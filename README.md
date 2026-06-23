@@ -75,9 +75,3 @@ The build process generates two types of Windows executables under the `release/
 - `dist-electron` — Compiled Electron main/preload files.
 - `release` — Packaged application artifacts ready for distribution.
 
-## Roadmap
-
-- Multi-monitor support (Projector Output).
-- Bible integration.
-- Remote control web interface.
-- Media (video/image) support.
