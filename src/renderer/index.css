@@ -1,0 +1,181 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Design Tokens ─────────────────────────────────────── */
+:root {
+  /* Background scale */
+  --bg-base: #0f0f11;
+  --bg-surface: #181818;
+  --bg-raised: #1e1e1e;
+  --bg-overlay: #242424;
+
+  /* Border */
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-normal: rgba(255, 255, 255, 0.12);
+
+  /* Text — all meet ≥4.5:1 on --bg-surface */
+  --text-primary: rgba(255, 255, 255, 0.92);
+  --text-secondary: rgba(255, 255, 255, 0.65);
+  --text-muted: rgba(255, 255, 255, 0.55);
+  --text-faint: rgba(255, 255, 255, 0.50);
+
+  /* Accent */
+  --accent: #3b82f6;
+  /* blue-500 */
+  --accent-dim: rgba(59, 130, 246, 0.20);
+  --accent-border: rgba(59, 130, 246, 0.40);
+
+  /* Spacing scale (4 px base) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  /* Typography */
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+  color: var(--text-primary);
+  background-color: var(--bg-base);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: var(--bg-base);
+}
+
+#root {
+  width: 100%;
+  height: 100vh;
+}
+
+/* ─── Global Focus Ring ────────────────────────────────── */
+/* Replaces outline:none with a visible, accessible indicator */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Remove default outline only when focus-visible is supported */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ─── Slide Enter Animation ─────────────────────────────── */
+@keyframes gpSlideEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.gp-slide-enter {
+  animation: gpSlideEnter 160ms ease-out;
+}
+
+/* ─── Reduced Motion ─────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .gp-slide-enter {
+    animation: none;
+  }
+}
+
+/* ─── Scrollbar (subtle) ─────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ─── Image Outlines ─────────────────────────────────────── */
+img {
+  outline: 1px solid rgba(0, 0, 0, 0.12);
+  outline-offset: -1px;
+}
+
+@media (prefers-color-scheme: dark) {
+  img {
+    outline-color: rgba(255, 255, 255, 0.06);
+  }
+}
+
+/* ─── Text Wrapping ─────────────────────────────────────── */
+h1, h2, h3, h4, h5, h6,
+.text-balance {
+  text-wrap: balance;
+}
+
+.text-pretty {
+  text-wrap: pretty;
+}
+
+/* ─── Live Border Pulse ──────────────────────────────────── */
+@keyframes liveBorderPulse {
+  0% { box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.7); border-color: rgba(239, 68, 68, 0.9); }
+  50% { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.3); border-color: rgba(239, 68, 68, 0.5); }
+  100% { box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.7); border-color: rgba(239, 68, 68, 0.9); }
+}
+.live-border-pulse {
+  animation: liveBorderPulse 2s infinite ease-in-out;
+  border-color: rgb(239, 68, 68) !important;
+}
+
+/* ─── kbd helper ─────────────────────────────────────────── */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  min-width: 22px;
+  line-height: 1.4;
+}
