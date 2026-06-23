@@ -1,76 +1,83 @@
 # Worship Presentation Assistant
 
-Worship Presentation Assistant, kiliseler ve sunum ihtiyacı olan topluluklar için TypeScript, React ve Electron kullanılarak geliştirilmiş modern bir masaüstü uygulamasıdır. Bu MVP sürümü, temel sunum oluşturma, slayt yönetimi ve yerel dosya işlemlerini içerir.
+A modern desktop application built with **TypeScript**, **React**, and **Electron** for churches and communities that need presentation software. This MVP release includes core presentation creation, slide management, and local file operations.
 
-## Özellikler
+## Features
 
-- **Slayt Yönetimi:** Slayt ekleme, silme ve düzenleme.
-- **Canlı Yayın:** Slaytları tam ekran modunda (F11/Canlı Yayın butonu) sunma.
-- **Yerel Depolama:** Sunumları `.gpres` uzantılı dosyalar olarak kaydetme ve açma.
-- **Modern Arayüz:** Tailwind CSS ile oluşturulmuş, kullanıcı dostu ve karanlık mod destekli tasarım.
+- **Slide Management:** Add, delete, reorder, and edit slides with ease.
+- **Live Presentation:** Present slides in fullscreen mode (F11 / Live Presentation button).
+- **Local Storage:** Save and open presentations as `.gpres` files.
+- **Modern UI:** Clean, user-friendly interface built with Tailwind CSS, featuring dark mode support.
 
-## Gereksinimler
+## Requirements
 
-- [Node.js](https://nodejs.org/) (v18 veya üzeri önerilir)
-- npm (Node.js ile birlikte gelir)
+- [Node.js](https://nodejs.org/) (v18 or later recommended)
+- npm (ships with Node.js)
 
-## Nasıl Çalıştırılır?
+## Getting Started
 
-### 1. Bağımlılıkları Yükleyin
+### 1. Install Dependencies
 
-Proje dizininde terminali açın ve aşağıdaki komutu çalıştırın:
+Open a terminal in the project directory and run:
 
 ```powershell
 npm install
 ```
 
-### 2. Geliştirme Modunda Başlatın
+### 2. Start in Development Mode
 
-Uygulamayı geliştirme modunda (HMR destekli) çalıştırmak için:
+Launch the application with hot module replacement (HMR) support:
 
 ```powershell
 npm run dev
 ```
 
-### 3. Kod Kalitesi Kontrolleri
+### 3. Code Quality Checks
 
-Kodunuzu ESLint ile kontrol etmek ve Prettier ile formatlamak için:
+Lint your code with ESLint and format it with Prettier:
 
 ```powershell
-# Hataları kontrol et
+# Check for errors
 npm run lint
 
-# Kod formatını düzelt
+# Auto-fix formatting
 npm run format
 ```
 
-## Derleme ve Paketleme (Windows)
+## Building & Packaging (Windows)
 
-Uygulamayı Windows için derleyip yüklenebilir bir `.exe` dosyası haline getirmek için:
+To compile and package the application for Windows:
 
 ```powershell
 npm run build
 ```
 
-Bu komut şunları yapar:
-1. TypeScript kodunu derler.
-2. Vite ile frontend varlıklarını (assets) paketler.
-3. `electron-builder` kullanarak `release/` klasörü altında Windows için bir installer (NSIS) oluşturur.
+This command performs the following steps:
+1. Compiles TypeScript code.
+2. Bundles frontend assets with Vite.
+3. Uses `electron-builder` to produce distributable artifacts in the `release/` folder.
 
-**Not:** Bu uygulama şu anda sadece Windows platformu için konfigüre edilmiştir.
+### Release Artifacts
 
-## Dosya Yapısı
+The build process generates two types of Windows executables under the `release/` directory:
 
-- `src/main`: Electron ana süreç (Main Process) kodları.
-- `src/preload`: Electron ve Renderer arasındaki güvenli köprü (Preload Scripts).
-- `src/renderer`: React tabanlı kullanıcı arayüzü kodları.
-- `dist`: Derlenmiş frontend dosyaları.
-- `dist-electron`: Derlenmiş Electron dosyaları.
-- `release`: Dağıtıma hazır paketlenmiş uygulama dosyaları.
+- **`Worship Presentation Assistant Setup X.X.X.exe`** — An NSIS installer that installs the application on your system. Recommended for standard installation.
+- **`Worship Presentation Assistant X.X.X-win-unpacked/`** — A portable, unpacked version of the application. No installation required — simply run the `.exe` file inside this folder directly. Ideal for USB drives or temporary use.
 
-## İleri Aşamada Eklenecek Özellikler
+**Note:** This application is currently configured for the Windows platform only.
 
-- Çoklu ekran desteği (Projector Output).
-- İncil (Bible) entegrasyonu.
-- Uzaktan kontrol (Remote Control) web arayüzü.
-- Medya (Video/Resim) desteği.
+## Project Structure
+
+- `src/main` — Electron main process code.
+- `src/preload` — Secure bridge (preload scripts) between Electron and the renderer.
+- `src/renderer` — React-based user interface code.
+- `dist` — Compiled frontend assets.
+- `dist-electron` — Compiled Electron main/preload files.
+- `release` — Packaged application artifacts ready for distribution.
+
+## Roadmap
+
+- Multi-monitor support (Projector Output).
+- Bible integration.
+- Remote control web interface.
+- Media (video/image) support.
