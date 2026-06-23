@@ -1,0 +1,33 @@
+directories:
+  output: release/${version}
+  buildResources: build
+compression: store
+copyright: Copyright © Worship Presentation Assistant
+appId: com.worship-presentation-assistant
+productName: Worship Presentation Assistant
+files:
+  - filter:
+      - dist/**/*
+      - dist-electron/**/*
+      - build/**/*
+      - '!**/*.map'
+      - '!**/*.ts'
+asarUnpack:
+  - '**/node_modules/sharp/**'
+  - '**/node_modules/@img/**'
+win:
+  icon: build/ico.png
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Worship Presentation Assistant
+  artifactName: Worship Presentation Assistant Setup.exe
+  uninstallDisplayName: Worship Presentation Assistant
+  deleteAppDataOnUninstall: true
+electronVersion: 29.4.6
