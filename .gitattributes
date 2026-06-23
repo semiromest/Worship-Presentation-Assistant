@@ -1,6 +1,5 @@
 # Auto detect text files and normalize line endings
 * text=auto eol=lf
-
 # Source files
 *.ts     text
 *.tsx    text
@@ -16,18 +15,14 @@
 *.md     text
 *.yml    text
 *.yaml   text
-
 # Shell scripts
 *.sh     text eol=lf
-
 # Windows scripts
 *.bat    text eol=crlf
 *.cmd    text eol=crlf
 *.ps1    text eol=crlf
-
 # Electron / Node native modules
 *.node   binary
-
 # Images
 *.png    binary
 *.jpg    binary
@@ -36,29 +31,25 @@
 *.webp   binary
 *.ico    binary
 *.svg    text
-
 # Fonts
 *.ttf    binary
 *.otf    binary
 *.woff   binary
 *.woff2  binary
-
 # Archives
 *.zip    binary
 *.7z     binary
 *.rar    binary
 *.tar    binary
 *.gz     binary
-
 # Media
 *.mp3    binary
 *.wav    binary
 *.ogg    binary
 *.mp4    binary
 *.webm   binary
-
 # Electron build artifacts
-*.exe    binary
+*.exe filter=lfs diff=lfs merge=lfs -text
 *.dll    binary
 *.dmg    binary
 *.app    binary
