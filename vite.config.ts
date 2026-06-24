@@ -17,11 +17,6 @@ export default defineConfig({
             rollupOptions: {
               external: [
                 'electron',
-                'sharp',
-                '@img/sharp-win32-x64',
-                '@img/sharp-darwin-x64',
-                '@img/sharp-linux-x64',
-                '@img/sharp-wasm32',
               ],
             },
           },
@@ -38,11 +33,6 @@ export default defineConfig({
             rollupOptions: {
               external: [
                 'electron',
-                'sharp',
-                '@img/sharp-win32-x64',
-                '@img/sharp-darwin-x64',
-                '@img/sharp-linux-x64',
-                '@img/sharp-wasm32',
               ],
             },
           },

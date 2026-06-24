@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   CalendarDays,
@@ -151,9 +151,21 @@ export default function CalendarTab({
     presentationName: '',
   });
 
+  const saveRef = useRef(events);
+  saveRef.current = events;
+
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+    const timer = setTimeout(() => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+    }, 500);
+    return () => clearTimeout(timer);
   }, [events]);
+
+  useEffect(() => {
+    const flush = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(saveRef.current));
+    window.addEventListener('beforeunload', flush);
+    return () => window.removeEventListener('beforeunload', flush);
+  }, []);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();

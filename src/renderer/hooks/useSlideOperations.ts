@@ -458,6 +458,21 @@ export function useSlideOperations() {
     appendSlides([newSlide]);
   }, [appendSlides]);
 
+  const handleAddAllMedia = useCallback((items: Array<{ type: 'image' | 'video'; path: string; thumbnailUrl?: string }>) => {
+    if (items.length === 0) return;
+    const newSlides = items.map(item => createSlide(item.type, {
+      mediaUrl: toFileUrl(item.path),
+      thumbnailUrl: item.type === 'video' ? item.thumbnailUrl : undefined,
+      styles: {
+        objectFit: 'cover',
+        fontSize: 0,
+        backgroundColor: '',
+        textColor: '',
+      },
+    }));
+    appendSlides(newSlides);
+  }, [appendSlides]);
+
   const handleScreenAdd = useCallback((sourceId: string, sourceName: string) => {
     const newSlide = createSlide('screen', {
       content: sourceName,
@@ -741,6 +756,7 @@ export function useSlideOperations() {
     appendSlides,
     handleSendToLive,
     handleMediaAdd,
+    handleAddAllMedia,
     handleScreenAdd,
     handleHymnAdd,
     handleAddCountdownToPresentation,

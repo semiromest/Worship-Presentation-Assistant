@@ -1,24 +1,20 @@
 import fs from 'node:fs/promises';
-import { rmSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { app } from 'electron';
 import { convertPptxToPng, type SlideImage } from 'pptx-glimpse';
-import sharp from 'sharp';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SLIDE_WIDTH = 1024;
-const WEBP_QUALITY = 85;
-const WEBP_EFFORT = 4; // 0-6 arası. 4 CPU/Boyut açısından en dengeli olanıdır.
 const CONCURRENCY = Math.max(2, Math.min(os.cpus().length, 8));
 const VALID_EXTS = new Set(['.pptx', '.ppt']);
 const IMPORT_TIMEOUT = 120000;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ImageFormat = 'webp';
+export type ImageFormat = 'png';
 
 export interface PptxSlideResult {
   slideNumber: number;
@@ -26,7 +22,6 @@ export interface PptxSlideResult {
   width: number;
   height: number;
   format: ImageFormat;
-  savedBytes: number;
 }
 
 export interface PptxImportResult {
@@ -44,11 +39,6 @@ export interface PptxImportError {
 
 export type PptxResult = PptxImportResult | PptxImportError;
 export type ProgressCallback = (current: number, total: number) => void;
-
-// ─── Global Sharp Configuration ───────────────────────────────────────────────
-
-sharp.cache(false);
-sharp.concurrency(1); // Thread oversubscription engellemesi
 
 // ─── Async Worker Pool (Memory Optimized) ─────────────────────────────────────
 
@@ -93,15 +83,12 @@ export class PptxService {
   private isInitialized: boolean = false;
 
   constructor() {
-    this.sessionId = randomUUID(); // Tüm slaytlar için tek sefer üret
+    this.sessionId = randomUUID();
     this.tempDir = path.join(app.getPath('temp'), 'pptx-imports', this.sessionId);
 
-    app.on('will-quit', () => {
-      try {
-        rmSync(this.tempDir, { recursive: true, force: true });
-      } catch {
-        // Sessizce yut
-      }
+    app.on('will-quit', (e) => {
+      e.preventDefault();
+      fs.rm(this.tempDir, { recursive: true, force: true }).catch(() => {}).finally(() => app.quit());
     });
   }
 
@@ -119,27 +106,16 @@ export class PptxService {
     }
   }
 
-  /**
-   * V8 Heap Bypass uygulanan encode ve kaydetme adımı.
-   */
   private async processSlide(
     slide: SlideImage,
     baseName: string,
     onSlideDone?: () => void
   ): Promise<PptxSlideResult> {
-    const originalSize = slide.png.length;
-    
-    // UUID yerine Session ID ve Index birleşimi (String allocation hızlandırması)
-    const fileName = `${baseName}-s${slide.slideNumber}-${this.sessionId}.webp`;
+    const fileName = `${baseName}-s${slide.slideNumber}-${this.sessionId}.png`;
     const imagePath = path.join(this.tempDir, fileName);
 
-    // .toFile() ile Buffer'ı V8 belleğine döndürmeden C++ üzerinden diske yaz
-    const webpInfo = await sharp(slide.png)
-  // Kalite 85 kalabilir (görsellik bozulmaz), ama eforu 1'e çekiyoruz (hız artar)
-  .webp({ quality: 85, effort: 1 }) 
-  .toFile(imagePath);
+    await fs.writeFile(imagePath, slide.png);
 
-    // Hard GC Hint: Buffer referansını anında yok et
     delete (slide as Partial<SlideImage>).png;
 
     onSlideDone?.();
@@ -147,10 +123,9 @@ export class PptxService {
     return {
       slideNumber: slide.slideNumber,
       imagePath,
-      width: webpInfo.width,
-      height: webpInfo.height,
-      format: 'webp',
-      savedBytes: originalSize - webpInfo.size,
+      width: 0,
+      height: 0,
+      format: 'png',
     };
   }
 

@@ -188,3 +188,7 @@ export function parseBibleXML(xmlString: string): BibleData {
   const parser = createParser(format);
   return parser.parse(xmlString);
 }
+
+export async function parseBibleXMLAsync(xmlString: string, _format?: 'zefania' | 'holyBible'): Promise<BibleData> {
+  return parseBibleXML(xmlString);
+}

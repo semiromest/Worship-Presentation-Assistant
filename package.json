@@ -11,8 +11,7 @@
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,html}\"",
-    "test:split": "tsx src/renderer/hymnSplit.test.ts",
-    "rebuild:sharp": "electron-rebuild -f -w sharp"
+    "test:split": "tsx src/renderer/hymnSplit.test.ts"
   },
   "dependencies": {
     "bufferutil": "^4.1.0",
@@ -27,7 +26,6 @@
     "react-colorful": "^5.6.1",
     "react-dom": "^18.2.0",
     "react-i18next": "^17.0.8",
-    "sharp": "^0.34.5",
     "tailwind-merge": "^2.2.2",
     "utf-8-validate": "^6.0.6",
     "ws": "^8.13.0",
@@ -45,7 +43,6 @@
     "autoprefixer": "^10.4.19",
     "electron": "^29.4.6",
     "electron-builder": "^24.13.3",
-    "electron-rebuild": "^3.2.9",
     "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.34.1",
     "eslint-plugin-react-hooks": "^4.6.0",
@@ -75,10 +72,7 @@
       "!**/*.map",
       "!**/*.ts"
     ],
-    "asarUnpack": [
-      "**/node_modules/sharp/**",
-      "**/node_modules/@img/**"
-    ],
+    "asarUnpack": [],
     "win": {
       "icon": "build/ico.png",
       "target": [

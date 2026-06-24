@@ -12,9 +12,7 @@ files:
       - build/**/*
       - '!**/*.map'
       - '!**/*.ts'
-asarUnpack:
-  - '**/node_modules/sharp/**'
-  - '**/node_modules/@img/**'
+asarUnpack: []
 win:
   icon: build/ico.png
   target:

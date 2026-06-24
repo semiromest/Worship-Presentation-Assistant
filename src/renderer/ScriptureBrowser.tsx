@@ -4,15 +4,16 @@ import {
 } from 'react';
 import {
   Search, Book, FileUp, ChevronRight,
-  ArrowLeft, Send, Hash, X, Layers,
+  ArrowLeft, Send, Hash, X, Layers, Check,
   BookOpen, Download, Globe, Loader, Type,
 } from 'lucide-react';
 import { cn, useDebounce } from './utils';
 import { confirmDialog } from './dialogs';
 import { useTranslation } from 'react-i18next';
-import { parseBibleXML, createParser, type BibleData, type IBibleParser } from './bibleParser';
+import { parseBibleXMLAsync, type BibleData } from './bibleParser';
 import { onlineBibleManager, type BibleInfo } from './onlineBibleManager';
 import { helloAoApi, type HelloAoTranslation } from './helloAoApi';
+import { dbGet, dbSet, dbClear } from './indexedDbCache';
 import Dialog from './components/Dialog';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -121,38 +122,32 @@ function parseZefaniaXML(xmlString: string): BibleData {
 
 // ─── Cache Management (Improved) ───────────────────────────────────────────
 
+const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 1 week
+
 class BibleCache {
   static getKey(path: string, format: string = 'zefania'): string {
-    return `bibleCache:${CACHE_VERSION}:${format}:${path}`;
+    return `bible:${CACHE_VERSION}:${format}:${path}`;
   }
 
-  static set(path: string, data: BibleData): void {
+  static async set(path: string, data: BibleData): Promise<void> {
     try {
-      localStorage.setItem(this.getKey(path, data.format), JSON.stringify(data));
+      await dbSet(this.getKey(path, data.format), data, CACHE_TTL);
     } catch {
       console.warn('Failed to cache Bible data');
     }
   }
 
-  static get(path: string, format: string = 'zefania'): BibleData | null {
+  static async get(path: string, format: string = 'zefania'): Promise<BibleData | null> {
     try {
-      const raw = localStorage.getItem(this.getKey(path, format));
-      return raw ? JSON.parse(raw) : null;
+      return await dbGet<BibleData>(this.getKey(path, format));
     } catch {
       return null;
     }
   }
 
-  static clear(): void {
+  static async clear(): Promise<void> {
     try {
-      const keysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key?.startsWith(`bibleCache:${CACHE_VERSION}:`)) {
-          keysToRemove.push(key);
-        }
-      }
-      keysToRemove.forEach(key => localStorage.removeItem(key));
+      await dbClear();
     } catch {
       console.warn('Failed to clear Bible cache');
     }
@@ -334,6 +329,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
   const [selectedVerses, setSelectedVerses] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [contentSearch, setContentSearch] = useState(false);
+  const [selectedContentResults, setSelectedContentResults] = useState<Set<string>>(new Set());
   const [parseError, setParseError] = useState<string | null>(null);
   
   // Online Bible states
@@ -375,6 +371,11 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
   const deferredSearch = useDeferredValue(debouncedSearch);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Clear content search selections when search term or mode changes
+  useEffect(() => {
+    setSelectedContentResults(new Set());
+  }, [deferredSearch, contentSearch]);
+
   // Virtual list hook
   const { startIndex, endIndex, totalHeight, containerRef } = useVirtualList(
     selectedChapter?.verses.length ?? 0,
@@ -387,9 +388,10 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
     [deferredSearch]
   );
 
-  // Pre-compute normalized book names once (avoid re-normalizing on every search)
-  const bookNameCache = useMemo(() => {
-    if (!bible) return null;
+  // Pre-compute normalized book names + testament split (single pass)
+  const { bookNameCache, oldTestament, newTestament } = useMemo(() => {
+    if (!bible) return { bookNameCache: null, oldTestament: [], newTestament: [] };
+
     const norms = new Map<BibleBook, string>();
     const byExact = new Map<string, BibleBook>();
     for (const book of bible.books) {
@@ -397,31 +399,81 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       norms.set(book, n);
       if (!byExact.has(n)) byExact.set(n, book);
     }
-    return { norms, byExact };
-  }, [bible]);
 
-  // Content search results across all verses
-  const contentSearchResults = useMemo(() => {
-    if (!contentSearch || !bible || !deferredSearch || deferredSearch.length < 2) return null;
+    const filteredBooks = parsedRef?.book
+      ? bible.books.filter(b => norms.get(b)!.includes(parsedRef.book))
+      : bible.books;
 
-    const query = normalize(deferredSearch);
-    const results: Array<{ book: BibleBook; chapter: Chapter; verse: Verse }> = [];
+    const matthewIndex = filteredBooks.findIndex(b => norms.get(b)!.startsWith('matta'));
 
-    for (const book of bible.books) {
-      for (const chapter of book.chapters) {
-        for (const verse of chapter.verses) {
-          if (normalize(verse.text).includes(query)) {
-            results.push({ book, chapter, verse });
-            if (results.length >= 50) break;
+    return {
+      bookNameCache: { norms, byExact },
+      oldTestament: matthewIndex !== -1
+        ? filteredBooks.slice(0, matthewIndex)
+        : filteredBooks,
+      newTestament: matthewIndex !== -1
+        ? filteredBooks.slice(matthewIndex)
+        : [],
+    };
+  }, [bible, parsedRef?.book]);
+
+  // Inverted index for fast content search (built once per bible load)
+  const searchIndex = useMemo(() => {
+    if (!bible) return null;
+    const index = new Map<string, Array<{ bookIndex: number; chapterIndex: number; verseIndex: number }>>();
+    for (let bi = 0; bi < bible.books.length; bi++) {
+      const book = bible.books[bi];
+      for (let ci = 0; ci < book.chapters.length; ci++) {
+        const chapter = book.chapters[ci];
+        for (let vi = 0; vi < chapter.verses.length; vi++) {
+          const words = new Set(normalize(chapter.verses[vi].text).split(/\s+/));
+          for (const word of words) {
+            if (word.length < 2) continue;
+            if (!index.has(word)) index.set(word, []);
+            index.get(word)!.push({ bookIndex: bi, chapterIndex: ci, verseIndex: vi });
           }
         }
+      }
+    }
+    return index;
+  }, [bible]);
+
+  // Content search results across all verses (using inverted index)
+  const contentSearchResults = useMemo(() => {
+    if (!contentSearch || !bible || !searchIndex || !deferredSearch || deferredSearch.length < 2) return null;
+
+    const query = normalize(deferredSearch);
+    const words = query.split(/\s+/).filter(w => w.length >= 2);
+    if (words.length === 0) return null;
+
+    const sets = words.map(word => searchIndex.get(word) ?? []);
+    if (sets.some(s => s.length === 0)) return null;
+
+    const smallestIdx = sets.reduce((best, set, i) => set.length < sets[best].length ? i : best, 0);
+    const smallest = sets[smallestIdx];
+    const others = sets.filter((_, i) => i !== smallestIdx);
+
+    const seen = new Set<string>();
+    const results: Array<{ book: BibleBook; chapter: Chapter; verse: Verse }> = [];
+
+    for (const ref of smallest) {
+      const key = `${ref.bookIndex}:${ref.chapterIndex}:${ref.verseIndex}`;
+      if (seen.has(key)) continue;
+
+      const allMatch = others.every(set =>
+        set.some(r => r.bookIndex === ref.bookIndex && r.chapterIndex === ref.chapterIndex && r.verseIndex === ref.verseIndex)
+      );
+
+      if (allMatch) {
+        const verse = bible.books[ref.bookIndex].chapters[ref.chapterIndex].verses[ref.verseIndex];
+        results.push({ book: bible.books[ref.bookIndex], chapter: bible.books[ref.bookIndex].chapters[ref.chapterIndex], verse });
+        seen.add(key);
         if (results.length >= 50) break;
       }
-      if (results.length >= 50) break;
     }
 
     return results;
-  }, [bible, contentSearch, deferredSearch]);
+  }, [bible, searchIndex, contentSearch, deferredSearch]);
 
   // Import XML handler
   const handleImportXML = useCallback(async (initialPath?: string) => {
@@ -436,7 +488,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
     try {
       // Try cache first
       if (result.path) {
-        const cached = BibleCache.get(result.path, 'zefania');
+        const cached = await BibleCache.get(result.path, 'zefania');
         if (cached) {
           setBible(cached);
           BibleCache.setStoredPath(result.path);
@@ -444,15 +496,13 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
         }
       }
 
-      // Parse XML in microtask to avoid blocking UI
-      await new Promise(resolve => setTimeout(resolve, 0));
-      const parsed = parseBibleXML(result.content);
+      const parsed = await parseBibleXMLAsync(result.content);
       setBible(parsed);
       setBibleSource('offline');
 
       if (result.path) {
         BibleCache.setStoredPath(result.path);
-        BibleCache.set(result.path, parsed);
+        await BibleCache.set(result.path, parsed);
       }
     } catch (err) {
       console.error('Failed to parse XML:', err);
@@ -486,14 +536,14 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
 
     try {
       const content = await onlineBibleManager.downloadBibleXml(bibleInfo.filename);
-      const parsed = parseBibleXML(content);
+      const parsed = await parseBibleXMLAsync(content);
 
       setBible(parsed);
       setBibleSource('online');
       setSelectedOnlineBible(bibleInfo);
       setShowOnlineBibleDialog(false);
 
-      BibleCache.set(`online:${bibleInfo.filename}`, parsed);
+      await BibleCache.set(`online:${bibleInfo.filename}`, parsed);
       setParseError(null);
     } catch (error) {
       console.error('Failed to download and parse Bible:', error);
@@ -539,7 +589,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       setSelectedHelloAo(translation);
       setShowOnlineBibleDialog(false);
 
-      BibleCache.set(`helloao:${translation.id}`, parsed);
+      await BibleCache.set(`helloao:${translation.id}`, parsed);
       setParseError(null);
     } catch (error) {
       console.error('Failed to download HelloAO Bible:', error);
@@ -558,26 +608,6 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       handleImportXML(storedPath);
     }
   }, [handleImportXML]);
-
-  // Filter books based on search
-  const { oldTestament, newTestament } = useMemo(() => {
-    if (!bible || !bookNameCache) return { oldTestament: [], newTestament: [] };
-
-    const filteredBooks = parsedRef?.book
-      ? bible.books.filter(b => bookNameCache.norms.get(b)!.includes(parsedRef.book))
-      : bible.books;
-
-    const matthewIndex = filteredBooks.findIndex(b => bookNameCache.norms.get(b)!.startsWith('matta'));
-
-    return {
-      oldTestament: matthewIndex !== -1
-        ? filteredBooks.slice(0, matthewIndex)
-        : filteredBooks,
-      newTestament: matthewIndex !== -1
-        ? filteredBooks.slice(matthewIndex)
-        : [],
-    };
-  }, [bible, bookNameCache, parsedRef?.book]);
 
   // Auto-select book/chapter/verses based on search
   // BUG FIX: Only reset selections when the book actually changes,
@@ -700,6 +730,30 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
     setSelectedChapter(result.chapter);
     setSelectedVerses(new Set([result.verse.number]));
   }, []);
+
+  // Send selected content search results as slides
+  const handleSendContentResults = useCallback(() => {
+    if (!contentSearchResults || selectedContentResults.size === 0) return;
+
+    const selected = contentSearchResults.filter(r => {
+      const key = `${r.book.number}:${r.chapter.number}:${r.verse.number}`;
+      return selectedContentResults.has(key);
+    });
+
+    const group = `${t('common.scriptureTitle')}: ${deferredSearch}`;
+    const slides = selected.map(r => {
+      const title = `${r.book.name} ${r.chapter.number}:${r.verse.number}`;
+      return `${title}\n\n${r.verse.number}. ${r.verse.text}`;
+    });
+
+    if (slides.length > 1) {
+      onSendToLive(slides, { groupTitle: group });
+    } else {
+      onSendToLive(slides[0]);
+    }
+
+    setSelectedContentResults(new Set());
+  }, [contentSearchResults, selectedContentResults, onSendToLive, deferredSearch, t]);
 
   // Clear cache handler
   const handleClearCache = useCallback(async () => {
@@ -1044,6 +1098,17 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       );
     }
 
+    const toggleContentResult = (key: string) => {
+      setSelectedContentResults(prev => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+    };
+
+    const resultKey = (r: typeof results[number]) => `${r.book.number}:${r.chapter.number}:${r.verse.number}`;
+
     return (
       <div className="flex-1 flex flex-col overflow-hidden bg-[#0a0a0b]">
         <div className="px-6 py-4 border-b border-zinc-800/60 bg-[#0a0a0b]/80 backdrop-blur-md z-10 sticky top-0">
@@ -1065,28 +1130,70 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
                 match = originalMatch;
                 after = result.verse.text.slice(matchIdx + query.length);
               }
+              const key = resultKey(result);
+              const isSelected = selectedContentResults.has(key);
 
               return (
-                <button
-                  key={`${result.book.number}-${result.chapter.number}-${result.verse.number}`}
-                  onClick={() => navigateToResult(result)}
-                  className="w-full text-left p-4 rounded-xl bg-zinc-900/30 border border-transparent hover:bg-zinc-800/50 hover:border-zinc-700/50 transition-all group"
+                <div
+                  key={key}
+                  className="flex items-start gap-3 p-4 rounded-xl bg-zinc-900/30 border border-transparent hover:bg-zinc-800/50 hover:border-zinc-700/50 transition-all group"
                 >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[12px] font-bold text-blue-400/80">{ref}</span>
-                    <ChevronRight className="w-3 h-3 text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                  <p className="text-[13px] leading-relaxed text-zinc-400 group-hover:text-zinc-300 transition-colors line-clamp-2">
-                    {matchIdx !== -1 ? (
-                      <>{before}<span className="text-blue-300 bg-blue-500/10 rounded px-0.5">{match}</span>{after}</>
-                    ) : (
-                      result.verse.text
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleContentResult(key); }}
+                    className={cn(
+                      'mt-0.5 w-5 h-5 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all',
+                      isSelected
+                        ? 'bg-blue-600 border-blue-600'
+                        : 'border-zinc-600 hover:border-zinc-500'
                     )}
-                  </p>
-                </button>
+                  >
+                    {isSelected && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
+                  </button>
+                  <button
+                    onClick={() => navigateToResult(result)}
+                    className="flex-1 text-left min-w-0"
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[12px] font-bold text-blue-400/80">{ref}</span>
+                      <ChevronRight className="w-3 h-3 text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                    <p className="text-[13px] leading-relaxed text-zinc-400 group-hover:text-zinc-300 transition-colors line-clamp-2">
+                      {matchIdx !== -1 ? (
+                        <>{before}<span className="text-blue-300 bg-blue-500/10 rounded px-0.5">{match}</span>{after}</>
+                      ) : (
+                        result.verse.text
+                      )}
+                    </p>
+                  </button>
+                </div>
               );
             })}
           </div>
+        </div>
+
+        {/* Content Search Send Bar */}
+        <div
+          className={cn(
+            'border-t border-zinc-800 bg-[#0a0a0b]/90 backdrop-blur-md transition-all duration-300 ease-in-out overflow-hidden',
+            selectedContentResults.size > 0
+              ? 'max-h-20 p-6'
+              : 'max-h-0 p-0'
+          )}
+        >
+          {selectedContentResults.size > 0 && (
+            <div className="max-w-2xl mx-auto space-y-3">
+              <div className="flex items-center justify-between text-[12px] font-medium text-zinc-400 px-1">
+                <span>{selectedContentResults.size} ayet seçildi</span>
+              </div>
+              <button
+                onClick={handleSendContentResults}
+                className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-[15px] transition-all shadow-lg shadow-blue-500/25 active:scale-[0.99]"
+              >
+                <Send className="w-4 h-4" />
+                Sunuma Ekle ({selectedContentResults.size})
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );

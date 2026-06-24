@@ -44,16 +44,25 @@ export function useProjectorSync() {
     }
   }, [throttledPresentation, liveIndex, isBlackout, isProjectorWindowOpen, mediaVolume, isMediaMuted]);
 
-  const thumbnailCache = useRef<Map<string, { hash: string; url: string }>>(new Map());
+  const thumbnailCache = useRef<Map<string, { url: string }>>(new Map());
   const prevSlidesRef = useRef<Slide[]>([]);
 
   useEffect(() => {
     let cancelled = false;
+    const CACHE_MAX = 100;
+
     (async () => {
       const prevSlides = prevSlidesRef.current;
       const currentSlides = throttledPresentation.slides;
 
       if (prevSlides === currentSlides) return;
+
+      if (thumbnailCache.current.size > CACHE_MAX) {
+        const keys = [...thumbnailCache.current.keys()];
+        for (let i = 0; i < keys.length - CACHE_MAX; i++) {
+          thumbnailCache.current.delete(keys[i]);
+        }
+      }
 
       const prevMap = new Map(prevSlides.map(s => [s.id, s]));
 
@@ -63,8 +72,13 @@ export function useProjectorSync() {
         }
       }
 
-      const thumbs = await Promise.all(
-        currentSlides.map(async (s) => {
+      const thumbs: (string | null)[] = new Array(currentSlides.length);
+      let idx = 0;
+
+      const worker = async () => {
+        while (idx < currentSlides.length && !cancelled) {
+          const i = idx++;
+          const s = currentSlides[i];
           const prev = prevMap.get(s.id);
           const changed = !prev ||
             prev.content !== s.content ||
@@ -77,17 +91,16 @@ export function useProjectorSync() {
 
           if (!changed) {
             const cached = thumbnailCache.current.get(s.id);
-            return cached?.url ?? null;
+            thumbs[i] = cached?.url ?? null;
+          } else {
+            const url = await generateSlideThumbnail(s);
+            if (url) thumbnailCache.current.set(s.id, { url });
+            thumbs[i] = url;
           }
+        }
+      };
 
-          const hash = `${s.id}-${s.content}-${s.mediaUrl}-${JSON.stringify(s.styles)}-${s.items?.length ?? 0}`;
-          const url = await generateSlideThumbnail(s);
-          if (url) {
-            thumbnailCache.current.set(s.id, { hash, url });
-          }
-          return url;
-        })
-      );
+      await Promise.all(Array.from({ length: 4 }, () => worker()));
 
       prevSlidesRef.current = currentSlides;
 

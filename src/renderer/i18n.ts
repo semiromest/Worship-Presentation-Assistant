@@ -10,7 +10,7 @@ import de from "./locales/de/translation.json";
 import ko from "./locales/ko/translation.json";
 
 i18n
-  // Detect user language from browser/OS settings
+  // Detect user language from localStorage only
   .use(LanguageDetector)
   // Integrate with React
   .use(initReactI18next)
@@ -23,15 +23,20 @@ i18n
       de: { translation: de },
       ko: { translation: ko },
     },
-    fallbackLng: "tr",
+    fallbackLng: "en",
+    detection: {
+      order: ['localStorage'],
+      caches: ['localStorage'],
+    },
     interpolation: {
       escapeValue: false,
     },
   });
 
 i18n.on('languageChanged', (lng) => {
+  localStorage.setItem('i18nextLng', lng);
   document.documentElement.lang = lng;
 });
-document.documentElement.lang = i18n.language || 'tr';
+document.documentElement.lang = i18n.language || 'en';
 
 export default i18n;

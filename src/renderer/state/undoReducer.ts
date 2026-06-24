@@ -34,16 +34,28 @@ export const MAX_HISTORY = 50;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function shallowEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+  const keysA = Object.keys(a as Record<string, unknown>);
+  const keysB = Object.keys(b as Record<string, unknown>);
+  if (keysA.length !== keysB.length) return false;
+  for (const key of keysA) {
+    if ((a as Record<string, unknown>)[key] !== (b as Record<string, unknown>)[key]) return false;
+  }
+  return true;
+}
+
 function slideHasChanged(a: Slide, b: Slide): boolean {
   if (a.type !== b.type) return true;
   if (a.content !== b.content) return true;
   if (a.mediaUrl !== b.mediaUrl) return true;
   if (a.thumbnailUrl !== b.thumbnailUrl) return true;
-  if (JSON.stringify(a.styles) !== JSON.stringify(b.styles)) return true;
-  if (JSON.stringify(a.group) !== JSON.stringify(b.group)) return true;
-  if (JSON.stringify(a.items ?? []) !== JSON.stringify(b.items ?? [])) return true;
-  if (JSON.stringify(a.loopItems ?? []) !== JSON.stringify(b.loopItems ?? [])) return true;
-  if (JSON.stringify(a.loopTransition) !== JSON.stringify(b.loopTransition)) return true;
+  if (!shallowEqual(a.styles, b.styles)) return true;
+  if (!shallowEqual(a.group, b.group)) return true;
+  if (!shallowEqual(a.items ?? [], b.items ?? [])) return true;
+  if (!shallowEqual(a.loopItems ?? [], b.loopItems ?? [])) return true;
+  if (!shallowEqual(a.loopTransition, b.loopTransition)) return true;
   if (a.gridEnabled !== b.gridEnabled) return true;
   if (a.gridSize !== b.gridSize) return true;
   if (a.snapEnabled !== b.snapEnabled) return true;
@@ -92,7 +104,7 @@ function computePatch(prev: Presentation, next: Presentation): PresentationPatch
     patch.nextName = next.name;
   }
 
-  if (JSON.stringify(prev.transition) !== JSON.stringify(next.transition)) {
+  if (!shallowEqual(prev.transition, next.transition)) {
     patch.prevTransition = prev.transition;
     patch.nextTransition = next.transition;
   }

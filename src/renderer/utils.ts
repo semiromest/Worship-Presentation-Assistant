@@ -319,7 +319,7 @@ export interface PptxSlideResult {
   imagePath: string;
   width: number;
   height: number;
-  format: 'webp';
+  format: 'png';
 }
 
 export interface PptxImportResult {

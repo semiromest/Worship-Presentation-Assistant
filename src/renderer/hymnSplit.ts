@@ -63,21 +63,27 @@ function analyzeSizeScripture(text: string): SizeInfo {
 function findOptimalSplitPoint(lines: string[], maxLines: number, maxChars: number): number {
   if (lines.length <= 1) return -1;
 
+  const prefix: number[] = [0];
+  for (const line of lines) {
+    prefix.push(prefix[prefix.length - 1] + line.length + 1);
+  }
+
+  function partLen(from: number, to: number): number {
+    return prefix[to] - prefix[from] - 1;
+  }
+
   let bestIndex = -1;
   let bestScore = Infinity;
 
   for (let i = 1; i < lines.length; i++) {
-    const topPart = lines.slice(0, i).join('\n');
-    const bottomPart = lines.slice(i).join('\n');
-    
-    const topSize = analyzeSize(topPart, maxLines, maxChars);
-    const bottomSize = analyzeSize(bottomPart, maxLines, maxChars);
+    const topLen = partLen(0, i);
+    const bottomLen = partLen(i, lines.length);
 
-    if (!topSize.isOversize && !bottomSize.isOversize) {
+    if (i <= maxLines && lines.length - i <= maxLines && topLen <= maxChars && bottomLen <= maxChars) {
       const endsWithPunctuation = RE_PUNCT_END.test(lines[i - 1].trim());
-      const balance = Math.abs(topPart.length - bottomPart.length);
+      const balance = Math.abs(topLen - bottomLen);
       const score = balance - (endsWithPunctuation ? 100 : 0);
-      
+
       if (score < bestScore) {
         bestScore = score;
         bestIndex = i;
@@ -87,16 +93,16 @@ function findOptimalSplitPoint(lines: string[], maxLines: number, maxChars: numb
 
   if (bestIndex === -1) {
     for (let i = 1; i < lines.length; i++) {
-      const topPart = lines.slice(0, i).join('\n');
-      const bottomPart = lines.slice(i).join('\n');
-      
+      const topLen = partLen(0, i);
+      const bottomLen = partLen(i, lines.length);
+
       const overflow = Math.max(
-        Math.max(0, topPart.split('\n').length - maxLines),
-        Math.max(0, bottomPart.split('\n').length - maxLines),
-        Math.max(0, topPart.length - maxChars),
-        Math.max(0, bottomPart.length - maxChars)
+        Math.max(0, i - maxLines),
+        Math.max(0, lines.length - i - maxLines),
+        Math.max(0, topLen - maxChars),
+        Math.max(0, bottomLen - maxChars)
       );
-      
+
       if (overflow < bestScore) {
         bestScore = overflow;
         bestIndex = i;

@@ -91,8 +91,7 @@ function scheduleSlideCapture(delayMs = 300): void {
     try {
       const img = await target.webContents.capturePage();
       if (img.isEmpty()) return;
-      // JPEG @ 960 px genişlik – telefon için yeterli kalite, boyut küçük (optimized quality 72)
-      const buf = img.resize({ width: 960 }).toJPEG(72);
+      const buf = img.resize({ width: 480 }).toJPEG(65);
       lastPreviewDataUrl = `data:image/jpeg;base64,${buf.toString('base64')}`;
       broadcast({ type: 'preview', data: lastPreviewDataUrl });
     } catch { /* pencere henüz hazır değil */ }
@@ -784,7 +783,7 @@ ipcMain.handle('get-screen-sources', async () => {
     const sources = await desktopCapturer.getSources({
       types: ['window', 'screen'],
       thumbnailSize: { width: 320, height: 180 },
-      fetchWindowIcons: true,
+      fetchWindowIcons: false,
     });
 
     return sources.map(source => ({
@@ -792,7 +791,6 @@ ipcMain.handle('get-screen-sources', async () => {
       name: source.name,
       thumbnail: source.thumbnail.toDataURL(),
       display_id: source.display_id,
-      appIcon: source.appIcon?.toDataURL(),
     }));
   } catch (error) {
     console.error('Error getting screen sources:', error);

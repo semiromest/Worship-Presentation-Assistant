@@ -88,14 +88,7 @@ function useTransitionManager(
             if (!Array.isArray(x) || !Array.isArray(y)) return false;
             if (x.length !== y.length) return false;
             for (let i = 0; i < x.length; i++) {
-              const xi = x[i];
-              const yi = y[i];
-              if (xi && yi && xi.id && yi.id) {
-                if (xi.id !== yi.id) return false;
-              } else {
-                // Fallback: shallow compare object keys/values
-                if (JSON.stringify(xi) !== JSON.stringify(yi)) return false;
-              }
+              if (x[i]?.id !== y[i]?.id) return false;
             }
             return true;
           };
@@ -104,7 +97,7 @@ function useTransitionManager(
             currentSlide.content !== prevSlide.content ||
             !shallowEqual(currentSlide.styles, prevSlide.styles) ||
             !itemsEqual(currentSlide.items ?? [], prevSlide.items ?? []) ||
-            JSON.stringify(currentSlide.loopTransition) !== JSON.stringify(prevSlide.loopTransition);
+            !shallowEqual(currentSlide.loopTransition, prevSlide.loopTransition);
 
           if (hasContentChanged) {
             setState({

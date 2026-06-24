@@ -59,6 +59,7 @@ export function CanvasStage({
   const [zoom, setZoom] = useState(1);
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
+  const panRef = useRef({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const panStart = useRef({ x: 0, y: 0, startX: 0, startY: 0 });
   const [guides, setGuides] = useState<SnapGuide[]>([]);
@@ -124,15 +125,21 @@ export function CanvasStage({
   useEffect(() => {
     if (!isPanning) return;
     panningRef.current = true;
+    panRef.current = { x: panX, y: panY };
     const handleMove = (e: PointerEvent) => {
       if (!panningRef.current) return;
       const start = panStart.current;
-      setPanX(start.startX + (e.clientX - start.x));
-      setPanY(start.startY + (e.clientY - start.y));
+      panRef.current = { x: start.startX + (e.clientX - start.x), y: start.startY + (e.clientY - start.y) };
+      if (canvasRef.current) {
+        const s = (containerWidth / SLIDE_REFERENCE_WIDTH) * zoom;
+        canvasRef.current.style.transform = `scale(${s}) translate(${panRef.current.x / s}px, ${panRef.current.y / s}px)`;
+      }
     };
     const handleUp = () => {
       panningRef.current = false;
       setIsPanning(false);
+      setPanX(panRef.current.x);
+      setPanY(panRef.current.y);
     };
     window.addEventListener('pointermove', handleMove);
     window.addEventListener('pointerup', handleUp);
@@ -140,7 +147,7 @@ export function CanvasStage({
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', handleUp);
     };
-  }, [isPanning]);
+  }, [isPanning, panX, panY, zoom, containerWidth]);
 
   const itemsRef = useRef(items);
   itemsRef.current = items;
@@ -208,6 +215,10 @@ export function CanvasStage({
 
           for (const other of items) {
             if (other.id === id || !other.visible) continue;
+            if (Math.abs(x - other.x) > SNAP_THRESHOLD &&
+                Math.abs((x + draggedItem.width) - (other.x + other.width)) > SNAP_THRESHOLD &&
+                Math.abs(y - other.y) > SNAP_THRESHOLD &&
+                Math.abs((y + draggedItem.height) - (other.y + other.height)) > SNAP_THRESHOLD) continue;
             const otherCenter = {
               x: other.x + other.width / 2,
               y: other.y + other.height / 2,

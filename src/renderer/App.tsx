@@ -87,6 +87,7 @@ export default function App() {
     createNewPresentation,
     handleSendToLive,
     handleMediaAdd,
+    handleAddAllMedia,
     handleScreenAdd,
     handleHymnAdd,
     handleAddCountdownToPresentation,
@@ -107,16 +108,16 @@ export default function App() {
 
   const SIDEBAR_TABS = useMemo(
     () => [
-      { id: 'presentations', icon: Layers, title: t('nav.presentations') },
-      { id: 'slides', icon: Layout, title: t('nav.slides') },
-      { id: 'bible', icon: BookOpen, title: t('nav.bible') },
-      { id: 'media', icon: ImageIcon, title: t('nav.media') },
-      { id: 'hymns', icon: Music, title: t('nav.hymns') },
-      { id: 'countdown', icon: Timer, title: t('nav.countdown') },
-      { id: 'screen', icon: Monitor, title: t('nav.screen') },
-      { id: 'calendar', icon: Calendar, title: t('nav.calendar') },
+      { id: 'presentations', icon: Layers, titleKey: 'nav.presentations' },
+      { id: 'slides', icon: Layout, titleKey: 'nav.slides' },
+      { id: 'bible', icon: BookOpen, titleKey: 'nav.bible' },
+      { id: 'media', icon: ImageIcon, titleKey: 'nav.media' },
+      { id: 'hymns', icon: Music, titleKey: 'nav.hymns' },
+      { id: 'countdown', icon: Timer, titleKey: 'nav.countdown' },
+      { id: 'screen', icon: Monitor, titleKey: 'nav.screen' },
+      { id: 'calendar', icon: Calendar, titleKey: 'nav.calendar' },
     ] as const,
-    [t]
+    []
   );
 
   const savedPresentationNames = useMemo(
@@ -204,12 +205,12 @@ export default function App() {
         aria-label={t('nav.sidebarLabel')}
         className="w-[72px] flex-shrink-0 bg-surface border-r border-white/10 flex flex-col items-center py-3 gap-1"
       >
-        {SIDEBAR_TABS.map(({ id, icon: Icon, title }) => (
+        {SIDEBAR_TABS.map(({ id, icon: Icon, titleKey }) => (
           <button
             key={id}
             onClick={() => setActiveTab(id as any)}
-            title={title}
-            aria-label={title}
+            title={t(titleKey)}
+            aria-label={t(titleKey)}
             aria-current={activeTab === id ? 'page' : undefined}
             className={cn(
               'w-[60px] min-h-[52px] flex flex-col items-center justify-center gap-1 rounded-xl transition-[background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none px-1 active:scale-[0.96]',
@@ -220,7 +221,7 @@ export default function App() {
           >
             <Icon className="w-5 h-5 shrink-0" aria-hidden="true" />
             <span className="text-[10px] font-semibold leading-tight text-white/65 max-w-[56px] truncate text-center text-balance">
-              {title}
+              {t(titleKey)}
             </span>
           </button>
         ))}
@@ -238,7 +239,7 @@ export default function App() {
         <main id="main-content" className="flex-1 overflow-hidden">
           {/* Screen-reader-only page title — provides h1 for every tab view */}
           <h1 className="sr-only">
-            {SIDEBAR_TABS.find(tab => tab.id === activeTab)?.title ?? t('nav.slides')}
+            {t(SIDEBAR_TABS.find(tab => tab.id === activeTab)?.titleKey ?? 'nav.slides')}
           </h1>
           {activeTab === 'presentations' && (
             <PresentationsTab
@@ -308,6 +309,7 @@ export default function App() {
             <div className="h-full">
               <MediaLoopTab
                 onAddMediaToPresentation={handleMediaAdd}
+                onAddAllMediaToPresentation={handleAddAllMedia}
                 onAddLoopToPresentation={handleAddLoopToPresentation}
               />
             </div>

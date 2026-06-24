@@ -134,7 +134,7 @@ export function normalizeSlideStyles(styles?: Record<string, unknown> | null): R
   return { ...DEFAULT_SLIDE_STYLES, ...(styles ?? {}) } as Record<string, unknown>;
 }
 
-export function normalizeItem(item: SlideItem): SlideItem {
+export function normalizeItemShape(item: SlideItem): SlideItem {
   const width = clamp(item.width ?? 10, MIN_ITEM_WIDTH, MAX_ITEM_WIDTH);
   const height = clamp(item.height ?? 10, MIN_ITEM_HEIGHT, MAX_ITEM_HEIGHT);
   return {
@@ -154,9 +154,17 @@ export function normalizeItem(item: SlideItem): SlideItem {
   };
 }
 
+export function normalizeItem(item: SlideItem): SlideItem {
+  return normalizeItemShape(item);
+}
+
+function reindexZOrder(items: SlideItem[]): SlideItem[] {
+  return items.map((item, index) => ({ ...item, zIndex: index }));
+}
+
 export function normalizeItems(items: SlideItem[]): SlideItem[] {
   return [...items]
-    .map(normalizeItem)
+    .map(normalizeItemShape)
     .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
     .map((item, index) => ({ ...item, zIndex: index }));
 }
@@ -201,7 +209,7 @@ export function swapLayer(
 
   const next = [...ordered];
   [next[idx], next[targetIndex]] = [next[targetIndex], next[idx]];
-  return next.map((item, index) => ({ ...item, zIndex: index }));
+  return reindexZOrder(next);
 }
 
 export function duplicateItem(items: SlideItem[], id: string): SlideItem[] {
@@ -225,10 +233,8 @@ export function updateItemAt(
   id: string,
   updates: Partial<SlideItem>,
 ): SlideItem[] {
-  return normalizeItems(
-    items.map(item =>
-      item.id === id ? normalizeItem({ ...item, ...updates }) : item,
-    ),
+  return items.map(item =>
+    item.id === id ? normalizeItemShape({ ...item, ...updates }) : item,
   );
 }
 

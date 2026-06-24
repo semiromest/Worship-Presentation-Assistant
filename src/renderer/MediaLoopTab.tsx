@@ -10,12 +10,14 @@ import {
 import type { LoopItem, MediaItem, MediaKind } from './types';
 import { LOOP_DEFAULT_DURATION } from './constants';
 import { cn } from './utils';
+import { confirmDialog } from './dialogs';
 import { useStore } from './state/useStore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface MediaLoopTabProps {
   onAddMediaToPresentation: (type: MediaKind, path: string, thumbnailUrl?: string) => void;
+  onAddAllMediaToPresentation: (items: Array<{ type: MediaKind; path: string; thumbnailUrl?: string }>) => void;
   onAddLoopToPresentation: (items: LoopItem[], defaultDuration: number) => void;
 }
 
@@ -287,7 +289,7 @@ const DropItem = memo(function DropItem({ icon, title, desc, onClick }: {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function MediaLoopTab({ onAddMediaToPresentation, onAddLoopToPresentation }: MediaLoopTabProps) {
+export default function MediaLoopTab({ onAddMediaToPresentation, onAddAllMediaToPresentation, onAddLoopToPresentation }: MediaLoopTabProps) {
   const { t } = useTranslation();
   const [activeSub, setActiveSub] = useState<'media' | 'loop'>('media');
 
@@ -366,6 +368,13 @@ export default function MediaLoopTab({ onAddMediaToPresentation, onAddLoopToPres
   const addMediaToPres = useCallback((item: MediaItem) => {
     onAddMediaToPresentation(item.type, item.path, item.preview);
   }, [onAddMediaToPresentation]);
+
+  const handleAddAllMediaClick = useCallback(async () => {
+    if (mediaItems.length === 0) return;
+    const confirmed = await confirmDialog(`${mediaItems.length} medya dosyasının tamamı slayt olarak eklensin mi?`);
+    if (!confirmed) return;
+    onAddAllMediaToPresentation(mediaItems.map(item => ({ type: item.type, path: item.path, thumbnailUrl: item.preview })));
+  }, [mediaItems, onAddAllMediaToPresentation]);
 
   // ── Loop actions ──
   const addLoopFiles = useCallback(async () => {
@@ -480,12 +489,22 @@ export default function MediaLoopTab({ onAddMediaToPresentation, onAddLoopToPres
 
       {/* ── Media Library Tab ─────────────────────────────────────────────── */}
       {activeSub === 'media' && (
-        <div role="tabpanel" id="media-panel" aria-labelledby="media-tab">
+        <div role="tabpanel" id="media-panel" aria-labelledby="media-tab" className="flex flex-col flex-1 overflow-hidden">
           {/* Media toolbar */}
           <div className="shrink-0 px-3 py-2.5 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5">
-              <Film className="w-3 h-3 text-amber-500" />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-white/45">{t('common.mediaLibrary')}</span>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <Film className="w-3 h-3 text-amber-500" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-white/45">{t('common.mediaLibrary')}</span>
+              </div>
+              {mediaItems.length > 0 && (
+                <button
+                  onClick={handleAddAllMediaClick}
+                  className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.08] text-[10px] font-bold uppercase tracking-wider text-white/40 hover:text-white/70 transition-all"
+                >
+                  <Plus size={11} /> Tümünü Slayta Ekle
+                </button>
+              )}
             </div>
             <div ref={menuRef} className="relative">
               <button
@@ -528,7 +547,7 @@ export default function MediaLoopTab({ onAddMediaToPresentation, onAddLoopToPres
 
       {/* ── Loop Slide Tab ────────────────────────────────────────────────── */}
       {activeSub === 'loop' && (
-        <div role="tabpanel" id="loop-panel" aria-labelledby="loop-tab">
+        <div role="tabpanel" id="loop-panel" aria-labelledby="loop-tab" className="flex flex-col flex-1 overflow-hidden">
           {/* Loop toolbar */}
           <div className="shrink-0 px-3 pt-2.5 pb-2 space-y-2.5">
             <div className="flex items-center justify-between">
