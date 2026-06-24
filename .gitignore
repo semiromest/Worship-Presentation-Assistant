@@ -3,6 +3,11 @@ node_modules/
 .pnp
 .pnp.js
 
+# Build output
+dist/
+dist-electron/
+out/
+release/
 
 # Environment
 .env
