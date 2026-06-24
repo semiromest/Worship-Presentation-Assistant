@@ -56,15 +56,35 @@ This command performs the following steps:
 1. Compiles TypeScript code.
 2. Bundles frontend assets with Vite.
 3. Uses `electron-builder` to produce distributable artifacts in the `release/` folder.
+### Downloads
 
-### Release Artifacts
+Prebuilt Windows binaries are available on the GitHub Releases page.
 
-The build process generates two types of Windows executables under the `release/` directory:
+1. Go to the **Releases** section of this repository.
+2. Download the latest release assets.
+3. Choose one of the following packages:
 
-- **`Worship Presentation Assistant Setup X.X.X.exe`** — An NSIS installer that installs the application on your system. Recommended for standard installation.
-- **`Worship Presentation Assistant X.X.X-win-unpacked/`** — A portable, unpacked version of the application. No installation required — simply run the `.exe` file inside this folder directly. Ideal for USB drives or temporary use.
+* **`Worship Presentation Assistant Setup X.X.X.exe`** — NSIS installer version. Recommended for most users. Run the installer and follow the setup wizard.
+* **`Worship Presentation Assistant X.X.X-win-unpacked.zip`** — Portable version. Extract the archive and run the executable directly without installation.
 
-**Note:** This application is currently configured for the Windows platform only.
+### Installation
+
+#### Installer Version
+
+1. Download `Worship Presentation Assistant Setup X.X.X.exe`.
+2. Run the installer.
+3. Follow the installation wizard.
+4. Launch the application from the Start Menu or Desktop shortcut.
+
+#### Portable Version
+
+1. Download `Worship Presentation Assistant X.X.X-win-unpacked.zip`.
+2. Extract the archive to any location.
+3. Open the extracted folder.
+4. Run `Worship Presentation Assistant.exe`.
+
+> **Note:** The application is currently available for Windows only.
+
 
 ## Project Structure
 
