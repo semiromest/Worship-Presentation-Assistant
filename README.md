@@ -86,12 +86,3 @@ Prebuilt Windows binaries are available on the GitHub Releases page.
 > **Note:** The application is currently available for Windows only.
 
 
-## Project Structure
-
-- `src/main` — Electron main process code.
-- `src/preload` — Secure bridge (preload scripts) between Electron and the renderer.
-- `src/renderer` — React-based user interface code.
-- `dist` — Compiled frontend assets.
-- `dist-electron` — Compiled Electron main/preload files.
-- `release` — Packaged application artifacts ready for distribution.
-
