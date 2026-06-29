@@ -85,4 +85,6 @@ Prebuilt Windows binaries are available on the GitHub Releases page.
 
 > **Note:** The application is currently available for Windows only.
 
+<img width="1708" height="920" alt="image" src="https://github.com/user-attachments/assets/3807e575-38c6-4a47-baf6-89b81239591f" />
+
 
