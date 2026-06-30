@@ -63,7 +63,7 @@ export function useRemoteControl() {
   };
 
   useEffect(() => {
-    // Preset'leri yükle
+    // Load presets
     (async () => {
       const loaded = await window.electronAPI?.loadPresets?.();
       if (Array.isArray(loaded)) setPresets(loaded);
@@ -130,7 +130,7 @@ export function useRemoteControl() {
       }
     });
 
-    // Projektör modu listener'ları
+    // Projector mode listeners
     let removeProjectorUpdate: (() => void) | undefined;
     let removeProjectorClosed: (() => void) | undefined;
 
@@ -161,7 +161,7 @@ export function useRemoteControl() {
     }
   });
 
-  // Listener kurulduktan SONRA main process'e hazır olduğumuzu bildiriyoruz
+  // Notify main process that listeners are ready
   window.electronAPI?.notifyProjectorReady?.();
 
 } else {

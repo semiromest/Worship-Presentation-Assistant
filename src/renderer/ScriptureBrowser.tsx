@@ -13,6 +13,8 @@ import { useTranslation } from 'react-i18next';
 import { parseBibleXMLAsync, type BibleData } from './bibleParser';
 import { onlineBibleManager, type BibleInfo } from './onlineBibleManager';
 import { helloAoApi, type HelloAoTranslation } from './helloAoApi';
+import { fetchBibleApi } from './fetchBibleApi';
+import type { GetResourcesItem } from '@gracious.tech/fetch-client';
 import { dbGet, dbSet, dbClear } from './indexedDbCache';
 import Dialog from './components/Dialog';
 
@@ -39,7 +41,6 @@ interface ParsedRef {
 const VERSE_HEIGHT = 96;
 const OVERSCAN = 5;
 const CACHE_VERSION = 'v2';
-// İncil ayetleri için chunk (82 font)
 const CHUNK_CONFIG = { maxVerses: 3, maxChars: 120, maxLines: 2 } as const;
 
 // ─── Normalization & Parsing ────────────────────────────────────────────────
@@ -63,7 +64,7 @@ function parseScriptureRef(input: string): ParsedRef | null {
   const s = input.trim();
   if (!s) return null;
 
-  // Optimize edilmiş regex ile tek seferde parsing
+  // Try each pattern: book chapter:verse, book chapter, book-only
   const patterns = [
     /^(.+?)\s+(\d+):(\d+)(?:-(\d+))?$/,
     /^(.+?)\s+(\d+)$/,
@@ -164,6 +165,34 @@ class BibleCache {
   static removeStoredPath(): void {
     localStorage.removeItem('defaultBibleXmlPath');
   }
+}
+
+// ─── Bible Source Persistence (survives tab switches) ─────────────────────
+
+interface LastBibleSource {
+  type: 'online' | 'helloao' | 'fetchbible';
+  id: string;
+}
+
+const LAST_BIBLE_KEY = 'lastBibleSource';
+
+function saveLastBibleSource(source: LastBibleSource): void {
+  localStorage.setItem(LAST_BIBLE_KEY, JSON.stringify(source));
+  BibleCache.removeStoredPath();
+}
+
+function getLastBibleSource(): LastBibleSource | null {
+  try {
+    const raw = localStorage.getItem(LAST_BIBLE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as LastBibleSource;
+  } catch {
+    return null;
+  }
+}
+
+function clearLastBibleSource(): void {
+  localStorage.removeItem(LAST_BIBLE_KEY);
 }
 
 // ─── Chunking Algorithm (Optimized) ─────────────────────────────────────────
@@ -335,18 +364,21 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
   // Online Bible states
   const [bibleSource, setBibleSource] = useState<'offline' | 'online'>('offline');
   const [onlineBibles, setOnlineBibles] = useState<BibleInfo[]>([]);
-  const [selectedOnlineBible, setSelectedOnlineBible] = useState<BibleInfo | null>(null);
   const [isLoadingOnline, setIsLoadingOnline] = useState(false);
   const [onlineError, setOnlineError] = useState<string | null>(null);
   const [showOnlineBibleDialog, setShowOnlineBibleDialog] = useState(false);
+  const [isLoadingUnified, setIsLoadingUnified] = useState(false);
   const [languageFilter, setLanguageFilter] = useState('');
-  const [onlineTab, setOnlineTab] = useState<'github' | 'helloao'>('github');
 
   // HelloAO states
   const [helloAoTranslations, setHelloAoTranslations] = useState<HelloAoTranslation[]>([]);
-  const [selectedHelloAo, setSelectedHelloAo] = useState<HelloAoTranslation | null>(null);
   const [isLoadingHelloAo, setIsLoadingHelloAo] = useState(false);
   const [helloAoError, setHelloAoError] = useState<string | null>(null);
+
+  // fetch.bible states
+  const [fetchBibleTranslations, setFetchBibleTranslations] = useState<GetResourcesItem[]>([]);
+  const [isLoadingFetchBible, setIsLoadingFetchBible] = useState(false);
+  const [fetchBibleProgress, setFetchBibleProgress] = useState<{ done: number; total: number } | null>(null);
 
   const filteredOnlineBibles = useMemo(() => {
     if (!languageFilter) return onlineBibles;
@@ -366,6 +398,47 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
            t.name.toLowerCase().includes(lower)
     );
   }, [helloAoTranslations, languageFilter]);
+
+  const filteredFetchBibleTranslations = useMemo(() => {
+    if (!languageFilter) return fetchBibleTranslations;
+    const lower = languageFilter.toLowerCase();
+    return fetchBibleTranslations.filter(t =>
+      t.language?.toLowerCase().includes(lower) ||
+      t.name?.toLowerCase().includes(lower) ||
+      t.name_local?.toLowerCase().includes(lower) ||
+      t.name_english?.toLowerCase().includes(lower)
+    );
+  }, [fetchBibleTranslations, languageFilter]);
+
+  const unifiedBibleList = useMemo(() => {
+    const items: Array<{
+      id: string;
+      name: string;
+      language: string;
+      detail: string;
+      source: 'github' | 'helloao' | 'fetchbible';
+      data: unknown;
+    }> = [];
+
+    for (const b of filteredOnlineBibles) {
+      items.push({ id: b.filename, name: b.name, language: b.language, detail: b.version, source: 'github', data: b });
+    }
+    for (const t of filteredHelloAoTranslations) {
+      items.push({
+        id: t.id, name: t.englishName || t.name, language: t.languageEnglishName || t.languageName,
+        detail: `${t.numberOfBooks} books`, source: 'helloao', data: t,
+      });
+    }
+    for (const t of filteredFetchBibleTranslations) {
+      items.push({
+        id: t.id, name: t.name_bilingual || t.name || t.name_english || t.id,
+        language: t.language || '', detail: '', source: 'fetchbible', data: t,
+      });
+    }
+
+    items.sort((a, b) => a.language.localeCompare(b.language) || a.name.localeCompare(b.name));
+    return items;
+  }, [filteredOnlineBibles, filteredHelloAoTranslations, filteredFetchBibleTranslations]);
   
   const debouncedSearch = useDebounce(searchTerm);
   const deferredSearch = useDeferredValue(debouncedSearch);
@@ -492,6 +565,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
         if (cached) {
           setBible(cached);
           BibleCache.setStoredPath(result.path);
+          clearLastBibleSource();
           return;
         }
       }
@@ -503,6 +577,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       if (result.path) {
         BibleCache.setStoredPath(result.path);
         await BibleCache.set(result.path, parsed);
+        clearLastBibleSource();
       }
     } catch (err) {
       console.error('Failed to parse XML:', err);
@@ -518,7 +593,6 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
     try {
       const result = await onlineBibleManager.fetchBibleList();
       setOnlineBibles(result.bibles);
-      setShowOnlineBibleDialog(true);
     } catch (error) {
       console.error('Failed to fetch online bibles:', error);
       setOnlineError(
@@ -540,10 +614,10 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
 
       setBible(parsed);
       setBibleSource('online');
-      setSelectedOnlineBible(bibleInfo);
       setShowOnlineBibleDialog(false);
 
       await BibleCache.set(`online:${bibleInfo.filename}`, parsed);
+      saveLastBibleSource({ type: 'online', id: bibleInfo.filename });
       setParseError(null);
     } catch (error) {
       console.error('Failed to download and parse Bible:', error);
@@ -563,8 +637,6 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
     try {
       const translations = await helloAoApi.fetchTranslations();
       setHelloAoTranslations(translations);
-      setOnlineTab('helloao');
-      setShowOnlineBibleDialog(true);
     } catch (error) {
       console.error('Failed to fetch HelloAO translations:', error);
       setHelloAoError(
@@ -586,10 +658,10 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
 
       setBible(parsed);
       setBibleSource('online');
-      setSelectedHelloAo(translation);
       setShowOnlineBibleDialog(false);
 
       await BibleCache.set(`helloao:${translation.id}`, parsed);
+      saveLastBibleSource({ type: 'helloao', id: translation.id });
       setParseError(null);
     } catch (error) {
       console.error('Failed to download HelloAO Bible:', error);
@@ -601,17 +673,81 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
     }
   }, []);
 
-  // Load stored Bible on mount
-  useEffect(() => {
-    const storedPath = BibleCache.getStoredPath();
-    if (storedPath) {
-      handleImportXML(storedPath);
+  // Unified browse: fetch all sources and open dialog
+  const handleBrowseOnline = useCallback(async () => {
+    setIsLoadingUnified(true);
+    setShowOnlineBibleDialog(true);
+
+    await Promise.allSettled([
+      handleFetchOnlineBibles(),
+      handleFetchHelloAo(),
+      fetchBibleApi.fetchTranslations().then(setFetchBibleTranslations).catch(() => {}),
+    ]);
+
+    setIsLoadingUnified(false);
+  }, [handleFetchOnlineBibles, handleFetchHelloAo]);
+
+  // Download fetch.bible translation (preloads all books)
+  const handleDownloadFetchBible = useCallback(async (resource: GetResourcesItem) => {
+    setIsLoadingFetchBible(true);
+    setFetchBibleProgress(null);
+
+    try {
+      const parsed = await fetchBibleApi.preloadBible(resource.id, (done, total) => {
+        setFetchBibleProgress({ done, total });
+      });
+
+      setBible(parsed);
+      setBibleSource('online');
+      setShowOnlineBibleDialog(false);
+
+      await BibleCache.set(`fetchbible:${resource.id}`, parsed);
+      saveLastBibleSource({ type: 'fetchbible', id: resource.id });
+      setFetchBibleProgress(null);
+      setParseError(null);
+    } catch (error) {
+      console.error('Failed to download fetch.bible:', error);
+      setParseError(
+        error instanceof Error ? error.message : 'Failed to download Bible'
+      );
+    } finally {
+      setIsLoadingFetchBible(false);
     }
+  }, []);
+
+  // Load stored Bible on mount (survives tab switches)
+  useEffect(() => {
+    const restoreBible = async () => {
+      const storedPath = BibleCache.getStoredPath();
+      if (storedPath) {
+        handleImportXML(storedPath);
+        return;
+      }
+
+      const last = getLastBibleSource();
+      if (!last) return;
+
+      const path = last.type === 'online'
+        ? `online:${last.id}`
+        : `${last.type}:${last.id}`;
+
+      const format = last.type === 'online'
+        ? 'zefania'
+        : last.type === 'helloao'
+          ? 'helloAo'
+          : 'fetchbible';
+
+      const cached = await BibleCache.get(path, format);
+      if (cached) {
+        setBible(cached);
+        setBibleSource('online');
+      }
+    };
+
+    restoreBible();
   }, [handleImportXML]);
 
-  // Auto-select book/chapter/verses based on search
-  // BUG FIX: Only reset selections when the book actually changes,
-  // not on every keystroke — prevents losing verse selections while typing.
+  // Auto-select book/chapter/verses from search ref; only reset on book change
   useEffect(() => {
     if (!bible || !parsedRef || !bookNameCache) return;
 
@@ -641,7 +777,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
         setSelectedVerses(new Set());
       }
 
-      // Select verses if specified — use functional update to avoid stale closure
+      // Select verse range
       if (parsedRef.verse != null && parsedRef.verseTo != null) {
         const targetChapter = chapter ?? selectedChapter;
         if (targetChapter) {
@@ -761,6 +897,8 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
     if (!confirmed) return;
 
     BibleCache.clear();
+    clearLastBibleSource();
+    BibleCache.removeStoredPath();
     setBible(null);
     setSelectedBook(null);
     setSelectedChapter(null);
@@ -1224,38 +1362,25 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
                 <FileUp className="w-4 h-4" aria-hidden="true" />
               </button>
               <button
-                onClick={handleClearCache}
-                className="w-8 h-8 flex items-center justify-center rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-all"
-                title={t('common.scriptureClearCache')}
-                aria-label={t('common.scriptureClearCache')}
-              >
-                <X className="w-4 h-4" aria-hidden="true" />
-              </button>
-              <button
-                onClick={handleFetchOnlineBibles}
-                disabled={isLoadingOnline}
+                onClick={handleBrowseOnline}
+                disabled={isLoadingUnified}
                 className="w-8 h-8 flex items-center justify-center rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 transition-all disabled:opacity-50"
-                title="GitHub XML Bibles"
-                aria-label="GitHub XML Bibles"
+                title={t('common.scriptureBrowseOnline')}
+                aria-label={t('common.scriptureBrowseOnline')}
               >
-                {isLoadingOnline ? (
+                {isLoadingUnified ? (
                   <Loader className="w-4 h-4 animate-spin" aria-hidden="true" />
                 ) : (
                   <Globe className="w-4 h-4" aria-hidden="true" />
                 )}
               </button>
               <button
-                onClick={handleFetchHelloAo}
-                disabled={isLoadingHelloAo}
-                className="w-8 h-8 flex items-center justify-center rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 transition-all disabled:opacity-50"
-                title="HelloAO API Bibles"
-                aria-label="HelloAO API Bibles"
+                onClick={handleClearCache}
+                className="w-8 h-8 flex items-center justify-center rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-all"
+                title={t('common.scriptureClearCache')}
+                aria-label={t('common.scriptureClearCache')}
               >
-                {isLoadingHelloAo ? (
-                  <Loader className="w-4 h-4 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Download className="w-4 h-4" aria-hidden="true" />
-                )}
+                <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -1339,45 +1464,22 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
             ? renderVerseList()
             : renderEmptyState()}
 
-      {/* Online Bible Dialog */}
+      {/* Online Bible Dialog (unified) */}
       <Dialog
         open={showOnlineBibleDialog}
         onClose={() => setShowOnlineBibleDialog(false)}
         labelledBy="online-bible-dialog-title"
-        className="w-full max-w-md rounded-[32px] border border-white/10 bg-zinc-900 shadow-2xl shadow-black/40 overflow-hidden"
+        className="w-full max-w-lg rounded-[32px] border border-white/10 bg-zinc-900 shadow-2xl shadow-black/40 overflow-hidden"
       >
         <div className="p-6 max-h-[80vh] flex flex-col">
           <h2 id="online-bible-dialog-title" className="text-xl font-semibold mb-4 flex items-center gap-2">
             <Globe className="w-5 h-5 text-blue-400" aria-hidden="true" />
-            Online Bible Versions
+            {t('common.scriptureOnlineBibles')}
           </h2>
-
-          <div className="flex mb-4 gap-1 bg-zinc-800/50 rounded-lg p-1">
-            <button
-              onClick={() => setOnlineTab('github')}
-              className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                onlineTab === 'github'
-                  ? 'bg-zinc-700 text-zinc-100 shadow-sm'
-                  : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              GitHub XML
-            </button>
-            <button
-              onClick={() => setOnlineTab('helloao')}
-              className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                onlineTab === 'helloao'
-                  ? 'bg-zinc-700 text-zinc-100 shadow-sm'
-                  : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              HelloAO API
-            </button>
-          </div>
 
           {(onlineError || helloAoError) && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4 text-red-400 text-sm">
-              {onlineTab === 'github' ? onlineError : helloAoError}
+              {[onlineError, helloAoError].filter(Boolean).join('; ')}
             </div>
           )}
 
@@ -1385,7 +1487,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
             <input
               type="text"
-              placeholder="Filter by language..."
+              placeholder={t('common.scriptureLanguageFilter')}
               value={languageFilter}
               onChange={e => setLanguageFilter(e.target.value)}
               aria-label={t('common.scriptureLanguageFilter')}
@@ -1394,58 +1496,63 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
           </div>
 
           <div className="overflow-y-auto flex-1 mb-4 space-y-2">
-            {onlineTab === 'github' ? (
-              filteredOnlineBibles.length === 0 ? (
-                <p className="text-zinc-400 text-center py-8">No Bibles available</p>
-              ) : (
-                filteredOnlineBibles.map((bible) => (
+            {isLoadingUnified ? (
+              <div className="flex items-center justify-center gap-3 py-12">
+                <Loader className="w-5 h-5 animate-spin text-blue-400" aria-hidden="true" />
+                <span className="text-[13px] text-zinc-400">Loading Bibles…</span>
+              </div>
+            ) : unifiedBibleList.length === 0 ? (
+              <p className="text-zinc-400 text-center py-8">
+                {t('common.scriptureNoMatch')}
+              </p>
+            ) : (
+              unifiedBibleList.map((item) => {
+                const isGitHub = item.source === 'github';
+                const isHelloAo = item.source === 'helloao';
+                const isFetchBible = item.source === 'fetchbible';
+                const isLoading = (isGitHub && isLoadingOnline) || (isHelloAo && isLoadingHelloAo) || (isFetchBible && isLoadingFetchBible);
+                const handleDownload = isGitHub
+                  ? () => handleDownloadOnlineBible(item.data as BibleInfo)
+                  : isHelloAo
+                    ? () => handleDownloadHelloAo(item.data as HelloAoTranslation)
+                    : () => handleDownloadFetchBible(item.data as GetResourcesItem);
+
+                return (
                   <button
-                    key={bible.filename}
-                    onClick={() => handleDownloadOnlineBible(bible)}
-                    disabled={isLoadingOnline}
+                    key={`${item.source}:${item.id}`}
+                    onClick={handleDownload}
+                    disabled={isLoading}
                     className="w-full text-left p-3 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/50 border border-zinc-700 hover:border-blue-500 transition-all disabled:opacity-50 group"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-zinc-100 truncate group-hover:text-blue-300">{bible.name}</p>
-                        <p className="text-xs text-zinc-400">{bible.language}</p>
-                      </div>
-                      {isLoadingOnline ? (
-                        <Loader className="w-4 h-4 animate-spin text-blue-400 shrink-0 ml-2" aria-hidden="true" />
-                      ) : (
-                        <Download className="w-4 h-4 text-zinc-400 group-hover:text-blue-400 shrink-0 ml-2" aria-hidden="true" />
-                      )}
-                    </div>
-                  </button>
-                ))
-              )
-            ) : (
-              filteredHelloAoTranslations.length === 0 ? (
-                <p className="text-zinc-400 text-center py-8">No translations available</p>
-              ) : (
-                filteredHelloAoTranslations.map((translation) => (
-                  <button
-                    key={translation.id}
-                    onClick={() => handleDownloadHelloAo(translation)}
-                    disabled={isLoadingHelloAo}
-                    className="w-full text-left p-3 rounded-lg bg-zinc-800/50 hover:bg-zinc-700/50 border border-zinc-700 hover:border-emerald-500 transition-all disabled:opacity-50 group"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-zinc-100 truncate group-hover:text-emerald-300">{translation.englishName || translation.name}</p>
-                        <p className="text-xs text-zinc-400">
-                          {translation.languageEnglishName || translation.languageName} &middot; {translation.numberOfBooks} books
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-zinc-100 truncate">{item.name}</p>
+                          <span className={cn(
+                            'text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0',
+                            isGitHub && 'bg-blue-500/10 text-blue-400',
+                            isHelloAo && 'bg-emerald-500/10 text-emerald-400',
+                            isFetchBible && 'bg-violet-500/10 text-violet-400',
+                          )}>
+                            {isGitHub ? 'GitHub XML' : isHelloAo ? 'HelloAO' : 'fetch.bible'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-zinc-400 mt-0.5">
+                          {item.language}
+                          {item.detail && <> &middot; {item.detail}</>}
                         </p>
                       </div>
-                      {isLoadingHelloAo ? (
-                        <Loader className="w-4 h-4 animate-spin text-emerald-400 shrink-0 ml-2" aria-hidden="true" />
-                      ) : (
-                        <Download className="w-4 h-4 text-zinc-400 group-hover:text-emerald-400 shrink-0 ml-2" aria-hidden="true" />
-                      )}
+                      <div className="shrink-0 ml-2">
+                        {isLoading ? (
+                          <Loader className="w-4 h-4 animate-spin text-blue-400" aria-hidden="true" />
+                        ) : (
+                          <Download className="w-4 h-4 text-zinc-400 group-hover:text-blue-400 transition-colors" aria-hidden="true" />
+                        )}
+                      </div>
                     </div>
                   </button>
-                ))
-              )
+                );
+              })
             )}
           </div>
 
@@ -1453,7 +1560,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
             onClick={() => setShowOnlineBibleDialog(false)}
             className="w-full px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-all"
           >
-            Close
+            {t('common.scriptureClose')}
           </button>
         </div>
       </Dialog>

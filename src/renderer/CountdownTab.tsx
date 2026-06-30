@@ -54,7 +54,7 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
   const [isRunning, setIsRunning] = useState(false);
   const [selectedThemeId, setSelectedThemeId] = useState('dark');
 
-  // ✅ startTime ref'te tutulur — interval timeLeft'e bağımlı değil
+  // startTime stored in ref — interval not dependent on timeLeft
   const startTimeRef = useRef<number | null>(null);
   const totalSecondsRef = useRef<number>(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -68,7 +68,7 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
     }
   }, []);
 
-  // ✅ Tek bir effect — sadece isRunning değiştiğinde çalışır
+  // Single effect — runs only when isRunning changes
   useEffect(() => {
     if (!isRunning) {
       clearTimer();
@@ -98,9 +98,9 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
     setIsRunning(true);
   }, [minutes, seconds]);
 
-  // ✅ Pause: sayacı durdurur, kaldığı yerden devam ettirilebilir
+  // Pause: stop the timer, keep current value for resume
   const pauseCountdown = useCallback(() => {
-    // Kalan süreyi totalSecondsRef'e yaz ki resume doğru hesaplasın
+    // Store remaining time so resume can pick up correctly
     totalSecondsRef.current = timeLeft;
     setIsRunning(false);
   }, [timeLeft]);

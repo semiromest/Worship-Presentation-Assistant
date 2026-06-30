@@ -51,7 +51,7 @@ function useTransitionManager(
 
   // Handle slide changes
   useEffect(() => {
-    // İlk render'da transition tetikleme
+    // Skip transition on first render
     if (isFirstRender.current) {
       isFirstRender.current = false;
       prevSlideRef.current = slide;
@@ -66,10 +66,10 @@ function useTransitionManager(
     const prevSlide = prevSlideRef.current;
     const currentSlide = slide;
 
-    // Aynı slayt ID'si - sadece içeriği güncelle
+    // Same slide ID — update content only
     if (currentSlide?.id === prevSlide?.id) {
       if (currentSlide && prevSlide) {
-          // İçerik gerçekten değiştiyse güncelle
+          // Update if content actually changed
           const shallowEqual = (a: any, b: any) => {
             if (a === b) return true;
             if (!a || !b) return false;
@@ -111,12 +111,12 @@ function useTransitionManager(
       return;
     }
 
-    // Farklı slayt - transition'ı yönet
+    // Different slide — manage transition
     if (transitionTimerRef.current) {
       clearTimeout(transitionTimerRef.current);
     }
 
-    // Transition gerekmiyorsa
+    // Skip if no transition
     if (transitionType === 'none' || duration === 0) {
       setState({
         incoming: currentSlide,
@@ -127,7 +127,7 @@ function useTransitionManager(
       return;
     }
 
-    // Transition'ı başlat
+    // Start transition
     transitionIdRef.current += 1;
     const currentTransitionId = transitionIdRef.current;
 
@@ -137,9 +137,9 @@ function useTransitionManager(
       isTransitioning: true,
     });
 
-    // Temizleme işlemini zamanla
+    // Schedule cleanup
     transitionTimerRef.current = setTimeout(() => {
-      // Hala bu transition aktifse temizle
+      // Clean up if this transition is still active
       if (transitionIdRef.current === currentTransitionId) {
         setState(prev => ({
           ...prev,

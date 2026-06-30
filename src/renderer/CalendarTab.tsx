@@ -20,7 +20,7 @@ interface CalendarEvent {
   description?: string;
   color?: string;
   time?: string;
-  /** Kayıtlı sunumun adı (Sunumlar sekmesinde kaydedilen isimle aynı) */
+  /** Name of the saved preset (same as the name saved in the Presets tab) */
   presentationName?: string;
 }
 

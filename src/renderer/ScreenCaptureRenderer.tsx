@@ -55,7 +55,7 @@ function useScreenStream(sourceId: string, captureAudio: boolean = true) {
         },
       });
 
-      // Abort edilmiş mi kontrol et
+      // Check if aborted
       if (abortControllerRef.current?.signal.aborted) {
         stream.getTracks().forEach((track: { stop: () => any; }) => track.stop());
         return;
@@ -149,7 +149,7 @@ export default function ScreenCaptureRenderer({
   const videoRef = useRef<HTMLVideoElement>(null);
   const { status, error, stream } = useScreenStream(sourceId, !muted);
 
-  // Video element'ini stream'e bağla ve ses ayarla
+  // Attach stream to video element and set audio
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !stream) return;
@@ -172,7 +172,7 @@ export default function ScreenCaptureRenderer({
     };
   }, [stream]);
 
-  // Ses seviyesi değişikliklerini uygula
+  // Apply volume/muted changes
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;

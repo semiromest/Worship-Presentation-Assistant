@@ -159,11 +159,11 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
 
       let w, h;
       if (parentRatio > targetRatio) {
-        // Ekran daha geniş - yüksekliğe göre sığdır
+        // Screen wider — scale by height
         h = parentH;
         w = h * targetRatio;
       } else {
-        // Ekran daha dar - genişliğe göre sığdır
+        // Screen taller — scale by width
         w = parentW;
         h = w / targetRatio;
       }
@@ -185,7 +185,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
 
   const { scale, width, height } = dimensions;
 
-  // İçerik katmanı - her zaman 16:9 ve ortalanmış
+  // Content layer — always 16:9 and centered
   const renderContent = () => {
     if (slide.items?.length) {
       return (

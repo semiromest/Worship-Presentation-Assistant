@@ -1,14 +1,13 @@
 import type { Preset } from './types';
 
-/** Takvim veya başka yerlerden gelen sunum referansını normalize eder. */
+/** Normalize a presentation reference string. */
 export function normalizePresentationRef(ref: string): string {
   return ref.trim();
 }
 
 /**
- * Kayıtlı sunumu referansa göre bulur.
- * Öncelik: tam ad eşleşmesi (büyük/küçük harf duyarsız).
- * Geriye dönük: yalnızca rakamsa 1 tabanlı sıra numarası.
+ * Find a saved preset by reference.
+ * Priority: exact name match (case-insensitive), then 1-based numeric index.
  */
 export function findPresetByRef(ref: string, presets: Preset[]): Preset | undefined {
   const trimmed = normalizePresentationRef(ref);

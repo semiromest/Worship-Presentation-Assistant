@@ -50,7 +50,7 @@ export const DEFAULT_SLIDE_STYLES: Record<string, unknown> = {
 export const FONT_PRESETS = [
   { name: 'Varsayılan', value: 'inherit' },
 
-  // Sistem Fontları
+  // System Fonts
   { name: 'Arial', value: 'Arial, sans-serif' },
   { name: 'Times New Roman', value: 'Times New Roman, serif' },
   { name: 'Courier New', value: 'Courier New, monospace' },

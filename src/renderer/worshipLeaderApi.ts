@@ -73,17 +73,14 @@ export async function getSong(id: number): Promise<WorshipSongDetail> {
 export function parseSongXml(songxml: string): string {
   if (!songxml) return '';
   let text = songxml;
-  // Remove <chord> tags completely (content included)
+  // Strip XML tags (including chords), decode HTML entities, normalize whitespace
   text = text.replace(/<chord>[^<]*<\/chord>/g, '');
-  // Strip ALL remaining XML tags (generic approach)
   text = text.replace(/<[^>]+>/g, ' ');
-  // Decode HTML entities
   text = text.replace(/&amp;/g, '&');
   text = text.replace(/&lt;/g, '<');
   text = text.replace(/&gt;/g, '>');
   text = text.replace(/&quot;/g, '"');
   text = text.replace(/&#39;/g, "'");
-  // Clean up whitespace
   text = text.replace(/[ \t]+/g, ' ');
   text = text.replace(/\n{3,}/g, '\n\n');
   text = text.trim();

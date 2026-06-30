@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Music, Plus, Search, Trash2, FolderUp, CheckSquare, Pencil, X, ListOrdered, Cloud } from 'lucide-react';
+import { Skeleton } from './components/Skeleton';
 import OnlineHymnsPanel from './components/OnlineHymnsPanel';
 import { cn, useDebounce } from './utils';
 import { confirmDialog } from './dialogs';
@@ -16,9 +17,9 @@ interface HymnsTabProps {
   onAddHymnToPresentation: (hymn: Hymn, partsMode?: boolean, goLive?: boolean) => void;
 }
 
-// ─── Saf yardımcı fonksiyonlar component dışında ───────────────────────────
+// ─── Pure helper functions (outside component) ────────────────────────────
 
-// BG, TC, I gibi ID kodlarını sil (TY ve RT kodlarını KOR)
+// Strip ID codes like BG, TC (keep TY and RT)
 const TITLE_PATTERNS = [/(?:BG|TC)\d+/gi, /\s{2,}/g];
 
 function cleanTitle(title: string): string {
@@ -30,13 +31,13 @@ function cleanTitle(title: string): string {
 const CHORD_TOKEN_RE =
   /^(?:\d+|\.?[A-G](#|b)?(?:M(?:aj)?(?:7|9)?|maj(?:7|9)?|min(?:7|9)?|mn?|m(?:7|9)?|sus(?:2|4)?|dim7?|aug|add\d+|\d+)?[+o°]?(?:\/[A-G](#|b)?)?(?:\([A-GMmb#0-9\/+]+\))?)$/;
 
-/** Satırdaki tüm token'lar akor mu? Öyleyse satırın tamamı silinir. */
+/** Are all tokens in this line chords? If so, the whole line is removed. */
 function isPureChordLine(line: string): boolean {
   const tokens = line.trim().split(/\s+/);
   return tokens.length > 0 && tokens.every(t => CHORD_TOKEN_RE.test(t));
 }
 
-/** Karma satırdaki (söz + akor karışık) akor token'larını siler. */
+/** Remove inline chord tokens from a mixed (lyrics + chords) line. */
 function removeInlineChords(line: string): string {
   return line
     .split(/\s+/)
@@ -64,7 +65,7 @@ function cleanLyrics(lyrics: string): string {
     text = text.split(entity).join(char);
   }
 
-  // Bölüm etiketlerini temizle: [V1] [CHORUS] vb.
+  // Strip section tags: [V1] [CHORUS] etc.
   text = text.replace(SECTION_TAG_RE, '');
 
   const lines = text.split('\n');
@@ -73,23 +74,23 @@ function cleanLyrics(lyrics: string): string {
   for (const raw of lines) {
     let line = raw.trim();
 
-    // Boş satır — art arda birden fazla boş satır ekleme
+    // Empty line — avoid consecutive blank lines
     if (!line) {
       if (out.length > 0 && out[out.length - 1] !== '') out.push('');
       continue;
     }
 
-    // 1) Tamamen akor olan satırı at (ör: "G F", "Am7 Dsus4", ".D .G")
+    // 1) Skip lines that are entirely chords (e.g. "G F", "Am7 Dsus4", ".D .G")
     if (isPureChordLine(line)) continue;
 
-    // 2) Karma satırlarda akor token'larını sil (ör: "Seni Am seviyorum G7")
+    // 2) Remove chord tokens from mixed lines (e.g. "Seni Am seviyorum G7")
     line = removeInlineChords(line);
 
-    // 3) Nokta, tire, alt çizgi temizliği (tekrarlar dahil) + boşluk düzeltmesi
+    // 3) Clean dots, dashes, underscores + fix spacing
     line = line.replace(/[.\-_]+/g, ' ').replace(MULTI_SPACE_RE, ' ').trim();
     if (!line) continue;
 
-    // 4) Virgül/noktalama ile aşırı bölünmüş tekrar eden parçaları birleştir
+    // 4) Merge over-split repeated fragments separated by commas/punctuation
     const parts = line.split(SENTENCE_SPLIT_RE);
     if (parts.length > 3) {
       const seen = new Set<string>();
@@ -109,7 +110,7 @@ function cleanLyrics(lyrics: string): string {
   return out.join('\n');
 }
 
-// ─── Cache yardımcıları ───────────────────────────────────────────────────
+// ─── Cache helpers ────────────────────────────────────────────────────────
 
 function cacheHymns(path: string, list: Hymn[]) {
   try { localStorage.setItem(`hymnsCache:${path}`, JSON.stringify(list)); } catch {}
@@ -122,7 +123,7 @@ function loadCachedHymns(path: string): Hymn[] | null {
   } catch { return null; }
 }
 
-// ─── XML parsing – chunk'lara bölerek main thread'i serbest bırak ──────────
+// ─── XML parsing — chunked to keep main thread free ───────────────────────
 
 async function parseXmlFiles(
   files: { name: string; content: string }[],
@@ -171,7 +172,7 @@ async function parseXmlFiles(
   return { hymns: results, failedCount };
 }
 
-// ─── Sanal liste ──────────────────────────────────────────────────────────
+// ─── Virtual list ─────────────────────────────────────────────────────────
 
 const ITEM_H = 64;
 const OVERSCAN = 5;
@@ -204,7 +205,7 @@ function useVirtualList(items: Hymn[], containerRef: React.RefObject<HTMLDivElem
   return { start, end, totalHeight: items.length * ITEM_H };
 }
 
-// ─── Ana bileşen ──────────────────────────────────────────────────────────
+// ─── Main component ───────────────────────────────────────────────────────
 
 export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
   const { t } = useTranslation();
@@ -288,7 +289,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
     }
   }, [handleBulkImport]);
 
-  // ─── Yeni ilahi ekle ──────────────────────────────────────────────────
+  // ─── Add new hymn ────────────────────────────────────────────────────
 
   const addNewHymn = useCallback(() => {
     const title = newHymn.title.trim();
@@ -337,7 +338,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
     setHymns(prev => prev.filter(h => h.id !== id));
   }, []);
 
-  // ─── İlahi düzenleme ────────────────────────────────────────────────────
+  // ─── Hymn editing ────────────────────────────────────────────────────
 
   const openEditModal = useCallback((hymn: Hymn) => {
     setEditingHymn(hymn);
@@ -534,9 +535,23 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
             </button>
           </form>
         ) : filteredHymns.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-white/45 text-sm">
-            {t('common.hymnsEmpty')}
-          </div>
+          importProgress !== null ? (
+            <div className="p-4 space-y-3" aria-hidden="true">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-3.5 w-3/5" />
+                    <Skeleton className="h-3 w-4/5" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center text-white/45 text-sm">
+              {t('common.hymnsEmpty')}
+            </div>
+          )
         ) : (
           <div style={{ height: totalHeight, position: 'relative' }}>
             {filteredHymns.slice(start, end).map((hymn, i) => (
@@ -622,7 +637,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
   );
 }
 
-// ─── Satır bileşeni ───────────────────────────────────────────────────────
+// ─── Row component ────────────────────────────────────────────────────────
 
 interface HymnRowProps {
   hymn: Hymn;

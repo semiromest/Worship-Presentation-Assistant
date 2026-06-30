@@ -17,7 +17,7 @@ export interface BibleBook {
 export interface BibleData {
   name: string;
   books: BibleBook[];
-  format: 'zefania' | 'holyBible' | 'helloAo';
+  format: 'zefania' | 'holyBible' | 'helloAo' | 'fetchbible';
 }
 
 export interface IBibleParser {

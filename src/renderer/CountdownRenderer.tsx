@@ -6,7 +6,7 @@ import {
   formatCountdownTime,
 } from './countdownUtils';
 
-// ─── Tipler ──────────────────────────────────────────────────────────────────
+// ─── Types ──────────────────────────────────────────────────────────────────
 
 interface Slide {
   id: string;
@@ -23,7 +23,7 @@ interface CountdownRendererProps {
   size?: 'preview' | 'projector';
 }
 
-// ─── Sabitler ────────────────────────────────────────────────────────────────
+// ─── Constants ──────────────────────────────────────────────────────────────
 
 const DEFAULT_BG_COLOR = '#000000';
 const DEFAULT_TEXT_COLOR = '#FFFFFF';
@@ -63,7 +63,7 @@ const useCountdown = (content: string) => {
   return timeLeft;
 };
 
-// ─── Memoized alt bileşenler ────────────────────────────────────────────────
+// ─── Memoized sub-components ───────────────────────────────────────────────
 
 const TimerDisplay = memo(({ 
   timeLeft, 
@@ -96,7 +96,7 @@ const TimerDisplay = memo(({
 
 TimerDisplay.displayName = 'TimerDisplay';
 
-// ─── Ana bileşen ────────────────────────────────────────────────────────────
+// ─── Main component ─────────────────────────────────────────────────────────
 
 const CountdownRenderer = memo(({ slide, size = 'preview' }: CountdownRendererProps) => {
   const timeLeft = useCountdown(slide?.content ?? '{}');

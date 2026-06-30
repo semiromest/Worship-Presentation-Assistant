@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Monitor, RefreshCw, Plus, Play, Square } from 'lucide-react';
+import { Skeleton } from './components/Skeleton';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -234,6 +235,21 @@ function SourceCard({
   );
 }
 
+function SourceGridSkeleton() {
+  return (
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3 overflow-y-auto pb-2" aria-hidden="true">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="rounded-xl border border-white/10 overflow-hidden">
+          <Skeleton className="w-full aspect-video rounded-none" />
+          <div className="p-2">
+            <Skeleton className="h-3.5 w-3/4" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SourceGrid({ 
   sources, 
   selectedId, 
@@ -449,7 +465,7 @@ export default function ScreenCaptureTab({ onAddScreenToPresentation }: ScreenCa
   }, [selectedId, selectedSource, isActive, captureFrame, onAddScreenToPresentation]);
 
   const renderContent = () => {
-    if (isLoading) return <EmptyState type="loading" t={t} />;
+    if (isLoading) return <SourceGridSkeleton />;
     if (error) return <EmptyState type="error" t={t} />;
     if (sources.length === 0) return <EmptyState type="empty" t={t} />;
 

@@ -1,6 +1,6 @@
 export type HymnSplitResult = { parts: string[] };
 
-// ─── Sabitler ────────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const RE_CRLF         = /\r\n/g;
 const RE_CR           = /\r/g;
@@ -8,17 +8,17 @@ const RE_TRAIL_SPACE  = /[^\S\n]+$/gm;
 const RE_MULTI_BLANK  = /\n{3,}/g;
 const RE_PUNCT_END    = /[.!?…;:,)]$/;
 
-// İlahiler için (küçük font)
+// Hymns (small font)
 const HYMN_MAX_LINES = 3;
 const HYMN_MAX_CHARS = 120;
 
-// İncil ayetleri için (82 font)
+// Bible verses (82 font)
 const SCRIPTURE_MAX_LINES = 2;
 const SCRIPTURE_MAX_CHARS = 80;
 
 const DEFAULT_MAX_PARTS = 5;
 
-// ─── Metin normalizasyonu ────────────────────────────────────────────────────
+// ─── Text Normalization ────────────────────────────────────────────────────────
 
 function normalizeText(text: string): string {
   return text
@@ -33,7 +33,7 @@ function splitParagraphs(text: string): string[] {
   return text.split('\n\n').map(p => p.trim()).filter(p => p.length > 0);
 }
 
-// ─── Boyut kontrolü ──────────────────────────────────────────────────────────
+// ─── Size Check ────────────────────────────────────────────────────────────
 
 interface SizeInfo {
   lines: number;
@@ -58,7 +58,7 @@ function analyzeSizeScripture(text: string): SizeInfo {
   return analyzeSize(text, SCRIPTURE_MAX_LINES, SCRIPTURE_MAX_CHARS);
 }
 
-// ─── Bölme algoritması ───────────────────────────────────────────────────────
+// ─── Split Algorithm (prefix-sum optimized) ─────────────────────────────────
 
 function findOptimalSplitPoint(lines: string[], maxLines: number, maxChars: number): number {
   if (lines.length <= 1) return -1;
@@ -191,7 +191,7 @@ function splitBlockOptimally(text: string, maxParts: number, analyzer: (t: strin
   return finalParts.filter(p => p.trim().length > 0);
 }
 
-// ─── Ana API ─────────────────────────────────────────────────────────────────
+// ─── Public API ────────────────────────────────────────────────────────────
 
 export function splitHymnLyrics(lyrics: string, maxParts: number = DEFAULT_MAX_PARTS): HymnSplitResult {
   if (!lyrics || typeof lyrics !== 'string') {
