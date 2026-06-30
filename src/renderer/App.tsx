@@ -30,6 +30,7 @@ import Toolbar from './components/Toolbar';
 import SlideGrid from './components/SlideGrid';
 import RightPanel from './components/RightPanel';
 import CheatsheetModal from './components/CheatsheetModal';
+import Toast from './components/Toast';
 
 export default function App() {
   const { t, i18n } = useTranslation();
@@ -148,7 +149,7 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [panels.styles, activeColorPicker, setPanels, setActiveColorPicker]);
 
-  // ─── Projektör Görünümü ──────────────────────────────────────────────────
+  // ─── Projector View ───────────────────────────────────────────────────────
   if (IS_PROJECTOR_MODE) {
     if (!projectorReady) {
       return (
@@ -197,7 +198,7 @@ export default function App() {
     );
   }
 
-  // ─── Ana Arayüz ──────────────────────────────────────────────────────────
+  // ─── Main UI ──────────────────────────────────────────────────────────────
   return (
     <div className="flex h-screen bg-surface-base text-white overflow-hidden">
       {/* Sidebar — navigation landmark */}
@@ -242,22 +243,25 @@ export default function App() {
             {t(SIDEBAR_TABS.find(tab => tab.id === activeTab)?.titleKey ?? 'nav.slides')}
           </h1>
           {activeTab === 'presentations' && (
-            <PresentationsTab
-              presentation={presentation}
-              presets={presets}
-              selectedPresetName={selectedPresetName}
-              onPresetsChange={setPresets}
-              onApplyPreset={applyPreset}
-              onSelectedPresetNameChange={setSelectedPresetName}
-              onOpenFile={openPresentation}
-              onSaveFile={savePresentation}
-              onImportSlides={handleImportSlides}
-              onNewPresentation={createNewPresentation}
-            />
+            <div className="h-full gp-slide-enter">
+              <PresentationsTab
+                presentation={presentation}
+                presets={presets}
+                selectedPresetName={selectedPresetName}
+                onPresetsChange={setPresets}
+                onApplyPreset={applyPreset}
+                onSelectedPresetNameChange={setSelectedPresetName}
+                onOpenFile={openPresentation}
+                onSaveFile={savePresentation}
+                onImportSlides={handleImportSlides}
+                onNewPresentation={createNewPresentation}
+              />
+            </div>
           )}
 
           {activeTab === 'slides' && (
-            <div className="h-full flex flex-col lg:flex-row">
+            <div className="h-full gp-slide-enter">
+              <div className="h-full flex flex-col lg:flex-row">
               <div className="flex-1 min-w-0 overflow-hidden">
                 <SlideGrid
                   addSlide={addSlide}
@@ -298,15 +302,16 @@ export default function App() {
                 </button>
               )}
             </div>
+            </div>
           )}
 
           {activeTab === 'bible' && (
-            <div className="h-full">
+            <div className="h-full gp-slide-enter">
               <ScriptureBrowser onSendToLive={handleSendToLive} />
             </div>
           )}
           {activeTab === 'media' && (
-            <div className="h-full">
+            <div className="h-full gp-slide-enter">
               <MediaLoopTab
                 onAddMediaToPresentation={handleMediaAdd}
                 onAddAllMediaToPresentation={handleAddAllMedia}
@@ -315,22 +320,22 @@ export default function App() {
             </div>
           )}
           {activeTab === 'hymns' && (
-            <div className="h-full">
+            <div className="h-full gp-slide-enter">
               <HymnsTab onAddHymnToPresentation={handleHymnAdd} />
             </div>
           )}
           {activeTab === 'countdown' && (
-            <div className="h-full">
+            <div className="h-full gp-slide-enter">
               <CountdownTab onAddCountdownToPresentation={handleAddCountdownToPresentation} />
             </div>
           )}
           {activeTab === 'screen' && (
-            <div className="h-full">
+            <div className="h-full gp-slide-enter">
               <ScreenCaptureTab onAddScreenToPresentation={handleScreenAdd} />
             </div>
           )}
           {activeTab === 'calendar' && (
-            <div className="h-full">
+            <div className="h-full gp-slide-enter">
               <CalendarTab
                 savedPresentationNames={savedPresentationNames}
                 onOpenPresentation={openSavedPresentationByName}
@@ -360,6 +365,9 @@ export default function App() {
 
       {/* Cheatsheet Modal */}
       <CheatsheetModal />
+
+      {/* Undo/Redo Toast */}
+      <Toast />
     </div>
   );
 }

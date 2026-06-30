@@ -45,6 +45,8 @@
     "keyboardShortcuts": "Atajos de Teclado",
     "undo": "Deshacer (Ctrl+Z)",
     "redo": "Rehacer (Ctrl+Y)",
+    "undoNotification": "Deshecho",
+    "redoNotification": "Rehecho",
     "moveSelectedUp": "Mover Seleccionados Arriba",
     "moveSelectedDown": "Mover Seleccionados Abajo",
     "deleteSelected": "Eliminar Seleccionados",

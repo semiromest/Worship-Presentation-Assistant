@@ -45,6 +45,8 @@
     "keyboardShortcuts": "키보드 단축키",
     "undo": "실행 취소 (Ctrl+Z)",
     "redo": "다시 실행 (Ctrl+Y)",
+    "undoNotification": "실행 취소됨",
+    "redoNotification": "다시 실행됨",
     "moveSelectedUp": "선택한 슬라이드 위로 이동",
     "moveSelectedDown": "선택한 슬라이드 아래로 이동",
     "deleteSelected": "선택한 슬라이드 삭제",

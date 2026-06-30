@@ -109,6 +109,10 @@ interface AppState {
   isCheatsheetOpen: boolean;
   setIsCheatsheetOpen: (open: boolean) => void;
 
+  // Toast notification
+  toastMessage: string | null;
+  toastKey: number;
+  setToastMessage: (msg: string | null) => void;
 
   // Presentation name
   setPresentationName: (name: string) => void;
@@ -117,12 +121,23 @@ interface AppState {
 export const useStore = create<AppState>((set) => ({
   undoState: initialUndoState,
   presentation: initialUndoState.present,
+  toastMessage: null,
+  toastKey: 0,
+  setToastMessage: (msg) => set({ toastMessage: msg, toastKey: msg ? Date.now() : 0 }),
   dispatchUndo: (action) =>
     set((state) => {
       const nextUndoState = undoReducer(state.undoState, action);
+      let toast: string | null = null;
+      if (action.type === 'UNDO' && nextUndoState.past.length < state.undoState.past.length) {
+        toast = 'undoNotification';
+      } else if (action.type === 'REDO' && nextUndoState.future.length < state.undoState.future.length) {
+        toast = 'redoNotification';
+      }
       return {
         undoState: nextUndoState,
         presentation: nextUndoState.present,
+        toastMessage: toast,
+        toastKey: toast ? Date.now() : state.toastKey,
       };
     }),
 

@@ -45,6 +45,8 @@
     "keyboardShortcuts": "Tastaturkürzel",
     "undo": "Rückgängig (Strg+Z)",
     "redo": "Wiederholen (Strg+Y)",
+    "undoNotification": "Rückgängig gemacht",
+    "redoNotification": "Wiederholt",
     "moveSelectedUp": "Ausgewählte nach oben verschieben",
     "moveSelectedDown": "Ausgewählte nach unten verschieben",
     "deleteSelected": "Ausgewählte löschen",

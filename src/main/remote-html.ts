@@ -4,7 +4,7 @@ export const REMOTE_HTML_NEW = /* html */`<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#000000">
@@ -41,6 +41,7 @@ export const REMOTE_HTML_NEW = /* html */`<!DOCTYPE html>
   --r:   14px;
   --r2:  10px;
   --bh:  58px;
+  color-scheme: dark;
 }
  
 /* ── Reset ───────────────────────────────────────────────────────────── */
@@ -64,7 +65,6 @@ body {
   min-height: -webkit-fill-available;
   color: var(--tx);
   font-family: 'Barlow', system-ui, sans-serif;
-  user-select: none;
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
  
@@ -200,9 +200,13 @@ body::after {
   border: 1.5px solid var(--rim);
   box-shadow: 0 12px 48px rgba(0,0,0,.8), 0 0 0 1px var(--bglow2);
   touch-action: pan-y;
-  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
 }
-.frame:active { cursor: grabbing; }
+@media (hover: hover) {
+  .frame { cursor: grab; }
+  .frame:active { cursor: grabbing; }
+}
  
 .frame img {
   position: absolute; inset: 0;
@@ -322,7 +326,7 @@ body::after {
 }
  
 .prog-track {
-  height: 2px; background: var(--z3);
+  height: 4px; background: var(--z3);
   border-radius: 99px; overflow: visible;
   position: relative;
 }
@@ -375,6 +379,8 @@ body::after {
   color: #fff; cursor: pointer;
   position: relative; overflow: hidden; outline: none;
   -webkit-appearance: none;
+  user-select: none;
+  -webkit-user-select: none;
   transition: transform .1s ease, filter .15s ease;
 }
  
@@ -509,6 +515,8 @@ body::after {
   overflow: hidden;
   border: 1.5px solid var(--rim);
   cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
   transition: border-color .18s, box-shadow .18s, transform .12s;
   -webkit-tap-highlight-color: transparent;
 }
@@ -584,12 +592,12 @@ body::after {
 /* ── Landscape ───────────────────────────────────────────────────────── */
 @media (orientation: landscape) and (max-height: 520px) {
   body { flex-direction: row; flex-wrap: wrap; }
- 
+
   .hdr {
     width: 100%;
     padding: .45rem 1rem;
   }
- 
+
   .stage {
     width: 52%;
     border-bottom: none;
@@ -597,23 +605,62 @@ body::after {
     padding: .55rem .7rem .4rem;
     flex-shrink: 0;
   }
- 
+
   .prog {
     width: 52%;
     border-right: 1px solid var(--z2);
     padding: 0 .7rem .45rem;
   }
- 
+
   .deck {
     flex: 1;
     width: 48%;
     border-top: none;
     padding: .6rem .8rem;
   }
- 
+
+  .slides-grid { grid-template-columns: 1fr 1fr; }
+
   .cnt-cur { font-size: 1.8rem; }
   .counter { padding: .35rem 0 .2rem; }
   .bh { height: 50px; }
+}
+
+@media (orientation: landscape) and (min-width: 768px) {
+  body { flex-direction: row; flex-wrap: wrap; align-items: flex-start; }
+
+  .hdr {
+    width: 100%;
+    padding: .5rem 1.2rem;
+  }
+
+  .stage {
+    width: 55%;
+    border-bottom: none;
+    border-right: 1px solid var(--z2);
+    padding: .65rem .8rem .5rem;
+    flex-shrink: 0;
+  }
+
+  .prog {
+    width: 55%;
+    border-right: 1px solid var(--z2);
+    padding: 0 .8rem .5rem;
+  }
+
+  .deck {
+    flex: 1;
+    width: 45%;
+    max-width: none;
+    border-top: none;
+    padding: .7rem 1rem;
+  }
+
+  .slides-grid { grid-template-columns: 1fr 1fr 1fr; }
+
+  .cnt-cur { font-size: 2rem; }
+  .counter { padding: .4rem 0 .25rem; }
+  .bh { height: 54px; }
 }
  
 /* ── Entrance animation ──────────────────────────────────────────────── */
@@ -635,6 +682,49 @@ body::after {
 .deck > *:nth-child(8)  { animation-delay: .32s; }
 .deck > *:nth-child(9)  { animation-delay: .36s; }
 .deck > *:nth-child(10) { animation-delay: .40s; }
+
+/* ── Focus visible ────────────────────────────────────────── */
+:focus-visible {
+  outline: 2.5px solid var(--blue);
+  outline-offset: 2px;
+}
+.frame:focus-visible,
+.slide-thumb:focus-visible {
+  outline: 2.5px solid var(--blue);
+  outline-offset: 1px;
+}
+.goto-inp:focus-visible {
+  outline: 2.5px solid var(--blue);
+  outline-offset: 0px;
+}
+
+/* ── Reduced motion ────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .deck > * { animation: none !important; }
+  .ph-icon { animation: none !important; }
+  .dot.wait { animation: none !important; opacity: .5; }
+  .bb-tag.on { animation: none !important; }
+  .cnt-cur.bump { transform: none !important; }
+}
+
+/* ── Container max-width (tablet+) ──────────────────────────── */
+@media (min-width: 520px) {
+  body { align-items: center; }
+  .hdr, .stage, .prog, .deck {
+    width: 100%;
+    max-width: 480px;
+  }
+}
+
+/* ── Grid responsive columns ────────────────────────────────── */
+@media (min-width: 480px) {
+  .slides-grid { grid-template-columns: 1fr 1fr 1fr; }
+}
 </style>
 </head>
 <body>
@@ -643,8 +733,8 @@ body::after {
 <header class="hdr">
     <div class="logo">
       <div class="logo-icon">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-             stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+             stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
         </svg>
       </div>
@@ -655,7 +745,7 @@ body::after {
     </div>
  
   <div class="hdr-right">
-    <div class="timer" id="timer" title="Reset timer">00:00</div>
+    <div class="timer" id="timer" title="Reset timer" aria-label="Reset timer" role="timer">00:00</div>
     <div class="pill" id="pill">
       <div class="dot" id="dot"></div>
       <span id="connTxt">Connect</span>
@@ -668,26 +758,26 @@ body::after {
   <div class="frame" id="frame">
     <div class="ph" id="ph">
       <svg class="ph-icon" width="34" height="34" viewBox="0 0 24 24"
-           fill="none" stroke="currentColor" stroke-width="1.1">
+           fill="none" stroke="currentColor" stroke-width="1.1" aria-hidden="true">
         <rect x="2" y="3" width="20" height="14" rx="2.5"/>
         <path d="m8 21 4-4 4 4M12 17v4"/>
       </svg>
       <p>Preview…</p>
     </div>
  
-    <img id="imgA" alt="" style="opacity:0">
-    <img id="imgB" alt="" style="opacity:0">
+    <img id="imgA" alt="Slide preview" style="opacity:0">
+    <img id="imgB" alt="Slide preview" style="opacity:0">
  
     <div class="bb-overlay" id="bbOverlay"></div>
  
     <div class="swipe-arrows" id="swipeArrows">
       <div class="arr">
         <svg width="13" height="13" fill="none" stroke="rgba(255,255,255,.8)"
-             stroke-width="2.5" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+             stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
       </div>
       <div class="arr">
         <svg width="13" height="13" fill="none" stroke="rgba(255,255,255,.8)"
-             stroke-width="2.5" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+             stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
     </div>
  
@@ -716,13 +806,13 @@ body::after {
  
   <!-- Navigation -->
   <div class="nav-g">
-    <button class="btn btn-prev" onclick="cmd('prev')">
+    <button class="btn btn-prev" onclick="cmd('prev')" aria-label="Previous slide">
       <svg width="20" height="20" fill="none" stroke="currentColor"
-           stroke-width="2.5" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+           stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
     </button>
-    <button class="btn btn-next" onclick="cmd('next')">
+    <button class="btn btn-next" onclick="cmd('next')" aria-label="Next slide">
       <svg width="20" height="20" fill="none" stroke="currentColor"
-           stroke-width="2.5" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+           stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
     </button>
   </div>
  
@@ -730,9 +820,9 @@ body::after {
  
   <!-- Blackout -->
   <span class="lbl">Screen</span>
-  <button class="btn btn-bb btn-w" id="bbBtn" onclick="cmd('blackout')">
+  <button class="btn btn-bb btn-w" id="bbBtn" onclick="cmd('blackout')" aria-label="Toggle blackout">
     <svg width="16" height="16" fill="none" viewBox="0 0 24 24"
-         stroke="currentColor" stroke-width="2">
+         stroke="currentColor" stroke-width="2" aria-hidden="true">
       <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
       <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
       <line x1="1" y1="1" x2="23" y2="23"/>
@@ -752,16 +842,16 @@ body::after {
   </div>
  
   <div class="g2">
-    <button class="btn btn-open" onclick="cmd('openProjector')">
+    <button class="btn btn-open" onclick="cmd('openProjector')" aria-label="Open projector">
       <svg width="18" height="18" fill="none" viewBox="0 0 24 24"
-           stroke="currentColor" stroke-width="2">
+           stroke="currentColor" stroke-width="2" aria-hidden="true">
         <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/>
         <circle cx="12" cy="12" r="3"/>
       </svg>
     </button>
-    <button class="btn btn-close" onclick="cmd('closeProjector')">
+    <button class="btn btn-close" onclick="cmd('closeProjector')" aria-label="Close projector">
       <svg width="18" height="18" fill="none" viewBox="0 0 24 24"
-           stroke="currentColor" stroke-width="2">
+           stroke="currentColor" stroke-width="2" aria-hidden="true">
         <line x1="1" y1="1" x2="23" y2="23"/>
         <path d="M2 12s3-7 10-7M22 12s-3 7-10 7"/>
       </svg>
@@ -775,9 +865,9 @@ body::after {
   <div class="goto-row">
     <input class="goto-inp" id="gotoInp" type="number" min="1"
            placeholder="#" inputmode="numeric">
-    <button class="btn btn-go" onclick="gotoSlide()">
+    <button class="btn btn-go" onclick="gotoSlide()" aria-label="Go to slide">
       <svg width="16" height="16" fill="none" viewBox="0 0 24 24"
-           stroke="currentColor" stroke-width="2.5">
+           stroke="currentColor" stroke-width="2.5" aria-hidden="true">
         <polyline points="9 18 15 12 9 6"/>
         <polyline points="3 18 9 12 3 6"/>
       </svg>
@@ -941,7 +1031,10 @@ function applyStatus(d) {
   updateGridActive();
 }
  
-function pad(n) { return String(n).padStart(2, '0'); }
+function pad(n) {
+  const width = st.slideCount > 0 ? String(st.slideCount).length : 2;
+  return String(n).padStart(width, '0');
+}
  
 /* ── Slides Grid ─────────────────────────────────────────────────────── */
 
@@ -977,7 +1070,7 @@ function renderGrid() {
     if (dataUrl) {
       const img = document.createElement('img');
       img.src = dataUrl;
-      img.alt = 'Slide ' + (i + 1);
+      img.alt = 'Slide ' + (i + 1) + ' of ' + allPreviews.length;
       img.loading = 'lazy';
       thumb.appendChild(img);
     } else {
@@ -997,12 +1090,22 @@ function renderGrid() {
     thumb.addEventListener('click', () => {
       cmd('goto', i);
     });
- 
+    thumb.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        cmd('goto', i);
+      }
+    });
+    thumb.setAttribute('tabindex', '0');
+    thumb.setAttribute('role', 'button');
+
     frag.appendChild(thumb);
   });
  
   slidesGrid.innerHTML = '';
   slidesGrid.appendChild(frag);
+  // Scroll to active slide on initial render only (not during navigation)
+  scrollGridToActive();
 }
  
 function updateGridActive() {
@@ -1010,15 +1113,12 @@ function updateGridActive() {
   thumbs.forEach((th, i) => {
     th.classList.toggle('active', i === st.currentIndex);
   });
+}
 
-  // Only scroll active slide into view within deck — not the whole page
+function scrollGridToActive() {
   const active = slidesGrid.querySelector('.slide-thumb.active');
   if (active) {
-    const deck     = slidesGrid.closest('.deck') || slidesGrid.parentElement;
-    const gridTop  = slidesGrid.offsetTop;
-    const thumbTop = active.offsetTop;
-    const thumbBot = thumbTop + active.offsetHeight;
-    const deckH    = deck.clientHeight;
+    active.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 }
  

@@ -210,10 +210,10 @@ const LoopItemRow = memo(function LoopItemRow({
 // ─── Media Card ───────────────────────────────────────────────────────────────
 
 const MediaCard = memo(function MediaCard({
-  item, hovered, onHover, onAdd, onRemove,
+  item, hovered, selected, onHover, onAdd, onRemove, onToggleSelect,
 }: {
-  item: MediaItem; hovered: boolean;
-  onHover: (id: string | null) => void; onAdd: (item: MediaItem) => void; onRemove: (id: string) => void;
+  item: MediaItem; hovered: boolean; selected: boolean;
+  onHover: (id: string | null) => void; onAdd: (item: MediaItem) => void; onRemove: (id: string) => void; onToggleSelect: (id: string) => void;
 }) {
   const { t } = useTranslation();
   const isImage = item.type === 'image';
@@ -226,10 +226,14 @@ const MediaCard = memo(function MediaCard({
   return (
     <div
       onMouseEnter={() => onHover(item.id)} onMouseLeave={() => onHover(null)}
-      className="rounded-lg border overflow-hidden transition-all duration-200"
+      onClick={() => onToggleSelect(item.id)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleSelect(item.id); } }}
+      className="rounded-lg border overflow-hidden transition-all duration-200 cursor-pointer"
+      role="button"
+      tabIndex={0}
       style={{
-        borderColor: hovered ? accentBorder : 'rgba(255,255,255,0.08)',
-        background: hovered ? accentBg : 'rgba(255,255,255,0.03)',
+        borderColor: selected ? (isImage ? 'rgba(200,146,10,0.9)' : 'rgba(124,92,191,0.9)') : hovered ? accentBorder : 'rgba(255,255,255,0.08)',
+        background: selected ? (isImage ? 'rgba(184,134,11,0.15)' : 'rgba(106,79,200,0.15)') : hovered ? accentBg : 'rgba(255,255,255,0.03)',
       }}
     >
       <div className="relative h-[180px] bg-black overflow-hidden">
@@ -243,6 +247,13 @@ const MediaCard = memo(function MediaCard({
         <span className="absolute top-1 left-1 text-[7px] font-bold font-mono tracking-wider text-white px-1.5 py-0.5 rounded" style={{ background: pillBg }}>
           {ext || (isImage ? 'IMG' : 'VID')}
         </span>
+        {selected ? (
+          <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center shadow-lg">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        ) : hovered && (
+          <div className="absolute top-1 right-1 w-5 h-5 rounded-full border-2 border-white/50 flex items-center justify-center" />
+        )}
       </div>
 
       <div className="flex items-center gap-1 px-2 py-1.5 bg-black/30">
@@ -299,6 +310,7 @@ export default function MediaLoopTab({ onAddMediaToPresentation, onAddAllMediaTo
   const loopItems = useStore(s => s.loopItems);
   const setLoopItems = useStore(s => s.setLoopItems);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -368,6 +380,19 @@ export default function MediaLoopTab({ onAddMediaToPresentation, onAddAllMediaTo
   const addMediaToPres = useCallback((item: MediaItem) => {
     onAddMediaToPresentation(item.type, item.path, item.preview);
   }, [onAddMediaToPresentation]);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }, []);
+
+  const clearSelection = useCallback(() => setSelectedIds([]), []);
+
+  const handleAddSelected = useCallback(() => {
+    if (selectedIds.length === 0) return;
+    const items = mediaItems.filter(m => selectedIds.includes(m.id));
+    onAddAllMediaToPresentation(items.map(item => ({ type: item.type, path: item.path, thumbnailUrl: item.preview })));
+    setSelectedIds([]);
+  }, [mediaItems, selectedIds, onAddAllMediaToPresentation]);
 
   const handleAddAllMediaClick = useCallback(async () => {
     if (mediaItems.length === 0) return;
@@ -497,7 +522,22 @@ export default function MediaLoopTab({ onAddMediaToPresentation, onAddAllMediaTo
                 <Film className="w-3 h-3 text-amber-500" />
                 <span className="text-[10px] font-bold uppercase tracking-widest text-white/45">{t('common.mediaLibrary')}</span>
               </div>
-              {mediaItems.length > 0 && (
+              {selectedIds.length > 0 ? (
+                <>
+                  <button
+                    onClick={handleAddSelected}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black text-[10px] font-bold uppercase tracking-wider transition-all"
+                  >
+                    <Plus size={11} /> Seçilenleri Slayta Ekle ({selectedIds.length})
+                  </button>
+                  <button
+                    onClick={clearSelection}
+                    className="text-[10px] text-white/30 hover:text-white/60 transition-colors px-1"
+                  >
+                    Seçimi Temizle
+                  </button>
+                </>
+              ) : mediaItems.length > 0 && (
                 <button
                   onClick={handleAddAllMediaClick}
                   className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.08] text-[10px] font-bold uppercase tracking-wider text-white/40 hover:text-white/70 transition-all"
@@ -537,7 +577,7 @@ export default function MediaLoopTab({ onAddMediaToPresentation, onAddAllMediaTo
             ) : (
               <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
                 {mediaItems.map(item => (
-                  <MediaCard key={item.id} item={item} hovered={hoveredId === item.id} onHover={setHoveredId} onAdd={addMediaToPres} onRemove={removeMediaItem} />
+                  <MediaCard key={item.id} item={item} hovered={hoveredId === item.id} selected={selectedIds.includes(item.id)} onHover={setHoveredId} onAdd={addMediaToPres} onRemove={removeMediaItem} onToggleSelect={toggleSelect} />
                 ))}
               </div>
             )}
