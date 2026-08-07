@@ -101,8 +101,9 @@ export default function OnlineHymnsPanel({ onImport }: OnlineHymnsPanelProps) {
 
   const filteredSongs = useMemo(() => {
     if (!debouncedSearch) return songs;
-    const query = debouncedSearch.toLowerCase();
-    return songs.filter(s => s.title.toLowerCase().includes(query));
+    const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const query = normalize(debouncedSearch);
+    return songs.filter(s => normalize(s.title).includes(query));
   }, [songs, debouncedSearch]);
 
   // Load first page from cache or API (Issue 4 + 5)

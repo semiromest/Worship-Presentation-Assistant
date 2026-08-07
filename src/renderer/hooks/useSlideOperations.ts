@@ -38,6 +38,7 @@ export function useSlideOperations() {
     selectedSlideIds,
     lastSelectedIndex,
     isProjectorWindowOpen,
+    liveIndex,
     presets,
     dispatchUndo,
     setSelectedSlideId,
@@ -339,15 +340,19 @@ export function useSlideOperations() {
       },
     });
     setSelectedSlideId(slides[0].id);
-  }, [t, dispatchUndo, setSelectedSlideId]);
+    // Yeni dosya açılımında canlı pozisyon sıfırlanır (taşma/eskimiş indeks olmasın).
+    setLiveIndex(0);
+  }, [t, dispatchUndo, setSelectedSlideId, setLiveIndex]);
 
   const applyPreset = useCallback((preset: Preset) => {
     dispatchUndo({ type: 'RESET', payload: preset.presentation });
     setPresentationName(preset.name);
     setSelectedSlideId(preset.presentation.slides[0]?.id ?? '1');
+    // Preset yüklendiğinde canlı pozisyon da baştan başlar.
+    setLiveIndex(0);
     setSelectedPresetName(preset.name);
     setActiveTab('slides');
-  }, [dispatchUndo, setPresentationName, setSelectedSlideId, setSelectedPresetName, setActiveTab]);
+  }, [dispatchUndo, setPresentationName, setSelectedSlideId, setLiveIndex, setSelectedPresetName, setActiveTab]);
 
   const openSavedPresentationByName = useCallback(async (presentationName: string) => {
     const loaded = await window.electronAPI?.loadPresets?.();
@@ -391,22 +396,24 @@ export function useSlideOperations() {
 
   const appendSlides = useCallback((newSlides: Slide[], goLive?: boolean) => {
     if (newSlides.length === 0) return;
-    const slides = [...presentation.slides, ...newSlides];
-    const newIndex = presentation.slides.length;
+    // Her çağrıda en güncel durumu oku: ardışık eklemeler (örn. set linkinden
+    // toplu ilahi ekleme) aynı render kapanışına (stale closure) takılı kalmasın.
+    const current = useStore.getState();
+    const slides = [...current.presentation.slides, ...newSlides];
+    const newIndex = current.presentation.slides.length;
+    // Yalnızca açık "goLive" bayrağı içerik eklemesini canlıya taşır (bilinçli eylem).
+    // Aksi halde yeni slayt sadece seçim olur; canlıya geçiş Enter ile yapılır.
     if (goLive) {
-      // Always set liveIndex even if projector is not open
-      setLiveIndex(newIndex);
-    } else if (isProjectorWindowOpen) {
       setLiveIndex(newIndex);
     }
 
     dispatchUndo({
       type: 'SET',
-      payload: { ...presentation, slides },
+      payload: { ...current.presentation, slides },
     });
     setSelectedSlideId(newSlides[0].id);
     setActiveTab('slides');
-  }, [presentation, isProjectorWindowOpen, dispatchUndo, setSelectedSlideId, setLiveIndex, setActiveTab]);
+  }, [dispatchUndo, setSelectedSlideId, setLiveIndex, setActiveTab]);
 
   const handleSendToLive = useCallback((content: string | string[], options?: { groupTitle?: string; goLive?: boolean }) => {
     if (Array.isArray(content)) {
@@ -489,7 +496,7 @@ export function useSlideOperations() {
   }, [appendSlides]);
 
   const handleHymnAdd = useCallback((hymn: { title: string; lyrics: string }, partsMode?: boolean, goLive?: boolean) => {
-    const split = splitHymnLyrics(hymn.lyrics, 5);
+    const split = splitHymnLyrics(hymn.lyrics);
     if (split.parts.length === 0) return;
 
     if (partsMode === false) {
@@ -601,8 +608,21 @@ export function useSlideOperations() {
     }
 
     setLastSelectedIndex(index);
+    // Canlı yayın açıkken tek tık seçili slaytı doğrudan canlıya taşır.
+    // Yayın kapalıyken tıklama yalnızca seçimi değiştirir; canlıya geçiş
+    // Enter (Canlıya Gönder) veya çift tık ile olur.
     if (isProjectorWindowOpen) setLiveIndex(index);
   }, [presentation.slides, lastSelectedIndex, isProjectorWindowOpen, setSelectedSlideIds, setSelectedSlideId, setLastSelectedIndex, setLiveIndex]);
+
+  const handleSlideDoubleClick = useCallback((id: string, index: number) => {
+    // Çift tık = hızlı Canlıya Gönder; yalnızca yayın kapalıyken çalışır.
+    // Yayın açıkken tek tık zaten canlıya taşıdığı için çift tık devre dışıdır.
+    if (isProjectorWindowOpen) return;
+    setSelectedSlideIds(new Set([id]));
+    setSelectedSlideId(id);
+    setLastSelectedIndex(index);
+    setLiveIndex(index);
+  }, [isProjectorWindowOpen, setSelectedSlideIds, setSelectedSlideId, setLastSelectedIndex, setLiveIndex]);
 
   const deleteSelectedSlides = useCallback(async () => {
     if (selectedSlideIds.size === 0) return;
@@ -626,6 +646,59 @@ export function useSlideOperations() {
       setSelectedSlideId(slides[0].id);
     }
   }, [presentation, selectedSlideIds, selectedSlideId, t, dispatchUndo, setSelectedSlideIds, setSelectedSlideId, setLastSelectedIndex]);
+
+  const duplicateSelectedSlides = useCallback(() => {
+    if (selectedSlideIds.size === 0) return;
+
+    const selectedIndices = presentation.slides
+      .map((s, i) => (selectedSlideIds.has(s.id) ? i : -1))
+      .filter((i) => i !== -1)
+      .sort((a, b) => a - b);
+
+    if (selectedIndices.length === 0) return;
+
+    const cloneIds: string[] = [];
+    const slides: Slide[] = [];
+
+    presentation.slides.forEach((slide) => {
+      slides.push(slide);
+      if (!selectedSlideIds.has(slide.id)) return;
+
+      const cloneId = makeSlideId();
+      const cloned: Slide = {
+        ...slide,
+        id: cloneId,
+        group: slide.group ? { ...slide.group, id: makeSlideId() } : undefined,
+      };
+      if (slide.type === 'countdown') {
+        const data = parseCountdownContent(slide.content);
+        cloned.content = serializeCountdownContent({ ...data, startTime: Date.now() });
+      }
+      slides.push(cloned);
+      cloneIds.push(cloneId);
+    });
+
+    let nextLiveIndex = liveIndex;
+    if (isProjectorWindowOpen) {
+      const liveSlide = presentation.slides[liveIndex];
+      if (liveSlide && selectedSlideIds.has(liveSlide.id)) {
+        nextLiveIndex = slides.findIndex((s) => s.id === cloneIds[selectedIndices.indexOf(liveIndex)]);
+      } else {
+        const insertionsBefore = selectedIndices.filter((i) => i < liveIndex).length;
+        nextLiveIndex = liveIndex + insertionsBefore;
+      }
+    }
+
+    dispatchUndo({
+      type: 'SET',
+      payload: { ...presentation, slides },
+    });
+
+    setSelectedSlideIds(new Set(cloneIds));
+    setLastSelectedIndex(slides.findIndex((s) => s.id === cloneIds[cloneIds.length - 1]));
+    setSelectedSlideId(cloneIds[0]);
+    if (isProjectorWindowOpen) setLiveIndex(nextLiveIndex);
+  }, [presentation, selectedSlideIds, liveIndex, isProjectorWindowOpen, dispatchUndo, setSelectedSlideIds, setLastSelectedIndex, setSelectedSlideId, setLiveIndex]);
 
   const moveSelectedSlides = useCallback((direction: -1 | 1) => {
     if (selectedSlideIds.size === 0) return;
@@ -762,7 +835,9 @@ export function useSlideOperations() {
     handleAddCountdownToPresentation,
     handleAddLoopToPresentation,
     handleSlideClick,
+    handleSlideDoubleClick,
     deleteSelectedSlides,
+    duplicateSelectedSlides,
     moveSelectedSlides,
     applyStylesToSelected,
     replaceSlideMedia,

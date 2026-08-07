@@ -292,10 +292,10 @@ export default function CalendarTab({
   }, []);
 
   return (
-    <div className="h-full bg-surface-base text-white overflow-hidden">
+    <div className="h-full bg-[#16161a] text-white overflow-hidden">
       <div className="h-full flex flex-col">
         {/* HEADER */}
-        <div className="border-b border-white/5 bg-surface-raised/95 backdrop-blur-xl">
+        <div className="border-b border-white/[0.08] bg-[#26262b]/95 backdrop-blur-xl">
           <div className="px-6 py-4 flex items-center justify-between">
             {/* LEFT */}
             <div className="flex items-center gap-4">
@@ -397,11 +397,11 @@ export default function CalendarTab({
                       className={cn(
                         'group relative min-h-[120px] rounded-2xl border p-3 text-left transition-all duration-200 overflow-hidden',
                         isCurrentMonth
-                          ? 'bg-white/[0.03] border-white/5'
-                          : 'bg-white/[0.015] border-white/[0.03] opacity-40',
-                        'hover:border-blue-500/20 hover:bg-white/[0.05]',
+                          ? 'bg-white/[0.05] border-white/[0.08]'
+                          : 'bg-white/[0.03] border-white/[0.05] opacity-40',
+                        'hover:border-blue-500/20 hover:bg-white/[0.07]',
                         isSelected &&
-                          'border-blue-500/40 bg-blue-500/[0.08] shadow-lg shadow-blue-500/10',
+                          'border-blue-500/40 bg-blue-500/[0.10] shadow-lg shadow-blue-500/10',
                         isToday &&
                           'ring-1 ring-blue-500/40'
                       )}
@@ -432,7 +432,7 @@ export default function CalendarTab({
                         {dayEvents.slice(0, 3).map(event => (
                           <div
                             key={event.id}
-                            className="flex items-center gap-2 rounded-lg bg-black/20 border border-white/5 px-2 py-1.5"
+                            className="flex items-center gap-2 rounded-lg bg-black/[0.08] border border-white/5 px-2 py-1.5"
                           >
                             <div
                               className={cn(
@@ -461,7 +461,7 @@ export default function CalendarTab({
           </div>
 
           {/* SIDEBAR */}
-          <div className="w-[380px] border-l border-white/5 bg-[#12151b] overflow-y-auto">
+          <div className="w-[380px] border-l border-white/[0.08] bg-[#1e2128] overflow-y-auto">
             <div className="p-5">
               {/* DATE HEADER */}
               <div className="rounded-3xl bg-gradient-to-br from-blue-500/10 to-violet-500/10 border border-white/5 p-5">
@@ -652,7 +652,7 @@ export default function CalendarTab({
                       }))
                     }
                     placeholder={t('common.calendarTitlePlaceholder')}
-                    className="w-full h-12 rounded-2xl bg-black/20 border border-white/10 px-4 outline-none focus:border-blue-500/40 transition-all"
+                    className="w-full h-12 rounded-2xl bg-black/[0.08] border border-white/10 px-4 outline-none focus:border-blue-500/40 transition-all"
                   />
                 </div>
 
@@ -671,7 +671,7 @@ export default function CalendarTab({
                       }))
                     }
                     placeholder={t('common.calendarDescPlaceholder')}
-                    className="w-full h-28 rounded-2xl bg-black/20 border border-white/10 px-4 py-3 outline-none resize-none focus:border-blue-500/40 transition-all"
+                    className="w-full h-28 rounded-2xl bg-black/[0.08] border border-white/10 px-4 py-3 outline-none resize-none focus:border-blue-500/40 transition-all"
                   />
                 </div>
 
@@ -722,7 +722,7 @@ export default function CalendarTab({
                         time: e.target.value,
                       }))
                     }
-                    className="w-full h-12 rounded-2xl bg-black/20 border border-white/10 px-4 outline-none focus:border-blue-500/40 transition-all"
+                    className="w-full h-12 rounded-2xl bg-black/[0.08] border border-white/10 px-4 outline-none focus:border-blue-500/40 transition-all"
                   />
                 </div>
 
@@ -744,7 +744,7 @@ export default function CalendarTab({
                       }))
                     }
                     placeholder={t('common.calendarPresPlaceholder')}
-                    className="w-full h-12 rounded-2xl bg-black/20 border border-white/10 px-4 outline-none focus:border-blue-500/40 transition-all"
+                    className="w-full h-12 rounded-2xl bg-black/[0.08] border border-white/10 px-4 outline-none focus:border-blue-500/40 transition-all"
                   />
                   {savedPresentationNames.length > 0 && (
                     <datalist id="calendar-presentation-names">

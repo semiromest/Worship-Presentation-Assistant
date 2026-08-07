@@ -4,7 +4,7 @@ import Dialog from './Dialog';
 
 export default function CheatsheetModal() {
   const { t } = useTranslation();
-  const { isCheatsheetOpen, setIsCheatsheetOpen } = useStore();
+  const { isCheatsheetOpen, setIsCheatsheetOpen, isMediaMuted } = useStore();
 
   return (
     <Dialog
@@ -28,8 +28,8 @@ export default function CheatsheetModal() {
 
       {/* Navigation */}
       <Section title={t('common.cheatsheet.navigation')}>
-        <ShortcutRow keys="→ / Space / J" label={t('common.cheatsheet.next')} />
-        <ShortcutRow keys="← / K" label={t('common.cheatsheet.previous')} />
+        <ShortcutRow keys="→ / Space / J / PageDown" label={t('common.cheatsheet.next')} />
+        <ShortcutRow keys="← / K / PageUp" label={t('common.cheatsheet.previous')} />
         <ShortcutRow keys="Home" label={t('common.cheatsheet.firstSlide')} />
         <ShortcutRow keys="End" label={t('common.cheatsheet.lastSlide')} />
         <ShortcutRow keys="Enter" label={t('common.cheatsheet.goLive')} />
@@ -47,6 +47,7 @@ export default function CheatsheetModal() {
         <ShortcutRow keys="Ctrl+Y / Ctrl+Shift+Z" label={t('common.cheatsheet.redo')} />
         <ShortcutRow keys="Ctrl++" label={t('common.cheatsheet.zoomIn')} />
         <ShortcutRow keys="Ctrl+-" label={t('common.cheatsheet.zoomOut')} />
+        <ShortcutRow keys="Ctrl+0" label={t('common.zoomReset')} />
         <ShortcutRow keys="Delete" label={t('common.cheatsheet.deleteSlide')} />
         <ShortcutRow keys="Ctrl+D" label={t('common.cheatsheet.duplicateSlide')} />
         <ShortcutRow keys="Escape" label={t('common.cheatsheet.clearSelection')} />
@@ -56,12 +57,14 @@ export default function CheatsheetModal() {
       <Section title={t('common.cheatsheet.slideOperations')}>
         <ShortcutRow keys="Alt+Enter" label={t('common.cheatsheet.splitSlide')} />
         <ShortcutRow keys="Shift+Tık" label={t('common.cheatsheet.multiSelect')} />
+        <ShortcutRow keys="Çift Tık" label={t('common.cheatsheet.doubleClickGoLive')} />
         <ShortcutRow keys="Alt+↑" label={t('common.cheatsheet.moveUp')} />
         <ShortcutRow keys="Alt+↓" label={t('common.cheatsheet.moveDown')} />
       </Section>
 
       {/* Broadcast */}
       <Section title={t('common.cheatsheet.broadcast')}>
+        <ShortcutRow keys="M" label={isMediaMuted ? t('common.cheatsheet.unmute') : t('common.cheatsheet.mute')} />
         <ShortcutRow keys="B" label={t('common.cheatsheet.blackScreen')} />
         <ShortcutRow keys="Esc" label={t('common.cheatsheet.closeBroadcast')} />
       </Section>

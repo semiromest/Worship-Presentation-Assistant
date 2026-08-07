@@ -10,6 +10,7 @@ interface SlideCardProps {
   isSelected: boolean;
   isLive: boolean;
   onClick: (id: string, index: number, e?: React.MouseEvent) => void;
+  onDoubleClick?: (id: string, index: number) => void;
   onDragStart?: (id: string, index: number) => void;
   onDragOver?: (id: string, index: number) => void;
   onDragEnd?: () => void;
@@ -25,14 +26,16 @@ const Badge = memo(({
   color,
 }: {
   children: React.ReactNode;
-  variant?: 'default' | 'live';
+  variant?: 'default' | 'live' | 'selected';
   color?: string;
 }) => (
   <span className={cn(
     'text-[10px] font-bold bg-black/60 px-2 py-1 rounded-md border tabular-nums',
     variant === 'live'
       ? 'text-red-400 border-red-500/40'
-      : 'border-white/10 text-white',
+      : variant === 'selected'
+        ? 'text-blue-300 border-blue-500/50'
+        : 'border-white/10 text-white',
     color && 'bg-black/80'
   )} style={color ? { borderColor: color, color } : undefined}>
     {children}
@@ -471,16 +474,17 @@ const SlideContent = memo(({ slide, isHovered = false }: { slide: Slide; isHover
 SlideContent.displayName = 'SlideContent';
 
 // Badges section
-const SlideBadges = memo(({ slide, index, isLive }: {
+const SlideBadges = memo(({ slide, index, isSelected, isLive }: {
   slide: Slide;
   index: number;
+  isSelected: boolean;
   isLive: boolean;
 }) => {
   const { t } = useTranslation();
   const showGroup = slide.group;
   const showType = slide.type !== 'text';
   const groupColor = slide.group?.color;
-  const showBadges = showGroup || showType || isLive;
+  const showBadges = showGroup || showType || isSelected || isLive;
 
   if (!showBadges && !isLive) {
     return (
@@ -493,6 +497,10 @@ const SlideBadges = memo(({ slide, index, isLive }: {
   return (
     <div className="absolute top-2 left-2 z-10 flex items-center gap-2">
       <Badge>{index + 1}</Badge>
+
+      {isSelected && (
+        <Badge variant="selected">{t('common.selectedCardLabel')}</Badge>
+      )}
 
       {showGroup && !slide.partsMode && (
         <Badge color={groupColor}>
@@ -531,6 +539,7 @@ export const SlideCard = memo(({
   isSelected,
   isLive,
   onClick,
+  onDoubleClick,
   onDragStart,
   onDragOver,
   onDragEnd,
@@ -544,6 +553,10 @@ export const SlideCard = memo(({
   const handleClick = useCallback((e: React.MouseEvent) => {
     onClick(slide.id, index, e);
   }, [onClick, slide.id, index]);
+
+  const handleDoubleClick = useCallback(() => {
+    onDoubleClick?.(slide.id, index);
+  }, [onDoubleClick, slide.id, index]);
 
   const handleDragStart = useCallback((e: React.DragEvent) => {
     e.dataTransfer.effectAllowed = 'move';
@@ -595,24 +608,20 @@ export const SlideCard = memo(({
       onDragEnd={handleDragEnd}
       onDrop={handleDrop}
       onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onFocus={() => setIsHovered(true)}
       onBlur={() => setIsHovered(false)}
       tabIndex={0}
+      data-slide-id={slide.id}
       role="button"
       className={cn(cardClassName, 'cursor-grab active:cursor-grabbing')}
       style={{ ...(groupColor ? { borderLeftWidth: 4, borderLeftColor: groupColor } : {}), zoom }}
       aria-pressed={isSelected}
       aria-label={slideLabel}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onClick(slide.id, index, undefined);
-        }
-      }}
     >
-      <SlideBadges slide={slide} index={index} isLive={isLive} />
+      <SlideBadges slide={slide} index={index} isSelected={isSelected} isLive={isLive} />
 
       <div className="aspect-video bg-black flex items-center justify-center overflow-hidden">
         <SlideContent slide={slide} isHovered={isHovered} />

@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Music, Plus, Search, Trash2, FolderUp, CheckSquare, Pencil, X, ListOrdered, Cloud } from 'lucide-react';
+import { Music, Plus, Search, Trash2, FolderUp, CheckSquare, Pencil, X, ListOrdered, Cloud, Link2 } from 'lucide-react';
 import { Skeleton } from './components/Skeleton';
 import OnlineHymnsPanel from './components/OnlineHymnsPanel';
+import SetLinkImportDialog from './components/SetLinkImportDialog';
+import { mergeImportedHymns } from './hymnImport';
 import { cn, useDebounce } from './utils';
 import { confirmDialog } from './dialogs';
 import Dialog from './components/Dialog';
@@ -112,13 +114,17 @@ function cleanLyrics(lyrics: string): string {
 
 // ─── Cache helpers ────────────────────────────────────────────────────────
 
+// Cache key version: v2 invalidates pre-fix caches whose lyrics lost their
+// stanza separators (whole hymn rendered as a single slide).
+const CACHE_VERSION = 'v2';
+
 function cacheHymns(path: string, list: Hymn[]) {
-  try { localStorage.setItem(`hymnsCache:${path}`, JSON.stringify(list)); } catch {}
+  try { localStorage.setItem(`hymnsCache:${CACHE_VERSION}:${path}`, JSON.stringify(list)); } catch {}
 }
 
 function loadCachedHymns(path: string): Hymn[] | null {
   try {
-    const raw = localStorage.getItem(`hymnsCache:${path}`);
+    const raw = localStorage.getItem(`hymnsCache:${CACHE_VERSION}:${path}`);
     return raw ? (JSON.parse(raw) as Hymn[]) : null;
   } catch { return null; }
 }
@@ -221,14 +227,16 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
   const [editForm, setEditForm] = useState({ title: '', lyrics: '' });
   const [partsModeEnabled, setPartsModeEnabled] = useState(true);
   const [showOnlinePanel, setShowOnlinePanel] = useState(false);
+  const [showSetLinkDialog, setShowSetLinkDialog] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
   const filteredHymns = useMemo(() => {
     if (!debouncedSearch) return hymns;
-    const q = debouncedSearch.toLowerCase();
+    const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const q = normalize(debouncedSearch);
     return hymns.filter(h => {
-      if (h.title.toLowerCase().includes(q)) return true;
-      if (searchInLyrics && h.lyrics.toLowerCase().includes(q)) return true;
+      if (normalize(h.title).includes(q)) return true;
+      if (searchInLyrics && normalize(h.lyrics).includes(q)) return true;
       return false;
     });
   }, [hymns, debouncedSearch, searchInLyrics]);
@@ -267,9 +275,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
     }
 
     setHymns(prev => {
-      const existing = new Set(prev.map(h => h.title.toLowerCase()));
-      const fresh    = imported.filter(h => !existing.has(h.title.toLowerCase()));
-      const combined = [...prev, ...fresh];
+      const combined = mergeImportedHymns(prev, imported);
       if (result.path) {
         localStorage.setItem('defaultHymnArchivePath', result.path);
         cacheHymns(result.path, combined);
@@ -304,13 +310,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
   }, [newHymn]);
 
   const handleOnlineImport = useCallback((imported: Hymn[]) => {
-    setHymns(prev => {
-      const existing = new Set(prev.map(h => h.title.toLowerCase()));
-      const fresh = imported
-        .filter(h => !existing.has(h.title.toLowerCase()))
-        .map(h => ({ ...h, lyrics: cleanLyrics(h.lyrics) }));
-      return [...prev, ...fresh];
-    });
+    setHymns(prev => mergeImportedHymns(prev, imported.map(h => ({ ...h, lyrics: cleanLyrics(h.lyrics) }))));
   }, []);
 
   // Auto-persist hymns to cache whenever the list changes (covers all mutations:
@@ -327,10 +327,10 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
     if (!confirmed) return;
     const savedPath = localStorage.getItem('defaultHymnArchivePath');
     if (savedPath) {
-      localStorage.removeItem(`hymnsCache:${savedPath}`);
+      localStorage.removeItem(`hymnsCache:${CACHE_VERSION}:${savedPath}`);
       localStorage.removeItem('defaultHymnArchivePath');
     }
-    localStorage.removeItem('hymnsCache:__online__');
+    localStorage.removeItem(`hymnsCache:${CACHE_VERSION}:__online__`);
     setHymns([]);
   }, [t]);
 
@@ -426,6 +426,15 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
               aria-label={t('common.hymnsOnline')}
             >
               <Cloud className="w-4 h-4" aria-hidden="true" />
+            </button>
+
+            <button
+              onClick={() => setShowSetLinkDialog(true)}
+              className="p-1.5 bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 rounded border border-cyan-500/30"
+              title={t('common.setImportTitle')}
+              aria-label={t('common.setImportTitle')}
+            >
+              <Link2 className="w-4 h-4" aria-hidden="true" />
             </button>
 
             <button
@@ -633,6 +642,15 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
               </button>
             </div>
       </Dialog>
+
+      {/* Set linki ile toplu ilahi içe aktarma */}
+      <SetLinkImportDialog
+        open={showSetLinkDialog}
+        onClose={() => setShowSetLinkDialog(false)}
+        partsMode={partsModeEnabled}
+        onAddHymn={(hymn, parts) => onAddHymnToPresentation(hymn, parts)}
+        onImportLibrary={handleOnlineImport}
+      />
     </div>
   );
 }

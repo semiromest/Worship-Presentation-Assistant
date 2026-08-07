@@ -87,6 +87,8 @@ export function useProjectorSync() {
             prev.thumbnailUrl !== s.thumbnailUrl ||
             (prev.items?.length ?? 0) !== (s.items?.length ?? 0) ||
             (prev.loopItems?.length ?? 0) !== (s.loopItems?.length ?? 0) ||
+            // FIX: partsMode slides must regenerate when activePart changes
+            prev.activePart !== s.activePart ||
             JSON.stringify(prev.styles) !== JSON.stringify(s.styles);
 
           if (!changed) {
@@ -94,15 +96,19 @@ export function useProjectorSync() {
             thumbs[i] = cached?.url ?? null;
           } else {
             const url = await generateSlideThumbnail(s);
-            if (url) thumbnailCache.current.set(s.id, { url });
-            thumbs[i] = url;
+            // FIX: a cancelled effect (rapid part taps) must not overwrite the
+            // cache with a stale part image, nor fill thumbs for broadcast.
+            if (url && !cancelled) thumbnailCache.current.set(s.id, { url });
+            thumbs[i] = cancelled ? null : url;
           }
         }
       };
 
       await Promise.all(Array.from({ length: 4 }, () => worker()));
 
-      prevSlidesRef.current = currentSlides;
+      // FIX: only a non-cancelled run may advance prevSlidesRef; a late-finishing
+      // cancelled run could otherwise corrupt the next changed() comparison.
+      if (!cancelled) prevSlidesRef.current = currentSlides;
 
       if (!cancelled) {
         window.electronAPI?.updateAllSlidePreviews?.(thumbs);
@@ -130,25 +136,34 @@ export function useProjectorSync() {
     }
   }, [liveIndex, throttledPresentation.slides]);
 
+  // Remote status rides the UNTHROTTLED presentation so part taps (partGoto)
+  // reflect on phones immediately instead of lagging behind useThrottle().
   useEffect(() => {
     const remoteTransition = TRANSITION_MAP[transitionType as TransitionType] ?? 'fade';
+    const liveSlide = presentation.slides[liveIndex];
 
     window.electronAPI?.updateRemoteStatus?.({
-      slideCount: throttledPresentation.slides.length,
+      slideCount: presentation.slides.length,
       currentIndex: liveIndex,
       isBlackout,
       isProjectorOpen: isProjectorWindowOpen,
       slideTransition: remoteTransition,
       transitionDurationMs: transitionDuration,
-      slidePreviews: throttledPresentation.slides.map((slide) => ({
+      // partsMode: expose active part info so remote can show part navigation
+      activePart: liveSlide?.partsMode ? (liveSlide.activePart ?? 0) : undefined,
+      partsCount: liveSlide?.partsMode ? (liveSlide.parts?.length ?? 1) : undefined,
+      slidePreviews: presentation.slides.map((slide) => ({
         type: slide.type,
         content: slide.content,
         mediaUrl: slide.mediaUrl,
         styles: slide.styles,
+        partsMode: !!slide.partsMode,
+        parts: slide.parts ?? null,
+        title: slide.group?.title ?? null,
       })),
     });
   }, [
-    throttledPresentation.slides,
+    presentation.slides,
     liveIndex,
     isBlackout,
     isProjectorWindowOpen,

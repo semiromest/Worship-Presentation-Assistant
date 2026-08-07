@@ -1,46 +1,107 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useEffect, useState, useRef } from 'react';
-import type { Slide } from './types';
+import type { Slide, WatermarkConfig, Position } from './types';
+import { useWatermarkStore } from './state/useWatermarkStore';
 
-// ─── Tailwind merge helper ────────────────────────────────────────────────────
+// ─── Precompiled Regexes (derleme maliyetini her çağrıda ödemeyiz) ─────────
+const SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
+const WINDOWS_DRIVE_RE = /^[a-zA-Z]:[\\/]/;
+const WINDOWS_DRIVE_ONLY_RE = /^[a-zA-Z]:$/;
+const HTTP_RE = /^https?:\/\//i;
+const LEADING_SLASHES_RE = /^\/+/;
 
+// ─── Tailwind merge helper ────────────────────────────────────────────────
 export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));
 }
 
-// ─── ID / path helpers ────────────────────────────────────────────────────────
-
+// ─── ID / path helpers ────────────────────────────────────────────────────
 export function makeSlideId(): string {
   return Math.random().toString(36).substring(2, 11);
 }
 
 export function toFileUrl(filePath: string): string {
-  const normalized = filePath.replace(/\\/g, '/');
-  // Baştaki tekrarlanan '/' karakterlerini sadeleştir (Unix mutlak yollarında
-  // file:/// + /path birleşince file:////path gibi hatalı bir sonuç oluşmasını önler)
-  const cleanPath = normalized.replace(/^\/+/, '/');
-  // Her path segmentini ayrı ayrı encode et (boşluk, Türkçe karakter vb. için).
-  // Windows sürücü harfini ("C:") encode etmekten kaçın, yoksa file:///C%3A/... olur.
+  const hasScheme = SCHEME_RE.test(filePath);
+  const isWindowsDrivePath = WINDOWS_DRIVE_RE.test(filePath);
+  if (hasScheme && !isWindowsDrivePath) return filePath;
+
+  const cleanPath = filePath.replace(/\\/g, '/').replace(LEADING_SLASHES_RE, '/');
   const encodedPath = cleanPath
     .split('/')
-    .map((segment, i) => (i === 0 && /^[a-zA-Z]:$/.test(segment) ? segment : encodeURIComponent(segment)))
+    .map((seg, i) => (i === 0 && WINDOWS_DRIVE_ONLY_RE.test(seg) ? seg : encodeURIComponent(seg)))
     .join('/');
   return `file:///${encodedPath}`;
 }
 
-// crossOrigin sadece gerçek http(s) kaynaklarda ayarlanmalı. file:// veya data:
-// kaynaklarda crossOrigin = 'anonymous' ayarlamak ya görselin hiç yüklenmemesine
-// (CORS header'ı olmadığı için onerror tetiklenir) ya da yüklense bile canvas'ın
-// "tainted" sayılmasına yol açar — bu da en sondaki toDataURL() çağrısını patlatır.
-function applyCorsIfRemote(img: HTMLImageElement, src: string): void {
-  if (/^https?:\/\//i.test(src)) {
+// ─── Image loading helpers (tek seferde CORS + Promise + error handling) ─
+async function loadImage(
+  src: string,
+  opts: { useFileUrl?: boolean; applyCors?: boolean } = {},
+): Promise<HTMLImageElement | null> {
+  if (!src) return null;
+  const img = new Image();
+  if (opts.applyCors !== false && HTTP_RE.test(src)) {
     img.crossOrigin = 'anonymous';
+  }
+  img.src = opts.useFileUrl && !src.startsWith('data:') ? toFileUrl(src) : src;
+
+  return new Promise((resolve) => {
+    if (img.complete && img.naturalWidth > 0) {
+      resolve(img);
+      return;
+    }
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+  });
+}
+
+// ─── Aspect ratio fit helpers ─────────────────────────────────────────────
+interface FitRect { dx: number; dy: number; dw: number; dh: number }
+interface CoverRect { sx: number; sy: number; sw: number; sh: number }
+
+function calculateFit(imgW: number, imgH: number, canvasW: number, canvasH: number): FitRect {
+  const imgAr = imgW / imgH;
+  const cAr = canvasW / canvasH;
+  if (imgAr > cAr) {
+    const dh = canvasW / imgAr;
+    return { dx: 0, dy: (canvasH - dh) / 2, dw: canvasW, dh };
+  }
+  const dw = canvasH * imgAr;
+  return { dx: (canvasW - dw) / 2, dy: 0, dw, dh: canvasH };
+}
+
+function calculateCover(imgW: number, imgH: number, canvasW: number, canvasH: number): CoverRect {
+  const imgAr = imgW / imgH;
+  const cAr = canvasW / canvasH;
+  if (imgAr > cAr) {
+    const sw = imgH * cAr;
+    return { sx: (imgW - sw) / 2, sy: 0, sw, sh: imgH };
+  }
+  const sh = imgW / cAr;
+  return { sx: 0, sy: (imgH - sh) / 2, sw: imgW, sh };
+}
+
+function drawImageSafe(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  fit: 'contain' | 'cover',
+  W: number,
+  H: number,
+): void {
+  if (img.naturalWidth === 0 || img.naturalHeight === 0) return;
+  const iw = img.naturalWidth;
+  const ih = img.naturalHeight;
+  if (fit === 'cover') {
+    const { sx, sy, sw, sh } = calculateCover(iw, ih, W, H);
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
+  } else {
+    const { dx, dy, dw, dh } = calculateFit(iw, ih, W, H);
+    ctx.drawImage(img, dx, dy, dw, dh);
   }
 }
 
-// ─── React Hooks ─────────────────────────────────────────────────────────────
-
+// ─── React Hooks ──────────────────────────────────────────────────────────
 export function useDebounce<T>(value: T, delay = 200): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -51,279 +112,382 @@ export function useDebounce<T>(value: T, delay = 200): T {
 }
 
 export function useThrottle<T>(value: T, limit = 200): T {
-  const [throttledValue, setThrottledValue] = useState(value);
-  const lastCall = useRef(Date.now());
+  const [throttled, setThrottled] = useState(value);
+  const lastRaf = useRef(0);
 
   useEffect(() => {
-    const handler = setTimeout(() => {
-      if (Date.now() - lastCall.current >= limit) {
-        setThrottledValue(value);
-        lastCall.current = Date.now();
-      }
-    }, limit - (Date.now() - lastCall.current));
-
-    return () => clearTimeout(handler);
+    const elapsed = Date.now() - lastRaf.current;
+    const wait = Math.max(0, limit - elapsed);
+    const id = setTimeout(() => {
+      setThrottled(value);
+      lastRaf.current = Date.now();
+    }, wait);
+    return () => clearTimeout(id);
   }, [value, limit]);
 
-  return throttledValue;
+  return throttled;
 }
 
-// ─── Slide thumbnail generator ────────────────────────────────────────────────
+// ─── Slide thumbnail renderer ─────────────────────────────────────────────
+const THUMB_W = 320;
+const THUMB_H = 180;
+const PLACEHOLDER_BG = '#1a1a2e';
+const EMPTY_BG = '#111111';
+
+function fillFallbackText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  color = 'rgba(255,255,255,0.45)',
+  font = 'bold 14px sans-serif',
+  W = THUMB_W,
+  H = THUMB_H,
+): void {
+  ctx.fillStyle = color;
+  ctx.font = font;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, W / 2, H / 2, W - 24);
+}
+
+async function renderTextSlide(
+  ctx: CanvasRenderingContext2D,
+  slide: Slide,
+  W: number,
+  H: number,
+): Promise<boolean> {
+  if (slide.items?.length) return false; // item'lı metin slaytları başka branch'te işlenir
+
+  if (slide.styles?.backgroundImage) {
+    const bgImg = await loadImage(slide.styles.backgroundImage, { applyCors: true });
+    if (bgImg) drawImageSafe(ctx, bgImg, 'cover', W, H);
+  }
+
+  const ff =
+    slide.styles?.fontFamily && slide.styles.fontFamily !== 'inherit'
+      ? slide.styles.fontFamily.split(',')[0].trim()
+      : 'sans-serif';
+
+  ctx.fillStyle = slide.styles?.textColor || '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const displayContent =
+    slide.partsMode && slide.parts?.length
+      ? (slide.parts[slide.activePart ?? 0] ?? slide.content)
+      : slide.content;
+
+  const FIXED_FS = 11;
+  const MAX_LINES = 3;
+  const PADDING_H = 20;
+  const usableW = W - PADDING_H * 2;
+  const LH = FIXED_FS * 1.45;
+
+  const allLines = (displayContent || '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (allLines.length === 0) return true;
+
+  const hasMore = allLines.length > MAX_LINES;
+  const visLines = allLines.slice(0, MAX_LINES);
+  if (hasMore) {
+    const last = visLines[visLines.length - 1];
+    visLines[visLines.length - 1] = last.replace(/\s+\S+$/, '') + '\u2026';
+  }
+
+  const totalH = visLines.length * LH;
+  const startY = H / 2 - totalH / 2 + LH / 2;
+  ctx.font = `bold ${FIXED_FS}px ${ff}`;
+  visLines.forEach((line, i) => {
+    ctx.fillText(line, W / 2, startY + i * LH, usableW);
+  });
+  return true;
+}
+
+async function renderImageSlide(
+  ctx: CanvasRenderingContext2D,
+  slide: Slide,
+  W: number,
+  H: number,
+): Promise<boolean> {
+  const sources = [slide.thumbnailUrl, slide.mediaUrl].filter(Boolean) as string[];
+  for (const src of sources) {
+    const img = await loadImage(src, { useFileUrl: true, applyCors: true });
+    if (!img) continue;
+    const fit = slide.styles?.objectFit === 'cover' ? 'cover' : 'contain';
+    drawImageSafe(ctx, img, fit, W, H);
+    return true;
+  }
+  ctx.fillStyle = EMPTY_BG;
+  ctx.fillRect(0, 0, W, H);
+  fillFallbackText(ctx, slide.content?.slice(0, 40) || '🖼 Görsel');
+  return true;
+}
+
+async function renderVideoSlide(
+  ctx: CanvasRenderingContext2D,
+  slide: Slide,
+  W: number,
+  H: number,
+): Promise<boolean> {
+  if (slide.thumbnailUrl) {
+    const img = await loadImage(slide.thumbnailUrl, { applyCors: true });
+    if (img) {
+      drawImageSafe(ctx, img, 'contain', W, H);
+      return true;
+    }
+  }
+  ctx.fillStyle = EMPTY_BG;
+  ctx.fillRect(0, 0, W, H);
+  fillFallbackText(ctx, slide.content?.slice(0, 40) || '▶ Video', 'rgba(255,255,255,0.25)', '18px sans-serif');
+  return true;
+}
+
+function renderCountdownSlide(
+  ctx: CanvasRenderingContext2D,
+  slide: Slide,
+  W: number,
+  H: number,
+): boolean {
+  try {
+    const data = JSON.parse(slide.content);
+    const mm = String(data.minutes || 0).padStart(2, '0');
+    const ss = String(data.seconds || 0).padStart(2, '0');
+    const fs = Math.max(8, Math.min(40, (slide.styles?.fontSize ?? 120) * 0.32));
+    ctx.fillStyle = slide.styles?.textColor ?? '#ffffff';
+    ctx.font = `bold ${fs}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${mm}:${ss}`, W / 2, H / 2);
+  } catch {
+    fillFallbackText(ctx, 'Geri Sayım', slide.styles?.textColor ?? '#ffffff', 'bold 20px sans-serif');
+  }
+  return true;
+}
+
+function renderScreenSlide(
+  ctx: CanvasRenderingContext2D,
+  slide: Slide,
+  W: number,
+  H: number,
+): boolean {
+  ctx.fillStyle = PLACEHOLDER_BG;
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(59,130,246,0.15)';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🖥️ Ekran Yakalama', W / 2, H / 2 - 10);
+  ctx.font = '12px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.fillText(slide.content || 'Canlı Ekran', W / 2, H / 2 + 15);
+  return true;
+}
+
+async function renderLoopSlide(
+  ctx: CanvasRenderingContext2D,
+  slide: Slide,
+  W: number,
+  H: number,
+): Promise<boolean> {
+  const first = slide.loopItems?.[0];
+  if (first?.type === 'image' && first.mediaUrl) {
+    const img = await loadImage(first.mediaUrl, { useFileUrl: true, applyCors: true });
+    if (img) {
+      drawImageSafe(ctx, img, 'contain', W, H);
+      return true;
+    }
+  }
+  ctx.fillStyle = EMPTY_BG;
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(168,85,247,0.2)';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🔄 Loop', W / 2, H / 2 - 8);
+  ctx.font = '11px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.fillText(`${slide.loopItems?.length ?? 0} öğe`, W / 2, H / 2 + 10);
+  return true;
+}
+
+async function renderItemsSlide(
+  ctx: CanvasRenderingContext2D,
+  slide: Slide,
+  W: number,
+  H: number,
+): Promise<boolean> {
+  if (!slide.items?.length) return false;
+
+  ctx.fillStyle = slide.styles?.backgroundColor ?? '#000000';
+  ctx.fillRect(0, 0, W, H);
+
+  let drewAny = false;
+  for (const item of slide.items) {
+    if (item.type !== 'image' || !item.mediaUrl) continue;
+    const img = await loadImage(item.mediaUrl, { useFileUrl: true, applyCors: true });
+    if (!img) continue;
+    const x = (item.x / 100) * W;
+    const y = (item.y / 100) * H;
+    const iw = (item.width / 100) * W;
+    const ih = (item.height / 100) * H;
+    ctx.drawImage(img, x, y, iw, ih);
+    drewAny = true;
+  }
+
+  if (!drewAny) {
+    fillFallbackText(ctx, slide.content?.slice(0, 40) || 'Düzen Slaytı', 'rgba(255,255,255,0.45)', 'bold 11px sans-serif');
+  }
+  return true;
+}
+
+export function isHymnSlide(slide: Slide): boolean {
+  return slide.type === 'text' && slide.partsMode === true;
+}
+
+export function isScriptureSlide(slide: Slide): boolean {
+  return !!slide.group;
+}
+
+export function isTargetSlide(slide: Slide | undefined): boolean {
+  if (!slide) return false;
+  return isHymnSlide(slide) || isScriptureSlide(slide);
+}
+
+export function shouldRenderWatermark(
+  slide: Slide,
+  config: WatermarkConfig,
+): boolean {
+  if (!config.enabled) return false;
+  if (!config.logoDataUrl) return false;
+
+  const appliesToHymn = config.applyToHymns && isHymnSlide(slide);
+  const appliesToScripture = config.applyToScriptures && isScriptureSlide(slide);
+
+  return appliesToHymn || appliesToScripture;
+}
+
+function getWatermarkCanvasPosition(
+  position: Position,
+  W: number,
+  H: number,
+  logoW: number,
+  logoH: number,
+  margin: number,
+): { x: number; y: number } {
+  switch (position) {
+    case 'top-left':
+      return { x: margin, y: margin };
+    case 'top-center':
+      return { x: (W - logoW) / 2, y: margin };
+    case 'top-right':
+      return { x: W - logoW - margin, y: margin };
+    case 'bottom-left':
+      return { x: margin, y: H - logoH - margin };
+    case 'bottom-center':
+      return { x: (W - logoW) / 2, y: H - logoH - margin };
+    case 'bottom-right':
+    default:
+      return { x: W - logoW - margin, y: H - logoH - margin };
+  }
+}
+
+async function drawWatermarkOnCanvas(
+  ctx: CanvasRenderingContext2D,
+  config: WatermarkConfig,
+  W: number,
+  H: number,
+): Promise<void> {
+  if (!config.logoDataUrl) return;
+  try {
+    const img = new Image();
+    img.src = config.logoDataUrl;
+    await new Promise<void>((resolve, reject) => {
+      if (img.complete && img.naturalWidth > 0) resolve();
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('logo load'));
+    });
+
+    const logoW = Math.max(1, Math.round((W * config.size) / 100));
+    const ratio = img.naturalWidth > 0 ? img.naturalHeight / img.naturalWidth : 1;
+    const logoH = Math.max(1, Math.round(logoW * ratio));
+    const margin = Math.max(1, Math.round(W * 0.02));
+    const { x, y } = getWatermarkCanvasPosition(config.position, W, H, logoW, logoH, margin);
+
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, Math.max(0, config.opacity / 100));
+    ctx.drawImage(img, x, y, logoW, logoH);
+    ctx.restore();
+  } catch (err) {
+    console.warn('Thumbnail watermark çizilemedi, logosuz devam ediliyor:', err);
+  }
+}
 
 export async function generateSlideThumbnail(slide: Slide): Promise<string | null> {
-  const W = 320, H = 180;
-
+  const W = THUMB_W;
+  const H = THUMB_H;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
 
-  function drawImg(img: HTMLImageElement, ...args: number[]) {
-    ctx!.drawImage(img, ...(args as [number, number, number, number, number, number, number, number]));
+  try {
+    // Default background (text/image-empty slides için)
+    ctx.fillStyle = slide.styles?.backgroundColor || '#000000';
+    ctx.fillRect(0, 0, W, H);
+
+    let rendered = false;
+
+    // Dispatch by type / structure
+    if (slide.type === 'text') {
+      rendered = await renderTextSlide(ctx, slide, W, H);
+    } else if (slide.type === 'image') {
+      rendered = await renderImageSlide(ctx, slide, W, H);
+    } else if (slide.type === 'video') {
+      rendered = await renderVideoSlide(ctx, slide, W, H);
+    } else if (slide.type === 'countdown') {
+      rendered = renderCountdownSlide(ctx, slide, W, H);
+    } else if (slide.type === 'screen') {
+      rendered = renderScreenSlide(ctx, slide, W, H);
+    } else if (slide.type === 'loop') {
+      rendered = await renderLoopSlide(ctx, slide, W, H);
+    } else if (slide.items?.length) {
+      rendered = await renderItemsSlide(ctx, slide, W, H);
+    }
+
+    if (!rendered) {
+      ctx.fillStyle = PLACEHOLDER_BG;
+      ctx.fillRect(0, 0, W, H);
+      fillFallbackText(ctx, slide.content?.slice(0, 60) || slide.type);
+    }
+  } catch {
+    // Render pipeline failed — fallback placeholder
+    ctx.fillStyle = PLACEHOLDER_BG;
+    ctx.fillRect(0, 0, W, H);
+    fillFallbackText(ctx, slide.content?.slice(0, 40) || slide.type || 'Slayt', 'rgba(255,255,255,0.25)', 'bold 12px sans-serif');
   }
 
   try {
-    ctx.fillStyle = slide.styles?.backgroundColor ?? '#000000';
-    ctx.fillRect(0, 0, W, H);
-    let hasVisibleContent = false;
-
-    if (slide.type === 'text' && !slide.items?.length) {
-      hasVisibleContent = true;
-      if (slide.styles?.backgroundImage) {
-        try {
-          const img = new Image();
-          applyCorsIfRemote(img, slide.styles.backgroundImage);
-          img.src = slide.styles.backgroundImage;
-          await new Promise(r => { img.onload = r; img.onerror = r; });
-          drawImg(img, 0, 0, W, H);
-        } catch { /* skip */ }
-      }
-      const fs = Math.max(8, Math.min(20, (slide.styles?.fontSize ?? 48) * 0.32));
-      const ff = slide.styles?.fontFamily && slide.styles.fontFamily !== 'inherit' ? slide.styles.fontFamily.split(',')[0].trim() : 'sans-serif';
-      ctx.fillStyle = slide.styles?.textColor ?? '#ffffff';
-      ctx.font = `bold ${fs}px ${ff}`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      const lines = slide.content.split('\n').slice(0, 8);
-      const lh = fs * 1.35;
-      const startY = H / 2 - ((lines.length - 1) * lh) / 2;
-      lines.forEach((line, i) => {
-        ctx.fillText(line.trim(), W / 2, startY + i * lh, W - 24);
-      });
-
-    } else if (slide.type === 'image' && (slide.mediaUrl || slide.thumbnailUrl)) {
-      hasVisibleContent = true;
-      const sources = [slide.thumbnailUrl, slide.mediaUrl].filter(Boolean) as string[];
-      let drawn = false;
-      for (const src of sources) {
-        try {
-          const img = new Image();
-          applyCorsIfRemote(img, src);
-          img.src = src.startsWith('data:') ? src : toFileUrl(src);
-          await new Promise<void>((resolve) => {
-            img.onload = () => resolve();
-            img.onerror = () => resolve();
-          });
-          if (!img.width || !img.height) continue;
-          const ar = img.width / img.height;
-          const cAr = W / H;
-          if (slide.styles?.objectFit === 'cover') {
-            let sx = 0, sy = 0, sw = img.width, sh = img.height;
-            if (ar > cAr) { sw = img.height * cAr; sx = (img.width - sw) / 2; }
-            else           { sh = img.width / cAr;  sy = (img.height - sh) / 2; }
-            drawImg(img, sx, sy, sw, sh, 0, 0, W, H);
-          } else {
-            let dw = W, dh = H, dx = 0, dy = 0;
-            if (ar > cAr) { dh = W / ar; dy = (H - dh) / 2; }
-            else           { dw = H * ar; dx = (W - dw) / 2; }
-            drawImg(img, dx, dy, dw, dh);
-          }
-          drawn = true;
-          break;
-        } catch { /* try next source */ }
-      }
-      if (!drawn) {
-        ctx.fillStyle = '#111111';
-        ctx.fillRect(0, 0, W, H);
-        ctx.fillStyle = 'rgba(255,255,255,0.45)';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(slide.content?.slice(0, 40) || '🖼 Görsel', W / 2, H / 2);
-      }
-
-    } else if (slide.type === 'video') {
-      hasVisibleContent = true;
-      let videoDrawn = false;
-      if (slide.thumbnailUrl) {
-        try {
-          const img = new Image();
-          img.src = slide.thumbnailUrl;
-          await new Promise<void>((resolve) => {
-            if (img.complete && img.width > 0) { resolve(); return; }
-            img.onload = () => resolve();
-            img.onerror = () => resolve();
-          });
-          if (img.width > 0 && img.height > 0) {
-            const ar = img.width / img.height;
-            let dw = W, dh = H, dx = 0, dy = 0;
-            const cAr = W / H;
-            if (ar > cAr) { dh = W / ar; dy = (H - dh) / 2; }
-            else           { dw = H * ar; dx = (W - dw) / 2; }
-            drawImg(img, dx, dy, dw, dh);
-            videoDrawn = true;
-          }
-        } catch { /* skip */ }
-      }
-      if (!videoDrawn) {
-        ctx.fillStyle = '#111111';
-        ctx.fillRect(0, 0, W, H);
-        ctx.fillStyle = 'rgba(255,255,255,0.25)';
-        ctx.font = '18px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(slide.content?.slice(0, 40) || '▶ Video', W / 2, H / 2);
-      }
-
-    } else if (slide.type === 'countdown') {
-      hasVisibleContent = true;
-      try {
-        const data = JSON.parse(slide.content);
-        const minutes = data.minutes || 0;
-        const seconds = data.seconds || 0;
-        const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        const fs = Math.max(8, Math.min(40, (slide.styles?.fontSize ?? 120) * 0.32));
-        ctx.fillStyle = slide.styles?.textColor ?? '#ffffff';
-        ctx.font = `bold ${fs}px monospace`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(timeStr, W / 2, H / 2);
-      } catch {
-        ctx.fillStyle = slide.styles?.textColor ?? '#ffffff';
-        ctx.font = 'bold 20px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Geri Sayım', W / 2, H / 2);
-      }
-
-    } else if (slide.type === 'screen') {
-      hasVisibleContent = true;
-      ctx.fillStyle = '#1a1a2e';
-      ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = 'rgba(59,130,246,0.15)';
-      ctx.font = 'bold 14px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('🖥️ Ekran Yakalama', W / 2, H / 2 - 10);
-      ctx.font = '12px sans-serif';
-      ctx.fillStyle = 'rgba(255,255,255,0.5)';
-      ctx.fillText(slide.content || 'Canlı Ekran', W / 2, H / 2 + 15);
-
-    } else if (slide.type === 'loop') {
-      hasVisibleContent = true;
-      const firstItem = slide.loopItems?.[0];
-      if (firstItem && firstItem.type === 'image') {
-        try {
-          const img = new Image();
-          applyCorsIfRemote(img, firstItem.mediaUrl);
-          img.src = firstItem.mediaUrl.startsWith('data:')
-            ? firstItem.mediaUrl
-            : toFileUrl(firstItem.mediaUrl);
-          await new Promise(r => { img.onload = r; img.onerror = r; });
-          if (img.width > 0 && img.height > 0) {
-            const ar = img.width / img.height;
-            const cAr = W / H;
-            let dw = W, dh = H, dx = 0, dy = 0;
-            if (ar > cAr) { dh = W / ar; dy = (H - dh) / 2; }
-            else           { dw = H * ar; dx = (W - dw) / 2; }
-            drawImg(img, dx, dy, dw, dh);
-          }
-        } catch { /* skip */ }
-      } else {
-        ctx.fillStyle = '#111111';
-        ctx.fillRect(0, 0, W, H);
-        ctx.fillStyle = 'rgba(168,85,247,0.2)';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('🔄 Loop', W / 2, H / 2 - 8);
-        ctx.font = '11px sans-serif';
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
-        ctx.fillText(`${slide.loopItems?.length ?? 0} öğe`, W / 2, H / 2 + 10);
-      }
-
-    } else if (slide.items?.length) {
-      hasVisibleContent = true;
-      ctx.fillStyle = slide.styles?.backgroundColor ?? '#000000';
-      ctx.fillRect(0, 0, W, H);
-
-      for (const item of slide.items) {
-        if (item.type === 'image' && item.mediaUrl) {
-          try {
-            const img = new Image();
-            applyCorsIfRemote(img, item.mediaUrl);
-            img.src = item.mediaUrl.startsWith('data:') ? item.mediaUrl : toFileUrl(item.mediaUrl);
-            await new Promise<void>((resolve) => {
-              img.onload = () => resolve();
-              img.onerror = () => resolve();
-            });
-            if (img.width > 0 && img.height > 0) {
-              const x = (item.x / 100) * W;
-              const y = (item.y / 100) * H;
-              const iw = (item.width / 100) * W;
-              const ih = (item.height / 100) * H;
-              drawImg(img, x, y, iw, ih);
-            }
-          } catch { /* skip */ }
-        }
-      }
-
-      if (!slide.items.some((i) => i.type === 'image' && i.mediaUrl)) {
-        ctx.fillStyle = 'rgba(255,255,255,0.45)';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(slide.content?.slice(0, 40) || 'Düzen Slaytı', W / 2, H / 2);
+    if (typeof useWatermarkStore === 'function') {
+      const wmConfig: WatermarkConfig = useWatermarkStore.getState().config;
+      if (shouldRenderWatermark(slide, wmConfig)) {
+        await drawWatermarkOnCanvas(ctx, wmConfig, W, H);
       }
     }
-
-    // Universal fallback — show a content snippet so user can identify the slide
-    if (!hasVisibleContent) {
-      const snippet = slide.content?.slice(0, 60) || slide.type;
-      ctx.fillStyle = '#1a1a2e';
-      ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.font = 'bold 13px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(snippet, W / 2, H / 2, W - 24);
-    }
-  } catch {
-    // Entire thumbnail failed — draw a minimal placeholder so it's never null
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = 'rgba(255,255,255,0.25)';
-    ctx.font = 'bold 12px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(slide.content?.slice(0, 40) || slide.type || 'Slayt', W / 2, H / 2, W - 24);
+  } catch (err) {
+    console.warn('generateSlideThumbnail watermark aşaması hatası:', err);
   }
 
-  // ÖNEMLİ: toDataURL() de hata fırlatabilir (ör. cross-origin bir görsel
-  // çizildiyse canvas "tainted" olur ve SecurityError fırlatır). Bu çağrı
-  // try/catch'in dışında bırakılmıştı; bu yüzden tek bir slaytta oluşan bu hata
-  // tüm fonksiyonu reddediyor ve hiçbir thumbnail (placeholder dahil) üretilmiyordu.
   try {
     return canvas.toDataURL('image/jpeg', 0.65);
   } catch (err) {
-    console.error('generateSlideThumbnail: toDataURL başarısız oldu (canvas tainted olabilir):', err);
+    console.error('generateSlideThumbnail: toDataURL failed (canvas tainted?):', err);
     return null;
   }
 }
 
-// ─── PPTX Import Helpers ───────────────────────────────────────────────────────
-
+// ─── PPTX Import Helpers ──────────────────────────────────────────────────
 export interface PptxSlideResult {
   slideNumber: number;
   imagePath: string;
@@ -339,33 +503,26 @@ export interface PptxImportResult {
   presentationName: string;
 }
 
-/**
- * Convert PPTX import results to Slide format
- */
 export function convertPptxToSlides(
   pptxResult: PptxImportResult,
-  makeId: () => string = makeSlideId
+  makeId: () => string = makeSlideId,
 ): Slide[] {
-  if (!pptxResult.success || !pptxResult.slides) {
-    return [];
-  }
+  if (!pptxResult.success || !pptxResult.slides?.length) return [];
 
-  // Sort slides by number (slice -> in-place sort on shallow copy)
-  const sortedSlides = pptxResult.slides.slice();
-  sortedSlides.sort((a, b) => a.slideNumber - b.slideNumber);
-
-  // Map to Slide objects lazily and avoid unnecessary allocations where possible
-  return sortedSlides.map((pptxSlide) => ({
-    id: makeId(),
-    type: 'image' as const,
-    content: `Slayt ${pptxSlide.slideNumber}`,
-    mediaUrl: pptxSlide.imagePath,
-    thumbnailUrl: pptxSlide.imagePath, // PPTX slaytları için thumbnail aynı olabilir
-    styles: {
-      fontSize: 48,
-      backgroundColor: '#000000',
-      textColor: '#ffffff',
-      objectFit: 'contain' as const,
-    },
-  }));
+  // toSorted() avoids mutating the input (ES2023)
+  return pptxResult.slides
+    .toSorted((a, b) => a.slideNumber - b.slideNumber)
+    .map((pptx): Slide => ({
+      id: makeId(),
+      type: 'image',
+      content: `Slayt ${pptx.slideNumber}`,
+      mediaUrl: pptx.imagePath,
+      thumbnailUrl: pptx.imagePath,
+      styles: {
+        fontSize: 48,
+        backgroundColor: '#000000',
+        textColor: '#ffffff',
+        objectFit: 'contain',
+      },
+    }));
 }

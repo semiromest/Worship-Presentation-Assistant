@@ -1,19 +1,20 @@
 import { useTranslation } from 'react-i18next';
 import {
-  Globe, Undo2, Redo2, ChevronUp, ChevronDown, Trash2, HelpCircle, Monitor, Play, Smartphone, PanelRightClose, PanelRightOpen, Music, Volume2, Pause, Disc3
+  Globe, Undo2, Redo2, ChevronUp, ChevronDown, Copy, Trash2, HelpCircle, Monitor, Play, Smartphone, PanelRightClose, PanelRightOpen
 } from 'lucide-react';
 import { useStore } from '../state/useStore';
-import { cn, toFileUrl } from '../utils';
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { cn } from '../utils';
+import { useState, useRef, useCallback } from 'react';
 
 interface ToolbarProps {
   moveSelectedSlides: (direction: -1 | 1) => void;
   deleteSelectedSlides: () => void;
+  duplicateSelectedSlides: () => void;
   openLive: () => Promise<void>;
   closeLive: () => Promise<void>;
 }
 
-export default function Toolbar({ moveSelectedSlides, deleteSelectedSlides, openLive, closeLive }: ToolbarProps) {
+export default function Toolbar({ moveSelectedSlides, deleteSelectedSlides, duplicateSelectedSlides, openLive, closeLive }: ToolbarProps) {
   const { t, i18n } = useTranslation();
 
   const {
@@ -35,30 +36,6 @@ export default function Toolbar({ moveSelectedSlides, deleteSelectedSlides, open
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Background music
-  const [audioFile, setAudioFile] = useState<string | null>(null);
-  const [audioPlaying, setAudioPlaying] = useState(false);
-  const [audioVolume, setAudioVolume] = useState(0.5);
-  const [audioPanelOpen, setAudioPanelOpen] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [audioFileName, setAudioFileName] = useState('');
-  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
-  const [audioDuration, setAudioDuration] = useState(0);
-
-  const formatTime = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    return `${m}:${sec.toString().padStart(2, '0')}`;
-  };
-
-  // Cleanup audio on unmount
-  useEffect(() => {
-    return () => {
-      audioRef.current?.pause();
-      audioRef.current = null;
-    };
-  }, []);
 
   const startEditing = useCallback(() => {
     setDraftName(presentation.name);
@@ -237,8 +214,16 @@ export default function Toolbar({ moveSelectedSlides, deleteSelectedSlides, open
               <ChevronDown className="w-4 h-4" aria-hidden="true" />
             </button>
             <button
+              onClick={duplicateSelectedSlides}
+              title={`${t('common.duplicateSelected')} (Ctrl+D)`}
+              aria-label={t('common.duplicateSelected')}
+              className="p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]"
+            >
+              <Copy className="w-4 h-4" aria-hidden="true" />
+            </button>
+            <button
               onClick={deleteSelectedSlides}
-              title={t('common.deleteSelected')}
+              title={`${t('common.deleteSelected')} (Del)`}
               aria-label={t('common.deleteSelected')}
               className="p-2.5 rounded-md bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-400 transition-colors focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:outline-none active:scale-[0.92]"
             >
@@ -258,143 +243,7 @@ export default function Toolbar({ moveSelectedSlides, deleteSelectedSlides, open
           <HelpCircle className="w-4 h-4" aria-hidden="true" />
         </button>
 
-        {/* Background Music */}
-        <div className="relative shrink-0">
-          <button
-            onClick={() => setAudioPanelOpen(v => !v)}
-              className={cn(
-                'p-2.5 rounded-md border transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]',
-              audioPlaying
-                ? 'bg-green-600/20 border-green-500/40 text-green-400'
-                : audioFile
-                  ? 'bg-white/10 hover:bg-white/15 border-white/15 text-white'
-                  : 'bg-white/5 hover:bg-white/10 border-white/10 text-white/60'
-            )}
-            title={audioFile ? audioFileName : t('audio.backgroundMusic')}
-            aria-label={audioFile ? audioFileName : t('audio.backgroundMusic')}
-          >
-            {audioPlaying ? <Disc3 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Music className="w-4 h-4" aria-hidden="true" />}
-          </button>
-
-          {audioPanelOpen && (
-            <div
-              className="absolute right-0 top-full mt-2 w-[280px] rounded-2xl border border-white/10 bg-[#121212] shadow-2xl shadow-black/50 z-50 p-4 space-y-3"
-            >
-              <p className="text-[10px] text-white/40 uppercase font-bold tracking-widest">{t('audio.backgroundMusic')}</p>
-
-              {audioFile ? (
-                <div className="text-xs text-white/70 truncate bg-white/5 rounded-lg px-3 py-2" title={audioFileName}>
-                  {audioFileName}
-                </div>
-              ) : (
-                <p className="text-xs text-white/45">{t('audio.noFile')}</p>
-              )}
-
-              {audioFile && (
-                <>
-                  <div className="flex items-center gap-2 text-[11px] text-white/50">
-                    <span className="w-8 text-right tabular-nums shrink-0">{formatTime(audioCurrentTime)}</span>
-                    <input
-                      type="range"
-                      min="0"
-                      max={audioDuration || 1}
-                      step="1"
-                      value={audioCurrentTime}
-                      onChange={e => {
-                        const t = parseFloat(e.target.value);
-                        setAudioCurrentTime(t);
-                        if (audioRef.current) audioRef.current.currentTime = t;
-                      }}
-                      aria-label={t('audio.seek')}
-                      className="w-full h-1 accent-blue-500 cursor-pointer"
-                    />
-                    <span className="w-8 tabular-nums shrink-0">{formatTime(audioDuration)}</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        if (!audioRef.current) return;
-                        if (audioPlaying) {
-                          audioRef.current.pause();
-                          setAudioPlaying(false);
-                        } else {
-                          audioRef.current.play().catch(() => {});
-                          setAudioPlaying(true);
-                        }
-                      }}
-                      className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-                      aria-label={audioPlaying ? t('common.pause') : t('common.play')}
-                    >
-                      {audioPlaying ? <Pause className="w-4 h-4" aria-hidden="true" /> : <Play className="w-4 h-4 fill-current" aria-hidden="true" />}
-                    </button>
-                    <Volume2 className="w-4 h-4 text-white/40 shrink-0" />
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={audioVolume}
-                      onChange={e => {
-                        const v = parseFloat(e.target.value);
-                        setAudioVolume(v);
-                        if (audioRef.current) audioRef.current.volume = v;
-                      }}
-                      aria-label={t('audio.volume')}
-                      className="w-full h-1 accent-blue-500 cursor-pointer"
-                    />
-                  </div>
-                </>
-              )}
-
-              <button
-                onClick={async () => {
-                  const path = await (window as any).electronAPI?.selectAudioFile?.();
-                  if (!path) return;
-                  setAudioFile(path);
-                  setAudioCurrentTime(0);
-                  setAudioDuration(0);
-                  const name = path.split('\\').pop()?.split('/').pop() ?? path;
-                  setAudioFileName(name);
-                  if (!audioRef.current) {
-                    audioRef.current = new Audio();
-                    audioRef.current.loop = true;
-                  }
-                  const el = audioRef.current;
-                  const onTime = () => { setAudioCurrentTime(el.currentTime); };
-                  const onMeta = () => { setAudioDuration(el.duration); };
-                  el.addEventListener('timeupdate', onTime);
-                  el.addEventListener('loadedmetadata', onMeta);
-                  el.addEventListener('durationchange', onMeta);
-                  el.src = toFileUrl(path);
-                  el.volume = audioVolume;
-                  el.play().catch(() => {});
-                  setAudioPlaying(true);
-                }}
-                className="w-full text-xs py-2 rounded-lg bg-blue-600 hover:bg-blue-700 transition-colors font-semibold"
-              >
-                {t('audio.selectFile')}
-              </button>
-
-              {audioFile && (
-                <button
-                  onClick={() => {
-                    audioRef.current?.pause();
-                    audioRef.current = null;
-                    setAudioFile(null);
-                    setAudioPlaying(false);
-                    setAudioFileName('');
-                    setAudioCurrentTime(0);
-                    setAudioDuration(0);
-                  }}
-                  className="w-full text-xs py-1.5 text-red-400 hover:bg-red-600/20 rounded-lg transition-colors"
-                >
-                  {t('audio.removeMusic')}
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+        {/* Background Music bölümü kaldırıldı */}
 
         <div className="w-px h-6 bg-white/10 mx-1" />
 

@@ -1,4 +1,4 @@
-import type { TransitionType } from './types';
+import type { TransitionType, WatermarkConfig } from './types';
 
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 
@@ -102,3 +102,18 @@ export const DURATION_OPTIONS = [150, 250, 400, 600, 800];
 // ─── Loop Defaults ────────────────────────────────────────────────────────────
 
 export const LOOP_DEFAULT_DURATION = 5000;
+
+// ─── Watermark Defaults ─────────────────────────────────────────────────────
+
+export const DEFAULT_WATERMARK_CONFIG: WatermarkConfig = {
+  logoDataUrl: null,
+  position: 'bottom-right',
+  size: 15,
+  opacity: 40,
+  applyToHymns: true,
+  applyToScriptures: true,
+  enabled: true,
+};
+
+export const WATERMARK_STORAGE_KEY = 'presenter_watermark_config';
+export const WATERMARK_DEBOUNCE_MS = 500;

@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useCallback, useRef, useState } from 'react';
+import { memo, useMemo, useEffect, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, X, Plus, ZoomIn, ZoomOut } from 'lucide-react';
 import { useStore } from '../state/useStore';
@@ -9,6 +9,9 @@ const MIN_ZOOM = 0.4;
 const MAX_ZOOM = 2;
 const ZOOM_STEP = 0.1;
 
+// Kaydırma kabının yatay/dikey iç boşluğu (p-4 = 16px)
+const CONTENT_PADDING = 16;
+
 // Approximate card height ratio for virtual scrolling (aspect-video = 9/16 + badge + gap)
 const CARD_ASPECT = 9 / 16;
 const ROW_GAP = 12; // gap-3 = 12px
@@ -17,6 +20,7 @@ interface SlideGridProps {
   addSlide: () => void;
   reorderSlides: (from: number, to: number) => void;
   handleSlideClick: (id: string, index: number, e?: React.MouseEvent) => void;
+  handleSlideDoubleClick?: (id: string, index: number) => void;
 }
 
 /** Simple virtual-row hook: returns which row range is visible */
@@ -54,10 +58,53 @@ function useVirtualRows(
   return { startRow, endRow, totalHeight };
 }
 
+/**
+ * Ghost slide — a translucent "empty slot" card that mirrors real slide
+ * dimensions and creates a new slide on click. Visually distinct via
+ * dashed double-frame, dotted texture and a soft blue glow on hover.
+ */
+const GhostSlide = memo(({ onClick, zoom }: { onClick: () => void; zoom: number }) => {
+  const { t } = useTranslation();
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={t('common.addNewSlide')}
+      aria-describedby="add-slide-hint"
+      title={t('common.addSlideHint')}
+      className="group relative w-full aspect-video rounded-xl border border-dashed border-white/15 bg-gradient-to-b from-white/[0.04] to-transparent overflow-hidden cursor-pointer text-left transition-[border-color,background-color,box-shadow,transform] duration-150 ease-out hover:border-blue-400/40 hover:bg-blue-500/[0.04] hover:shadow-[0_0_24px_rgba(59,130,246,0.12)] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.98]"
+      style={{ zoom }}
+    >
+      <span
+        className="absolute inset-0 bg-[radial-gradient(circle,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:12px_12px] pointer-events-none"
+        aria-hidden="true"
+      />
+      <span
+        className="absolute inset-2 rounded border border-dashed border-white/10 transition-colors group-hover:border-blue-400/25"
+        aria-hidden="true"
+      />
+      <span className="relative z-10 flex flex-col items-center justify-center gap-2 h-full">
+        <span className="w-10 h-10 rounded-full border border-white/15 bg-white/[0.04] flex items-center justify-center transition-[transform,border-color,background-color,box-shadow] duration-150 ease-out group-hover:scale-110 group-hover:border-blue-400/50 group-hover:bg-blue-500/15 group-hover:shadow-[0_0_16px_rgba(59,130,246,0.25)]">
+          <Plus
+            className="w-4 h-4 text-white/50 transition-colors group-hover:text-blue-300"
+            aria-hidden="true"
+          />
+        </span>
+        <span className="text-xs font-semibold text-white/45 transition-colors group-hover:text-blue-300">
+          {t('common.addNewSlide')}
+        </span>
+      </span>
+    </button>
+  );
+});
+
+GhostSlide.displayName = 'GhostSlide';
+
 export default function SlideGrid({
   addSlide,
   reorderSlides,
   handleSlideClick,
+  handleSlideDoubleClick,
 }: SlideGridProps) {
   const { t } = useTranslation();
   const {
@@ -65,6 +112,7 @@ export default function SlideGrid({
     searchQuery,
     setSearchQuery,
     selectedSlideIds,
+    selectedSlideId,
     isProjectorWindowOpen,
     liveIndex,
     slideZoom,
@@ -154,14 +202,50 @@ export default function SlideGrid({
     );
   }, [presentation.slides, searchQuery]);
 
+  // Seçim değişince seçili kart görünür bölgeye taşınır (fare olmadan klavyeyle
+  // kullananlar için). Sanallaştırma nedeniyle ekran dışı kartlar DOM'da olmayabilir;
+  // o durumda satır geometrisiyle anlık kaydırma yapılır.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !selectedSlideId) return;
+
+    const idx = filteredSlides.findIndex((s) => s.id === selectedSlideId);
+    if (idx === -1) return;
+
+    const cardTop = Math.floor(idx / columnCount) * rowHeight;
+    const cardBottom = cardTop + cardHeight;
+    const viewTop = el.scrollTop - CONTENT_PADDING;
+    const viewBottom = viewTop + el.clientHeight;
+
+    if (cardTop < viewTop) {
+      el.scrollTop = cardTop + CONTENT_PADDING;
+    } else if (cardBottom > viewBottom) {
+      el.scrollTop = cardBottom - el.clientHeight + CONTENT_PADDING;
+    }
+
+    // Kaydırmadan sonra kart render edilince odakla (odak halkası klavye kullanıcısı için).
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.querySelector<HTMLElement>(`[data-slide-id="${selectedSlideId}"]`)?.focus({ preventScroll: true });
+      });
+    });
+  }, [selectedSlideId, filteredSlides, columnCount, rowHeight, cardHeight]);
+
+  // Ghost slide ("add new") sits at the end of the grid; reserve a slot for it
+  const showGhost = !searchQuery;
+
   // Group slides into rows for virtual rendering
   const rows = useMemo(() => {
     const result: (typeof filteredSlides)[] = [];
     for (let i = 0; i < filteredSlides.length; i += columnCount) {
       result.push(filteredSlides.slice(i, i + columnCount));
     }
+    const last = result[result.length - 1];
+    if (showGhost && (!last || last.length === columnCount)) {
+      result.push([]);
+    }
     return result;
-  }, [filteredSlides, columnCount]);
+  }, [filteredSlides, columnCount, showGhost]);
 
   const { startRow, endRow, totalHeight } = useVirtualRows(rows.length, rowHeight, containerRef);
 
@@ -266,6 +350,7 @@ export default function SlideGrid({
                             isSelected={selectedSlideIds.has(slide.id)}
                             isLive={isProjectorWindowOpen && liveIndex === originalIndex}
                             onClick={handleSlideClick}
+                            onDoubleClick={handleSlideDoubleClick}
                             onDragStart={handleDragStart}
                             onDragOver={handleDragOver}
                             onDragEnd={handleDragEnd}
@@ -276,6 +361,15 @@ export default function SlideGrid({
                         </div>
                       );
                     })}
+
+                    {rowIdx === rows.length - 1 && showGhost && (
+                      <div role="listitem" className="relative">
+                        <GhostSlide onClick={addSlide} zoom={slideZoom} />
+                        <p id="add-slide-hint" className="sr-only">
+                          {t('common.addSlideHint')}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -283,23 +377,6 @@ export default function SlideGrid({
           )}
         </div>
       </div>
-
-      {/* Add New Slide — fixed at bottom, always visible */}
-      {!searchQuery && (
-        <div className="flex-shrink-0 px-4 py-3 border-t border-white/5 bg-surface-raised">
-          <button
-            onClick={addSlide}
-            aria-describedby="add-slide-hint"
-            className="group w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-white/10 hover:border-blue-500/50 hover:bg-blue-500/5 transition-[border-color,background-color] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.98]"
-          >
-            <Plus className="w-4 h-4 text-white/60 group-hover:text-blue-400 transition-colors" aria-hidden="true" />
-            <span className="text-sm font-semibold text-white/60 group-hover:text-blue-400 transition-colors">
-              {t('common.addNewSlide')}
-            </span>
-          </button>
-          <p id="add-slide-hint" className="sr-only">{t('common.addSlideHint')}</p>
-        </div>
-      )}
     </div>
   );
 }

@@ -14,7 +14,9 @@
     "test:split": "tsx src/renderer/hymnSplit.test.ts"
   },
   "dependencies": {
+    "@googleapis/drive": "^20.2.0",
     "@gracious.tech/fetch-client": "^2.2.0",
+    "adm-zip": "^0.6.0",
     "bufferutil": "^4.1.0",
     "clsx": "^2.1.0",
     "electron-updater": "^6.1.7",
@@ -33,6 +35,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
     "@types/node": "^20.19.39",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^18.2.66",
@@ -95,5 +98,15 @@
       "uninstallDisplayName": "Worship Presentation Assistant",
       "deleteAppDataOnUninstall": true
     }
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/semiromest/Worship-Presentation-Assistant.git"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/semiromest/Worship-Presentation-Assistant/issues"
+  },
+  "homepage": "https://github.com/semiromest/Worship-Presentation-Assistant#readme"
 }

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Presentation, Preset, MediaItem, MediaKind, LoopItem } from '../types';
+import { Presentation, Preset, MediaItem, MediaKind, LoopItem, DriveFile, DriveStatus } from '../types';
 import { undoReducer, UndoState, UndoAction } from './undoReducer';
 // UndoAction is used in setPresentationName to keep rename in undo history
 import { DEFAULT_STYLES, DEFAULT__TRANSITION } from '../constants';
@@ -116,6 +116,17 @@ interface AppState {
 
   // Presentation name
   setPresentationName: (name: string) => void;
+
+  // Google Drive State
+  driveSignedIn: boolean;
+  driveEmail: string | null;
+  driveFiles: DriveFile[];
+  drivePanelOpen: boolean;
+  driveSigningIn: boolean;
+  setDriveSignedIn: (signedIn: boolean, email?: string | null) => void;
+  setDriveFiles: (files: DriveFile[]) => void;
+  setDrivePanelOpen: (open: boolean) => void;
+  setDriveSigningIn: (signingIn: boolean) => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -243,7 +254,6 @@ export const useStore = create<AppState>((set) => ({
   setIsCheatsheetOpen: (open) => set({ isCheatsheetOpen: open }),
 
   setPresentationName: (name) => set((state) => {
-    // Use the undo reducer so the rename is tracked in undo history
     const action: UndoAction = { type: 'SET', payload: { ...state.presentation, name } };
     const nextUndoState = undoReducer(state.undoState, action);
     return {
@@ -251,4 +261,15 @@ export const useStore = create<AppState>((set) => ({
       presentation: nextUndoState.present,
     };
   }),
+
+  // Google Drive State
+  driveSignedIn: false,
+  driveEmail: null,
+  driveFiles: [],
+  drivePanelOpen: false,
+  driveSigningIn: false,
+  setDriveSignedIn: (signedIn, email = null) => set({ driveSignedIn: signedIn, driveEmail: email }),
+  setDriveFiles: (files) => set({ driveFiles: files }),
+  setDrivePanelOpen: (open) => set({ drivePanelOpen: open }),
+  setDriveSigningIn: (signingIn) => set({ driveSigningIn: signingIn }),
 }));

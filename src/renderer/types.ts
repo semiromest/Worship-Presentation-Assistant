@@ -176,3 +176,34 @@ export interface Preset {
   presentation: Presentation;
   createdAt: number;
 }
+
+export interface DriveFile {
+  id: string;
+  name: string;
+  modifiedTime: string;
+  size?: string;
+}
+
+export type DriveStatus =
+  | { signedIn: false; email: null }
+  | { signedIn: true; email: string };
+
+// ─── Watermark Types ──────────────────────────────────────────────────────
+
+export type Position =
+  | 'top-left'
+  | 'top-center'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-center'
+  | 'bottom-right';
+
+export interface WatermarkConfig {
+  logoDataUrl: string | null;
+  position: Position;
+  size: number;
+  opacity: number;
+  applyToHymns: boolean;
+  applyToScriptures: boolean;
+  enabled: boolean;
+}

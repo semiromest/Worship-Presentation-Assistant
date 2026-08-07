@@ -47,6 +47,16 @@ declare global {
       selectMediaFolder?: () => Promise<string | null>;
       readMediaFolder?: (folderPath: string) => Promise<string[] | null>;
       selectMediaFile?: (type: MediaKind) => Promise<string | null>;
+
+      // Google Drive API
+      driveSignIn: () => Promise<DriveStatus>;
+      driveSignOut: () => Promise<void>;
+      driveStatus: () => Promise<DriveStatus>;
+      driveListFiles: () => Promise<DriveFile[]>;
+      driveUpload: (name: string, content: string) => Promise<{ ok: boolean; id?: string; error?: string }>;
+      driveSavePresentation: (content: string, name?: string) => Promise<{ ok: boolean; id?: string; error?: string }>;
+      driveDownload: (fileId: string) => Promise<{ ok: boolean; data?: string; error?: string }>;
+      driveDeleteFile: (fileId: string) => Promise<{ ok: boolean; error?: string }>;
     };
   }
 }

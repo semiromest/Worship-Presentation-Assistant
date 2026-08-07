@@ -2,8 +2,8 @@ import { useEffect } from 'react';
 import { useStore } from '../state/useStore';
 
 const NAV_KEYS = {
-  NEXT: new Set(['ArrowRight', ' ', 'PageDown', 'j', 'J']),
-  PREV: new Set(['ArrowLeft', 'PageUp', 'k', 'K']),
+  NEXT: new Set(['ArrowRight', 'ArrowDown', ' ', 'PageDown', 'j', 'J']),
+  PREV: new Set(['ArrowLeft', 'ArrowUp', 'PageUp', 'k', 'K']),
   HOME: new Set(['Home']),
   END: new Set(['End']),
 };
@@ -19,7 +19,15 @@ const TAB_KEYS: Record<string, string> = {
   '8': 'calendar',
 };
 
-export function useKeyboardNavigation() {
+interface KeyboardNavigationOptions {
+  /** Seçili slaytları sil (Delete) */
+  onDeleteSlides?: () => void;
+  /** Seçili slaytları kopyala (Ctrl+D) */
+  onDuplicateSlides?: () => void;
+}
+
+export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
+  const { onDeleteSlides, onDuplicateSlides } = options ?? {};
   const {
     dispatchUndo,
     setSelectedSlideId,
@@ -30,6 +38,7 @@ export function useKeyboardNavigation() {
     setIsEditorOpen,
     setIsCheatsheetOpen,
     setActiveTab,
+    setIsMediaMuted,
   } = useStore();
 
   useEffect(() => {
@@ -70,8 +79,14 @@ export function useKeyboardNavigation() {
 
       const navigate = (index: number) => {
         if (index < 0 || index > lastIndex) return;
-        if (canLive) setLiveIndex(index);
-        setSelectedSlideId(slides[index].id);
+        // Ok/Home/End/Space/J/K tuşları her koşulda sadece SEÇİMİ değiştirir.
+        // Canlı pozisyon ancak Enter (Canlıya Gönder) ile bilinçli olarak taşınır.
+        // Tekil seçim ve badge/çerçevenin dayandığı set ile anchor senkron tutulur:
+        // kullanıcı Enter'a basmadan önce son klavye hedefini "seçili" olarak görür.
+        const id = slides[index].id;
+        setSelectedSlideId(id);
+        setSelectedSlideIds(new Set([id]));
+        setLastSelectedIndex(index);
       };
 
       const moveSelectedSlide = (direction: -1 | 1) => {
@@ -104,6 +119,15 @@ export function useKeyboardNavigation() {
       } else if (e.altKey && e.key === 'ArrowDown' && state.activeTab === 'slides') {
         e.preventDefault();
         moveSelectedSlide(1);
+      } else if (e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'd' && !state.isEditorOpen && !state.isCheatsheetOpen && state.activeTab === 'slides') {
+        e.preventDefault();
+        onDuplicateSlides?.();
+      } else if (e.key === 'Delete' && !state.isEditorOpen && !state.isCheatsheetOpen && state.activeTab === 'slides' && state.selectedSlideIds.size > 0) {
+        e.preventDefault();
+        onDeleteSlides?.();
+      } else if ((e.key === 'm' || e.key === 'M') && !state.isCheatsheetOpen) {
+        e.preventDefault();
+        setIsMediaMuted((p) => !p);
       } else if (NAV_KEYS.NEXT.has(e.key)) {
         e.preventDefault();
         navigate(Math.min(selectedIdx + 1, lastIndex));
@@ -116,8 +140,10 @@ export function useKeyboardNavigation() {
       } else if (NAV_KEYS.END.has(e.key)) {
         e.preventDefault();
         navigate(lastIndex);
-      } else if (e.key === 'Enter' && state.isProjectorWindowOpen && selectedIdx >= 0) {
+      } else if (e.key === 'Enter' && selectedIdx >= 0) {
         e.preventDefault();
+        // Enter = "Canlıya Gönder": seçili slayt canlıya taşınır. Yayın kapalıyken
+        // canlı pozisyon hazırlanır (staging); açıkken perdeye yansıtılır.
         setLiveIndex(selectedIdx);
       } else if (e.key === 'Escape' && state.isProjectorWindowOpen) {
         e.preventDefault();
@@ -149,5 +175,8 @@ export function useKeyboardNavigation() {
     setIsEditorOpen,
     setIsCheatsheetOpen,
     setActiveTab,
+    setIsMediaMuted,
+    onDeleteSlides,
+    onDuplicateSlides,
   ]);
 }

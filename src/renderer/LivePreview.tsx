@@ -1,10 +1,12 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import type { Slide, SlideItem, LoopItem } from './types';
+import type { Slide, LoopItem } from './types';
 import { cn } from './utils';
 import { SLIDE_REFERENCE_WIDTH, ANIM_MAP } from './constants';
 import CountdownRenderer from './CountdownRenderer';
 import ScreenCaptureRenderer from './ScreenCaptureRenderer';
 import { useTranslation } from 'react-i18next';
+import { WatermarkOverlay } from './components/WatermarkOverlay';
+import { useWatermarkStore } from './state/useWatermarkStore';
 
 export interface LivePreviewProps {
   slide: Slide | undefined;
@@ -143,6 +145,7 @@ function LoopVideoPlayer({ mediaUrl, isActive = true }: { mediaUrl: string; isAc
 export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = false, isActive = true }: LivePreviewProps) => {
   const outerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0, scale: 1 });
+  const wmConfig = useWatermarkStore((s) => s.config);
 
   useEffect(() => {
     const el = outerRef.current;
@@ -300,6 +303,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
             </div>
             );
           })}
+          <WatermarkOverlay slide={slide!} config={wmConfig} />
         </div>
       );
     }
@@ -336,6 +340,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
             }}
             alt=""
           />
+          <WatermarkOverlay slide={slide!} config={wmConfig} />
         </div>
       );
     }
@@ -349,29 +354,41 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
             volume={volume}
             muted={muted}
           />
+          <WatermarkOverlay slide={slide!} config={wmConfig} />
         </div>
       );
     }
 
     if (slide.type === 'countdown') {
-      return <CountdownRenderer slide={slide} size={size} />;
+      return (
+        <div className="relative" style={{ width: `${width}px`, height: `${height}px` }}>
+          <CountdownRenderer slide={slide} size={size} />
+          <WatermarkOverlay slide={slide!} config={wmConfig} />
+        </div>
+      );
     }
 
     if (slide.type === 'screen') {
       return (
-        <div className="bg-black flex items-center justify-center" style={{ width: `${width}px`, height: `${height}px` }}>
+        <div className="bg-black flex items-center justify-center relative" style={{ width: `${width}px`, height: `${height}px` }}>
           <ScreenCaptureRenderer
             sourceId={slide.mediaUrl}
             sourceName={slide.content}
             volume={volume}
             muted={muted}
           />
+          <WatermarkOverlay slide={slide!} config={wmConfig} />
         </div>
       );
     }
 
     if (slide.type === 'loop') {
-      return <LoopRenderer slide={slide} width={width} height={height} isActive={isActive} />;
+      return (
+        <div className="relative" style={{ width: `${width}px`, height: `${height}px` }}>
+          <LoopRenderer slide={slide} width={width} height={height} isActive={isActive} />
+          <WatermarkOverlay slide={slide!} config={wmConfig} />
+        </div>
+      );
     }
 
     const styles = (slide.styles || {}) as Record<string, any>;
@@ -423,6 +440,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
         >
           {displayContent}
         </p>
+        <WatermarkOverlay slide={slide!} config={wmConfig} />
       </div>
     );
   };
@@ -437,3 +455,4 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
     </div>
   );
 });
+LivePreview.displayName = 'LivePreview';

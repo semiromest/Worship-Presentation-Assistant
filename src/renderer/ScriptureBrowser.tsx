@@ -1,16 +1,27 @@
+import { useState, useEffect, useMemo, useCallback, useRef, memo, useDeferredValue } from 'react';
 import {
-  useState, useEffect, useMemo, useCallback,
-  useRef, memo, useDeferredValue,
-} from 'react';
-import {
-  Search, Book, FileUp, ChevronRight,
-  ArrowLeft, Send, Hash, X, Layers, Check,
-  BookOpen, Download, Globe, Loader, Type,
+  Search,
+  Book,
+  FileUp,
+  ChevronRight,
+  ArrowLeft,
+  Send,
+  Hash,
+  X,
+  Layers,
+  Check,
+  BookOpen,
+  Download,
+  Globe,
+  Loader,
+  Type,
+  Wrench,
 } from 'lucide-react';
 import { cn, useDebounce } from './utils';
 import { confirmDialog } from './dialogs';
 import { useTranslation } from 'react-i18next';
 import { parseBibleXMLAsync, type BibleData } from './bibleParser';
+import { fixBibleBookNames, BOOK_NAMES_BY_LANGUAGE } from './bibleBookNames';
 import { onlineBibleManager, type BibleInfo } from './onlineBibleManager';
 import { helloAoApi, type HelloAoTranslation } from './helloAoApi';
 import { fetchBibleApi } from './fetchBibleApi';
@@ -20,9 +31,19 @@ import Dialog from './components/Dialog';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
-interface Verse { number: string; text: string }
-interface Chapter { number: string; verses: Verse[] }
-interface BibleBook { name: string; number: string; chapters: Chapter[] }
+interface Verse {
+  number: string;
+  text: string;
+}
+interface Chapter {
+  number: string;
+  verses: Verse[];
+}
+interface BibleBook {
+  name: string;
+  number: string;
+  chapters: Chapter[];
+}
 // BibleData interface imported from bibleParser.ts
 
 interface ScriptureBrowserProps {
@@ -46,18 +67,26 @@ const CHUNK_CONFIG = { maxVerses: 3, maxChars: 120, maxLines: 2 } as const;
 // ─── Normalization & Parsing ────────────────────────────────────────────────
 
 const TURKISH_CHARS_MAP: Record<string, string> = {
-  'ı': 'i', 'ğ': 'g', 'ü': 'u', 'ş': 's', 'ö': 'o', 'ç': 'c',
-  'İ': 'i', 'Ğ': 'g', 'Ü': 'u', 'Ş': 's', 'Ö': 'o', 'Ç': 'c',
+  ı: 'i',
+  ğ: 'g',
+  ü: 'u',
+  ş: 's',
+  ö: 'o',
+  ç: 'c',
+  İ: 'i',
+  Ğ: 'g',
+  Ü: 'u',
+  Ş: 's',
+  Ö: 'o',
+  Ç: 'c',
 };
 
 function normalize(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/[ığüşöçİĞÜŞÖÇ]/g, char => TURKISH_CHARS_MAP[char] || char);
+  return str.toLowerCase().replace(/[ığüşöçİĞÜŞÖÇ]/g, (char) => TURKISH_CHARS_MAP[char] || char);
 }
 
 function findMatthewIndex(books: BibleBook[]): number {
-  return books.findIndex(b => normalize(b.name).startsWith('matta'));
+  return books.findIndex((b) => normalize(b.name).startsWith('matta'));
 }
 
 function parseScriptureRef(input: string): ParsedRef | null {
@@ -65,11 +94,7 @@ function parseScriptureRef(input: string): ParsedRef | null {
   if (!s) return null;
 
   // Try each pattern: book chapter:verse, book chapter, book-only
-  const patterns = [
-    /^(.+?)\s+(\d+):(\d+)(?:-(\d+))?$/,
-    /^(.+?)\s+(\d+)$/,
-    /^(.+?)$/,
-  ];
+  const patterns = [/^(.+?)\s+(\d+):(\d+)(?:-(\d+))?$/, /^(.+?)\s+(\d+)$/, /^(.+?)$/];
 
   for (const pattern of patterns) {
     const match = s.match(pattern);
@@ -98,14 +123,14 @@ function parseZefaniaXML(xmlString: string): BibleData {
     const bnumber = b.getAttribute('bnumber') ?? '';
     const bname = b.getAttribute('bname') ?? '';
     const isNumeric = /^\d+$/.test(bnumber.trim());
-    
+
     const bookName = bname || (!isNumeric ? bnumber : `Kitap ${index + 1}`);
     const bookNumber = isNumeric ? bnumber : String(index + 1);
 
     const chapterElements = b.querySelectorAll('CHAPTER, Chapter');
-    const chapters = Array.from(chapterElements, c => {
+    const chapters = Array.from(chapterElements, (c) => {
       const verseElements = c.querySelectorAll('VERS, vers, V');
-      const verses = Array.from(verseElements, v => ({
+      const verses = Array.from(verseElements, (v) => ({
         number: v.getAttribute('vnumber') ?? '',
         text: v.textContent ?? '',
       }));
@@ -242,7 +267,7 @@ function useVirtualList(itemCount: number, resetDependency: unknown) {
     container.scrollTop = 0;
     setScrollTop(0);
 
-    const resizeObserver = new ResizeObserver(entries => {
+    const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (entry) {
         setContainerHeight(entry.contentRect.height);
@@ -272,79 +297,87 @@ function useVirtualList(itemCount: number, resetDependency: unknown) {
 
 // ─── Memoized Components ───────────────────────────────────────────────────
 
-const BookRow = memo(({ book, isActive, onClick }: {
-  book: BibleBook;
-  isActive: boolean;
-  onClick: () => void;
-}) => (
+const BookRow = memo(({ book, isActive, onClick }: { book: BibleBook; isActive: boolean; onClick: () => void }) => (
   <button
     onClick={onClick}
     className={cn(
       'w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-left transition-all duration-200 group',
-      isActive
-        ? 'bg-blue-500/10 text-blue-400 font-medium'
-        : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50',
+      isActive ? 'bg-blue-500/10 text-blue-400 font-medium' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
     )}
   >
     <span className="text-[13px] truncate">{book.name}</span>
-    <ChevronRight className={cn(
-      'w-4 h-4 shrink-0 transition-all duration-200',
-      isActive
-        ? 'text-blue-400 opacity-100'
-        : 'text-zinc-600 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0',
-    )} />
+    <ChevronRight
+      className={cn(
+        'w-4 h-4 shrink-0 transition-all duration-200',
+        isActive
+          ? 'text-blue-400 opacity-100'
+          : 'text-zinc-600 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0'
+      )}
+    />
   </button>
 ));
 
-const VerseRow = memo(({ verse, top, isSelected, onToggle, onDoubleClick }: {
-  verse: Verse;
-  top: number;
-  isSelected: boolean;
-  onToggle: (number: string) => void;
-  onDoubleClick?: (verse: Verse) => void;
-}) => {
-  const { t } = useTranslation();
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-pressed={isSelected}
-      aria-label={`${t('common.scriptureVerseLabel')} ${verse.number}: ${verse.text.substring(0, 80)}`}
-      onClick={() => onToggle(verse.number)}
-      onDoubleClick={() => onDoubleClick?.(verse)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onToggle(verse.number);
-        }
-      }}
-      style={{ position: 'absolute', top, left: 0, right: 0, height: VERSE_HEIGHT - 12 }}
-      className={cn(
-        'mx-6 rounded-2xl cursor-pointer transition-all duration-200 flex gap-4 p-4 group border',
-        isSelected
-          ? 'bg-blue-500/10 border-blue-500/20 shadow-sm shadow-blue-900/10'
-          : 'bg-zinc-900/30 border-transparent hover:bg-zinc-800/50 hover:border-zinc-700/50',
-      )}
-    >
-      <div className="shrink-0 pt-0.5">
-        <div className={cn(
-          'min-w-[28px] h-6 rounded-md flex items-center justify-center text-[11px] font-semibold transition-colors',
+const VerseRow = memo(
+  ({
+    verse,
+    top,
+    isSelected,
+    onToggle,
+    onDoubleClick,
+  }: {
+    verse: Verse;
+    top: number;
+    isSelected: boolean;
+    onToggle: (number: string) => void;
+    onDoubleClick?: (verse: Verse) => void;
+  }) => {
+    const { t } = useTranslation();
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        aria-pressed={isSelected}
+        aria-label={`${t('common.scriptureVerseLabel')} ${verse.number}: ${verse.text.substring(0, 80)}`}
+        onClick={() => onToggle(verse.number)}
+        onDoubleClick={() => onDoubleClick?.(verse)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggle(verse.number);
+          }
+        }}
+        style={{ position: 'absolute', top, left: 0, right: 0, height: VERSE_HEIGHT - 12 }}
+        className={cn(
+          'mx-6 rounded-2xl cursor-pointer transition-all duration-200 flex gap-4 p-4 group border',
           isSelected
-            ? 'bg-blue-500 text-white shadow-md shadow-blue-500/20'
-            : 'bg-zinc-800 text-zinc-400 group-hover:bg-zinc-700 group-hover:text-zinc-300',
-        )}>
-          {verse.number}
+            ? 'bg-blue-500/10 border-blue-500/20 shadow-sm shadow-blue-900/10'
+            : 'bg-zinc-900/30 border-transparent hover:bg-zinc-800/50 hover:border-zinc-700/50'
+        )}
+      >
+        <div className="shrink-0 pt-0.5">
+          <div
+            className={cn(
+              'min-w-[28px] h-6 rounded-md flex items-center justify-center text-[11px] font-semibold transition-colors',
+              isSelected
+                ? 'bg-blue-500 text-white shadow-md shadow-blue-500/20'
+                : 'bg-zinc-800 text-zinc-400 group-hover:bg-zinc-700 group-hover:text-zinc-300'
+            )}
+          >
+            {verse.number}
+          </div>
         </div>
+        <p
+          className={cn(
+            'text-[13.5px] leading-relaxed line-clamp-2 transition-colors',
+            isSelected ? 'text-zinc-100 font-medium' : 'text-zinc-400 group-hover:text-zinc-300'
+          )}
+        >
+          {verse.text}
+        </p>
       </div>
-      <p className={cn(
-        'text-[13.5px] leading-relaxed line-clamp-2 transition-colors',
-        isSelected ? 'text-zinc-100 font-medium' : 'text-zinc-400 group-hover:text-zinc-300',
-      )}>
-        {verse.text}
-      </p>
-    </div>
-  );
-});
+    );
+  }
+);
 
 // ─── Main Component ────────────────────────────────────────────────────────
 
@@ -360,9 +393,13 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
   const [contentSearch, setContentSearch] = useState(false);
   const [selectedContentResults, setSelectedContentResults] = useState<Set<string>>(new Set());
   const [parseError, setParseError] = useState<string | null>(null);
-  
+
   // Online Bible states
   const [bibleSource, setBibleSource] = useState<'offline' | 'online'>('offline');
+  const [isFixingNames, setIsFixingNames] = useState(false);
+  const [fixNamesMessage, setFixNamesMessage] = useState<string | null>(null);
+  const [fixLangMenuOpen, setFixLangMenuOpen] = useState(false);
+  const fixLangMenuRef = useRef<HTMLDivElement>(null);
   const [onlineBibles, setOnlineBibles] = useState<BibleInfo[]>([]);
   const [isLoadingOnline, setIsLoadingOnline] = useState(false);
   const [onlineError, setOnlineError] = useState<string | null>(null);
@@ -383,30 +420,30 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
   const filteredOnlineBibles = useMemo(() => {
     if (!languageFilter) return onlineBibles;
     const lower = languageFilter.toLowerCase();
-    return onlineBibles.filter(
-      b => b.language.toLowerCase().includes(lower) || b.name.toLowerCase().includes(lower)
-    );
+    return onlineBibles.filter((b) => b.language.toLowerCase().includes(lower) || b.name.toLowerCase().includes(lower));
   }, [onlineBibles, languageFilter]);
 
   const filteredHelloAoTranslations = useMemo(() => {
     if (!languageFilter) return helloAoTranslations;
     const lower = languageFilter.toLowerCase();
     return helloAoTranslations.filter(
-      t => t.language.toLowerCase().includes(lower) ||
-           t.languageEnglishName.toLowerCase().includes(lower) ||
-           t.englishName.toLowerCase().includes(lower) ||
-           t.name.toLowerCase().includes(lower)
+      (t) =>
+        t.language.toLowerCase().includes(lower) ||
+        t.languageEnglishName.toLowerCase().includes(lower) ||
+        t.englishName.toLowerCase().includes(lower) ||
+        t.name.toLowerCase().includes(lower)
     );
   }, [helloAoTranslations, languageFilter]);
 
   const filteredFetchBibleTranslations = useMemo(() => {
     if (!languageFilter) return fetchBibleTranslations;
     const lower = languageFilter.toLowerCase();
-    return fetchBibleTranslations.filter(t =>
-      t.language?.toLowerCase().includes(lower) ||
-      t.name?.toLowerCase().includes(lower) ||
-      t.name_local?.toLowerCase().includes(lower) ||
-      t.name_english?.toLowerCase().includes(lower)
+    return fetchBibleTranslations.filter(
+      (t) =>
+        t.language?.toLowerCase().includes(lower) ||
+        t.name?.toLowerCase().includes(lower) ||
+        t.name_local?.toLowerCase().includes(lower) ||
+        t.name_english?.toLowerCase().includes(lower)
     );
   }, [fetchBibleTranslations, languageFilter]);
 
@@ -425,21 +462,29 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
     }
     for (const t of filteredHelloAoTranslations) {
       items.push({
-        id: t.id, name: t.englishName || t.name, language: t.languageEnglishName || t.languageName,
-        detail: `${t.numberOfBooks} books`, source: 'helloao', data: t,
+        id: t.id,
+        name: t.englishName || t.name,
+        language: t.languageEnglishName || t.languageName,
+        detail: `${t.numberOfBooks} books`,
+        source: 'helloao',
+        data: t,
       });
     }
     for (const t of filteredFetchBibleTranslations) {
       items.push({
-        id: t.id, name: t.name_bilingual || t.name || t.name_english || t.id,
-        language: t.language || '', detail: '', source: 'fetchbible', data: t,
+        id: t.id,
+        name: t.name_bilingual || t.name || t.name_english || t.id,
+        language: t.language || '',
+        detail: '',
+        source: 'fetchbible',
+        data: t,
       });
     }
 
     items.sort((a, b) => a.language.localeCompare(b.language) || a.name.localeCompare(b.name));
     return items;
   }, [filteredOnlineBibles, filteredHelloAoTranslations, filteredFetchBibleTranslations]);
-  
+
   const debouncedSearch = useDebounce(searchTerm);
   const deferredSearch = useDeferredValue(debouncedSearch);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -456,10 +501,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
   );
 
   // Parse search reference
-  const parsedRef = useMemo(
-    () => parseScriptureRef(deferredSearch),
-    [deferredSearch]
-  );
+  const parsedRef = useMemo(() => parseScriptureRef(deferredSearch), [deferredSearch]);
 
   // Pre-compute normalized book names + testament split (single pass)
   const { bookNameCache, oldTestament, newTestament } = useMemo(() => {
@@ -474,19 +516,15 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
     }
 
     const filteredBooks = parsedRef?.book
-      ? bible.books.filter(b => norms.get(b)!.includes(parsedRef.book))
+      ? bible.books.filter((b) => norms.get(b)!.includes(parsedRef.book))
       : bible.books;
 
-    const matthewIndex = filteredBooks.findIndex(b => norms.get(b)!.startsWith('matta'));
+    const matthewIndex = filteredBooks.findIndex((b) => norms.get(b)!.startsWith('matta'));
 
     return {
       bookNameCache: { norms, byExact },
-      oldTestament: matthewIndex !== -1
-        ? filteredBooks.slice(0, matthewIndex)
-        : filteredBooks,
-      newTestament: matthewIndex !== -1
-        ? filteredBooks.slice(matthewIndex)
-        : [],
+      oldTestament: matthewIndex !== -1 ? filteredBooks.slice(0, matthewIndex) : filteredBooks,
+      newTestament: matthewIndex !== -1 ? filteredBooks.slice(matthewIndex) : [],
     };
   }, [bible, parsedRef?.book]);
 
@@ -516,13 +554,13 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
     if (!contentSearch || !bible || !searchIndex || !deferredSearch || deferredSearch.length < 2) return null;
 
     const query = normalize(deferredSearch);
-    const words = query.split(/\s+/).filter(w => w.length >= 2);
+    const words = query.split(/\s+/).filter((w) => w.length >= 2);
     if (words.length === 0) return null;
 
-    const sets = words.map(word => searchIndex.get(word) ?? []);
-    if (sets.some(s => s.length === 0)) return null;
+    const sets = words.map((word) => searchIndex.get(word) ?? []);
+    if (sets.some((s) => s.length === 0)) return null;
 
-    const smallestIdx = sets.reduce((best, set, i) => set.length < sets[best].length ? i : best, 0);
+    const smallestIdx = sets.reduce((best, set, i) => (set.length < sets[best].length ? i : best), 0);
     const smallest = sets[smallestIdx];
     const others = sets.filter((_, i) => i !== smallestIdx);
 
@@ -533,13 +571,19 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       const key = `${ref.bookIndex}:${ref.chapterIndex}:${ref.verseIndex}`;
       if (seen.has(key)) continue;
 
-      const allMatch = others.every(set =>
-        set.some(r => r.bookIndex === ref.bookIndex && r.chapterIndex === ref.chapterIndex && r.verseIndex === ref.verseIndex)
+      const allMatch = others.every((set) =>
+        set.some(
+          (r) => r.bookIndex === ref.bookIndex && r.chapterIndex === ref.chapterIndex && r.verseIndex === ref.verseIndex
+        )
       );
 
       if (allMatch) {
         const verse = bible.books[ref.bookIndex].chapters[ref.chapterIndex].verses[ref.verseIndex];
-        results.push({ book: bible.books[ref.bookIndex], chapter: bible.books[ref.bookIndex].chapters[ref.chapterIndex], verse });
+        results.push({
+          book: bible.books[ref.bookIndex],
+          chapter: bible.books[ref.bookIndex].chapters[ref.chapterIndex],
+          verse,
+        });
         seen.add(key);
         if (results.length >= 50) break;
       }
@@ -595,9 +639,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       setOnlineBibles(result.bibles);
     } catch (error) {
       console.error('Failed to fetch online bibles:', error);
-      setOnlineError(
-        error instanceof Error ? error.message : 'Failed to fetch Bible list'
-      );
+      setOnlineError(error instanceof Error ? error.message : 'Failed to fetch Bible list');
     } finally {
       setIsLoadingOnline(false);
     }
@@ -621,9 +663,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       setParseError(null);
     } catch (error) {
       console.error('Failed to download and parse Bible:', error);
-      setOnlineError(
-        error instanceof Error ? error.message : 'Failed to download Bible'
-      );
+      setOnlineError(error instanceof Error ? error.message : 'Failed to download Bible');
     } finally {
       setIsLoadingOnline(false);
     }
@@ -639,9 +679,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       setHelloAoTranslations(translations);
     } catch (error) {
       console.error('Failed to fetch HelloAO translations:', error);
-      setHelloAoError(
-        error instanceof Error ? error.message : 'Failed to fetch Bible list'
-      );
+      setHelloAoError(error instanceof Error ? error.message : 'Failed to fetch Bible list');
     } finally {
       setIsLoadingHelloAo(false);
     }
@@ -665,9 +703,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       setParseError(null);
     } catch (error) {
       console.error('Failed to download HelloAO Bible:', error);
-      setHelloAoError(
-        error instanceof Error ? error.message : 'Failed to download Bible'
-      );
+      setHelloAoError(error instanceof Error ? error.message : 'Failed to download Bible');
     } finally {
       setIsLoadingHelloAo(false);
     }
@@ -681,7 +717,10 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
     await Promise.allSettled([
       handleFetchOnlineBibles(),
       handleFetchHelloAo(),
-      fetchBibleApi.fetchTranslations().then(setFetchBibleTranslations).catch(() => {}),
+      fetchBibleApi
+        .fetchTranslations()
+        .then(setFetchBibleTranslations)
+        .catch(() => {}),
     ]);
 
     setIsLoadingUnified(false);
@@ -707,9 +746,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       setParseError(null);
     } catch (error) {
       console.error('Failed to download fetch.bible:', error);
-      setParseError(
-        error instanceof Error ? error.message : 'Failed to download Bible'
-      );
+      setParseError(error instanceof Error ? error.message : 'Failed to download Bible');
     } finally {
       setIsLoadingFetchBible(false);
     }
@@ -727,15 +764,9 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       const last = getLastBibleSource();
       if (!last) return;
 
-      const path = last.type === 'online'
-        ? `online:${last.id}`
-        : `${last.type}:${last.id}`;
+      const path = last.type === 'online' ? `online:${last.id}` : `${last.type}:${last.id}`;
 
-      const format = last.type === 'online'
-        ? 'zefania'
-        : last.type === 'helloao'
-          ? 'helloAo'
-          : 'fetchbible';
+      const format = last.type === 'online' ? 'zefania' : last.type === 'helloao' ? 'helloAo' : 'fetchbible';
 
       const cached = await BibleCache.get(path, format);
       if (cached) {
@@ -751,9 +782,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
   useEffect(() => {
     if (!bible || !parsedRef || !bookNameCache) return;
 
-    const matchedBook = bible.books.find(
-      b => bookNameCache.norms.get(b)!.includes(parsedRef.book)
-    );
+    const matchedBook = bible.books.find((b) => bookNameCache.norms.get(b)!.includes(parsedRef.book));
     if (!matchedBook) return;
 
     // Only change book (and clear downstream) if it's genuinely a different book
@@ -766,9 +795,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
 
     // Select chapter if specified
     if (parsedRef.chapter != null) {
-      const chapter = matchedBook.chapters.find(
-        c => parseInt(c.number) === parsedRef.chapter
-      );
+      const chapter = matchedBook.chapters.find((c) => parseInt(c.number) === parsedRef.chapter);
 
       const chapterChanged = chapter && selectedChapter?.number !== chapter.number;
       if (chapterChanged) {
@@ -783,11 +810,11 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
         if (targetChapter) {
           const verseNumbers = new Set(
             targetChapter.verses
-              .filter(v => {
+              .filter((v) => {
                 const num = parseInt(v.number);
                 return num >= parsedRef.verse! && num <= parsedRef.verseTo!;
               })
-              .map(v => v.number)
+              .map((v) => v.number)
           );
           setSelectedVerses(verseNumbers);
         }
@@ -797,7 +824,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
 
   // Toggle verse selection
   const toggleVerse = useCallback((verseNumber: string) => {
-    setSelectedVerses(prev => {
+    setSelectedVerses((prev) => {
       const next = new Set(prev);
       if (next.has(verseNumber)) {
         next.delete(verseNumber);
@@ -811,11 +838,11 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
   // Calculate slide count
   const slideCount = useMemo(() => {
     if (!selectedChapter || selectedVerses.size === 0) return 0;
-    
+
     const selectedVerseList = selectedChapter.verses
-      .filter(v => selectedVerses.has(v.number))
+      .filter((v) => selectedVerses.has(v.number))
       .sort((a, b) => parseInt(a.number) - parseInt(b.number))
-      .map(v => `${v.number}. ${v.text}`);
+      .map((v) => `${v.number}. ${v.text}`);
 
     return splitVersesIntoChunks(selectedVerseList).length;
   }, [selectedChapter, selectedVerses]);
@@ -825,19 +852,19 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
     if (!selectedBook || !selectedChapter || selectedVerses.size === 0) return;
 
     const sortedVerses = selectedChapter.verses
-      .filter(v => selectedVerses.has(v.number))
+      .filter((v) => selectedVerses.has(v.number))
       .sort((a, b) => parseInt(a.number) - parseInt(b.number));
 
-    const verseNumbers = sortedVerses.map(v => v.number);
+    const verseNumbers = sortedVerses.map((v) => v.number);
     const firstVerse = verseNumbers[0];
     const lastVerse = verseNumbers[verseNumbers.length - 1];
-    
+
     const title = `${selectedBook.name} ${selectedChapter.number}:${
       verseNumbers.length > 1 ? `${firstVerse}–${lastVerse}` : firstVerse
     }`;
-    
-    const lines = sortedVerses.map(v => `${v.number}. ${v.text}`);
-    const chunks = splitVersesIntoChunks(lines).map(chunk => `${title}\n\n${chunk}`);
+
+    const lines = sortedVerses.map((v) => `${v.number}. ${v.text}`);
+    const chunks = splitVersesIntoChunks(lines).map((chunk) => `${title}\n\n${chunk}`);
     const group = `${selectedBook.name} ${selectedChapter.number}`;
 
     if (chunks.length > 1) {
@@ -850,15 +877,18 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
   }, [selectedBook, selectedChapter, selectedVerses, onSendToLive]);
 
   // Double-click a verse to send directly to live
-  const handleDoubleClickVerse = useCallback((verse: Verse) => {
-    if (!selectedBook || !selectedChapter) return;
+  const handleDoubleClickVerse = useCallback(
+    (verse: Verse) => {
+      if (!selectedBook || !selectedChapter) return;
 
-    const title = `${selectedBook.name} ${selectedChapter.number}:${verse.number}`;
-    const content = `${title}\n\n${verse.number}. ${verse.text}`;
-    const group = `${selectedBook.name} ${selectedChapter.number}`;
+      const title = `${selectedBook.name} ${selectedChapter.number}:${verse.number}`;
+      const content = `${title}\n\n${verse.number}. ${verse.text}`;
+      const group = `${selectedBook.name} ${selectedChapter.number}`;
 
-    onSendToLive(content, { groupTitle: group, goLive: true });
-  }, [selectedBook, selectedChapter, onSendToLive]);
+      onSendToLive(content, { groupTitle: group, goLive: true });
+    },
+    [selectedBook, selectedChapter, onSendToLive]
+  );
 
   // Navigate to a content search result
   const navigateToResult = useCallback((result: { book: BibleBook; chapter: Chapter; verse: Verse }) => {
@@ -871,13 +901,13 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
   const handleSendContentResults = useCallback(() => {
     if (!contentSearchResults || selectedContentResults.size === 0) return;
 
-    const selected = contentSearchResults.filter(r => {
+    const selected = contentSearchResults.filter((r) => {
       const key = `${r.book.number}:${r.chapter.number}:${r.verse.number}`;
       return selectedContentResults.has(key);
     });
 
     const group = `${t('common.scriptureTitle')}: ${deferredSearch}`;
-    const slides = selected.map(r => {
+    const slides = selected.map((r) => {
       const title = `${r.book.name} ${r.chapter.number}:${r.verse.number}`;
       return `${title}\n\n${r.verse.number}. ${r.verse.text}`;
     });
@@ -905,7 +935,86 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
     setSelectedVerses(new Set());
     setSearchTerm('');
     setParseError(null);
+    setFixNamesMessage(null);
   }, [t]);
+
+  // Re-save the currently loaded bible to its cache entry (keeps source as-is)
+  const persistBibleToCache = useCallback(async (data: BibleData) => {
+    const storedPath = BibleCache.getStoredPath();
+    if (storedPath) {
+      await BibleCache.set(storedPath, data);
+      return;
+    }
+
+    const last = getLastBibleSource();
+    if (!last) return;
+
+    const path = last.type === 'online' ? `online:${last.id}` : `${last.type}:${last.id}`;
+    await BibleCache.set(path, data);
+  }, []);
+
+  // Fix book names to canonical names in the chosen language (same downloaded bible, better names)
+  const handleFixBookNames = useCallback(
+    async (lang: 'tr' | 'en') => {
+      if (!bible) return;
+
+      setIsFixingNames(true);
+      setFixNamesMessage(null);
+      setFixLangMenuOpen(false);
+
+      try {
+        const names = BOOK_NAMES_BY_LANGUAGE[lang];
+        const result = fixBibleBookNames(bible, names);
+
+        if (result.renamedCount === 0) {
+          setFixNamesMessage(t('common.scriptureFixBookNamesAlready'));
+          return;
+        }
+
+        const fixedBible = result.bible;
+        setBible(fixedBible);
+
+        // Keep current selection in sync (book identity preserved via number)
+        if (selectedBook) {
+          const nextBook = fixedBible.books.find((b) => b.number === selectedBook.number);
+          if (nextBook) {
+            setSelectedBook(nextBook);
+            if (selectedChapter) {
+              const nextChapter = nextBook.chapters.find((c) => c.number === selectedChapter.number);
+              if (nextChapter) setSelectedChapter(nextChapter);
+            }
+          }
+        }
+
+        await persistBibleToCache(fixedBible);
+        setFixNamesMessage(t('common.scriptureFixBookNamesDone', { count: result.renamedCount }));
+      } finally {
+        setIsFixingNames(false);
+      }
+    },
+    [bible, selectedBook, selectedChapter, persistBibleToCache, t]
+  );
+
+  // Close the language menu on outside click / Escape
+  useEffect(() => {
+    if (!fixLangMenuOpen) return;
+
+    const handlePointerDown = (e: MouseEvent) => {
+      if (fixLangMenuRef.current && !fixLangMenuRef.current.contains(e.target as Node)) {
+        setFixLangMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFixLangMenuOpen(false);
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [fixLangMenuOpen]);
 
   // Keyboard shortcut handler
   useEffect(() => {
@@ -943,9 +1052,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
           <div className="w-16 h-16 rounded-2xl bg-zinc-900 flex items-center justify-center">
             <Book className="w-6 h-6 text-zinc-700" aria-hidden="true" />
           </div>
-          <p className="text-[13px] text-zinc-500 leading-relaxed">
-            {t('common.scriptureEmptyDesc')}
-          </p>
+          <p className="text-[13px] text-zinc-500 leading-relaxed">{t('common.scriptureEmptyDesc')}</p>
         </div>
       );
     }
@@ -966,7 +1073,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
               {t('common.scriptureOldTestament')}
             </div>
             <div className="space-y-0.5">
-              {oldTestament.map(book => (
+              {oldTestament.map((book) => (
                 <BookRow
                   key={book.number}
                   book={book}
@@ -987,7 +1094,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
               {t('common.scriptureNewTestament')}
             </div>
             <div className="space-y-0.5">
-              {newTestament.map(book => (
+              {newTestament.map((book) => (
                 <BookRow
                   key={book.number}
                   book={book}
@@ -1019,16 +1126,14 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
             <ArrowLeft className="w-3.5 h-3.5" />
             {t('common.scriptureBackToBooks')}
           </button>
-          <h3 className="text-xl font-bold text-zinc-100 truncate tracking-tight">
-            {selectedBook.name}
-          </h3>
+          <h3 className="text-xl font-bold text-zinc-100 truncate tracking-tight">{selectedBook.name}</h3>
           <p className="text-[12px] text-zinc-500 mt-1">
             {t('common.scriptureChapters', { count: selectedBook.chapters.length })}
           </p>
         </div>
         <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
           <div className="grid grid-cols-4 gap-2">
-            {selectedBook.chapters.map(ch => (
+            {selectedBook.chapters.map((ch) => (
               <button
                 key={ch.number}
                 onClick={() => {
@@ -1039,7 +1144,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
                   'aspect-square rounded-xl text-[14px] font-semibold transition-[background-color,border-color,box-shadow,transform] duration-200 border tabular-nums',
                   parsedRef?.chapter === parseInt(ch.number)
                     ? 'bg-blue-500 border-blue-400 text-white shadow-lg shadow-blue-500/20 scale-105'
-                    : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 hover:border-zinc-700',
+                    : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 hover:border-zinc-700'
                 )}
               >
                 {ch.number}
@@ -1054,13 +1159,10 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
   const renderVerseList = () => {
     if (!selectedChapter || !selectedBook) return null;
 
-    const currentIndex = selectedBook.chapters.findIndex(
-      c => c.number === selectedChapter.number
-    );
+    const currentIndex = selectedBook.chapters.findIndex((c) => c.number === selectedChapter.number);
     const prevChapter = currentIndex > 0 ? selectedBook.chapters[currentIndex - 1] : null;
-    const nextChapter = currentIndex < selectedBook.chapters.length - 1
-      ? selectedBook.chapters[currentIndex + 1]
-      : null;
+    const nextChapter =
+      currentIndex < selectedBook.chapters.length - 1 ? selectedBook.chapters[currentIndex + 1] : null;
 
     return (
       <div className="flex-1 flex flex-col overflow-hidden bg-[#0a0a0b] relative">
@@ -1079,8 +1181,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
             </button>
             <div className="min-w-0">
               <h3 className="text-lg font-bold text-zinc-100 truncate tracking-tight">
-                {selectedBook.name}{' '}
-                <span className="text-zinc-500">{selectedChapter.number}</span>
+                {selectedBook.name} <span className="text-zinc-500">{selectedChapter.number}</span>
               </h3>
               <p className="text-[12px] text-zinc-500 mt-0.5">
                 {t('common.scriptureVerses', { count: selectedChapter.verses.length })}
@@ -1098,9 +1199,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
               </button>
             )}
             <button
-              onClick={() =>
-                setSelectedVerses(new Set(selectedChapter.verses.map(v => v.number)))
-              }
+              onClick={() => setSelectedVerses(new Set(selectedChapter.verses.map((v) => v.number)))}
               className="px-3 py-1.5 rounded-md bg-zinc-800 text-[12px] font-medium text-zinc-200 hover:bg-zinc-700 hover:text-white transition-[background-color] active:scale-[0.96]"
             >
               {t('common.scriptureSelectAll')}
@@ -1123,9 +1222,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
             {prevChapter ? t('common.scripturePrevChapter', { number: prevChapter.number }) : ''}
           </button>
           <div className="px-6 flex items-center text-[12px] font-semibold text-zinc-600 bg-zinc-900/30">
-            {selectedChapter.number}{' '}
-            <span className="mx-1 text-zinc-700">/</span>{' '}
-            {selectedBook.chapters.length}
+            {selectedChapter.number} <span className="mx-1 text-zinc-700">/</span> {selectedBook.chapters.length}
           </div>
           <button
             onClick={() => {
@@ -1142,23 +1239,18 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
         </div>
 
         {/* Virtual Verse List */}
-        <div
-          ref={containerRef}
-          className="flex-1 overflow-y-auto py-4 custom-scrollbar"
-        >
+        <div ref={containerRef} className="flex-1 overflow-y-auto py-4 custom-scrollbar">
           <div style={{ height: totalHeight, position: 'relative' }}>
-            {selectedChapter.verses
-              .slice(startIndex, endIndex)
-              .map((verse, index) => (
-                <VerseRow
-                  key={verse.number}
-                  verse={verse}
-                  top={(startIndex + index) * VERSE_HEIGHT}
-                  isSelected={selectedVerses.has(verse.number)}
-                  onToggle={toggleVerse}
-                  onDoubleClick={handleDoubleClickVerse}
-                />
-              ))}
+            {selectedChapter.verses.slice(startIndex, endIndex).map((verse, index) => (
+              <VerseRow
+                key={verse.number}
+                verse={verse}
+                top={(startIndex + index) * VERSE_HEIGHT}
+                isSelected={selectedVerses.has(verse.number)}
+                onToggle={toggleVerse}
+                onDoubleClick={handleDoubleClickVerse}
+              />
+            ))}
           </div>
         </div>
 
@@ -1166,9 +1258,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
         <div
           className={cn(
             'border-t border-zinc-800 bg-[#0a0a0b]/90 backdrop-blur-md transition-all duration-300 ease-in-out overflow-hidden absolute bottom-0 left-0 right-0',
-            selectedVerses.size > 0
-              ? 'translate-y-0 opacity-100 p-6'
-              : 'translate-y-full opacity-0 p-0'
+            selectedVerses.size > 0 ? 'translate-y-0 opacity-100 p-6' : 'translate-y-full opacity-0 p-0'
           )}
         >
           {selectedVerses.size > 0 && (
@@ -1188,9 +1278,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
               >
                 <Send className="w-4 h-4" />
                 {(() => {
-                  const nums = [...selectedVerses]
-                    .map(Number)
-                    .sort((a, b) => a - b);
+                  const nums = [...selectedVerses].map(Number).sort((a, b) => a - b);
                   const ref = `${selectedBook.name} ${selectedChapter.number}:${
                     nums.length === 1 ? nums[0] : `${nums[0]}–${nums[nums.length - 1]}`
                   }`;
@@ -1210,14 +1298,10 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
         <BookOpen className="w-8 h-8 opacity-40 text-zinc-400" />
       </div>
       <div className="text-center">
-        <p className="text-base font-semibold text-zinc-300">
-          {t('common.scriptureSelectBook')}
-        </p>
+        <p className="text-base font-semibold text-zinc-300">{t('common.scriptureSelectBook')}</p>
         <p className="text-[13px] mt-2 text-zinc-600">
           {t('common.scriptureSearchHint')}{' '}
-          <span className="bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">
-            {t('common.scriptureSearchExample')}
-          </span>{' '}
+          <span className="bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">{t('common.scriptureSearchExample')}</span>{' '}
           {t('common.scriptureSearchSuffix')}
         </p>
       </div>
@@ -1237,7 +1321,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
     }
 
     const toggleContentResult = (key: string) => {
-      setSelectedContentResults(prev => {
+      setSelectedContentResults((prev) => {
         const next = new Set(prev);
         if (next.has(key)) next.delete(key);
         else next.add(key);
@@ -1245,14 +1329,12 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       });
     };
 
-    const resultKey = (r: typeof results[number]) => `${r.book.number}:${r.chapter.number}:${r.verse.number}`;
+    const resultKey = (r: (typeof results)[number]) => `${r.book.number}:${r.chapter.number}:${r.verse.number}`;
 
     return (
       <div className="flex-1 flex flex-col overflow-hidden bg-[#0a0a0b]">
         <div className="px-6 py-4 border-b border-zinc-800/60 bg-[#0a0a0b]/80 backdrop-blur-md z-10 sticky top-0">
-          <h3 className="text-sm font-bold text-zinc-300">
-            Search results ({results.length})
-          </h3>
+          <h3 className="text-sm font-bold text-zinc-300">Search results ({results.length})</h3>
         </div>
         <div className="flex-1 overflow-y-auto py-4 custom-scrollbar">
           <div className="space-y-1 px-4">
@@ -1261,7 +1343,9 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
               const normalizedText = normalize(result.verse.text);
               const query = normalize(deferredSearch);
               const matchIdx = normalizedText.indexOf(query);
-              let before = '', match = '', after = '';
+              let before = '',
+                match = '',
+                after = '';
               if (matchIdx !== -1) {
                 const originalMatch = result.verse.text.slice(matchIdx, matchIdx + query.length);
                 before = result.verse.text.slice(0, matchIdx);
@@ -1277,27 +1361,29 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
                   className="flex items-start gap-3 p-4 rounded-xl bg-zinc-900/30 border border-transparent hover:bg-zinc-800/50 hover:border-zinc-700/50 transition-all group"
                 >
                   <button
-                    onClick={(e) => { e.stopPropagation(); toggleContentResult(key); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleContentResult(key);
+                    }}
                     className={cn(
                       'mt-0.5 w-5 h-5 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all',
-                      isSelected
-                        ? 'bg-blue-600 border-blue-600'
-                        : 'border-zinc-600 hover:border-zinc-500'
+                      isSelected ? 'bg-blue-600 border-blue-600' : 'border-zinc-600 hover:border-zinc-500'
                     )}
                   >
                     {isSelected && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
                   </button>
-                  <button
-                    onClick={() => navigateToResult(result)}
-                    className="flex-1 text-left min-w-0"
-                  >
+                  <button onClick={() => navigateToResult(result)} className="flex-1 text-left min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-[12px] font-bold text-blue-400/80">{ref}</span>
                       <ChevronRight className="w-3 h-3 text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                     <p className="text-[13px] leading-relaxed text-zinc-400 group-hover:text-zinc-300 transition-colors line-clamp-2">
                       {matchIdx !== -1 ? (
-                        <>{before}<span className="text-blue-300 bg-blue-500/10 rounded px-0.5">{match}</span>{after}</>
+                        <>
+                          {before}
+                          <span className="text-blue-300 bg-blue-500/10 rounded px-0.5">{match}</span>
+                          {after}
+                        </>
                       ) : (
                         result.verse.text
                       )}
@@ -1313,9 +1399,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
         <div
           className={cn(
             'border-t border-zinc-800 bg-[#0a0a0b]/90 backdrop-blur-md transition-all duration-300 ease-in-out overflow-hidden',
-            selectedContentResults.size > 0
-              ? 'max-h-20 p-6'
-              : 'max-h-0 p-0'
+            selectedContentResults.size > 0 ? 'max-h-20 p-6' : 'max-h-0 p-0'
           )}
         >
           {selectedContentResults.size > 0 && (
@@ -1344,7 +1428,9 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       {/* Left Panel - Book List */}
       <div className="w-[280px] shrink-0 flex flex-col border-r border-zinc-800/50 bg-[#0f0f11]">
         <div className="px-5 pt-6 pb-4">
-          <div className="flex items-center justify-between mb-5">            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between mb-5">
+            {' '}
+            <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center">
                 <BookOpen className="w-4 h-4 text-blue-400" />
               </div>
@@ -1353,6 +1439,59 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
               </span>
             </div>
             <div className="flex items-center gap-2">
+              {bible && (
+                <div className="relative" ref={fixLangMenuRef}>
+                  <button
+                    onClick={() => setFixLangMenuOpen((v) => !v)}
+                    disabled={isFixingNames}
+                    className={cn(
+                      'w-8 h-8 flex items-center justify-center rounded-xl transition-colors duration-150 active:scale-[0.96] disabled:opacity-60',
+                      fixLangMenuOpen
+                        ? 'bg-emerald-500/20 text-emerald-300'
+                        : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300'
+                    )}
+                    title={t('common.scriptureFixBookNamesHint')}
+                    aria-label={t('common.scriptureFixBookNames')}
+                    aria-haspopup="menu"
+                    aria-expanded={fixLangMenuOpen}
+                  >
+                    <Wrench className={cn('w-4 h-4', isFixingNames && 'animate-spin')} aria-hidden="true" />
+                  </button>
+                  {fixLangMenuOpen && (
+                    <div
+                      role="menu"
+                      aria-label={t('common.scriptureFixBookNames')}
+                      className="popover-enter absolute right-0 top-full mt-2 w-40 p-1 rounded-xl bg-zinc-900 border border-zinc-700/60 shadow-2xl shadow-black/50 z-30"
+                    >
+                      {isFixingNames ? (
+                        <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-[12px] text-zinc-400">
+                          <Loader className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                          {t('common.scriptureFixingBookNames')}
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            role="menuitem"
+                            onClick={() => handleFixBookNames('tr')}
+                            className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[12px] font-medium text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50"
+                          >
+                            <span className="text-[10px] font-bold text-zinc-500 w-6">TR</span>
+                            {t('language.tr')}
+                          </button>
+                          <button
+                            role="menuitem"
+                            onClick={() => handleFixBookNames('en')}
+                            className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[12px] font-medium text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50"
+                          >
+                            <span className="text-[10px] font-bold text-zinc-500 w-6">EN</span>
+                            {t('language.en')}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
               <button
                 onClick={() => handleImportXML()}
                 className="w-8 h-8 flex items-center justify-center rounded-xl bg-zinc-800/50 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-all"
@@ -1393,8 +1532,8 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
               type="text"
               placeholder={contentSearch ? 'Search verse content…' : t('common.scriptureSearchPlaceholder')}
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              onKeyDown={e => {
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => {
                 if (e.key === 'Enter') handleSendToLive();
               }}
               aria-label={t('common.scriptureSearchLabel')}
@@ -1402,14 +1541,12 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
             />
             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
               <button
-                onClick={() => setContentSearch(v => !v)}
+                onClick={() => setContentSearch((v) => !v)}
                 title={contentSearch ? 'Search by reference' : 'Search verse content'}
                 aria-label={contentSearch ? 'Search by reference' : 'Search verse content'}
                 className={cn(
                   'w-7 h-7 flex items-center justify-center rounded-lg transition-all',
-                  contentSearch
-                    ? 'bg-blue-500/20 text-blue-400'
-                    : 'text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800',
+                  contentSearch ? 'bg-blue-500/20 text-blue-400' : 'text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800'
                 )}
               >
                 <Type className="w-3.5 h-3.5" aria-hidden="true" />
@@ -1438,17 +1575,21 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
             <div className="mt-3 px-3 py-2 bg-blue-500/5 border border-blue-500/10 rounded-xl flex items-center gap-2">
               <Hash className="w-3.5 h-3.5 text-blue-400/80 shrink-0" />
               <span className="text-[12px] text-blue-300/90 truncate font-medium">
-                {parsedRef.book && bookNameCache &&
-                  bible?.books.find(b =>
-                    bookNameCache.norms.get(b)!.includes(parsedRef.book)
-                  )?.name}
+                {parsedRef.book &&
+                  bookNameCache &&
+                  bible?.books.find((b) => bookNameCache.norms.get(b)!.includes(parsedRef.book))?.name}
                 {parsedRef.chapter != null && ` ${parsedRef.chapter}`}
                 {parsedRef.verse != null && `:${parsedRef.verse}`}
-                {parsedRef.verseTo != null &&
-                  parsedRef.verseTo !== parsedRef.verse &&
-                  `–${parsedRef.verseTo}`}
+                {parsedRef.verseTo != null && parsedRef.verseTo !== parsedRef.verse && `–${parsedRef.verseTo}`}
               </span>
             </div>
+          )}
+
+          {/* Fix Book Names result message */}
+          {fixNamesMessage && (
+            <p className="mt-3 px-1 text-[11px] text-emerald-400/90" role="status" aria-live="polite">
+              {fixNamesMessage}
+            </p>
           )}
         </div>
 
@@ -1489,7 +1630,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
               type="text"
               placeholder={t('common.scriptureLanguageFilter')}
               value={languageFilter}
-              onChange={e => setLanguageFilter(e.target.value)}
+              onChange={(e) => setLanguageFilter(e.target.value)}
               aria-label={t('common.scriptureLanguageFilter')}
               className="w-full bg-zinc-900/50 border border-zinc-800 focus:border-blue-500/50 rounded-xl py-2 pl-10 pr-3 text-[13px] outline-none text-zinc-200 placeholder:text-zinc-600 transition-all"
             />
@@ -1502,15 +1643,16 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
                 <span className="text-[13px] text-zinc-400">Loading Bibles…</span>
               </div>
             ) : unifiedBibleList.length === 0 ? (
-              <p className="text-zinc-400 text-center py-8">
-                {t('common.scriptureNoMatch')}
-              </p>
+              <p className="text-zinc-400 text-center py-8">{t('common.scriptureNoMatch')}</p>
             ) : (
               unifiedBibleList.map((item) => {
                 const isGitHub = item.source === 'github';
                 const isHelloAo = item.source === 'helloao';
                 const isFetchBible = item.source === 'fetchbible';
-                const isLoading = (isGitHub && isLoadingOnline) || (isHelloAo && isLoadingHelloAo) || (isFetchBible && isLoadingFetchBible);
+                const isLoading =
+                  (isGitHub && isLoadingOnline) ||
+                  (isHelloAo && isLoadingHelloAo) ||
+                  (isFetchBible && isLoadingFetchBible);
                 const handleDownload = isGitHub
                   ? () => handleDownloadOnlineBible(item.data as BibleInfo)
                   : isHelloAo
@@ -1528,12 +1670,14 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="font-medium text-zinc-100 truncate">{item.name}</p>
-                          <span className={cn(
-                            'text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0',
-                            isGitHub && 'bg-blue-500/10 text-blue-400',
-                            isHelloAo && 'bg-emerald-500/10 text-emerald-400',
-                            isFetchBible && 'bg-violet-500/10 text-violet-400',
-                          )}>
+                          <span
+                            className={cn(
+                              'text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0',
+                              isGitHub && 'bg-blue-500/10 text-blue-400',
+                              isHelloAo && 'bg-emerald-500/10 text-emerald-400',
+                              isFetchBible && 'bg-violet-500/10 text-violet-400'
+                            )}
+                          >
                             {isGitHub ? 'GitHub XML' : isHelloAo ? 'HelloAO' : 'fetch.bible'}
                           </span>
                         </div>
@@ -1546,7 +1690,10 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
                         {isLoading ? (
                           <Loader className="w-4 h-4 animate-spin text-blue-400" aria-hidden="true" />
                         ) : (
-                          <Download className="w-4 h-4 text-zinc-400 group-hover:text-blue-400 transition-colors" aria-hidden="true" />
+                          <Download
+                            className="w-4 h-4 text-zinc-400 group-hover:text-blue-400 transition-colors"
+                            aria-hidden="true"
+                          />
                         )}
                       </div>
                     </div>
@@ -1565,11 +1712,16 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
         </div>
       </Dialog>
 
-    <style>{`
+      <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #27272a; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+        .popover-enter { animation: popover-enter 140ms ease-out; transform-origin: top right; }
+        @keyframes popover-enter {
+          from { opacity: 0; transform: translateY(-4px) scale(0.96); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
       `}</style>
     </div>
   );

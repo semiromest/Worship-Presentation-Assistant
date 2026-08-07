@@ -37,7 +37,6 @@ export default function App() {
 
   // Custom Hooks
   const { openLive, closeLive } = useRemoteControl();
-  useKeyboardNavigation();
   useProjectorSync();
 
   const {
@@ -94,13 +93,20 @@ export default function App() {
     handleAddCountdownToPresentation,
     handleAddLoopToPresentation,
     handleSlideClick,
+    handleSlideDoubleClick,
     deleteSelectedSlides,
+    duplicateSelectedSlides,
     moveSelectedSlides,
     replaceSlideMedia,
     removeSlideMedia,
     updateLoopItems,
     updateSlideProperty,
   } = useSlideOperations();
+
+  useKeyboardNavigation({
+    onDeleteSlides: deleteSelectedSlides,
+    onDuplicateSlides: duplicateSelectedSlides,
+  });
 
   const transitionType = presentation.transition?.type ?? DEFAULT__TRANSITION.type;
   const transitionDuration = presentation.transition?.duration ?? DEFAULT__TRANSITION.duration;
@@ -233,6 +239,7 @@ export default function App() {
         <Toolbar
           moveSelectedSlides={moveSelectedSlides}
           deleteSelectedSlides={deleteSelectedSlides}
+          duplicateSelectedSlides={duplicateSelectedSlides}
           openLive={openLive}
           closeLive={closeLive}
         />
@@ -267,6 +274,7 @@ export default function App() {
                   addSlide={addSlide}
                   reorderSlides={reorderSlides}
                   handleSlideClick={handleSlideClick}
+                  handleSlideDoubleClick={handleSlideDoubleClick}
                 />
               </div>
 

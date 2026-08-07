@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   captureScreenSource: (sourceId: string) => ipcRenderer.invoke('capture-screen-source', sourceId),
   selectAudioFile: () => ipcRenderer.invoke('select-audio-file'),
   notifyProjectorReady: () => ipcRenderer.send('projector-ready'),
+  cleanupTempDir: () => ipcRenderer.invoke('cleanup-temp-dir'),
   // ──────────────────────────────────────────────
 
   onRemoteAction: (callback: (data: any) => void) => {
@@ -67,4 +68,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('pptx-import-progress', subscription);
     return () => ipcRenderer.removeListener('pptx-import-progress', subscription);
   },
+
+  // ─── Google Drive ──────────────────────────────────────────────────────────
+
+  driveSignIn: () => ipcRenderer.invoke('drive-sign-in'),
+  driveSignOut: () => ipcRenderer.invoke('drive-sign-out'),
+  driveStatus: () => ipcRenderer.invoke('drive-status'),
+  driveListFiles: () => ipcRenderer.invoke('drive-list-files'),
+  driveUpload: (name: string, content: string) => ipcRenderer.invoke('drive-upload', name, content),
+  driveSavePresentation: (content: string, name?: string) => ipcRenderer.invoke('drive-save-presentation', content, name),
+  driveDownload: (fileId: string) => ipcRenderer.invoke('drive-download', fileId),
+  driveDeleteFile: (fileId: string) => ipcRenderer.invoke('drive-delete-file', fileId),
 });

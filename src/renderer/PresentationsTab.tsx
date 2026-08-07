@@ -15,6 +15,9 @@ import {
   AlertCircle,
   Timer,
   Pencil,
+  Cloud,
+  Plus,
+  ChevronDown,
 } from 'lucide-react';
 import { AnimatedPreview } from './AnimatedPreview';
 import { cn } from './utils';
@@ -22,6 +25,17 @@ import { convertPptxToSlides, type PptxImportResult } from './utils';
 import type { Presentation, Preset, Slide } from './types';
 import { confirmDialog } from './dialogs';
 import { useStore } from './state/useStore';
+import DrivePanel from './components/DrivePanel';
+
+// ─── Shared action/styles (page-scoped) ────────────────────────────────────
+// All actions use the same secondary outline style for a quiet, uniform look;
+// wider variants add extra horizontal padding for emphasis.
+const BTN_BASE =
+  'inline-flex items-center gap-2 h-10 rounded-xl text-sm font-medium transition-all active:scale-[0.98] shrink-0';
+const BTN_SECONDARY = `${BTN_BASE} border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] text-white/70 hover:text-white px-4`;
+const BTN_SECONDARY_WIDE = `${BTN_BASE} border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] text-white/70 hover:text-white px-6`;
+
+type SortOrder = 'newest' | 'oldest' | 'name';
 
 // ─── LazyAnimatedPreview ─────────────────────────────────────────────────────
 // Defined at module level so it's not recreated on every PresetCard render,
@@ -37,7 +51,10 @@ const LazyAnimatedPreview = memo(function LazyAnimatedPreview({ slide }: { slide
       const io = new IntersectionObserver(
         (entries) => {
           for (const e of entries) {
-            if (e.isIntersecting) { setVisible(true); io.disconnect(); }
+            if (e.isIntersecting) {
+              setVisible(true);
+              io.disconnect();
+            }
           }
         },
         { rootMargin: '200px' }
@@ -51,14 +68,7 @@ const LazyAnimatedPreview = memo(function LazyAnimatedPreview({ slide }: { slide
   return (
     <div ref={ref} className="w-full h-full">
       {visible && slide ? (
-        <AnimatedPreview
-          slide={slide}
-          transitionType="none"
-          duration={0}
-          size="preview"
-          volume={0}
-          muted
-        />
+        <AnimatedPreview slide={slide} transitionType="none" duration={0} size="preview" volume={0} muted />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center text-white/10">
           <Layers className="w-10 h-10" aria-hidden="true" />
@@ -89,30 +99,42 @@ interface PresetCardProps {
   onRename: (oldName: string, newName: string) => void;
 }
 
-const PresetCard = memo(function PresetCard({
-  preset,
-  isActive,
-  onApply,
-  onDelete,
-  onRename,
-}: PresetCardProps) {
+const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelete, onRename }: PresetCardProps) {
   const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const firstSlide = preset.presentation.slides[0];
 
+  const startRename = () => {
+    setDraftName(preset.name);
+    setIsEditing(true);
+    requestAnimationFrame(() => inputRef.current?.select());
+  };
+
+  const openPreset = () => onApply(preset);
+
   return (
     <article
-      aria-label={preset.name}
+      aria-label={`${t('common.openPreset')}: ${preset.name}`}
+      role="button"
+      tabIndex={0}
+      onClick={openPreset}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openPreset();
+        }
+      }}
       className={cn(
-        'group relative rounded-3xl border overflow-hidden transition-all duration-200',
+        'group relative rounded-2xl border overflow-hidden transition-all duration-200 cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none',
         isActive
           ? 'border-blue-500/50 bg-blue-500/[0.06] shadow-lg shadow-blue-500/10 ring-1 ring-blue-500/30'
-          : 'border-white/5 bg-white/[0.03] hover:border-blue-500/25 hover:bg-white/[0.05]',
+          : 'border-white/5 bg-white/[0.03] hover:border-blue-500/25 hover:bg-white/[0.05]'
       )}
     >
-      <div className="relative aspect-video bg-black overflow-hidden">
+      <div className="relative aspect-video bg-black overflow-hidden pointer-events-none">
         {firstSlide ? (
           <LazyAnimatedPreview slide={firstSlide} />
         ) : (
@@ -124,7 +146,7 @@ const PresetCard = memo(function PresetCard({
         {isActive && (
           <div className="absolute top-2 left-2">
             <span className="px-2 py-1 rounded-lg bg-blue-600/90 text-[10px] font-semibold uppercase tracking-wide">
-              {t('common.openPreset')}
+              {t('common.active')}
             </span>
           </div>
         )}
@@ -132,43 +154,44 @@ const PresetCard = memo(function PresetCard({
         <div className="absolute inset-0 bg-gradient-to-t from-[#0f1115] via-transparent to-transparent opacity-60" />
       </div>
 
-      <div className="p-4 space-y-2">
+      <div className="p-3 space-y-1.5">
         <div className="flex items-center gap-2">
           {isEditing ? (
-            <input
-              ref={inputRef}
-              type="text"
-              value={draftName}
-              onChange={e => setDraftName(e.target.value)}
-              onBlur={() => {
-                const trimmed = draftName.trim();
-                if (trimmed && trimmed !== preset.name) {
-                  onRename(preset.name, trimmed);
-                }
-                setIsEditing(false);
-              }}
-              onKeyDown={e => {
-                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                if (e.key === 'Escape') setIsEditing(false);
-              }}
-              aria-label={t('common.presetName')}
-              className="flex-1 font-semibold text-sm bg-transparent border-b border-blue-400/50 outline-none text-white"
-            />
+            <div className="flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+              <input
+                ref={inputRef}
+                type="text"
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                onBlur={() => {
+                  const trimmed = draftName.trim();
+                  if (trimmed && trimmed !== preset.name) {
+                    onRename(preset.name, trimmed);
+                  }
+                  setIsEditing(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                  if (e.key === 'Escape') setIsEditing(false);
+                }}
+                aria-label={t('common.presetName')}
+                className="w-full font-semibold text-sm bg-transparent border-b border-blue-400/50 outline-none text-white"
+              />
+            </div>
           ) : (
-            <h3 className="font-semibold text-sm truncate group-hover:text-blue-300 transition-colors flex-1">
+            <h3 className="flex-1 font-semibold text-sm truncate group-hover:text-blue-300 transition-colors">
               {preset.name}
             </h3>
           )}
           <button
             type="button"
-            onClick={() => {
-              setDraftName(preset.name);
-              setIsEditing(true);
-              requestAnimationFrame(() => inputRef.current?.select());
+            onClick={(e) => {
+              e.stopPropagation();
+              startRename();
             }}
             title={t('common.rename')}
             aria-label={t('common.rename')}
-            className="opacity-60 hover:opacity-100 focus-visible:opacity-100 transition-all w-7 h-7 rounded-lg hover:bg-white/10 text-white/40 hover:text-white flex items-center justify-center shrink-0"
+            className="opacity-60 group-hover:opacity-100 focus-visible:opacity-100 transition-all w-7 h-7 rounded-lg hover:bg-white/10 text-white/40 hover:text-white flex items-center justify-center shrink-0"
           >
             <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
@@ -189,40 +212,51 @@ const PresetCard = memo(function PresetCard({
         </div>
       </div>
 
-      <div className="px-4 pb-4 flex gap-2">
+      <div className="px-3 pb-3 flex gap-2">
         <button
           type="button"
-          onClick={() => onApply(preset)}
-          className="flex-1 h-10 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 hover:opacity-90 text-sm font-medium transition-all shadow-md shadow-blue-500/15"
+          onClick={(e) => {
+            e.stopPropagation();
+            openPreset();
+          }}
+          className="flex-1 h-9 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] text-white/70 hover:text-white text-sm font-medium transition-all"
         >
           {t('common.openPreset')}
         </button>
         <button
           type="button"
-          onClick={() => onDelete(preset.name)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(preset.name);
+          }}
           title={t('common.deletePreset')}
           aria-label={t('common.deletePreset')}
-          className="w-10 h-10 rounded-xl border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 text-red-400 flex items-center justify-center transition-all"
+          className="w-7 h-7 self-center rounded-lg text-white/40 opacity-60 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-red-500/15 hover:text-red-300 text-red-400/70 flex items-center justify-center transition-all"
         >
-          <Trash2 className="w-4 h-4" aria-hidden="true" />
+          <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
         </button>
       </div>
     </article>
   );
 });
 
-const EmptyLibrary = () => {
+interface EmptyLibraryProps {
+  onSave: () => void;
+}
+const EmptyLibrary = ({ onSave }: EmptyLibraryProps) => {
   const { t } = useTranslation();
   return (
-    <div className="h-full min-h-[280px] flex items-center justify-center">
+    <div className="h-full min-h-[300px] flex items-center justify-center">
       <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.02] p-12 text-center max-w-md">
         <div className="w-16 h-16 mx-auto rounded-3xl bg-blue-500/10 border border-blue-500/10 flex items-center justify-center mb-4">
-          <Layers className="w-8 h-8 text-blue-400/60" />
+          <Layers className="w-8 h-8 text-blue-400/60" aria-hidden="true" />
         </div>
-        <h5 className="font-medium text-white/80">{t('common.noSavedPresets')}</h5>
-        <p className="text-sm text-white/35 mt-2 leading-relaxed">
-          {t('common.noSavedPresetsDesc')}
-        </p>
+        <h2 className="font-medium text-white/80">{t('common.noSavedPresets')}</h2>
+        <p className="text-sm text-white/35 mt-2 leading-relaxed">{t('common.noSavedPresetsDesc')}</p>
+        <button type="button" onClick={onSave} className={`${BTN_SECONDARY_WIDE} mt-6`}>
+          <Save className="w-4 h-4" aria-hidden="true" />
+          {t('common.savePreset')}
+        </button>
       </div>
     </div>
   );
@@ -236,11 +270,7 @@ const EmptySearch = memo(function EmptySearch({ onClear }: EmptySearchProps) {
   return (
     <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.02] p-10 text-center">
       <p className="text-white/50">{t('common.noSearchResults')}</p>
-      <button
-        type="button"
-        onClick={onClear}
-        className="mt-3 text-sm text-blue-400 hover:text-blue-300"
-      >
+      <button type="button" onClick={onClear} className="mt-3 text-sm text-blue-400 hover:text-blue-300">
         {t('common.clearSearch')}
       </button>
     </div>
@@ -269,13 +299,31 @@ export default function PresentationsTab({
   onNewPresentation,
 }: PresentationsTabProps) {
   const { t } = useTranslation();
-  const setPresentationName = useStore(s => s.setPresentationName);
+  const setPresentationName = useStore((s) => s.setPresentationName);
+  const setDrivePanelOpen = useStore((s) => s.setDrivePanelOpen);
+  const drivePanelOpen = useStore((s) => s.drivePanelOpen);
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
   const [importError, setImportError] = useState<string | null>(null);
   const [importDuration, setImportDuration] = useState<number | null>(null);
   const importStartTimeRef = useRef<number>(0);
+
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [draftName, setDraftName] = useState('');
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail && onApplyPreset) {
+        onApplyPreset({ name: detail.name ?? 'Drive Sunumu', presentation: detail, createdAt: Date.now() });
+      }
+    };
+    window.addEventListener('drive-open-presentation', handler);
+    return () => window.removeEventListener('drive-open-presentation', handler);
+  }, [onApplyPreset]);
 
   const [isSaving, startSaveTransition] = useTransition();
 
@@ -297,8 +345,30 @@ export default function PresentationsTab({
 
   const filteredPresets = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return q ? presets.filter(p => p.name.toLowerCase().includes(q)) : presets;
+    return q ? presets.filter((p) => p.name.toLowerCase().includes(q)) : presets;
   }, [presets, searchQuery]);
+
+  const sortedPresets = useMemo(() => {
+    const arr = [...filteredPresets];
+    if (sortOrder === 'name') {
+      return arr.sort((a, b) => a.name.localeCompare(b.name, 'tr'));
+    }
+    return arr.sort((a, b) => (sortOrder === 'oldest' ? a.createdAt - b.createdAt : b.createdAt - a.createdAt));
+  }, [filteredPresets, sortOrder]);
+
+  const startNameEdit = () => {
+    setDraftName(presentation.name);
+    setIsEditingName(true);
+    requestAnimationFrame(() => nameInputRef.current?.select());
+  };
+
+  const commitName = () => {
+    const trimmed = draftName.trim();
+    if (trimmed && trimmed !== presentation.name) {
+      setPresentationName(trimmed);
+    }
+    setIsEditingName(false);
+  };
 
   const saveCurrentPreset = useCallback(() => {
     const name = presentation.name || 'Yeni Sunum';
@@ -325,12 +395,10 @@ export default function PresentationsTab({
       const updated = await window.electronAPI?.deletePreset?.(name);
       if (Array.isArray(updated)) {
         onPresetsChange(updated);
-        onSelectedPresetNameChange(
-          name === selectedPresetName ? null : selectedPresetName,
-        );
+        onSelectedPresetNameChange(name === selectedPresetName ? null : selectedPresetName);
       }
     },
-    [selectedPresetName, onPresetsChange, onSelectedPresetNameChange],
+    [selectedPresetName, onPresetsChange, onSelectedPresetNameChange, t]
   );
 
   const renamePreset = useCallback(
@@ -343,7 +411,7 @@ export default function PresentationsTab({
         }
       }
     },
-    [selectedPresetName, onPresetsChange, onSelectedPresetNameChange],
+    [selectedPresetName, onPresetsChange, onSelectedPresetNameChange]
   );
 
   const clearSearch = useCallback(() => setSearchQuery(''), []);
@@ -391,68 +459,148 @@ export default function PresentationsTab({
         setImportDuration(Math.round(duration));
       }
     }
-  }, [onImportSlides]);
+  }, [onImportSlides, t]);
 
   return (
     <div className="h-full bg-surface-base text-white overflow-hidden flex flex-col">
-      <div className="flex-shrink-0 border-b border-white/5 bg-surface-raised/95 backdrop-blur-xl">
-        <div className="px-6 py-4 flex items-center justify-between gap-4">
+      <header className="flex-shrink-0 border-b border-white/5 bg-surface-raised/95 backdrop-blur-xl">
+        <div className="px-6 pt-4 flex items-center justify-between gap-x-4 gap-y-3 flex-wrap">
           <div className="flex items-center gap-4 min-w-0">
             <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500/20 to-violet-500/20 border border-white/10 flex items-center justify-center shadow-lg shadow-blue-500/10 shrink-0">
               <Layers className="w-5 h-5 text-blue-400" />
             </div>
             <div className="min-w-0">
               <h2 className="text-lg font-semibold tracking-tight">{t('common.presetsTitle')}</h2>
-              <p className="text-xs text-white/40 mt-0.5 truncate">
-                {t('common.presetsSubtitle')}
-              </p>
+              <p className="text-xs text-white/40 mt-0.5 truncate">{t('common.presetsSubtitle')}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 justify-end shrink-0">
             {onImportSlides && (
               <button
                 type="button"
                 onClick={handleImportPptx}
                 disabled={isImporting}
-                className="h-10 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:opacity-90 disabled:opacity-50 transition-all text-sm font-medium flex items-center gap-2 shadow-lg shadow-orange-500/20"
+                className={`${BTN_SECONDARY} disabled:opacity-50 disabled:hover:bg-white/[0.03]`}
               >
                 {isImporting ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                     {importProgress.total > 0
                       ? `${importProgress.current}/${importProgress.total}`
                       : t('common.importing')}
                   </>
                 ) : (
                   <>
-                    <FileUp className="w-4 h-4" />
+                    <FileUp className="w-4 h-4" aria-hidden="true" />
                     {t('common.importPptx')}
                   </>
                 )}
               </button>
             )}
             {onOpenFile && (
-              <button
-                type="button"
-                onClick={onOpenFile}
-                className="h-10 px-4 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] transition-all text-sm font-medium flex items-center gap-2"
-              >
-                <FolderOpen className="w-4 h-4 text-white/60" />
+              <button type="button" onClick={onOpenFile} className={BTN_SECONDARY}>
+                <FolderOpen className="w-4 h-4" aria-hidden="true" />
                 {t('common.openFromFile')}
               </button>
             )}
             {onSaveFile && (
-              <button
-                type="button"
-                onClick={onSaveFile}
-                className="h-10 px-4 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] transition-all text-sm font-medium flex items-center gap-2"
-              >
-                <HardDrive className="w-4 h-4 text-white/60" />
+              <button type="button" onClick={onSaveFile} className={BTN_SECONDARY}>
+                <HardDrive className="w-4 h-4" aria-hidden="true" />
                 {t('common.saveToFile')}
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => setDrivePanelOpen(!drivePanelOpen)}
+              aria-pressed={drivePanelOpen}
+              className={cn(
+                BTN_SECONDARY,
+                drivePanelOpen &&
+                  'border-blue-500/50 bg-blue-500/10 text-blue-400 hover:bg-blue-500/10 shadow-lg shadow-blue-500/10'
+              )}
+            >
+              <Cloud className="w-4 h-4" aria-hidden="true" />
+              Drive
+            </button>
+            {onNewPresentation && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (presentation?.slides?.length > 0) {
+                    const confirmed = await confirmDialog(
+                      'Yeni bir sunum açmak istediğinize emin misiniz? Kaydedilmemiş değişiklikler kaybolacak.',
+                      {
+                        title: 'Yeni Sunum',
+                        confirmLabel: 'Yeni Sunum Aç',
+                        cancelLabel: 'İptal',
+                      }
+                    );
+                    if (!confirmed) return;
+                  }
+                  onNewPresentation();
+                }}
+                className={BTN_SECONDARY_WIDE}
+              >
+                <Plus className="w-4 h-4" aria-hidden="true" />
+                {t('common.newPresentation')}
+              </button>
+            )}
           </div>
+        </div>
+
+        {/* Action strip — current presentation name + save */}
+        <div className="px-6 py-3 border-t border-white/5 flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xs text-white/40 shrink-0">{t('common.currentName')}:</span>
+            {isEditingName ? (
+              <input
+                ref={nameInputRef}
+                type="text"
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                onBlur={commitName}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitName();
+                  if (e.key === 'Escape') setIsEditingName(false);
+                }}
+                aria-label={t('common.presetName')}
+                className="min-w-0 max-w-[260px] font-semibold text-sm text-white bg-transparent border-b border-blue-400/50 outline-none"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={startNameEdit}
+                title={t('common.clickToRename')}
+                aria-label={t('common.clickToRename')}
+                className="group flex items-center gap-1.5 font-semibold text-sm text-white/85 truncate max-w-[260px] hover:text-blue-300 transition-colors cursor-pointer rounded px-1 py-0.5 -ml-1 hover:bg-white/5"
+              >
+                <span className="truncate">{presentation.name}</span>
+                <Pencil
+                  className="w-3 h-3 text-white/25 group-hover:text-white/50 transition-colors shrink-0"
+                  aria-hidden="true"
+                />
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={saveCurrentPreset}
+            disabled={isSaving}
+            className={cn(BTN_SECONDARY_WIDE, 'disabled:opacity-50 disabled:pointer-events-none')}
+          >
+            {isSaving ? (
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Save className="w-4 h-4" aria-hidden="true" />
+            )}
+            {isSaving ? t('common.saving') : t('common.savePreset')}
+          </button>
+
+          <p className="hidden md:block sm:ml-auto text-[11px] text-white/45 leading-relaxed max-w-[280px]">
+            {t('common.presetCalendarHint')}
+          </p>
         </div>
 
         <div aria-live="polite">
@@ -461,29 +609,31 @@ export default function PresentationsTab({
               {importDuration !== null && !importError && (
                 <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3 flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center shrink-0">
-                    <Timer className="w-4 h-4 text-emerald-400" />
+                    <Timer className="w-4 h-4 text-emerald-400" aria-hidden="true" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-emerald-300 font-medium">
-                      {t('common.importComplete')}
-                    </p>
+                    <p className="text-sm text-emerald-300 font-medium">{t('common.importComplete')}</p>
                     <p className="text-xs text-emerald-200/70 mt-0.5">
-                      {t('common.importSlidesCount', { count: importProgress.total, duration: formatDuration(importDuration) })}
+                      {t('common.importSlidesCount', {
+                        count: importProgress.total,
+                        duration: formatDuration(importDuration),
+                      })}
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setImportDuration(null)}
                     className="text-emerald-400 hover:text-emerald-300 shrink-0"
+                    aria-label={t('common.clearSearch')}
                   >
-                    <X className="w-4 h-4" />
+                    <X className="w-4 h-4" aria-hidden="true" />
                   </button>
                 </div>
               )}
 
               {importError && (
                 <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-3 flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                  <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" aria-hidden="true" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-red-300 font-medium">{t('common.importError')}</p>
                     <p className="text-xs text-red-200/70 mt-1">{importError}</p>
@@ -500,62 +650,60 @@ export default function PresentationsTab({
                       setImportDuration(null);
                     }}
                     className="text-red-400 hover:text-red-300 shrink-0"
+                    aria-label={t('common.clearSearch')}
                   >
-                    <X className="w-4 h-4" />
+                    <X className="w-4 h-4" aria-hidden="true" />
                   </button>
                 </div>
               )}
             </div>
           )}
         </div>
-      </div>
+      </header>
 
-      <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
-        <div className="lg:w-[380px] shrink-0 border-b lg:border-b-0 lg:border-r border-white/5 overflow-y-auto">
-          <div className="p-5 space-y-5">
-            <div className="text-center">
-              <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/10 flex items-center justify-center mb-3">
-                <Save className="w-6 h-6 text-emerald-400" />
-              </div>
-              <p className="text-xs text-white/40 mb-1">{t('common.currentName')}</p>
-              <p className="font-semibold text-sm truncate text-white/80">{presentation.name}</p>
-            </div>
-
-            <button
-              type="button"
-              onClick={saveCurrentPreset}
-              disabled={isSaving}
-              className="w-full h-12 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 disabled:opacity-50 transition-all font-medium flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
-            >
-              <Save className="w-4 h-4" />
-              {isSaving ? t('common.saving') : t('common.savePreset')}
-            </button>
-
-            <p className="text-[11px] text-white/45 leading-relaxed">
-              {t('common.presetCalendarHint')}
+      <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+        <div className="flex-shrink-0 p-5 pb-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <h2 className="font-semibold flex items-center gap-2">
+              <LayoutGrid className="w-4 h-4 text-blue-400" aria-hidden="true" />
+              {t('common.savedPresentations')}
+            </h2>
+            <p className="text-xs text-white/40 mt-0.5">
+              {t('common.presetCount', { count: presets.length })}
+              {searchQuery && t('common.searchResults', { count: filteredPresets.length })}
             </p>
           </div>
-        </div>
 
-        <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-          <div className="flex-shrink-0 p-5 pb-0 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
-            <div>
-              <h2 className="font-semibold flex items-center gap-2">
-                <LayoutGrid className="w-4 h-4 text-blue-400" />
-                {t('common.savedPresentations')}
-              </h2>
-              <p className="text-xs text-white/40 mt-0.5">
-                {t('common.presetCount', { count: presets.length })}
-                {searchQuery && t('common.searchResults', { count: filteredPresets.length })}
-              </p>
+          <div className="flex items-center gap-2 w-full xl:w-auto">
+            <div className="relative shrink-0">
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+                aria-label={t('common.sortBy')}
+                className="h-10 rounded-xl bg-white/[0.04] border border-white/10 text-sm text-white/70 outline-none focus:border-blue-500/30 transition-all pl-3 pr-9 appearance-none cursor-pointer"
+              >
+                <option value="newest" className="bg-surface-overlay text-white">
+                  {t('common.sortNewest')}
+                </option>
+                <option value="oldest" className="bg-surface-overlay text-white">
+                  {t('common.sortOldest')}
+                </option>
+                <option value="name" className="bg-surface-overlay text-white">
+                  {t('common.sortName')}
+                </option>
+              </select>
+              <ChevronDown
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 pointer-events-none"
+                aria-hidden="true"
+              />
             </div>
 
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25" />
+            <div className="relative w-full xl:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25" aria-hidden="true" />
               <input
                 type="text"
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t('common.searchPresets')}
                 aria-label={t('common.searchPresets')}
                 className="w-full h-10 pl-10 pr-9 rounded-xl bg-white/[0.04] border border-white/10 text-sm outline-none focus:border-blue-500/30 transition-all placeholder:text-white/25"
@@ -572,29 +720,30 @@ export default function PresentationsTab({
               )}
             </div>
           </div>
+        </div>
 
-          <div className="flex-1 overflow-y-auto p-5">
-            {presets.length === 0 ? (
-              <EmptyLibrary />
-            ) : filteredPresets.length === 0 ? (
-              <EmptySearch onClear={clearSearch} />
-            ) : (
-              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                {filteredPresets.map(preset => (
-                  <PresetCard
-                    key={preset.name}
-                    preset={preset}
-                    isActive={selectedPresetName === preset.name}
-                    onApply={onApplyPreset}
-                    onDelete={deletePreset}
-                    onRename={renamePreset}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+        <div className="flex-1 overflow-y-auto p-5 pt-1">
+          {presets.length === 0 ? (
+            <EmptyLibrary onSave={saveCurrentPreset} />
+          ) : sortedPresets.length === 0 ? (
+            <EmptySearch onClear={clearSearch} />
+          ) : (
+            <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              {sortedPresets.map((preset) => (
+                <PresetCard
+                  key={preset.name}
+                  preset={preset}
+                  isActive={selectedPresetName === preset.name}
+                  onApply={onApplyPreset}
+                  onDelete={deletePreset}
+                  onRename={renamePreset}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
+      <DrivePanel />
     </div>
   );
 }

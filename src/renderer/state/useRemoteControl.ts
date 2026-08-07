@@ -10,6 +10,9 @@ const REMOTE_ACTIONS = {
   openProjector: 'openProjector',
   closeProjector: 'closeProjector',
   goto: 'goto',
+  partNext: 'partNext',
+  partPrev: 'partPrev',
+  partGoto: 'partGoto',
 } as const;
 
 export function useRemoteControl() {
@@ -127,6 +130,48 @@ export function useRemoteControl() {
             setLiveIndex(idx);
           }
           break;
+        case REMOTE_ACTIONS.partGoto: {
+          const val = data.value as { slide?: unknown; part?: unknown } | undefined;
+          const slideIdx = typeof val?.slide === 'number' ? val.slide : NaN;
+          const partIdx  = typeof val?.part  === 'number' ? val.part  : NaN;
+          const target = slides[slideIdx];
+          if (target?.partsMode && target.parts && Number.isInteger(partIdx)) {
+            const p = Math.max(0, Math.min(partIdx, target.parts.length - 1));
+            const updatedSlides = state.presentation.slides.map(s =>
+              s.id === target.id ? { ...s, activePart: p, content: s.parts![p] } : s
+            );
+            setSelectedSlideId(target.id);
+            setLiveIndex(slideIdx);
+            dispatchUndo({ type: 'SET', payload: { ...state.presentation, slides: updatedSlides } });
+          }
+          break;
+        }
+        case REMOTE_ACTIONS.partNext: {
+          const liveSlide = slides[state.liveIndex];
+          if (liveSlide?.partsMode && liveSlide.parts) {
+            const nextPart = Math.min((liveSlide.activePart ?? 0) + 1, liveSlide.parts.length - 1);
+            if (nextPart !== (liveSlide.activePart ?? 0)) {
+              const updatedSlides = state.presentation.slides.map(s =>
+                s.id === liveSlide.id ? { ...s, activePart: nextPart, content: s.parts![nextPart] } : s
+              );
+              dispatchUndo({ type: 'SET', payload: { ...state.presentation, slides: updatedSlides } });
+            }
+          }
+          break;
+        }
+        case REMOTE_ACTIONS.partPrev: {
+          const liveSlide = slides[state.liveIndex];
+          if (liveSlide?.partsMode && liveSlide.parts) {
+            const prevPart = Math.max((liveSlide.activePart ?? 0) - 1, 0);
+            if (prevPart !== (liveSlide.activePart ?? 0)) {
+              const updatedSlides = state.presentation.slides.map(s =>
+                s.id === liveSlide.id ? { ...s, activePart: prevPart, content: s.parts![prevPart] } : s
+              );
+              dispatchUndo({ type: 'SET', payload: { ...state.presentation, slides: updatedSlides } });
+            }
+          }
+          break;
+        }
       }
     });
 
