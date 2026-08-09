@@ -113,6 +113,8 @@
     "slideCardLabel": "Slayt {{index}}: {{content}}",
     "slideList": "Slayt Listesi",
     "zoomControls": "Yakınlaştırma Kontrolleri",
+    "autoGoLive": "Anında Canlı",
+    "autoGoLiveHint": "Klavye/uzaktan kumanda ile seçilen slayt anında canlıya verilir",
     "transitionHeading": "Geçiş Ayarları",
     "presetsTitle": "Sunumlar",
     "presetsSubtitle": "Kaydet, yükle ve hızlıca geçiş yap",
@@ -609,5 +611,26 @@
     "statusActive": "Aktif",
     "statusInactive": "Pasif",
     "statusNoLogo": "Logo yok"
+  },
+  "updates": {
+    "title": "Güncellemeler",
+    "currentVersion": "Mevcut Sürüm",
+    "check": "Güncellemeleri kontrol et",
+    "checking": "Güncellemeler kontrol ediliyor...",
+    "uptodate": "Güncelsiniz",
+    "available": "Güncelleme mevcut",
+    "fromTo": "v{{current}} → v{{next}}",
+    "download": "Güncellemeyi indir",
+    "downloading": "Güncelleme indiriliyor...",
+    "downloadedTitle": "Güncelleme hazır",
+    "downloadedDesc": "v{{version}} başarıyla indirildi. Uygulama yeniden başlatıldığında güncellenecek.",
+    "restartNow": "Şimdi yeniden başlat",
+    "later": "Daha sonra",
+    "errorTitle": "Güncelleme kontrol edilemedi",
+    "errorDesc": "{{message}}",
+    "releaseNotes": "Sürüm Notları",
+    "devMode": "Geliştirici modundasınız — güncelleme kontrolü devre dışı.",
+    "updateAvailableBadge": "Yeni sürüm mevcut",
+    "updateDownloadedBadge": "Güncelleme indirildi — yeniden başlat"
   }
 }

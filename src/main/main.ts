@@ -14,6 +14,7 @@ import { WebSocketServer, WebSocket as WsSocket } from 'ws';
 import { REMOTE_HTML_NEW } from './remote-html';
 import { getPptxService } from './pptxService';
 import { driveService } from './driveService';
+import { initUpdater } from './updater';
 
 // ─── Paths ────────────────────────────────────────────────────────────────
 
@@ -513,6 +514,7 @@ app.whenReady().then(() => {
     }
   });
   createWindow();
+  if (win) initUpdater(win);
   createRemoteServer();
 });
 

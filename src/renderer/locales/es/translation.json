@@ -113,6 +113,8 @@
     "slideCardLabel": "Diapositiva {{index}}: {{content}}",
     "slideList": "Lista de Diapositivas",
     "zoomControls": "Controles de Zoom",
+    "autoGoLive": "En vivo al instante",
+    "autoGoLiveHint": "La diapositiva seleccionada con teclado/control remoto se envía en vivo al instante",
     "transitionHeading": "Configuración de Transición",
     "presetsTitle": "Presentaciones",
     "presetsSubtitle": "Guardar, cargar y cambiar rápidamente",
@@ -605,5 +607,26 @@
     "statusActive": "Activo",
     "statusInactive": "Inactivo",
     "statusNoLogo": "Sin logo"
+  },
+  "updates": {
+    "title": "Actualizaciones",
+    "currentVersion": "Versión actual",
+    "check": "Buscar actualizaciones",
+    "checking": "Buscando actualizaciones...",
+    "uptodate": "Estás actualizado",
+    "available": "Actualización disponible",
+    "fromTo": "v{{current}} → v{{next}}",
+    "download": "Descargar actualización",
+    "downloading": "Descargando actualización...",
+    "downloadedTitle": "Actualización lista",
+    "downloadedDesc": "v{{version}} descargada correctamente. La app se actualizará al reiniciar.",
+    "restartNow": "Reiniciar ahora",
+    "later": "Más tarde",
+    "errorTitle": "No se pudo buscar actualizaciones",
+    "errorDesc": "{{message}}",
+    "releaseNotes": "Notas de la versión",
+    "devMode": "Estás en modo desarrollador — la búsqueda de actualizaciones está desactivada.",
+    "updateAvailableBadge": "Hay una nueva versión disponible",
+    "updateDownloadedBadge": "Actualización descargada — reinicia para aplicarla"
   }
 }

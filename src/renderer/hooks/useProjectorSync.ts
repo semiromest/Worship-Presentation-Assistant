@@ -46,6 +46,10 @@ export function useProjectorSync() {
 
   const thumbnailCache = useRef<Map<string, { url: string }>>(new Map());
   const prevSlidesRef = useRef<Slide[]>([]);
+  // Son üretimi başarısız olan (null dönen) slaytlar: içerik değişmese bile
+  // bir sonraki run'da yeniden denenir. Aksi halde prevSlidesRef ilerlediği
+  // için changed bir daha true olmaz ve önizleme kalıcı olarak boş kalır.
+  const pendingRetryRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -69,6 +73,7 @@ export function useProjectorSync() {
       for (const id of prevMap.keys()) {
         if (!currentSlides.some(s => s.id === id)) {
           thumbnailCache.current.delete(id);
+          pendingRetryRef.current.delete(id);
         }
       }
 
@@ -80,6 +85,7 @@ export function useProjectorSync() {
           const i = idx++;
           const s = currentSlides[i];
           const prev = prevMap.get(s.id);
+          const cachedEntry = thumbnailCache.current.get(s.id);
           const changed = !prev ||
             prev.content !== s.content ||
             prev.mediaUrl !== s.mediaUrl ||
@@ -89,17 +95,26 @@ export function useProjectorSync() {
             (prev.loopItems?.length ?? 0) !== (s.loopItems?.length ?? 0) ||
             // FIX: partsMode slides must regenerate when activePart changes
             prev.activePart !== s.activePart ||
-            JSON.stringify(prev.styles) !== JSON.stringify(s.styles);
+            JSON.stringify(prev.styles) !== JSON.stringify(s.styles) ||
+            // Son denemesi başarısız olan slayt tekrar denenir
+            pendingRetryRef.current.has(s.id);
 
           if (!changed) {
-            const cached = thumbnailCache.current.get(s.id);
-            thumbs[i] = cached?.url ?? null;
+            thumbs[i] = cachedEntry?.url ?? null;
           } else {
             const url = await generateSlideThumbnail(s);
-            // FIX: a cancelled effect (rapid part taps) must not overwrite the
-            // cache with a stale part image, nor fill thumbs for broadcast.
-            if (url && !cancelled) thumbnailCache.current.set(s.id, { url });
-            thumbs[i] = cancelled ? null : url;
+            if (url && !cancelled) {
+              thumbnailCache.current.set(s.id, { url });
+              pendingRetryRef.current.delete(s.id);
+              thumbs[i] = url;
+            } else if (!cancelled) {
+              // Üretim başarısız (ctx/taint hatası vb.): hiç boş göndermek
+              // yerine son geçerli görseli koru ve retry için işaretle.
+              pendingRetryRef.current.add(s.id);
+              thumbs[i] = cachedEntry?.url ?? null;
+            } else {
+              thumbs[i] = null;
+            }
           }
         }
       };
@@ -117,6 +132,19 @@ export function useProjectorSync() {
         const liveThumb = liveSlide ? thumbs[liveIndex] : null;
         if (liveThumb) {
           window.electronAPI?.sendSlidePreview?.(liveThumb);
+        }
+
+        // Canlı slaytın üretimi başarısızsa, kısa bir bekleyip bir kez daha
+        // dene — kullanıcı başka bir değişiklik yapmadan önizleme düzelir.
+        if (liveSlide && pendingRetryRef.current.has(liveSlide.id)) {
+          setTimeout(async () => {
+            if (cancelled) return;
+            const retryUrl = await generateSlideThumbnail(liveSlide);
+            if (cancelled || !retryUrl) return;
+            thumbnailCache.current.set(liveSlide.id, { url: retryUrl });
+            pendingRetryRef.current.delete(liveSlide.id);
+            window.electronAPI?.sendSlidePreview?.(retryUrl);
+          }, 180);
         }
       }
     })();

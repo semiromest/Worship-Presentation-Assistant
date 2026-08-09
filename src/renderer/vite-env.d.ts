@@ -57,6 +57,13 @@ declare global {
       driveSavePresentation: (content: string, name?: string) => Promise<{ ok: boolean; id?: string; error?: string }>;
       driveDownload: (fileId: string) => Promise<{ ok: boolean; data?: string; error?: string }>;
       driveDeleteFile: (fileId: string) => Promise<{ ok: boolean; error?: string }>;
+
+      // Updater API
+      getUpdaterInfo: () => Promise<{ version: string; updaterActive: boolean }>;
+      checkForUpdates: () => Promise<{ ok: boolean; error?: string }>;
+      downloadUpdate: () => Promise<{ ok: boolean; error?: string }>;
+      installUpdate: () => Promise<boolean>;
+      onUpdaterEvent: (callback: (event: { type: string; payload?: any }) => void) => () => void;
     };
   }
 }

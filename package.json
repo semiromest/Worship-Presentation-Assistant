@@ -1,6 +1,6 @@
 {
   "name": "worship-presentation-assistant",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "main": "dist-electron/main.js",
   "description": "Worship Presentation Assistant - Simple Worship Presentation App",
   "author": "IPCA",
@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,html}\"",
-    "test:split": "tsx src/renderer/hymnSplit.test.ts"
+    "test:split": "tsx src/renderer/hymnSplit.test.ts",
+    "test:updater": "tsx --test src/renderer/state/updaterReducer.test.ts"
   },
   "dependencies": {
     "@googleapis/drive": "^20.2.0",
@@ -65,6 +66,11 @@
     "compression": "store",
     "copyright": "Copyright © Worship Presentation Assistant",
     "appId": "com.worship-presentation-assistant",
+    "publish": {
+      "provider": "github",
+      "owner": "semiromest",
+      "repo": "Worship-Presentation-Assistant"
+    },
     "productName": "Worship Presentation Assistant",
     "directories": {
       "output": "release/${version}"
@@ -94,7 +100,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Worship Presentation Assistant",
-      "artifactName": "Worship Presentation Assistant Setup.exe",
+      "artifactName": "Worship-Presentation-Assistant-Setup-${version}.${ext}",
       "uninstallDisplayName": "Worship Presentation Assistant",
       "deleteAppDataOnUninstall": true
     }

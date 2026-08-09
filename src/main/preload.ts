@@ -79,4 +79,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   driveSavePresentation: (content: string, name?: string) => ipcRenderer.invoke('drive-save-presentation', content, name),
   driveDownload: (fileId: string) => ipcRenderer.invoke('drive-download', fileId),
   driveDeleteFile: (fileId: string) => ipcRenderer.invoke('drive-delete-file', fileId),
+
+  // ─── Updater ─────────────────────────────────────────────────────────────
+
+  getUpdaterInfo: () => ipcRenderer.invoke('updater:get-info'),
+  checkForUpdates: () => ipcRenderer.invoke('updater:check'),
+  downloadUpdate: () => ipcRenderer.invoke('updater:download'),
+  installUpdate: () => ipcRenderer.invoke('updater:install'),
+
+  onUpdaterEvent: (callback: (event: { type: string; payload?: any }) => void) => {
+    const subscription = (_event: any, data: { type: string; payload?: any }) => callback(data);
+    ipcRenderer.on('updater-event', subscription);
+    return () => ipcRenderer.removeListener('updater-event', subscription);
+  },
 });
