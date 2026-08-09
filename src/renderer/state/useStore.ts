@@ -108,6 +108,8 @@ interface AppState {
   setSearchQuery: (query: string) => void;
   isCheatsheetOpen: boolean;
   setIsCheatsheetOpen: (open: boolean) => void;
+  isUpdatesOpen: boolean;
+  setIsUpdatesOpen: (open: boolean) => void;
 
   // Toast notification
   toastMessage: string | null;
@@ -252,6 +254,9 @@ export const useStore = create<AppState>((set) => ({
 
   isCheatsheetOpen: false,
   setIsCheatsheetOpen: (open) => set({ isCheatsheetOpen: open }),
+
+  isUpdatesOpen: false,
+  setIsUpdatesOpen: (open) => set({ isUpdatesOpen: open }),
 
   setPresentationName: (name) => set((state) => {
     const action: UndoAction = { type: 'SET', payload: { ...state.presentation, name } };
