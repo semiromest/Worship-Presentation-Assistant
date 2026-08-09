@@ -605,5 +605,26 @@
     "statusActive": "Aktiv",
     "statusInactive": "Inaktiv",
     "statusNoLogo": "Kein Logo"
+  },
+  "updates": {
+    "title": "Aktualisierungen",
+    "currentVersion": "Aktuelle Version",
+    "check": "Nach Updates suchen",
+    "checking": "Suche nach Updates...",
+    "uptodate": "Sie sind auf dem neuesten Stand",
+    "available": "Update verfügbar",
+    "fromTo": "v{{current}} → v{{next}}",
+    "download": "Update herunterladen",
+    "downloading": "Update wird heruntergeladen...",
+    "downloadedTitle": "Update bereit",
+    "downloadedDesc": "v{{version}} erfolgreich heruntergeladen. Die App wird beim Neustart aktualisiert.",
+    "restartNow": "Jetzt neu starten",
+    "later": "Später",
+    "errorTitle": "Update konnte nicht geprüft werden",
+    "errorDesc": "{{message}}",
+    "releaseNotes": "Versionshinweise",
+    "devMode": "Sie befinden sich im Entwicklermodus — Updateprüfung ist deaktiviert.",
+    "updateAvailableBadge": "Eine neue Version ist verfügbar",
+    "updateDownloadedBadge": "Update heruntergeladen — Neustart zum Anwenden"
   }
 }

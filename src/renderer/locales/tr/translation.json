@@ -609,5 +609,26 @@
     "statusActive": "Aktif",
     "statusInactive": "Pasif",
     "statusNoLogo": "Logo yok"
+  },
+  "updates": {
+    "title": "Güncellemeler",
+    "currentVersion": "Mevcut Sürüm",
+    "check": "Güncellemeleri kontrol et",
+    "checking": "Güncellemeler kontrol ediliyor...",
+    "uptodate": "Güncelsiniz",
+    "available": "Güncelleme mevcut",
+    "fromTo": "v{{current}} → v{{next}}",
+    "download": "Güncellemeyi indir",
+    "downloading": "Güncelleme indiriliyor...",
+    "downloadedTitle": "Güncelleme hazır",
+    "downloadedDesc": "v{{version}} başarıyla indirildi. Uygulama yeniden başlatıldığında güncellenecek.",
+    "restartNow": "Şimdi yeniden başlat",
+    "later": "Daha sonra",
+    "errorTitle": "Güncelleme kontrol edilemedi",
+    "errorDesc": "{{message}}",
+    "releaseNotes": "Sürüm Notları",
+    "devMode": "Geliştirici modundasınız — güncelleme kontrolü devre dışı.",
+    "updateAvailableBadge": "Yeni sürüm mevcut",
+    "updateDownloadedBadge": "Güncelleme indirildi — yeniden başlat"
   }
 }

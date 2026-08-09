@@ -609,5 +609,26 @@
     "statusActive": "Active",
     "statusInactive": "Inactive",
     "statusNoLogo": "No logo"
+  },
+  "updates": {
+    "title": "Updates",
+    "currentVersion": "Current Version",
+    "check": "Check for updates",
+    "checking": "Checking for updates...",
+    "uptodate": "You're up to date",
+    "available": "Update available",
+    "fromTo": "v{{current}} → v{{next}}",
+    "download": "Download update",
+    "downloading": "Downloading update...",
+    "downloadedTitle": "Update ready",
+    "downloadedDesc": "v{{version}} downloaded successfully. The app will update on restart.",
+    "restartNow": "Restart now",
+    "later": "Later",
+    "errorTitle": "Couldn't check for updates",
+    "errorDesc": "{{message}}",
+    "releaseNotes": "Release Notes",
+    "devMode": "You're in developer mode — update checking is disabled.",
+    "updateAvailableBadge": "A new version is available",
+    "updateDownloadedBadge": "Update downloaded — restart to apply"
   }
 }
