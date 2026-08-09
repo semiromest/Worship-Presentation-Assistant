@@ -24,12 +24,14 @@ import { useRemoteControl } from './state/useRemoteControl';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation';
 import { useProjectorSync } from './hooks/useProjectorSync';
 import { useSlideOperations } from './hooks/useSlideOperations';
+import { initUpdaterSync } from './state/useUpdaterStore';
 
 // Components
 import Toolbar from './components/Toolbar';
 import SlideGrid from './components/SlideGrid';
 import RightPanel from './components/RightPanel';
 import CheatsheetModal from './components/CheatsheetModal';
+import UpdatesModal from './components/UpdatesModal';
 import Toast from './components/Toast';
 
 export default function App() {
@@ -136,6 +138,9 @@ export default function App() {
   useEffect(() => {
     document.documentElement.lang = i18n.language?.split('-')[0] ?? 'tr';
   });
+
+  // ─── Updater sync (preload events → store) ────────────────────────────────
+  useEffect(() => { initUpdaterSync(); }, []);
 
   // ─── Effect: Dropdown Click-Outside ───────────────────────────────────────
   useEffect(() => {
@@ -373,6 +378,9 @@ export default function App() {
 
       {/* Cheatsheet Modal */}
       <CheatsheetModal />
+
+      {/* Updates Modal */}
+      <UpdatesModal />
 
       {/* Undo/Redo Toast */}
       <Toast />

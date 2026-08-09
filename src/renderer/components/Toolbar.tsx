@@ -1,8 +1,9 @@
 import { useTranslation } from 'react-i18next';
 import {
-  Globe, Undo2, Redo2, ChevronUp, ChevronDown, Copy, Trash2, HelpCircle, Monitor, Play, Smartphone, PanelRightClose, PanelRightOpen
+  Globe, Undo2, Redo2, ChevronUp, ChevronDown, Copy, Trash2, HelpCircle, Monitor, Play, Smartphone, PanelRightClose, PanelRightOpen, Settings2
 } from 'lucide-react';
 import { useStore } from '../state/useStore';
+import { useUpdaterStore } from '../state/useUpdaterStore';
 import { cn } from '../utils';
 import { useState, useRef, useCallback } from 'react';
 
@@ -31,7 +32,10 @@ export default function Toolbar({ moveSelectedSlides, deleteSelectedSlides, dupl
     setPresentationName,
     isRightPanelOpen,
     setIsRightPanelOpen,
+    setIsUpdatesOpen,
   } = useStore();
+
+  const updaterStatus = useUpdaterStore((s) => s.status);
 
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState('');
@@ -96,6 +100,20 @@ export default function Toolbar({ moveSelectedSlides, deleteSelectedSlides, dupl
       </div>
 
       <div className="flex items-center gap-2">
+        {/* Updates */}
+        <button
+          onClick={() => setIsUpdatesOpen(true)}
+          title={t('updates.title')}
+          aria-label={t('updates.title')}
+          className="relative p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]"
+        >
+          <Settings2 className="w-4 h-4" aria-hidden="true" />
+          {(updaterStatus === 'available' || updaterStatus === 'downloaded') && (
+            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-green-500" aria-hidden="true"
+              title={updaterStatus === 'downloaded' ? t('updates.updateDownloadedBadge') : t('updates.updateAvailableBadge')} />
+          )}
+        </button>
+
         {/* Language Switcher */}
         <div className="relative shrink-0">
           <button
