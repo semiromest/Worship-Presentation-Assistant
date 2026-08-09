@@ -1,9 +1,10 @@
 import { memo, useMemo, useEffect, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, X, Plus, ZoomIn, ZoomOut } from 'lucide-react';
+import { Search, X, Plus, ZoomIn, ZoomOut, Zap } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { SlideCard } from '../SlideCard';
 import { useDragAndDrop } from '../hooks/useDragAndDrop';
+import { cn } from '../utils';
 
 const MIN_ZOOM = 0.4;
 const MAX_ZOOM = 2;
@@ -117,6 +118,8 @@ export default function SlideGrid({
     liveIndex,
     slideZoom,
     setSlideZoom,
+    autoGoLive,
+    setAutoGoLive,
   } = useStore();
 
   const { handleDragStart, handleDragOver, handleDragEnd, handleDrop, resetDragState, draggedSlideId, dragOverIndex } =
@@ -280,6 +283,28 @@ export default function SlideGrid({
               </button>
             )}
           </div>
+
+          {/* Auto Go-Live toggle */}
+          <button
+            type="button"
+            onClick={() => setAutoGoLive(!autoGoLive)}
+            aria-pressed={autoGoLive}
+            title={t('common.autoGoLiveHint')}
+            aria-label={t('common.autoGoLive')}
+            className={cn(
+              'flex items-center gap-1.5 h-8 px-2.5 rounded-lg border text-[11px] font-medium whitespace-nowrap transition-colors shrink-0',
+              'focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.94]',
+              autoGoLive
+                ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15'
+                : 'border-white/10 bg-white/5 text-white/55 hover:text-white/80 hover:bg-white/10'
+            )}
+          >
+            <Zap
+              className={cn('w-3.5 h-3.5', autoGoLive ? 'text-emerald-300' : 'text-white/35')}
+              aria-hidden="true"
+            />
+            <span className="hidden md:inline">{t('common.autoGoLive')}</span>
+          </button>
 
           {/* Zoom Controls */}
           <div className="flex items-center gap-1 shrink-0" role="group" aria-label={t('common.zoomControls')}>

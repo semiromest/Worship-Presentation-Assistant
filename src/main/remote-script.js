@@ -414,6 +414,9 @@ let activeImg = 'A';
 let lastUrl   = '';
 // FIX: track in-flight transition so race conditions are avoided
 let transitionPending = false;
+// BUG FIX: stale completion timer must be cancelable — after a rapid preview
+// cancel it would otherwise flip activeImg again and desync from/to slots.
+let transitionTimer = null;
 
 function norm(t) {
   const m = {
@@ -494,18 +497,26 @@ function showPreview(url) {
   const tr   = norm(st.slideTransition || 'fade');
   const anim = tr !== 'none' && dur > 0;
 
-  const from = activeImg === 'A' ? imgA : imgB;
-  const to   = activeImg === 'A' ? imgB : imgA;
-
-  // FIX: cancel any previous pending transition to prevent race conditions
-  // on rapid slide changes — flip activeImg immediately so next call is consistent
+  // BUG FIX: cancel the pending completion timer FIRST — a stale setTimeout
+  // would later flip activeImg/transitionPending again and desync the
+  // from/to slots we derive below.
   if (transitionPending) {
-    from.style.opacity = '0';
-    from.style.display = 'none';
-    from.style.filter  = 'none';
+    if (transitionTimer) clearTimeout(transitionTimer);
+    transitionTimer = null;
+    const stale = activeImg === 'A' ? imgA : imgB;
+    stale.style.opacity = '0';
+    stale.style.display = 'none';
+    stale.style.filter  = 'none';
     activeImg = activeImg === 'A' ? 'B' : 'A';
     transitionPending = false;
   }
+
+  // BUG FIX: from/to must be derived from the FINAL activeImg state (after
+  // the cancel block's flip). Before, they were computed pre-flip, so on
+  // rapid part taps the new image loaded into the wrong slot and the
+  // crossfade ran from an invisible layer.
+  const from = activeImg === 'A' ? imgA : imgB;
+  const to   = activeImg === 'A' ? imgB : imgA;
 
   to.onload = () => {
     ph.style.display = 'none';
@@ -535,7 +546,8 @@ function showPreview(url) {
     }
 
     transitionPending = true;
-    setTimeout(() => {
+    transitionTimer = setTimeout(() => {
+      if (transitionTimer) { clearTimeout(transitionTimer); transitionTimer = null; }
       from.style.opacity = '0'; from.style.display = 'none';
       from.style.filter  = 'none';
       activeImg = activeImg === 'A' ? 'B' : 'A';
@@ -544,9 +556,14 @@ function showPreview(url) {
   };
 
   to.onerror = () => {
+    if (transitionTimer) { clearTimeout(transitionTimer); transitionTimer = null; }
     to.style.opacity = '0'; to.style.display = 'none';
     ph.style.display = '';
     transitionPending = false;
+    // BUG FIX: a failed load must not poison lastUrl. The renderer retries
+    // the same (deterministic) data URL shortly after; the dedupe guard
+    // above would otherwise silently drop the retried preview.
+    if (lastUrl === url) lastUrl = '';
   };
   to.src = url;
 }

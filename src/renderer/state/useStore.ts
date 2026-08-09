@@ -49,6 +49,10 @@ interface AppState {
   isBlackout: boolean;
   setIsBlackout: (blackout: boolean | ((prev: boolean) => boolean)) => void;
 
+  // Navigation Mode: seçim değişince canlıya anında taşı
+  autoGoLive: boolean;
+  setAutoGoLive: (auto: boolean) => void;
+
   // UI State
   activeTab: 'presentations' | 'slides' | 'bible' | 'media' | 'hymns' | 'countdown' | 'screen' | 'loop' | 'calendar';
   setActiveTab: (tab: 'presentations' | 'slides' | 'bible' | 'media' | 'hymns' | 'countdown' | 'screen' | 'loop' | 'calendar') => void;
@@ -125,10 +129,13 @@ interface AppState {
   driveFiles: DriveFile[];
   drivePanelOpen: boolean;
   driveSigningIn: boolean;
+  /** İlk liste taraması yapıldı mı? (panel her açıldığında yeniden taramayı önler) */
+  driveFilesLoaded: boolean;
   setDriveSignedIn: (signedIn: boolean, email?: string | null) => void;
   setDriveFiles: (files: DriveFile[]) => void;
   setDrivePanelOpen: (open: boolean) => void;
   setDriveSigningIn: (signingIn: boolean) => void;
+  setDriveFilesLoaded: (loaded: boolean) => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -183,6 +190,9 @@ export const useStore = create<AppState>((set) => ({
     set((state) => ({
       isBlackout: typeof blackout === 'function' ? blackout(state.isBlackout) : blackout,
     })),
+
+  autoGoLive: false,
+  setAutoGoLive: (auto) => set({ autoGoLive: auto }),
 
   activeTab: 'slides',
   setActiveTab: (tab) => set({ activeTab: tab }),
@@ -273,8 +283,10 @@ export const useStore = create<AppState>((set) => ({
   driveFiles: [],
   drivePanelOpen: false,
   driveSigningIn: false,
+  driveFilesLoaded: false,
   setDriveSignedIn: (signedIn, email = null) => set({ driveSignedIn: signedIn, driveEmail: email }),
   setDriveFiles: (files) => set({ driveFiles: files }),
   setDrivePanelOpen: (open) => set({ drivePanelOpen: open }),
   setDriveSigningIn: (signingIn) => set({ driveSigningIn: signingIn }),
+  setDriveFilesLoaded: (loaded) => set({ driveFilesLoaded: loaded }),
 }));

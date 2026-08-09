@@ -18,6 +18,7 @@ import {
   Clock,
   FileUp,
   Edit3,
+  Search,
 } from 'lucide-react';
 import type { DriveFile } from '../types';
 import { useStore } from '../state/useStore';
@@ -111,14 +112,17 @@ export default function DrivePanel() {
     setDriveSigningIn,
   } = useStore();
 
-  const [loading, setLoading] = useState(false);
+const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [driveFileName, setDriveFileName] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [downloading, setDownloading] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const fileListRef = useRef<HTMLDivElement>(null);
+  const driveFilesLoaded = useStore((s) => s.driveFilesLoaded);
+  const setDriveFilesLoaded = useStore((s) => s.setDriveFilesLoaded);
 
   // Sync filename input with presentation name when it changes
   useEffect(() => {
@@ -129,12 +133,6 @@ export default function DrivePanel() {
     setError(null);
     setSuccess(null);
   }, []);
-
-  useEffect(() => {
-    if (drivePanelOpen && driveSignedIn) {
-      refreshFiles();
-    }
-  }, [drivePanelOpen, driveSignedIn]);
 
   const refreshFiles = useCallback(async () => {
     if (!window.electronAPI?.driveListFiles) return;
@@ -147,8 +145,17 @@ export default function DrivePanel() {
       setError(t('drive.error'));
     } finally {
       setLoading(false);
+      setDriveFilesLoaded(true);
     }
-  }, [setDriveFiles, t, clearFeedback]);
+  }, [setDriveFiles, setDriveFilesLoaded, t, clearFeedback]);
+
+  // Panel her açıldığında/yeniden mount olduğunda Drive'ı yeniden tarama:
+  // liste bir kez çekildiyse bir daha otomatik çekilmez, manuel "Yenile" ile çekilir.
+  useEffect(() => {
+    if (drivePanelOpen && driveSignedIn && !driveFilesLoaded) {
+      refreshFiles();
+    }
+  }, [drivePanelOpen, driveSignedIn, driveFilesLoaded, refreshFiles]);
 
   const showSuccess = useCallback((msg: string) => {
     setSuccess(msg);
@@ -180,6 +187,7 @@ export default function DrivePanel() {
     await window.electronAPI.driveSignOut();
     setDriveSignedIn(false);
     setDriveFiles([]);
+    setDriveFilesLoaded(false);
   };
 
   const handleUpload = async () => {
@@ -260,6 +268,10 @@ export default function DrivePanel() {
   };
 
   const signedInLabel = t('drive.signedInAs', { email: driveEmail ?? '' });
+
+  const filteredFiles = driveFiles.filter((file) =>
+    file.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
+  );
 
   if (!drivePanelOpen) return null;
 
@@ -432,7 +444,7 @@ export default function DrivePanel() {
                   {t('drive.driveFiles')}
                   {driveFiles.length > 0 && (
                     <span className="text-white/25 font-normal normal-case tracking-normal">
-                      ({driveFiles.length})
+                      ({filteredFiles.length})
                     </span>
                   )}
                 </h3>
@@ -451,6 +463,34 @@ export default function DrivePanel() {
                 </button>
               </div>
 
+              {/* Search */}
+              {driveFiles.length > 0 && (
+                <div className="relative mb-2.5">
+                  <Search
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/25 pointer-events-none"
+                    aria-hidden="true"
+                  />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Dosya ara..."
+                    aria-label="Dosyalarda ara"
+                    className="w-full h-9 pl-9 pr-8 rounded-lg bg-white/5 border border-white/10 text-xs text-white/90 placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400/40 transition-[border-color,box-shadow]"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-white/30 hover:text-white/70 hover:bg-white/5 transition-[color,background-color]"
+                      aria-label="Aramayı temizle"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* File list */}
               <div
                 ref={fileListRef}
@@ -465,7 +505,7 @@ export default function DrivePanel() {
                     <SkeletonRow />
                     <SkeletonRow />
                   </div>
-                ) : driveFiles.length === 0 ? (
+                ) : filteredFiles.length === 0 ? (
                   <div className="flex flex-col items-center py-8 text-center px-4">
                     <div
                       className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/4 mb-3"
@@ -473,14 +513,16 @@ export default function DrivePanel() {
                     >
                       <FileText className="w-5 h-5 text-white/15" />
                     </div>
-                    <p className="text-sm font-medium text-white/40 mb-1">{t('drive.noFiles')}</p>
+                    <p className="text-sm font-medium text-white/40 mb-1">
+                      {searchQuery ? 'Sonuç bulunamadı' : t('drive.noFiles')}
+                    </p>
                     <p className="text-xs text-white/25 max-w-[200px]">
-                      Sunumunuzu yükleyin, burada görünecek
+                      {searchQuery ? 'Farklı bir arama deneyin' : 'Sunumunuzu yükleyin, burada görünecek'}
                     </p>
                   </div>
                 ) : (
                   <div className="divide-y divide-white/4" role="list">
-                    {driveFiles.map((file) => {
+                    {filteredFiles.map((file) => {
                       const isDownloading = downloading === file.id;
                       const isDeleting = deleting === file.id;
                       const isBusy = isDownloading || isDeleting;

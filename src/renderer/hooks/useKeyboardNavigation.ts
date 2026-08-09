@@ -87,6 +87,12 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
         setSelectedSlideId(id);
         setSelectedSlideIds(new Set([id]));
         setLastSelectedIndex(index);
+        // "Anında Canlı" modu: yayın açıkken seçim değişimi canlıya da taşınır.
+        // Enter görmediği için sadece sol/sağ tuş kullanabilen uzaktan
+        // kumandalar için gereklidir; kapalıyken eski davranış korunur.
+        if (state.autoGoLive && canLive) {
+          setLiveIndex(index);
+        }
       };
 
       const moveSelectedSlide = (direction: -1 | 1) => {

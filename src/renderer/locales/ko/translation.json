@@ -113,6 +113,8 @@
     "slideCardLabel": "슬라이드 {{index}}: {{content}}",
     "slideList": "슬라이드 목록",
     "zoomControls": "화면 확대/축소",
+    "autoGoLive": "즉시 라이브",
+    "autoGoLiveHint": "키보드/리모컨으로 선택한 슬라이드가 즉시 라이브로 전송됩니다",
     "transitionHeading": "화면 전환 설정",
     "presetsTitle": "프레젠테이션",
     "presetsSubtitle": "저장, 불러오기 및 빠른 전환",

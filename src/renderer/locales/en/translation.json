@@ -113,6 +113,8 @@
     "slideCardLabel": "Slide {{index}}: {{content}}",
     "slideList": "Slide List",
     "zoomControls": "Zoom Controls",
+    "autoGoLive": "Instant Live",
+    "autoGoLiveHint": "The slide selected with keyboard/remote is sent live instantly",
     "transitionHeading": "Transition Settings",
     "presetsTitle": "Presentations",
     "presetsSubtitle": "Save, load and quickly switch",

@@ -113,6 +113,8 @@
     "slideCardLabel": "Slayt {{index}}: {{content}}",
     "slideList": "Slayt Listesi",
     "zoomControls": "Yakınlaştırma Kontrolleri",
+    "autoGoLive": "Anında Canlı",
+    "autoGoLiveHint": "Klavye/uzaktan kumanda ile seçilen slayt anında canlıya verilir",
     "transitionHeading": "Geçiş Ayarları",
     "presetsTitle": "Sunumlar",
     "presetsSubtitle": "Kaydet, yükle ve hızlıca geçiş yap",

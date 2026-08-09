@@ -113,6 +113,8 @@
     "slideCardLabel": "Folie {{index}}: {{content}}",
     "slideList": "Folienliste",
     "zoomControls": "Zoom-Steuerung",
+    "autoGoLive": "Sofort Live",
+    "autoGoLiveHint": "Die per Tastatur/Fernbedienung ausgewählte Folie wird sofort live gesendet",
     "transitionHeading": "Übergangseinstellungen",
     "presetsTitle": "Präsentationen",
     "presetsSubtitle": "Speichern, laden und schnell wechseln",

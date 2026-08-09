@@ -113,6 +113,8 @@
     "slideCardLabel": "Diapositiva {{index}}: {{content}}",
     "slideList": "Lista de Diapositivas",
     "zoomControls": "Controles de Zoom",
+    "autoGoLive": "En vivo al instante",
+    "autoGoLiveHint": "La diapositiva seleccionada con teclado/control remoto se envía en vivo al instante",
     "transitionHeading": "Configuración de Transición",
     "presetsTitle": "Presentaciones",
     "presetsSubtitle": "Guardar, cargar y cambiar rápidamente",
