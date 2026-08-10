@@ -37,7 +37,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     okLabel?: string;
   }) => ipcRenderer.invoke('show-alert-dialog', options),
   selectMediaFolder: () => ipcRenderer.invoke('select-media-folder'),
-  readMediaFolder: (folderPath: string) => ipcRenderer.invoke('read-media-folder', folderPath),
+  readMediaFolder: (folderPath: string, options?: {
+    recursive?: boolean;
+    includeImages?: boolean;
+    includeVideos?: boolean;
+  }) => ipcRenderer.invoke('read-media-folder', folderPath, options),
   getScreenSources: () => ipcRenderer.invoke('get-screen-sources'),
   captureScreenSource: (sourceId: string) => ipcRenderer.invoke('capture-screen-source', sourceId),
   selectAudioFile: () => ipcRenderer.invoke('select-audio-file'),

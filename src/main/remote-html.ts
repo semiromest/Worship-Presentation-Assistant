@@ -66,6 +66,9 @@ body {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* Interactive controls: kill the 300ms double-tap zoom delay on tablets */
+.btn, .part-chip, .slide-thumb, .timer, .goto-inp { touch-action: manipulation; }
+
 /* ── Noise texture overlay ───────────────────────────────────────────── */
 /* FIX: was mix-blend-mode:overlay on a full-screen fixed layer — a
    per-pixel blend of the entire viewport on every frame is expensive on
@@ -394,7 +397,7 @@ body::after {
 
 /* Grid rows */
 .g2  { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
-.nav-g { display: grid; grid-template-columns: 1fr 1.55fr; gap: .6rem; }
+.nav-g { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
 
 /* ── Goto ────────────────────────────────────────────────────────────── */
 .goto-row { display: flex; gap: .6rem; }
@@ -631,27 +634,32 @@ body::after {
 }
 
 @media (orientation: landscape) and (min-width: 800px) {
-  body { flex-direction: row; flex-wrap: wrap; align-items: flex-start; }
-  .hdr  { width: 100%; padding: .5rem 1.2rem; }
+  body { flex-direction: row; flex-wrap: wrap; align-items: stretch; }
+  .hdr {
+    width: 100%;
+    padding: .5rem calc(1.2rem + env(safe-area-inset-right)) .5rem calc(1.2rem + env(safe-area-inset-left));
+  }
   .stage {
     width: 55%; border-bottom: none; border-right: 1px solid var(--z2);
-    padding: .65rem .8rem .5rem; flex-shrink: 0;
+    padding: 1.5rem calc(1rem + env(safe-area-inset-left)) 1rem;
+    flex-shrink: 0;
+    /* fill the pane height; the 16:9 preview keeps its ratio, centered */
+    display: flex; flex-direction: column; justify-content: center;
   }
-  .prog  { width: 55%; border-right: 1px solid var(--z2); padding: 0 .8rem .5rem; }
-  .deck  { flex: 1; width: 45%; max-width: none; border-top: none; padding: .7rem 1rem; }
-  .slides-grid { grid-template-columns: 1fr 1fr 1fr; }
-  .cnt-cur { font-size: 2rem; }
+  .prog  { width: 55%; border-right: 1px solid var(--z2); padding: 0 calc(1rem + env(safe-area-inset-left)) 1rem; }
+  .deck  {
+    flex: 1; width: 45%; max-width: none; border-top: none;
+    padding: .7rem calc(1rem + env(safe-area-inset-right)) .7rem 1.5rem;
+  }
+  /* slides grid columns are fluid at ≥768px (auto-fill), see bottom query */
+  .cnt-cur { font-size: 2.5rem; }
   .counter { padding: .4rem 0 .25rem; }
-  :root { --bh: 58px; }
+  :root { --bh: 64px; }
 }
 
-/* Large tablets / desktop-width landscape: same row layout, one more
-   grid column since there's room for it. Kept as a single additive
-   breakpoint (not a separate width/orientation block) so it can never
-   fight with the rule above it. */
-@media (orientation: landscape) and (min-width: 1024px) {
-  .slides-grid { grid-template-columns: repeat(4, 1fr); }
-}
+/* Tablets/desktop-width landscape: column count is fluid now — the
+   auto-fill grid at the bottom of the file grows columns with the pane
+   width, so no width-specific slide grid rule is needed here. */
 
 /* ── Entrance animation ──────────────────────────────────────────────── */
 @keyframes slide-up {
@@ -690,21 +698,31 @@ body::after {
   .cnt-cur.bump { transform: none !important; }
 }
 
-/* ── Container max-width (tablet+) ──────────────────────────────────── */
-@media (min-width: 520px) {
+/* ── Container max-width (portrait phones/tablets) ──────────────────── */
+/* FIX: restricted to portrait. The rule previously set align-items:center
+   + max-width:480px on landscape too — it re-overrode the landscape
+   system's align-items (source order) and silently fought with it. */
+@media (min-width: 520px) and (orientation: portrait) {
   body { align-items: center; }
   .hdr, .stage, .prog, .deck { width: 100%; max-width: 480px; }
 }
 
 @media (min-width: 768px) and (orientation: portrait) {
-  .hdr, .stage, .prog, .deck { max-width: 640px; }
+  /* Tablet portrait: full-width stacked layout — big 16:9 preview on top,
+     full-width controls and slides grid below. Replaces the old narrow
+     640px centered column that wasted both side gutters. */
+  .hdr, .stage, .prog, .deck { max-width: 100%; padding-left: 2rem; padding-right: 2rem; }
+  .stage { padding-top: 1.5rem; padding-bottom: 1.5rem; }
+  .deck  { padding-top: 1.5rem; }
+  .cnt-cur { font-size: 3rem; }
+  :root { --bh: 64px; }
 }
 /* NOTE: the landscape tablet/desktop rules used to be duplicated here
    (min-width:768px / 1024px + orientation:landscape), overriding the
    dedicated landscape system above it in source order. That silently
    broke the short-phone compact layout for a real range of devices.
-   The large-tablet 4-column enhancement has been merged into the single
-   landscape system above instead — see the "Landscape" section. */
+   The grid column enhancement is now a single fluid rule at the very
+   bottom of the file — see "Grid responsive columns". */
 
 .proj-hdr {
   display: flex;
@@ -717,6 +735,14 @@ body::after {
    the 768px rule was dead weight since 480px already covers it. */
 @media (min-width: 480px) and (orientation: portrait) {
   .slides-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* Tablet+ any orientation: fluid slides grid — columns follow the pane
+   width automatically (no static breakpoints for 3/4 columns anymore).
+   minmax floor of 150px keeps 3 columns on a ~1180px landscape deck and
+   4 on 768px+ portrait. Phones (<768px) keep the fixed 1fr 1fr base. */
+@media (min-width: 768px) {
+  .slides-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 }
 </style>
 </head>
@@ -793,16 +819,8 @@ body::after {
 <!-- ── Deck ───────────────────────────────────────────────────────────── -->
 <main class="deck">
 
-  <!-- Parts bar — shown only when active slide is a partsMode (hymn) slide -->
-  <div class="parts-bar" id="partsBar">
-    <div class="parts-hdr">
-      <span class="lbl">Parts</span>
-      <span class="parts-counter" id="partsCtr" aria-live="polite">1 / 1</span>
-    </div>
-    <div class="part-chips" id="partsChips" role="group" aria-label="Hymn parts"></div>
-  </div>
-
-  <!-- Navigation -->
+  <!-- Navigation — kept above the parts bar so the buttons stay in a fixed
+       position regardless of parts UI (which changes per slide/hymn). -->
   <nav class="nav-g">
     <button class="btn btn-prev" onclick="cmd('prev')" aria-label="Previous slide">
       <svg width="20" height="20" fill="none" stroke="currentColor"
@@ -813,6 +831,15 @@ body::after {
            stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
     </button>
   </nav>
+
+  <!-- Parts bar — shown only when active slide is a partsMode (hymn) slide -->
+  <div class="parts-bar" id="partsBar">
+    <div class="parts-hdr">
+      <span class="lbl">Parts</span>
+      <span class="parts-counter" id="partsCtr" aria-live="polite">1 / 1</span>
+    </div>
+    <div class="part-chips" id="partsChips" role="group" aria-label="Hymn parts"></div>
+  </div>
 
   <div class="sep"></div>
 

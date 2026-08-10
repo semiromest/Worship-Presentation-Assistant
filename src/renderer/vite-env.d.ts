@@ -45,7 +45,10 @@ declare global {
       onPptxImportProgress: (callback: (data: { current: number; total: number }) => void) => () => void;
       selectMediaFiles?: (type: MediaKind) => Promise<string[] | string | null>;
       selectMediaFolder?: () => Promise<string | null>;
-      readMediaFolder?: (folderPath: string) => Promise<string[] | null>;
+      readMediaFolder?: (
+        folderPath: string,
+        options?: { recursive?: boolean; includeImages?: boolean; includeVideos?: boolean },
+      ) => Promise<{ paths: string[]; missing: boolean } | null>;
       selectMediaFile?: (type: MediaKind) => Promise<string | null>;
 
       // Google Drive API

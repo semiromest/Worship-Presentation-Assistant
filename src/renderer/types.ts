@@ -84,6 +84,7 @@ export interface MediaItem {
   path: string;
   name: string;
   preview?: string;
+  origin?: 'manual' | 'folder';
 }
 
 // ─── Slide Types ──────────────────────────────────────────────────────────────

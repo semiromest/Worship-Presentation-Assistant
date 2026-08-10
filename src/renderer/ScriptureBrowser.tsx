@@ -197,6 +197,10 @@ class BibleCache {
 interface LastBibleSource {
   type: 'online' | 'helloao' | 'fetchbible';
   id: string;
+  // Persisted at download time: the actual cache format of the stored data.
+  // Without it, restore would have to guess (online XMLs can be either
+  // 'zefania' or 'holyBible' depending on the file content).
+  format?: string;
 }
 
 const LAST_BIBLE_KEY = 'lastBibleSource';
@@ -603,9 +607,11 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
     }
 
     try {
-      // Try cache first
+      // Try cache first (local XMLs can be zefania or holyBible format)
       if (result.path) {
-        const cached = await BibleCache.get(result.path, 'zefania');
+        const cached =
+          (await BibleCache.get(result.path, 'zefania')) ??
+          (await BibleCache.get(result.path, 'holyBible'));
         if (cached) {
           setBible(cached);
           BibleCache.setStoredPath(result.path);
@@ -659,7 +665,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       setShowOnlineBibleDialog(false);
 
       await BibleCache.set(`online:${bibleInfo.filename}`, parsed);
-      saveLastBibleSource({ type: 'online', id: bibleInfo.filename });
+      saveLastBibleSource({ type: 'online', id: bibleInfo.filename, format: parsed.format });
       setParseError(null);
     } catch (error) {
       console.error('Failed to download and parse Bible:', error);
@@ -699,7 +705,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       setShowOnlineBibleDialog(false);
 
       await BibleCache.set(`helloao:${translation.id}`, parsed);
-      saveLastBibleSource({ type: 'helloao', id: translation.id });
+      saveLastBibleSource({ type: 'helloao', id: translation.id, format: parsed.format });
       setParseError(null);
     } catch (error) {
       console.error('Failed to download HelloAO Bible:', error);
@@ -741,7 +747,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       setShowOnlineBibleDialog(false);
 
       await BibleCache.set(`fetchbible:${resource.id}`, parsed);
-      saveLastBibleSource({ type: 'fetchbible', id: resource.id });
+      saveLastBibleSource({ type: 'fetchbible', id: resource.id, format: parsed.format });
       setFetchBibleProgress(null);
       setParseError(null);
     } catch (error) {
@@ -766,9 +772,22 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
 
       const path = last.type === 'online' ? `online:${last.id}` : `${last.type}:${last.id}`;
 
-      const format = last.type === 'online' ? 'zefania' : last.type === 'helloao' ? 'helloAo' : 'fetchbible';
+      // Prefer the format persisted at download time. Legacy sources (saved
+      // before 'format' existed) have to be probed: online GitHub XMLs can be
+      // either zefania or holyBible depending on file content.
+      const formats = last.format
+        ? [last.format]
+        : last.type === 'online'
+          ? ['zefania', 'holyBible']
+          : last.type === 'helloao'
+            ? ['helloAo']
+            : ['fetchbible'];
 
-      const cached = await BibleCache.get(path, format);
+      let cached: BibleData | null = null;
+      for (const f of formats) {
+        cached = await BibleCache.get(path, f);
+        if (cached) break;
+      }
       if (cached) {
         setBible(cached);
         setBibleSource('online');

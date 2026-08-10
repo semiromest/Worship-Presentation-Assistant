@@ -253,19 +253,37 @@ async function writePresets(list: PresetItem[]): Promise<void> {
 // walkers (XML files / media files). Recursion is parallel per-directory and
 // results are flattened with the built-in `flat()` instead of manual pushes.
 
-async function walkFiles(dir: string, matches: (name: string, ext: string) => boolean): Promise<string[]> {
+interface ScanFolderOptions {
+  recursive?: boolean;
+  includeImages?: boolean;
+  includeVideos?: boolean;
+}
+
+async function walkFiles(
+  dir: string,
+  matches: (name: string, ext: string) => boolean,
+  recursive = true,
+): Promise<string[]> {
   const entries = await fs.readdir(dir, { withFileTypes: true });
   const tasks = entries.map(async (entry): Promise<string[]> => {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) return walkFiles(full, matches);
+    if (entry.isDirectory()) return recursive ? walkFiles(full, matches, true) : [];
     if (entry.isFile() && matches(entry.name, path.extname(full).toLowerCase())) return [full];
     return [];
   });
   return (await Promise.all(tasks)).flat();
 }
 
-const walkXmlFiles   = (dir: string) => walkFiles(dir, (name) => name.toLowerCase().endsWith('.xml'));
-const walkMediaFiles = (dir: string) => walkFiles(dir, (_name, ext) => IMAGE_EXTS.has(ext) || VIDEO_EXTS.has(ext));
+const walkXmlFiles = (dir: string) => walkFiles(dir, (name) => name.toLowerCase().endsWith('.xml'));
+
+const walkMediaFiles = (dir: string, opts: ScanFolderOptions = {}): Promise<string[]> => {
+  const { recursive = true, includeImages = true, includeVideos = true } = opts;
+  return walkFiles(
+    dir,
+    (_name, ext) => (includeImages && IMAGE_EXTS.has(ext)) || (includeVideos && VIDEO_EXTS.has(ext)),
+    recursive,
+  );
+};
 
 // ─── HTTP body reader ────────────────────────────────────────────────────
 
@@ -931,7 +949,16 @@ ipcMain.handle('select-audio-file', async () => {
   return filePaths?.[0] ?? null;
 });
 
-ipcMain.handle('read-media-folder', async (_event, folderPath: string) => walkMediaFiles(folderPath));
+ipcMain.handle('read-media-folder', async (_event, folderPath: string, options?: ScanFolderOptions) => {
+  try {
+    await fs.stat(folderPath);
+    const paths = await walkMediaFiles(folderPath, options);
+    return { paths, missing: false };
+  } catch (error) {
+    console.error('read-media-folder error:', error);
+    return { paths: [], missing: true };
+  }
+});
 
 // ─── IPC: PowerPoint ─────────────────────────────────────────────────────
 

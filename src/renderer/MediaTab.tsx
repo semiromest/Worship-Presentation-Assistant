@@ -15,7 +15,15 @@ import {
   Film,
   FolderOpen,
   ChevronDown,
+  RefreshCw,
+  X,
+  Check,
 } from 'lucide-react';
+import {
+  loadMediaFolderSettings,
+  saveMediaFolderSettings,
+  type MediaFolderSettings,
+} from './mediaFolderSettings';
 
 // ─── Types ────────────────────────────────────────────────
 type MediaKind = 'image' | 'video';
@@ -26,6 +34,7 @@ interface MediaItem {
   path: string;
   name: string;
   preview?: string;
+  origin: 'manual' | 'folder';
 }
 
 interface MediaTabProps {
@@ -131,6 +140,11 @@ export default function MediaTab({ onAddMediaToPresentation }: MediaTabProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [folderSettings, setFolderSettings] = useState<MediaFolderSettings>(
+    () => loadMediaFolderSettings(),
+  );
+  const [scanLoading, setScanLoading] = useState(false);
+  const [folderMissing, setFolderMissing] = useState(false);
 
   // Click-outside to close dropdown
   useEffect(() => {
@@ -143,7 +157,7 @@ export default function MediaTab({ onAddMediaToPresentation }: MediaTabProps) {
   }, []);
 
   // Add file paths to library (dedup by normalized path)
-  const addPaths = useCallback(async (paths: string[]) => {
+  const addPaths = useCallback(async (paths: string[], origin: 'manual' | 'folder' = 'manual') => {
     const incoming = paths
       .filter(p => p && isMediaFile(p))
       .map(p => {
@@ -154,6 +168,7 @@ export default function MediaTab({ onAddMediaToPresentation }: MediaTabProps) {
           path: p,
           name: getFileName(p),
           preview: type === 'image' ? toFileUrl(p) : undefined,
+          origin,
         } satisfies MediaItem;
       });
 
@@ -199,14 +214,57 @@ export default function MediaTab({ onAddMediaToPresentation }: MediaTabProps) {
     [addPaths],
   );
 
-  const importFolder = useCallback(async () => {
+  const scanFolder = useCallback(
+    async (settings: MediaFolderSettings) => {
+      const api = window.electronAPI;
+      if (!api?.readMediaFolder || !settings.path) return;
+      setScanLoading(true);
+      try {
+        const result = await api.readMediaFolder(settings.path, {
+          recursive: settings.recursive,
+          includeImages: settings.includeImages,
+          includeVideos: settings.includeVideos,
+        });
+        if (!result) return;
+        setFolderMissing(result.missing);
+        if (result.missing) {
+          setItems(prev => prev.filter(i => i.origin !== 'folder'));
+        } else if (result.paths.length) {
+          await addPaths(result.paths, 'folder');
+        }
+      } finally {
+        setScanLoading(false);
+      }
+    },
+    [addPaths],
+  );
+
+  const updateFolderSettings = useCallback((patch: Partial<MediaFolderSettings>) => {
+    setFolderSettings(prev => {
+      const next = { ...prev, ...patch };
+      saveMediaFolderSettings(next);
+      return next;
+    });
+  }, []);
+
+  const chooseFolder = useCallback(async () => {
     const api = window.electronAPI;
-    if (!api?.selectMediaFolder || !api.readMediaFolder) return;
+    if (!api?.selectMediaFolder) return;
     const folder = await api.selectMediaFolder();
     if (!folder) return;
-    const paths = await api.readMediaFolder(folder);
-    if (paths?.length) await addPaths(paths);
-  }, [addPaths]);
+    setFolderMissing(false);
+    updateFolderSettings({ path: folder });
+  }, [updateFolderSettings]);
+
+  const clearFolder = useCallback(() => {
+    updateFolderSettings({ path: '', recursive: false, includeImages: true, includeVideos: true });
+    setItems(prev => prev.filter(i => i.origin !== 'folder'));
+  }, [updateFolderSettings]);
+
+  // Folder ayarları değiştiğinde (açılış yüklemesi dahil) otomatik tara
+  useEffect(() => {
+    if (folderSettings.path) scanFolder(folderSettings);
+  }, [folderSettings, scanFolder]);
 
   const removeItem = useCallback((id: string) => {
     setItems(prev => prev.filter(i => i.id !== id));
@@ -263,11 +321,79 @@ export default function MediaTab({ onAddMediaToPresentation }: MediaTabProps) {
                 icon={<FolderOpen size={14} />}
                 title={t('common.mediaSelectFolder')}
                 desc={t('common.mediaSelectFolderDesc')}
-                onClick={() => { setMenuOpen(false); importFolder(); }}
+                onClick={() => { setMenuOpen(false); chooseFolder(); }}
               />
             </div>
           )}
         </div>
+
+        {/* Saved media folder */}
+        {folderSettings.path && (
+          <div style={s.folderBar}>
+            <div style={s.folderBarRow}>
+              <FolderOpen size={12} style={{ color: '#9c7c38', flexShrink: 0 }} />
+              <span style={s.folderPathText} title={folderSettings.path}>
+                {folderSettings.path}
+              </span>
+              {folderMissing && (
+                <span style={s.folderWarn}>{t('common.mediaFolderMissing')}</span>
+              )}
+            </div>
+            <div style={s.folderBarRow}>
+              <div style={s.segmented}>
+                <SegBtn
+                  active={!folderSettings.recursive}
+                  onClick={() => updateFolderSettings({ recursive: false })}
+                  label={t('common.mediaFolderOnlyThis')}
+                />
+                <SegBtn
+                  active={folderSettings.recursive}
+                  onClick={() => updateFolderSettings({ recursive: true })}
+                  label={t('common.mediaFolderWithSubs')}
+                />
+              </div>
+              <CheckChip
+                checked={folderSettings.includeImages}
+                onChange={v => updateFolderSettings({ includeImages: v })}
+                label={t('common.mediaFolderImages')}
+              />
+              <CheckChip
+                checked={folderSettings.includeVideos}
+                onChange={v => updateFolderSettings({ includeVideos: v })}
+                label={t('common.mediaFolderVideos')}
+              />
+              <button
+                type="button"
+                style={s.folderBtnMain}
+                onClick={chooseFolder}
+                disabled={scanLoading}
+              >
+                {t('common.mediaFolderChange')}
+              </button>
+              <button
+                type="button"
+                style={s.folderBtnIcon}
+                onClick={() => scanFolder(folderSettings)}
+                disabled={scanLoading}
+                title={t('common.mediaFolderRefresh')}
+              >
+                {scanLoading ? (
+                  <span style={s.folderLoadingText}>{t('common.mediaFolderLoading')}</span>
+                ) : (
+                  <RefreshCw size={11} />
+                )}
+              </button>
+              <button
+                type="button"
+                style={s.folderBtnIcon}
+                onClick={clearFolder}
+                title={t('common.mediaFolderClear')}
+              >
+                <X size={11} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div style={s.divider} />
@@ -324,6 +450,66 @@ const DropItem = memo(function DropItem({
         <div style={s.dropItemTitle}>{title}</div>
         <div style={s.dropItemDesc}>{desc}</div>
       </div>
+    </button>
+  );
+});
+
+// ─── Folder bar helpers ───────────────────────────────────
+const SegBtn = memo(function SegBtn({
+  active,
+  onClick,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        ...s.segBtn,
+        background: active ? 'rgba(184,134,11,0.22)' : 'transparent',
+        color: active ? '#e8c766' : 'rgba(255,255,255,0.5)',
+        borderColor: active ? 'rgba(184,134,11,0.45)' : 'transparent',
+      }}
+    >
+      {label}
+    </button>
+  );
+});
+
+const CheckChip = memo(function CheckChip({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      style={{
+        ...s.chip,
+        background: checked ? 'rgba(184,134,11,0.18)' : 'rgba(255,255,255,0.04)',
+        borderColor: checked ? 'rgba(184,134,11,0.4)' : 'rgba(255,255,255,0.12)',
+        color: checked ? '#e8c766' : 'rgba(255,255,255,0.5)',
+      }}
+    >
+      <span
+        style={{
+          ...s.chipBox,
+          background: checked ? 'rgba(184,134,11,0.9)' : 'transparent',
+          borderColor: checked ? 'transparent' : 'rgba(255,255,255,0.3)',
+        }}
+      >
+        {checked && <Check size={9} color="#1a1405" strokeWidth={3.5} />}
+      </span>
+      {label}
     </button>
   );
 });
@@ -590,6 +776,115 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 10,
     color: 'rgba(255,255,255,0.42)',
     lineHeight: 1.4,
+  },
+
+  // Folder bar
+  folderBar: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    padding: 8,
+    borderRadius: 10,
+    border: '1px solid rgba(184,134,11,0.25)',
+    background: 'rgba(184,134,11,0.06)',
+  },
+  folderBarRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+    minWidth: 0,
+  },
+  folderPathText: {
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    fontSize: 10,
+    fontWeight: 600,
+    color: 'rgba(255,255,255,0.65)',
+    fontFamily: 'monospace',
+  },
+  folderWarn: {
+    fontSize: 9,
+    fontWeight: 700,
+    letterSpacing: 0.05,
+    color: '#ff9a8a',
+    background: 'rgba(200,60,50,0.14)',
+    border: '1px solid rgba(200,60,50,0.35)',
+    borderRadius: 3,
+    padding: '1px 5px',
+    whiteSpace: 'nowrap',
+  },
+  segmented: {
+    display: 'flex',
+    padding: 2,
+    borderRadius: 7,
+    border: '1px solid rgba(255,255,255,0.1)',
+    background: 'rgba(0,0,0,0.25)',
+  },
+  segBtn: {
+    border: '1px solid',
+    borderRadius: 5,
+    padding: '4px 8px',
+    fontSize: 10,
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  },
+  chip: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    border: '1px solid',
+    borderRadius: 7,
+    padding: '4px 8px',
+    fontSize: 10,
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  },
+  chipBox: {
+    width: 12,
+    height: 12,
+    borderRadius: 3,
+    border: '1px solid',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  folderBtnMain: {
+    border: '1px solid rgba(184,134,11,0.4)',
+    borderRadius: 7,
+    padding: '4px 10px',
+    fontSize: 10,
+    fontWeight: 700,
+    letterSpacing: 0.05,
+    background: 'rgba(184,134,11,0.14)',
+    color: '#e8c766',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  },
+  folderBtnIcon: {
+    width: 24,
+    height: 24,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: '1px solid rgba(255,255,255,0.14)',
+    borderRadius: 6,
+    background: 'rgba(255,255,255,0.05)',
+    color: 'rgba(255,255,255,0.6)',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  },
+  folderLoadingText: {
+    fontSize: 9,
+    fontWeight: 700,
+    whiteSpace: 'nowrap',
+    padding: '0 2px',
   },
 
   // Divider

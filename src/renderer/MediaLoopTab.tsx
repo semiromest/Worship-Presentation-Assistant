@@ -5,13 +5,18 @@ import {
 import { useTranslation } from 'react-i18next';
 import {
   Image as ImageIcon, Video, Trash2, Plus, Film, FolderOpen,
-  ChevronDown, Repeat, Clock, GripVertical,
+  ChevronDown, Repeat, Clock, GripVertical, RefreshCw, X, Check,
 } from 'lucide-react';
 import type { LoopItem, MediaItem, MediaKind } from './types';
 import { LOOP_DEFAULT_DURATION } from './constants';
 import { cn } from './utils';
 import { confirmDialog } from './dialogs';
 import { useStore } from './state/useStore';
+import {
+  loadMediaFolderSettings,
+  saveMediaFolderSettings,
+  type MediaFolderSettings,
+} from './mediaFolderSettings';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,7 +31,10 @@ interface ElectronAPI {
   selectMediaFilesAll?: () => Promise<string | string[] | null>;
   selectMediaFile?: (type: string) => Promise<string | null>;
   selectMediaFolder?: () => Promise<string | null>;
-  readMediaFolder?: (folder: string) => Promise<string[] | null>;
+  readMediaFolder?: (
+    folder: string,
+    options?: { recursive?: boolean; includeImages?: boolean; includeVideos?: boolean },
+  ) => Promise<{ paths: string[]; missing: boolean } | null>;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -313,6 +321,11 @@ export default function MediaLoopTab({ onAddMediaToPresentation, onAddAllMediaTo
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [folderSettings, setFolderSettings] = useState<MediaFolderSettings>(
+    () => loadMediaFolderSettings(),
+  );
+  const [scanLoading, setScanLoading] = useState(false);
+  const [folderMissing, setFolderMissing] = useState(false);
 
   // ── Loop state ──
   const [defaultDuration, setDefaultDuration] = useState(LOOP_DEFAULT_DURATION / 1000);
@@ -332,10 +345,10 @@ export default function MediaLoopTab({ onAddMediaToPresentation, onAddAllMediaTo
   }, []);
 
   // ── Media actions ──
-  const addMediaPaths = useCallback(async (paths: string[]) => {
+  const addMediaPaths = useCallback(async (paths: string[], origin: 'manual' | 'folder' = 'manual') => {
     const incoming = paths.filter(p => p && isMediaFile(p)).map(p => {
       const type = detectMediaType(p)!;
-      return { id: makeId(), type, path: p, name: getFileName(p), preview: type === 'image' ? toFileUrl(p) : undefined } satisfies MediaItem;
+      return { id: makeId(), type, path: p, name: getFileName(p), preview: type === 'image' ? toFileUrl(p) : undefined, origin } satisfies MediaItem;
     });
     if (!incoming.length) return;
 
@@ -366,14 +379,56 @@ export default function MediaLoopTab({ onAddMediaToPresentation, onAddAllMediaTo
     }
   }, [addMediaPaths]);
 
-  const importFolder = useCallback(async () => {
+  const scanFolder = useCallback(async (settings: MediaFolderSettings) => {
     const api = window.electronAPI as ElectronAPI | undefined;
-    if (!api?.selectMediaFolder || !api.readMediaFolder) return;
+    if (!api?.readMediaFolder || !settings.path) return;
+    setScanLoading(true);
+    try {
+      const result = await api.readMediaFolder(settings.path, {
+        recursive: settings.recursive,
+        includeImages: settings.includeImages,
+        includeVideos: settings.includeVideos,
+      });
+      if (!result) return;
+      setFolderMissing(result.missing);
+      if (result.missing) {
+        setMediaItems(prev => prev.filter(i => i.origin !== 'folder'));
+      } else {
+        const keep = new Set(result.paths.map(normalizePath));
+        setMediaItems(prev => prev.filter(i => i.origin !== 'folder' || keep.has(normalizePath(i.path))));
+        if (result.paths.length) await addMediaPaths(result.paths, 'folder');
+      }
+    } finally {
+      setScanLoading(false);
+    }
+  }, [addMediaPaths, setMediaItems]);
+
+  const updateFolderSettings = useCallback((patch: Partial<MediaFolderSettings>) => {
+    setFolderSettings(prev => {
+      const next = { ...prev, ...patch };
+      saveMediaFolderSettings(next);
+      return next;
+    });
+  }, []);
+
+  const chooseFolder = useCallback(async () => {
+    const api = window.electronAPI as ElectronAPI | undefined;
+    if (!api?.selectMediaFolder) return;
     const folder = await api.selectMediaFolder();
     if (!folder) return;
-    const paths = await api.readMediaFolder(folder);
-    if (paths?.length) await addMediaPaths(paths);
-  }, [addMediaPaths]);
+    setFolderMissing(false);
+    updateFolderSettings({ path: folder });
+  }, [updateFolderSettings]);
+
+  const clearFolder = useCallback(() => {
+    updateFolderSettings({ path: '', recursive: false, includeImages: true, includeVideos: true });
+    setMediaItems(prev => prev.filter(i => i.origin !== 'folder'));
+  }, [updateFolderSettings, setMediaItems]);
+
+  // Folder ayarları değiştiğinde (açılış yüklemesi dahil) otomatik tara
+  useEffect(() => {
+    if (folderSettings.path) scanFolder(folderSettings);
+  }, [folderSettings, scanFolder]);
 
   const removeMediaItem = useCallback((id: string) => setMediaItems(prev => prev.filter(i => i.id !== id)), []);
 
@@ -557,11 +612,124 @@ export default function MediaLoopTab({ onAddMediaToPresentation, onAddAllMediaTo
                 <div className="absolute right-0 top-[calc(100%+6px)] w-[280px] z-20 p-1.5 rounded-xl border border-white/10 bg-[#141414]/[0.98] shadow-2xl shadow-black/50 backdrop-blur-xl">
                   <DropItem icon={<ImageIcon size={14} />} title={t('common.mediaSelectImages')} desc={t('common.mediaSelectImagesDesc')} onClick={() => { setMenuOpen(false); importFiles('image'); }} />
                   <DropItem icon={<Video size={14} />} title={t('common.mediaSelectVideos')} desc={t('common.mediaSelectVideosDesc')} onClick={() => { setMenuOpen(false); importFiles('video'); }} />
-                  <DropItem icon={<FolderOpen size={14} />} title={t('common.mediaSelectFolder')} desc={t('common.mediaSelectFolderDesc')} onClick={() => { setMenuOpen(false); importFolder(); }} />
+                  <DropItem icon={<FolderOpen size={14} />} title={t('common.mediaSelectFolder')} desc={t('common.mediaSelectFolderDesc')} onClick={() => { setMenuOpen(false); chooseFolder(); }} />
                 </div>
               )}
             </div>
           </div>
+
+          {/* Saved media folder */}
+          {folderSettings.path && (
+            <div className="shrink-0 mx-3 mb-2 px-2.5 py-2 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] space-y-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <FolderOpen className="w-3 h-3 text-amber-600 shrink-0" />
+                <span className="flex-1 min-w-0 truncate font-mono text-[10px] font-semibold text-white/65" title={folderSettings.path}>
+                  {folderSettings.path}
+                </span>
+                {folderMissing && (
+                  <span className="shrink-0 text-[9px] font-bold text-red-300 bg-red-500/15 border border-red-500/35 rounded px-1.5 py-0.5 whitespace-nowrap">
+                    {t('common.mediaFolderMissing')}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="flex p-0.5 rounded-lg border border-white/10 bg-black/25">
+                  <button
+                    type="button"
+                    onClick={() => updateFolderSettings({ recursive: false })}
+                    className={cn(
+                      'px-2 py-1 rounded-md text-[10px] font-semibold transition-all',
+                      !folderSettings.recursive
+                        ? 'bg-amber-500/20 text-amber-300'
+                        : 'text-white/45 hover:text-white/70',
+                    )}
+                  >
+                    {t('common.mediaFolderOnlyThis')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateFolderSettings({ recursive: true })}
+                    className={cn(
+                      'px-2 py-1 rounded-md text-[10px] font-semibold transition-all',
+                      folderSettings.recursive
+                        ? 'bg-amber-500/20 text-amber-300'
+                        : 'text-white/45 hover:text-white/70',
+                    )}
+                  >
+                    {t('common.mediaFolderWithSubs')}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => updateFolderSettings({ includeImages: !folderSettings.includeImages })}
+                  className={cn(
+                    'flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-semibold border transition-all',
+                    folderSettings.includeImages
+                      ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                      : 'border-white/10 bg-white/[0.04] text-white/45',
+                  )}
+                >
+                  <span className={cn(
+                    'w-3 h-3 rounded-[3px] border flex items-center justify-center',
+                    folderSettings.includeImages
+                      ? 'bg-amber-500 border-transparent'
+                      : 'border-white/30',
+                  )}>
+                    {folderSettings.includeImages && <Check className="w-2 h-2 text-black" strokeWidth={3.5} />}
+                  </span>
+                  {t('common.mediaFolderImages')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateFolderSettings({ includeVideos: !folderSettings.includeVideos })}
+                  className={cn(
+                    'flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-semibold border transition-all',
+                    folderSettings.includeVideos
+                      ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                      : 'border-white/10 bg-white/[0.04] text-white/45',
+                  )}
+                >
+                  <span className={cn(
+                    'w-3 h-3 rounded-[3px] border flex items-center justify-center',
+                    folderSettings.includeVideos
+                      ? 'bg-amber-500 border-transparent'
+                      : 'border-white/30',
+                  )}>
+                    {folderSettings.includeVideos && <Check className="w-2 h-2 text-black" strokeWidth={3.5} />}
+                  </span>
+                  {t('common.mediaFolderVideos')}
+                </button>
+                <span className="flex-1" />
+                <button
+                  type="button"
+                  onClick={chooseFolder}
+                  disabled={scanLoading}
+                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold tracking-wider border border-amber-500/40 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 transition-all disabled:opacity-40"
+                >
+                  {t('common.mediaFolderChange')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => scanFolder(folderSettings)}
+                  disabled={scanLoading}
+                  title={t('common.mediaFolderRefresh')}
+                  className="w-6 h-6 flex items-center justify-center rounded border border-white/[0.14] bg-white/[0.05] text-white/60 hover:text-white hover:bg-white/[0.1] transition-all disabled:opacity-40"
+                >
+                  {scanLoading
+                    ? <span className="text-[9px] font-bold px-0.5">{t('common.mediaFolderLoading')}</span>
+                    : <RefreshCw className="w-3 h-3" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={clearFolder}
+                  title={t('common.mediaFolderClear')}
+                  className="w-6 h-6 flex items-center justify-center rounded border border-white/[0.14] bg-white/[0.05] text-white/60 hover:text-red-400 hover:border-red-500/40 transition-all"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Media content */}
           <div className="flex-1 overflow-y-auto px-3 pb-4">
