@@ -250,8 +250,7 @@ const TURKISH_CHARS_MAP: Record<string, string> = {
   Ê: 'e',
 };
 
-// charCode bounds for ASCII 'a'-'z' and '0'-'9', used by normalizeBookName's
-// single-pass scan below instead of a chain of regex .replace() calls.
+// ASCII char code bounds for 'a'-'z' and '0'-'9' (used by the single-pass scan).
 const CODE_LOWER_A = 97; // 'a'
 const CODE_LOWER_Z = 122; // 'z'
 const CODE_DIGIT_0 = 48; // '0'
@@ -263,13 +262,8 @@ function isAsciiAlnumCode(code: number): boolean {
 
 /**
  * Normalizes a book name for matching: lowercase, Turkish diacritics folded to
- * ASCII, apostrophes stripped, everything else collapsed to single spaces,
- * trimmed.
- *
- * Optimization: the original implementation chained four separate
- * `.replace()` calls, each scanning the whole string and allocating a new
- * intermediate string. This does the same work in a single left-to-right
- * pass with no intermediate allocations, and no regex/backtracking overhead.
+ * ASCII, apostrophes removed, other separators collapsed to single spaces.
+ * Single left-to-right pass, no intermediate string allocations.
  */
 export function normalizeBookName(str: string): string {
   const lower = str.toLowerCase();
@@ -279,8 +273,7 @@ export function normalizeBookName(str: string): string {
   for (let i = 0; i < lower.length; i++) {
     const ch = lower[i];
 
-    // Apostrophes are dropped entirely (no separator introduced),
-    // matching the original `.replace(/['`]/g, '')` step.
+    // Apostrophes are dropped entirely (no separator introduced).
     if (ch === "'" || ch === '`') continue;
 
     const mapped = TURKISH_CHARS_MAP[ch] ?? ch;
@@ -293,10 +286,7 @@ export function normalizeBookName(str: string): string {
       }
       out += mapped;
     } else if (out.length > 0) {
-      // Any other character (spaces, punctuation, unmapped diacritics) acts
-      // as a separator; runs of separators collapse to a single space and
-      // leading/trailing separators are dropped (no leading emit, and a
-      // trailing pendingSpace is simply never flushed).
+      // Other characters act as separators; runs collapse to one space and edges drop.
       pendingSpace = true;
     }
   }
@@ -304,7 +294,7 @@ export function normalizeBookName(str: string): string {
   return out;
 }
 
-// Aliases pre-built per position: normalized canonical Turkish name + known aliases
+// Aliases per position: normalized TR name + known variants
 const ALIASES_NORMALIZED: readonly (readonly string[])[] = BOOK_ALIASES.map((aliases, i) => [
   normalizeBookName(BOOK_NAMES_TR[i]),
   ...aliases,
@@ -318,16 +308,11 @@ interface AliasEntry {
 }
 
 /**
- * O(1) exact-match lookup: alias string -> canonical book index.
- * When the same alias text appears under multiple books (shouldn't normally
- * happen, but defensively handled), the lowest book index wins — this
- * mirrors the original code's `for (i = 0..65) return first match` order.
+ * Exact-match lookup: alias -> book index (lowest book index wins ties).
  */
 const EXACT_MATCH_MAP: Map<string, number> = new Map();
 
-// Flat list of every (alias, bookIndex) pair, kept sorted lexicographically
-// by alias so that "does any alias start with X" can be answered with a
-// binary search instead of scanning all ~200 aliases.
+// Aliases sorted lexicographically so prefix lookups can use binary search.
 const ALIASES_SORTED: AliasEntry[] = [];
 
 for (let i = 0; i < ALIASES_NORMALIZED.length; i++) {
@@ -345,7 +330,7 @@ ALIASES_SORTED.sort((a, b) => {
   return a.bookIndex - b.bookIndex;
 });
 
-/** First index in `arr` whose `.alias` is >= target (standard binary lower bound). */
+/** First index whose alias is >= target (binary lower bound). */
 function lowerBound(arr: readonly AliasEntry[], target: string): number {
   let lo = 0;
   let hi = arr.length;
@@ -361,19 +346,9 @@ function lowerBound(arr: readonly AliasEntry[], target: string): number {
 }
 
 /**
- * Finds the canonical book index for a normalized name.
- *
- * Optimization vs. the original nested-loop scan (66 books x up to ~6
- * aliases, twice — once for exact match, once for prefix/containment):
- *  - Exact match is a single hashmap lookup: O(1) instead of O(books x aliases).
- *  - "some alias is a prefix of the input" is answered by hashing each
- *    prefix of the input (length >= 4) against the same map: O(len(input))
- *    lookups instead of scanning every alias's `startsWith`.
- *  - "input is a prefix of some alias" is answered with a binary search over
- *    a pre-sorted alias list, then a short scan of just the matching range:
- *    O(log A + k) instead of O(A) `startsWith` checks.
- * Priority (lowest book index wins on ties) is preserved to match the
- * original's book-ascending iteration order.
+ * Returns the canonical book index for a normalized name.
+ * Exact matches use a hashmap; prefixes use hashed input prefixes and a
+ * binary search over the sorted alias list. Lowest index wins ties.
  */
 function matchBookPosition(normalizedName: string): number {
   if (!normalizedName) return -1;

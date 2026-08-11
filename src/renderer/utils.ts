@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import type { Slide, WatermarkConfig, Position } from './types';
 import { useWatermarkStore } from './state/useWatermarkStore';
 
-// ─── Precompiled Regexes (derleme maliyetini her çağrıda ödemeyiz) ─────────
+// Precompiled regexes (compiled once, not per call)
 const SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
 const WINDOWS_DRIVE_RE = /^[a-zA-Z]:[\\/]/;
 const WINDOWS_DRIVE_ONLY_RE = /^[a-zA-Z]:$/;
@@ -155,7 +155,7 @@ async function renderTextSlide(
   W: number,
   H: number,
 ): Promise<boolean> {
-  if (slide.items?.length) return false; // item'lı metin slaytları başka branch'te işlenir
+  if (slide.items?.length) return false; // item-based text slides handled in another branch
 
   if (slide.styles?.backgroundImage) {
     const bgImg = await loadImage(slide.styles.backgroundImage, { applyCors: true });
@@ -433,7 +433,7 @@ export async function generateSlideThumbnail(slide: Slide): Promise<string | nul
   if (!ctx) return null;
 
   try {
-    // Default background (text/image-empty slides için)
+    // Default background (text/image-empty slides)
     ctx.fillStyle = slide.styles?.backgroundColor || '#000000';
     ctx.fillRect(0, 0, W, H);
 

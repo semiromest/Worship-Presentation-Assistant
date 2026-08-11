@@ -145,7 +145,7 @@ export default function CountdownSlideEditor({
   return (
     <div className="space-y-4">
 
-      {/* Kalan süre */}
+      {/* Remaining time */}
       <div
         className={cn(
           'rounded-xl border p-3 flex items-center justify-between',
@@ -167,7 +167,7 @@ export default function CountdownSlideEditor({
         </span>
       </div>
 
-      {/* Süre belirleme */}
+      {/* Set duration */}
       <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-3">
         <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
           {t('common.cdSetDuration')}
@@ -277,7 +277,7 @@ export default function CountdownSlideEditor({
         </button>
       </div>
 
-      {/* Görünüm */}
+      {/* Appearance */}
       <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-3">
         <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 flex items-center gap-2">
           <Timer className="w-3.5 h-3.5" />

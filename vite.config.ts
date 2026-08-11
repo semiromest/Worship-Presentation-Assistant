@@ -11,7 +11,7 @@ export default defineConfig({
         entry: 'src/main/main.ts',
         vite: {
           build: {
-            target: 'node20',         // ✅ Main process Node.js tabanlı çalışır
+            target: 'node20',         // main process runs on Node.js
             minify: 'esbuild',
             sourcemap: false,
             rollupOptions: {
@@ -27,7 +27,7 @@ export default defineConfig({
         input: path.join(__dirname, 'src/main/preload.ts'),
         vite: {
           build: {
-            target: 'node20',         // ✅ Preload da Node.js ortamında çalışır
+            target: 'node20',         // preload runs in a Node.js environment
             minify: 'esbuild',
             sourcemap: false,
             rollupOptions: {
@@ -43,7 +43,7 @@ export default defineConfig({
     }),
   ],
 
-  // ✅ manualChunks buraya taşındı — renderer (Chromium) tarafına ait
+  // manualChunks moved here — belongs to the renderer (Chromium)
   build: {
     target: 'chrome120',
     cssCodeSplit: true,

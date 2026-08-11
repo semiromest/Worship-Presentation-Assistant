@@ -103,6 +103,40 @@
       "artifactName": "Worship-Presentation-Assistant-Setup-${version}.${ext}",
       "uninstallDisplayName": "Worship Presentation Assistant",
       "deleteAppDataOnUninstall": true
+    },
+    "mac": {
+      "icon": "build/icon.png",
+      "category": "public.app-category.presentation",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "artifactName": "Worship-Presentation-Assistant-${version}-${arch}.${ext}"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Office;Presentation",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Worship-Presentation-Assistant-${version}.${ext}"
     }
   },
   "repository": {

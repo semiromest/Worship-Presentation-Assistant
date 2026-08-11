@@ -15,7 +15,7 @@ export default function UpdatesModal() {
   const { t } = useTranslation();
   const { isUpdatesOpen, setIsUpdatesOpen } = useStore();
   const updater = useUpdaterStore();
-  const { status, currentVersion, updaterActive, nextVersion, releaseNotes, percent, transferred, total, errorMessage } = updater;
+  const { status, currentVersion, updaterActive, nextVersion, percent, transferred, total, errorMessage } = updater;
 
   return (
     <Dialog
@@ -78,25 +78,6 @@ export default function UpdatesModal() {
               {t('updates.fromTo', { current: currentVersion, next: nextVersion ?? '' })}
             </span>
           </p>
-
-          {releaseNotes != null && (
-            <div>
-              <p className="text-xs font-bold text-white/50 uppercase tracking-wider mb-2">{t('updates.releaseNotes')}</p>
-              {typeof releaseNotes === 'string' ? (
-                <pre className="whitespace-pre-wrap text-xs text-white/65 bg-white/5 border border-white/10 rounded-lg p-3 max-h-48 overflow-y-auto">
-                  {releaseNotes}
-                </pre>
-              ) : (
-                <ul className="text-xs text-white/65 space-y-1.5 max-h-48 overflow-y-auto">
-                  {releaseNotes.map((item) => (
-                    <li key={item.version}>
-                      <span className="text-white font-semibold">v{item.version}</span> — {item.note}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
 
           <button className={primaryButtonClass} onClick={() => updater.download()}>
             <Download className="w-4 h-4" aria-hidden="true" />

@@ -134,7 +134,7 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
       <h2 className="text-2xl font-bold text-white">{t('common.countdownTitle')}</h2>
 
       <div className="bg-white/10 rounded-lg p-6 space-y-4">
-        {/* Süre girişi */}
+        {/* Duration input */}
         <div className="flex items-center space-x-4">
           {(['minutes', 'seconds'] as const).map((key) => {
             const isMin = key === 'minutes';
@@ -155,7 +155,7 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
           })}
         </div>
 
-        {/* Sayaç göstergesi */}
+        {/* Counter display */}
         <div className="text-center">
           <div className="text-6xl font-mono font-bold text-white tabular-nums mb-4">
             {formatTime(displayTime)}
@@ -210,7 +210,7 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
         </div>
       </div>
 
-      {/* Tema Seçimi */}
+      {/* Theme selection */}
       <div className="space-y-3">
         <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider">{t('common.countdownThemeLabel')}</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

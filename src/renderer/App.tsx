@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Layers, Layout, BookOpen, Image as ImageIcon, Music, Timer, Monitor, Calendar,
-  PanelRightOpen
+  PanelRightOpen, Settings
 } from 'lucide-react';
 
 import ScriptureBrowser from './ScriptureBrowser';
@@ -13,6 +13,7 @@ import CalendarTab from './CalendarTab';
 import PresentationsTab from './PresentationsTab';
 import HymnsTab from './HymnsTab';
 import SlideEditor from './SlideEditor';
+import SettingsTab from './components/SettingsTab';
 import { AnimatedPreview } from './AnimatedPreview';
 
 import { IS_PROJECTOR_MODE, DEFAULT__TRANSITION } from './constants';
@@ -23,6 +24,7 @@ import { useStore } from './state/useStore';
 import { useRemoteControl } from './state/useRemoteControl';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation';
 import { useProjectorSync } from './hooks/useProjectorSync';
+import { useLiveSave } from './hooks/useLiveSave';
 import { useSlideOperations } from './hooks/useSlideOperations';
 import { initUpdaterSync } from './state/useUpdaterStore';
 
@@ -32,6 +34,7 @@ import SlideGrid from './components/SlideGrid';
 import RightPanel from './components/RightPanel';
 import CheatsheetModal from './components/CheatsheetModal';
 import UpdatesModal from './components/UpdatesModal';
+import RemoteControlModal from './components/RemoteControlModal';
 import Toast from './components/Toast';
 
 export default function App() {
@@ -40,6 +43,7 @@ export default function App() {
   // Custom Hooks
   const { openLive, closeLive } = useRemoteControl();
   useProjectorSync();
+  useLiveSave();
 
   const {
     presentation,
@@ -125,6 +129,7 @@ export default function App() {
       { id: 'countdown', icon: Timer, titleKey: 'nav.countdown' },
       { id: 'screen', icon: Monitor, titleKey: 'nav.screen' },
       { id: 'calendar', icon: Calendar, titleKey: 'nav.calendar' },
+      { id: 'settings', icon: Settings, titleKey: 'nav.settings' },
     ] as const,
     []
   );
@@ -355,6 +360,11 @@ export default function App() {
               />
             </div>
           )}
+          {activeTab === 'settings' && (
+            <div className="h-full gp-slide-enter">
+              <SettingsTab />
+            </div>
+          )}
         </main>
       </div>
 
@@ -381,6 +391,9 @@ export default function App() {
 
       {/* Updates Modal */}
       <UpdatesModal />
+
+      {/* Remote Control Modal */}
+      <RemoteControlModal />
 
       {/* Undo/Redo Toast */}
       <Toast />

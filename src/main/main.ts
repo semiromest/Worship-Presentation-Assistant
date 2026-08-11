@@ -16,7 +16,7 @@ import { getPptxService } from './pptxService';
 import { driveService } from './driveService';
 import { initUpdater } from './updater';
 
-// ─── Paths ────────────────────────────────────────────────────────────────
+// Paths
 
 const DIST         = path.join(__dirname, '../dist');
 const ICON_PATH    = path.join(__dirname, '../build', 'ico.png');
@@ -29,13 +29,13 @@ const VIDEO_EXTS = new Set(['.mp4', '.webm', '.mov', '.mkv', '.avi', '.m4v', '.w
 process.env.DIST        = DIST;
 process.env.VITE_PUBLIC = VITE_PUBLIC;
 
-// ─── Window references ──────────────────────────────────────────────────
+// Window references
 
 let win:          BrowserWindow | null = null;
 let projectorWin: BrowserWindow | null = null;
 let pendingProjectorPayload: any = null;
 
-// ─── Remote server state ────────────────────────────────────────────────
+// Remote server state
 
 let remoteServer:    http.Server     | null = null;
 let wss:             WebSocketServer | null = null;
@@ -92,17 +92,13 @@ function broadcastClientCount(): void {
   win?.webContents.send('remote-client-count', wsClients.size);
 }
 
-// ─── Slide preview capture (debounced + rate-limited) ───────────────────
+// Slide preview capture (debounced + rate-limited)
 
 let captureTimer: ReturnType<typeof setTimeout> | null = null;
 let lastCaptureTime = 0;
 const CAPTURE_MIN_INTERVAL = 100; // ms, hard floor between captures
 
-/**
- * True when a captured frame is essentially empty: fully black or a single
- * flat color. This happens when the window is minimized / occluded /
- * offscreen — broadcasting such a frame blanks the phone's preview screen.
- */
+/** True if the frame is blank (black/flat color) — e.g. a minimized window. */
 function captureIsBlank(img: Electron.NativeImage): boolean {
   try {
     const { width, height } = img.getSize();
@@ -121,14 +117,9 @@ function captureIsBlank(img: Electron.NativeImage): boolean {
 }
 
 /**
- * Captures the projector window (or main window as fallback) and
- * broadcasts a downscaled JPEG preview. Debounced by `delayMs`, then
- * additionally rate-limited so bursts of calls collapse into one capture.
- *
- * Only used as a fallback while the renderer has not yet delivered its own
- * canvas preview (`lastPreviewDataUrl === null`); once the renderer's
- * thumbnails flow, those win so a stale/black window capture can never
- * overwrite the accurate part preview on phones.
+ * Captures a downscaled JPEG preview of the projector/main window and
+ * broadcasts it. Debounced + rate-limited; fallback only until the renderer
+ * delivers its own canvas preview (never overwrites it).
  */
 function scheduleSlideCapture(delayMs = 300): void {
   if (wsClients.size === 0) return; // no one listening, skip the work
@@ -151,7 +142,7 @@ function scheduleSlideCapture(delayMs = 300): void {
   }, delayMs);
 }
 
-// ─── Local IPv4 detection (scored, cached for app lifetime) ────────────
+// Local IPv4 detection (scored, cached for app lifetime)
 
 let cachedLocalIP: string | null = null;
 let remoteDebugInfo: {
@@ -227,7 +218,7 @@ function getLocalIPv4(): string {
   return cachedLocalIP;
 }
 
-// ─── Preset cache (write-through) ───────────────────────────────────────
+// Preset cache (write-through)
 
 type PresetItem = { name: string; presentation: unknown; createdAt: number };
 let presetsCache: PresetItem[] | null = null;
@@ -248,7 +239,7 @@ async function writePresets(list: PresetItem[]): Promise<void> {
   await fs.rename(tempFile, PRESETS_FILE);
 }
 
-// ─── Generic recursive file finder ──────────────────────────────────────
+// Generic recursive file finder
 // One directory walker, parametrized by a filter, replaces two near-identical
 // walkers (XML files / media files). Recursion is parallel per-directory and
 // results are flattened with the built-in `flat()` instead of manual pushes.
@@ -285,7 +276,7 @@ const walkMediaFiles = (dir: string, opts: ScanFolderOptions = {}): Promise<stri
   );
 };
 
-// ─── HTTP body reader ────────────────────────────────────────────────────
+// HTTP body reader
 
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -304,7 +295,59 @@ function readBody(req: http.IncomingMessage): Promise<string> {
   });
 }
 
-// ─── Window creation ─────────────────────────────────────────────────────
+// Window creation
+
+const QUIT_CONFIRM_TEXTS: Record<string, { message: string; detail: string; cancel: string; confirm: string }> = {
+  tr: { message: 'Çıkmak istediğinize emin misiniz?', detail: 'Çıkış yaparsanız canlı yayın durdurulur.', cancel: 'Vazgeç', confirm: 'Evet, Çık' },
+  en: { message: 'Are you sure you want to quit?', detail: 'Live projection will stop if you quit.', cancel: 'Cancel', confirm: 'Yes, Quit' },
+  es: { message: '¿Seguro que desea salir?', detail: 'La proyección en vivo se detendrá si sale.', cancel: 'Cancelar', confirm: 'Sí, salir' },
+  de: { message: 'Möchten Sie wirklich beenden?', detail: 'Die Live-Projektion wird beendet, wenn Sie beenden.', cancel: 'Abbrechen', confirm: 'Ja, beenden' },
+  ko: { message: '정말 종료하시겠습니까?', detail: '종료하면 라이브 프로젝션이 중지됩니다.', cancel: '취소', confirm: '예, 종료' },
+};
+
+let rendererLanguageCache = 'tr';
+
+/** Best-effort read of the renderer's chosen language (localStorage persisted by i18next). */
+function refreshRendererLanguage(): void {
+  const lng = win?.webContents.executeJavaScript(`localStorage.getItem('i18nextLng') || 'tr'`);
+  if (lng && typeof (lng as unknown as Promise<string>).then === 'function') {
+    (lng as unknown as Promise<string>)
+      .then((value) => { rendererLanguageCache = String(value).split('-')[0] ?? 'tr'; })
+      .catch(() => { /* default stays */ });
+  }
+}
+
+/** Quit confirm: blocks window close until the user confirms in a native dialog. */
+function attachQuitConfirm(window: BrowserWindow): void {
+  let quitConfirmed = false;
+
+  window.on('close', (e) => {
+    if (quitConfirmed) return;
+    e.preventDefault();
+
+    const texts = QUIT_CONFIRM_TEXTS[rendererLanguageCache] ?? QUIT_CONFIRM_TEXTS.en;
+    dialog
+      .showMessageBox(window, {
+        type: 'question',
+        title: 'Worship Presentation Assistant',
+        message: texts.message,
+        detail: texts.detail,
+        buttons: [texts.cancel, texts.confirm],
+        defaultId: 0,
+        cancelId: 0,
+      })
+      .then(({ response }) => {
+        if (response === 1) {
+          quitConfirmed = true;
+          if (!window.isDestroyed()) window.close();
+        }
+      })
+      .catch(() => {
+        quitConfirmed = true;
+        if (!window.isDestroyed()) window.close();
+      });
+  });
+}
 
 function createWindow(): void {
   win = new BrowserWindow({
@@ -328,6 +371,11 @@ function createWindow(): void {
     : win.loadFile(path.join(DIST, 'index.html'));
 
   win.maximize();
+
+  attachQuitConfirm(win);
+
+  win.webContents.once('did-finish-load', refreshRendererLanguage);
+
   win.on('closed', () => { projectorWin?.close(); win = null; });
 }
 
@@ -371,7 +419,7 @@ function createProjectorWindow(initialData?: any): void {
     win?.webContents.send('projector-closed');
     remoteStatus.isProjectorOpen = false;
     broadcast({ type: 'status', data: remoteStatus });
-    scheduleSlideCapture(120);                   // kapandıktan sonra kısa süre sonra yakala
+    scheduleSlideCapture(120);                   // capture shortly after closing
   });
 }
 
@@ -385,7 +433,7 @@ ipcMain.on('projector-ready', (event) => {
   }
 });
 
-// ─── HTTP + WebSocket remote control server ─────────────────────────────
+// HTTP + WebSocket remote control server
 
 function createRemoteServer(): void {
   remoteServer = http.createServer(async (req, res) => {
@@ -481,7 +529,7 @@ function createRemoteServer(): void {
   });
 }
 
-// ─── App lifecycle ────────────────────────────────────────────────────────
+// App lifecycle
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'local-resource', privileges: { bypassCSP: true, stream: true, supportFetchAPI: true } },
@@ -546,7 +594,7 @@ app.on('will-quit', () => {
   if (captureTimer) clearTimeout(captureTimer);
 });
 
-// ─── .gpres (ZIP) helpers ─────────────────────────────────────────────────
+// .gpres (ZIP) helpers
 
 let currentTempDir: string | null = null;
 
@@ -579,10 +627,8 @@ function fileUrlToPath(fileUrl: string): string {
 }
 
 /**
- * Single recursive walker over a JSON-like tree, visiting every string leaf.
- * Replaces three separate near-identical tree walks (collect URLs, replace
- * URLs, collect media paths) with one traversal, reused via different
- * callbacks. Callback receives (value, parent, key) so it can mutate in place.
+ * Recursive walker over a JSON-like tree hitting every string leaf.
+ * Replaces three near-identical tree walks; callback may mutate in place.
  */
 function walkStrings(node: any, onString: (value: string, parent: any, key: string) => void): void {
   if (!node || typeof node !== 'object') return;
@@ -634,9 +680,8 @@ function toMediaFileName(fileUrl: string, registry: MediaNameRegistry): string {
 const isZip = (buf: Buffer) => buf[0] === 0x50 && buf[1] === 0x4b; // "PK"
 
 /**
- * Extracts a .gpres ZIP buffer: reads presentation.json, unpacks media to a
- * fresh temp dir, and rewrites media/* references to local-resource:// URLs
- * in a single pass (collect-and-replace combined, instead of two tree walks).
+ * Extracts a .gpres ZIP: reads presentation.json, unpacks media to a fresh
+ * temp dir, and rewrites media/* refs to local-resource:// URLs in one pass.
  */
 async function extractGpresZip(buffer: Buffer): Promise<{ data: any; tempDir: string; mediaCount: number }> {
   await cleanupTempDir();
@@ -664,9 +709,8 @@ async function extractGpresZip(buffer: Buffer): Promise<{ data: any; tempDir: st
 }
 
 /**
- * Builds a .gpres ZIP in memory: finds every embeddable media URL, embeds
- * files in parallel (instead of one-by-one awaits), then rewrites the tree
- * to point at the embedded media/* paths.
+ * Builds a .gpres ZIP in memory: finds embeddable media URLs, embeds files
+ * in parallel, then rewrites the tree to the embedded media/* paths.
  */
 async function buildGpresZip(data: any): Promise<{ zip: AdmZip; embeddedCount: number }> {
   const urls = new Set<string>();
@@ -698,7 +742,7 @@ async function buildGpresZip(data: any): Promise<{ zip: AdmZip; embeddedCount: n
   return { zip, embeddedCount: urlToMedia.size };
 }
 
-// ─── IPC: file operations ────────────────────────────────────────────────
+// IPC: file operations
 
 ipcMain.handle('save-file', async (_, content: string) => {
   const { filePath, canceled } = await dialog.showSaveDialog({
@@ -734,7 +778,7 @@ ipcMain.handle('open-file', async () => {
   return { path: filePath, content: raw.toString('utf-8') };
 });
 
-// ─── IPC: native dialogs ─────────────────────────────────────────────────
+// IPC: native dialogs
 
 ipcMain.handle(
   'show-confirm-dialog',
@@ -771,7 +815,7 @@ ipcMain.handle(
   },
 );
 
-// ─── IPC: preset CRUD ────────────────────────────────────────────────────
+// IPC: preset CRUD
 
 ipcMain.handle('load-presets', () => readPresets());
 
@@ -800,7 +844,7 @@ ipcMain.handle('rename-preset', async (_, oldName: string, newName: string) => {
   return list;
 });
 
-// ─── IPC: projector ──────────────────────────────────────────────────────
+// IPC: projector
 
 ipcMain.handle('toggle-projector', (_, initialData?: any) => {
   if (projectorWin) { projectorWin.close(); return false; }
@@ -817,7 +861,7 @@ ipcMain.handle('update-projector', (_, data: unknown) => {
 ipcMain.handle('get-projector-status', () => !!projectorWin);
 ipcMain.handle('cleanup-temp-dir', () => { cleanupTempDir(); return true; });
 
-// ─── IPC: remote control ─────────────────────────────────────────────────
+// IPC: remote control
 
 ipcMain.handle('get-remote-url', () => remoteServerUrl);
 ipcMain.handle('get-remote-debug', () => ({ remoteServerUrl, debug: remoteDebugInfo }));
@@ -830,9 +874,8 @@ ipcMain.handle('update-all-slide-previews', (_, previews: string[]) => {
 });
 
 /**
- * Called by the renderer on slide change / blackout toggle / etc.
- * Broadcasts the new status to all connected phones, then schedules a
- * (throttled) preview capture once the transition animation has settled.
+ * Renderer hook on slide change / blackout / etc: broadcasts status to
+ * phones, then schedules a throttled preview capture after the transition.
  */
 ipcMain.handle('update-remote-status', (_, status: Partial<typeof remoteStatus> & { slidePreviews?: SlideMeta[] }) => {
   remoteStatus = {
@@ -900,7 +943,7 @@ ipcMain.handle('send-slide-preview', (_, dataUrl: string) => {
   return true;
 });
 
-// ─── IPC: media / import ─────────────────────────────────────────────────
+// IPC: media / import
 
 ipcMain.handle('import-bible-xml', async (_, filePath?: string) => {
   let selected = filePath;
@@ -960,7 +1003,7 @@ ipcMain.handle('read-media-folder', async (_event, folderPath: string, options?:
   }
 });
 
-// ─── IPC: PowerPoint ─────────────────────────────────────────────────────
+// IPC: PowerPoint
 
 ipcMain.handle('select-pptx-file', async () => {
   const { filePaths } = await dialog.showOpenDialog({
@@ -1005,7 +1048,7 @@ ipcMain.handle('import-hymn-archive', async (_, dirPath?: string) => {
   return { results: contents, path: selected };
 });
 
-// ─── IPC: screen capture ─────────────────────────────────────────────────
+// IPC: screen capture
 
 interface ScreenSource {
   id: string;
@@ -1049,7 +1092,7 @@ ipcMain.handle('capture-screen-source', async (_, sourceId: string) => {
   }
 });
 
-// ─── IPC: Google Drive ───────────────────────────────────────────────────
+// IPC: Google Drive
 
 ipcMain.handle('drive-sign-in', async () => {
   try { return await driveService.signIn(); }

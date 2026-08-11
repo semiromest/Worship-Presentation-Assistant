@@ -9,6 +9,7 @@
     "screen": "Ekran",
     "loop": "Loop",
     "calendar": "Takvim",
+    "settings": "Ayarlar",
     "sidebarLabel": "Ana Navigasyon"
   },
   "common": {
@@ -115,6 +116,7 @@
     "zoomControls": "Yakınlaştırma Kontrolleri",
     "autoGoLive": "Anında Canlı",
     "autoGoLiveHint": "Klavye/uzaktan kumanda ile seçilen slayt anında canlıya verilir",
+    "liveSaveBadge": "Canlı Kayıt (Otomatik)",
     "transitionHeading": "Geçiş Ayarları",
     "presetsTitle": "Sunumlar",
     "presetsSubtitle": "Kaydet, yükle ve hızlıca geçiş yap",
@@ -156,9 +158,10 @@
     "hymnsTitle": "İlahiler",
     "hymnsList": "İlahi Listesi",
     "hymnsImport": "İçe aktar",
-    "hymnsImportProgress": "İçe aktarılıyor… {{count}} dosya",
+    "hymnsImportProgress": "İçe aktarılıyor… {{count}}/{{total}} dosya",
     "hymnsImportPartialError": "{{count}} dosya içe aktarılamadı",
     "hymnsClearAll": "Tüm ilahileri temizle",
+    "hymnsClearButton": "Temizle",
     "hymnsConfirmClear": "Tüm ilahileri temizlemek istediğinizden emin misiniz?",
     "hymnsSearch": "İlahi ara...",
     "hymnsSearchLyricsOff": "Sözlerden aramayı kapat",
@@ -175,6 +178,7 @@
     "hymnsEdit": "Düzenle",
     "hymnsPartsModeOn": "Parça Modu Açık - İlahi tek slayta bölünür",
     "hymnsPartsModeOff": "Parça Modu Kapalı - İlahi ayrı slaytlara bölünür",
+    "hymnsPartsMode": "Parça Modu",
     "hymnsOnline": "Online İlahiler",
     "onlineHymnsTitle": "Online İlahiler",
     "onlineHymnsSearch": "İlahi ara...",
@@ -186,7 +190,11 @@
     "onlineHymnsClearSelection": "Seçimi Temizle",
     "onlineHymnsConfirmAll": "Tüm ilahileri içe aktarmak istediğinizden emin misiniz?",
     "onlineHymnsImportFailed": "{{count}} ilahi içe aktarılamadı",
+    "onlineHymnsBack": "Geri",
+    "onlineHymnsImported": "{{count}} ilahi eklendi",
+    "onlineHymnsImportAllFailed": "Hiçbir ilahi içe aktarılamadı",
     "setImportTitle": "Set Linkinden İçe Aktar",
+    "setImportButton": "Set Linki",
     "setImportHint": "Worship Leader'daki haftalık listeye ait set paylaşım linkini yapıştırın",
     "setImportPlaceholder": "https://songs.worshipleaderapp.com/#page-set-list?new_set=...&song_ids=...",
     "setImportFetch": "İlahileri Getir",
@@ -364,6 +372,7 @@
       "tabCountdown": "Geri sayım süreli slayt oluşturma",
       "tabScreen": "Ekran yakalama kaynağı seçme",
       "tabCalendar": "Takvim üzerinden kayıtlı sunumları açma",
+      "tabSettings": "Uygulama ayarları: dil, anında canlı ve güncellemeler",
       "hint": "Birleşik tuşlar için tuşları aynı anda basılı tutun",
       "doubleClickGoLive": "Çift tıkla canlıya gönder"
     },
@@ -637,9 +646,17 @@
     "later": "Daha sonra",
     "errorTitle": "Güncelleme kontrol edilemedi",
     "errorDesc": "{{message}}",
-    "releaseNotes": "Sürüm Notları",
     "devMode": "Geliştirici modundasınız — güncelleme kontrolü devre dışı.",
     "updateAvailableBadge": "Yeni sürüm mevcut",
     "updateDownloadedBadge": "Güncelleme indirildi — yeniden başlat"
+  },
+  "settings": {
+    "language": "Dil",
+    "languageDesc": "Uygulamanın arayüz dilini seçin",
+    "updates": "Güncellemeler",
+    "updatesDesc": "Uygulamanın yeni sürümlerini kontrol edin ve indirin",
+    "openUpdates": "Güncellemeleri Aç",
+    "liveSave": "Canlı Kayıt",
+    "liveSaveLastSaved": "Son kayıt: {{time}}"
   }
 }

@@ -261,7 +261,7 @@ export default function MediaTab({ onAddMediaToPresentation }: MediaTabProps) {
     setItems(prev => prev.filter(i => i.origin !== 'folder'));
   }, [updateFolderSettings]);
 
-  // Folder ayarları değiştiğinde (açılış yüklemesi dahil) otomatik tara
+  // Auto-scan when folder settings change (including initial load)
   useEffect(() => {
     if (folderSettings.path) scanFolder(folderSettings);
   }, [folderSettings, scanFolder]);

@@ -32,7 +32,7 @@ export function initUpdater(win: BrowserWindow): void {
   mainWindow = win;
 
   if (process.env.FORCE_DEV_UPDATE) {
-    autoUpdater.forceDevUpdateConfig = true; // dev'de dev-app-update.yml okur
+    autoUpdater.forceDevUpdateConfig = true; // reads dev-app-update.yml in dev
   }
 
   autoUpdater.autoDownload = false;
@@ -40,8 +40,7 @@ export function initUpdater(win: BrowserWindow): void {
   autoUpdater.disableWebInstaller = true;
 
   autoUpdater.on('checking-for-update', () => sendEvent('checking-for-update'));
-  autoUpdater.on('update-available', (info) =>
-    sendEvent('update-available', { version: info.version, releaseNotes: info.releaseNotes ?? null }));
+  autoUpdater.on('update-available', (info) => sendEvent('update-available', { version: info.version }));
   autoUpdater.on('update-not-available', () => sendEvent('update-not-available'));
   autoUpdater.on('download-progress', (p) =>
     sendEvent('download-progress', {
@@ -82,7 +81,7 @@ export function initUpdater(win: BrowserWindow): void {
     return true;
   });
 
-  // Sessiz başlangıç kontrolü — kullanıcıya bildirim yok; UI rozeti renderer'da
+  // silent startup check — no user notification; UI badge lives in the renderer
   win.webContents.once('did-finish-load', () => {
     if (app.isPackaged || process.env.FORCE_DEV_UPDATE) {
       autoUpdater.checkForUpdates().catch(() => { /* non-fatal */ });

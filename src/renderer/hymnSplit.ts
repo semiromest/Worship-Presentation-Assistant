@@ -2,15 +2,15 @@ export type HymnSplitResult = {
   parts: string[];
 };
 
-// ───────────────────────  Ayarlanabilir konfigürasyon  ───────────────────────
+// Adjustable configuration
 
 export interface SplitConfig {
   maxLines: number;
   maxChars: number;
   defaultMaxParts: number;
-  /** Slaytları cümle sınırında bitirmeyi tercih et (prose için uygundur, lirik için gereksiz) */
+  /** Prefer cutting at sentence boundaries (useful for prose, not for lyrics) */
   preferSentenceBoundaryCuts: boolean;
-  /** Tek bir birimin karakter-ceza eşiği (yalnızca scripture'da zorunlu kırma için) */
+  /** Char-penalty threshold per unit (only for forced scripture breaks) */
   allowWordBreak: boolean;
 }
 
@@ -30,7 +30,7 @@ export const SCRIPTURE_CONFIG: SplitConfig = {
   allowWordBreak: true,
 };
 
-// ─────────────────────────────  Regex sabitleri  ──────────────────────────────
+// Regex constants
 
 const RE_CRLF        = /\r\n/g;
 const RE_CR          = /\r/g;
@@ -40,7 +40,7 @@ const RE_MULTI_BLANK = /\n{3,}/g;
 const RE_SPACE_RUN   = /[ \t]{2,}/g;
 const RE_SENTENCE_END = /[.!?…;:»"\])\u061F\u0964]$/u;
 
-// Wortslavyar/İngilizce stanza etiketleri + "1." / "12:" tek başına satır.
+// Stanza label lines (Turkish/English) plus standalone "1." / "12:" numbering.
 const STANZA_LABEL_PATTERN = String.raw`
   ^
   (?:
@@ -54,7 +54,7 @@ const STANZA_LABEL_PATTERN = String.raw`
 `.replace(/\s+/g, '');
 const RE_LABEL = new RegExp(STANZA_LABEL_PATTERN, 'iu');
 
-// ─────────────────────────  1) Normalizasyon  ──────────────────────────────────
+// 1) Normalization
 
 function normalizeText(text: string): string {
   if (!text) return '';
@@ -71,7 +71,7 @@ function normalizeText(text: string): string {
     .trim();
 }
 
-// ─────────────────────────  2) Birim modeli  ──────────────────────────────────
+// 2) Unit model
 
 interface Unit {
   text: string;
@@ -144,15 +144,15 @@ function parseScripture(text: string): Unit[] {
   }));
 }
 
-// ────  3) Maliyet fonksiyonu (primary/secondary/tertiary hiyerarşi)  ─────────
+// 3) Cost function (primary/secondary/tertiary hierarchy)
 
-const HARD_LINE_OVERFLOW_W   = 1000;   // slayt başına satır taşması — karesel
-const HARD_CHAR_OVERFLOW_W   = 20;     // slayt başına karakter taşması — lineer
-const SOFT_BASE_SLIDE_COST   = 1;      // daha az slayt preferable
-const SOFT_UNDERUTILIZE_PEN  = 0.2;   // ≤0.5 dolu ise ufak ceza
-const SOFT_LABEL_STRAND_PEN  = 4;      // etiket satırı tek başına slayt olamaz
-const SOFT_CUT_MID_SENTENCE  = 0.01;   // cümle ortasında kesimin hafif cezası
-const CROSS_BLOCK_MERGE_PEN  = 50;     // maxParts durumunda farklı stanza birleşiminden kaçın
+const HARD_LINE_OVERFLOW_W   = 1000;   // line overflow per slide — quadratic
+const HARD_CHAR_OVERFLOW_W   = 20;     // char overflow per slide — linear
+const SOFT_BASE_SLIDE_COST   = 1;      // prefer fewer slides
+const SOFT_UNDERUTILIZE_PEN  = 0.2;   // small penalty when a slide is <= 0.5 full
+const SOFT_LABEL_STRAND_PEN  = 4;      // a label line cannot sit alone on a slide
+const SOFT_CUT_MID_SENTENCE  = 0.01;   // mild penalty for cutting mid-sentence
+const CROSS_BLOCK_MERGE_PEN  = 50;     // avoid merging different stanzas when over maxParts
 
 function slideCostForRange(units: Unit[], start: number, end: number, cfg: SplitConfig): number {
   let chars = 0;
@@ -161,7 +161,7 @@ function slideCostForRange(units: Unit[], start: number, end: number, cfg: Split
   let contentCount = 0;
   for (let i = start; i < end; i++) {
     const u = units[i];
-    if (i > start) chars += 1;          // birim arası \n ayracı
+    if (i > start) chars += 1;          // \n separator between units
     chars += u.length;
     lines += u.lineCount;
     if (u.isLabel) labelCount++; else contentCount++;
@@ -169,18 +169,18 @@ function slideCostForRange(units: Unit[], start: number, end: number, cfg: Split
   const lineOver = Math.max(0, lines - cfg.maxLines);
   const charOver = Math.max(0, chars - cfg.maxChars);
   let cost = 0;
-  // PRIMARY: hard overflow (Daha fazla slaytın var olduğu durumda ~hiç risk olmamalı)
+  // PRIMARY: hard overflow (should be near-zero risk when more slides are allowed)
   cost += lineOver * lineOver * HARD_LINE_OVERFLOW_W + charOver * HARD_CHAR_OVERFLOW_W;
-  // SECONDARY: daha az slayt tercih et
+  // SECONDARY: prefer fewer slides
   cost += SOFT_BASE_SLIDE_COST;
-  // TERTIARY: dengesiz kullanım + etiket tek başına
+  // TERTIARY: unbalanced usage + label on its own
   const util = Math.min(chars / cfg.maxChars, lines / cfg.maxLines);
   if (util < 0.5) cost += (0.5 - util) * SOFT_UNDERUTILIZE_PEN;
   if (labelCount > 0 && contentCount === 0) cost += SOFT_LABEL_STRAND_PEN;
   return cost;
 }
 
-// ────  4) DP partition — her blok içinde optimum çok-yönlü kırma  ─────────────
+// 4) DP partition: optimal multi-way splitting within each block
 
 function partitionByDP(units: Unit[], cfg: SplitConfig): Array<[number, number]> {
   const n = units.length;
@@ -191,7 +191,7 @@ function partitionByDP(units: Unit[], cfg: SplitConfig): Array<[number, number]>
   for (let i = 1; i <= n; i++) {
     for (let j = 0; j < i; j++) {
       const sc = slideCostForRange(units, j, i, cfg);
-      // Yalnızca "i" sınırı gerçek bir kırma noktası ise cümle-ortası bias ekle
+      // Add mid-sentence bias only when the "i" boundary is a real split point
       let bias = 0;
       if (i < n && cfg.preferSentenceBoundaryCuts && !units[i - 1].endsSentence) {
         bias += SOFT_CUT_MID_SENTENCE;
@@ -235,13 +235,13 @@ function buildSlide(units: Unit[], start: number, end: number): Slide {
   };
 }
 
-// ────  5) Word-boundary fallback (yalnız scriptural zorunlu kırma için)  ────
+// 5) Word-boundary fallback (only for forced scripture breaks)
 
 function wordBreakRecursive(unit: Unit, maxChars: number): Unit[] {
   const text = unit.text;
   if (text.length <= maxChars) return [unit];
 
-  // 1) Öncelik: maxChars'ın %55–%100 bandında en iyi noktalama işareti
+  // 1) Prefer the best punctuation in the 55%-100% band of maxChars
   const lower = Math.floor(maxChars * 0.55);
   const re = /([.,;:!?\-–—،؛»"'])/g;
   let bestPunct = -1;
@@ -252,10 +252,10 @@ function wordBreakRecursive(unit: Unit, maxChars: number): Unit[] {
   }
   let cut = bestPunct;
   if (cut < 0) {
-    // 2) Noktalama yoksa nearest 0..maxChars boşluğu
+    // 2) Without punctuation, use the nearest space within 0..maxChars
     cut = maxChars;
     while (cut > 0 && text[cut] !== ' ' && text[cut] !== '\n') cut--;
-    if (cut <= 0) cut = maxChars;   // kelime tek parça — mecburi sert kırma
+    if (cut <= 0) cut = maxChars;   // single word — forced hard break
   }
   const left  = text.slice(0, cut).replace(/[\s,;:\-–—،؛»"']+$/, '').trim();
   const right = text.slice(cut).replace(/^[\s,;:\-–—،؛»"']+/,    '').trim();
@@ -285,7 +285,7 @@ function expandUnits(units: Unit[], maxChars: number, allowWordBreak: boolean): 
       out.push(u);
     }
   }
-  // Recursive stabilizasyon (çok uzun tek kelime nadiren olur)
+  // Recursive stabilization (a single very long word is rare)
   let stable = false;
   while (!stable) {
     stable = true;
@@ -301,7 +301,7 @@ function expandUnits(units: Unit[], maxChars: number, allowWordBreak: boolean): 
   return out;
 }
 
-// ────  6) Slayt tıkanıklığı gevşetme: maxParts sınırları içinde akıllıca birleştir  ─
+// 6) Slide congestion easing: smart merging within maxParts limits
 
 function enforceMaxParts(slides: Slide[], cfg: SplitConfig, maxParts: number): Slide[] {
   const work = slides.slice();
@@ -336,10 +336,10 @@ function enforceMaxParts(slides: Slide[], cfg: SplitConfig, maxParts: number): S
   return work;
 }
 
-// ────  7) Top-level orkestrasyon  ──────────────────────────────────────────────
+// 7) Top-level orchestration
 
-// İlahi bölme ilkesi: her kıta (boş satırla ayrılmış blok) = tek slayt.
-// Satır sayısı veya karakter uzunluğuna bakılmaz; kıta asla parçalanmaz.
+// Hymn split rule: every stanza (blank-line-separated block) becomes one slide.
+// Stanzas are never split, regardless of line/char counts.
 function splitHymnInternal(text: string): Slide[] {
   const blocks = parseHymn(text);
   const slides: Slide[] = [];
@@ -360,7 +360,7 @@ function splitScriptureInternal(text: string, cfg: SplitConfig, maxParts: number
   return enforceMaxParts(slides, cfg, maxParts);
 }
 
-// ────  8) Public API  ─────────────────────────────────────────────────────────
+// 8) Public API
 
 export function splitHymnLyrics(lyrics: string): HymnSplitResult {
   if (!lyrics || typeof lyrics !== 'string') return { parts: [] };

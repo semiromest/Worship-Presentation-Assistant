@@ -70,28 +70,28 @@ export async function getSong(id: number): Promise<WorshipSongDetail> {
   };
 }
 
-// Kıta (stanza) sınırı sayılan blok etiketleri: açılış/kapanış → \n\n
+// Tags treated as stanza boundaries: opening/closing map to \n\n
 const RE_BLOCK_TAGS = /<\s*\/?\s*(?:verse|chorus|refrain|bridge|stanza|paragraph|para|section|part|repeat|intro|outro|tag|interlude)\b[^>]*\s*>/gi;
 
 export function parseSongXml(songxml: string): string {
   if (!songxml) return '';
   let text = songxml;
-  // Akorlar tamamen kaldırılır
+  // Chords are removed entirely
   text = text.replace(/<chord>[^<]*<\/chord>/g, '');
-  // Blok etiketleri kıta boşluğuna çevrilir (stanza yapısı korunur)
+  // Block tags become stanza gaps (stanza structure preserved)
   text = text.replace(RE_BLOCK_TAGS, '\n\n');
-  // Satır sonu etiketleri → yeni satır (ardındaki boşluk/\/n ile birlikte)
+  // Line-break tags -> newline (with trailing whitespace/newline)
   text = text.replace(/<br\s*\/?>\s*/gi, '\n');
-  // Kalan satır içi etiketler → boşluk
+  // Remaining inline tags -> space
   text = text.replace(/<[^>]+>/g, ' ');
-  // HTML varlıkları
+  // HTML entities
   text = text.replace(/&amp;/g, '&');
   text = text.replace(/&lt;/g, '<');
   text = text.replace(/&gt;/g, '>');
   text = text.replace(/&quot;/g, '"');
   text = text.replace(/&#39;/g, "'");
   text = text.replace(/&nbsp;/g, ' ');
-  // Normalizasyon
+  // Normalization
   text = text.replace(/[ \t]+/g, ' ');
   text = text.replace(/[^\S\n]+$/gm, '');
   text = text.replace(/^[^\S\n]+/gm, '');
@@ -99,21 +99,11 @@ export function parseSongXml(songxml: string): string {
   return text.trim();
 }
 
-// ─── Set (liste) linki çözümleme ────────────────────────────────────────────
+// Set (list) link parsing.
 //
-// Worship Leader uygulamasında setler cihaz yerelinde tutulur; sunucuda
-// "set_id ile set getir" API'si yoktur. Paylaşılan set linkleri şarkı
-// id'lerini URL'e gömer:
-//
-//   https://songs.worshipleaderapp.com/#page-set-list?new_set=Hafta+1&song_ids=568,208,...&keys=...&capos=...
-//
-// Kendi cihazında görüntülenen set view linki ise yalnızca yerel bir id taşır:
-//
-//   https://songs.worshipleaderapp.com/#page-set-view?set_id=10
-//
-// Bu fonksiyon her iki biçimi de çözer. "songs" türü doğrudan içe
-// aktarılabilir; "set_id" türü yalnızca yerel bir id olduğu için
-// kullanıcıya açıklayıcı bir mesaj gösterilmesini sağlar.
+// Shared set links embed song ids in the URL (#page-set-list?...&song_ids=...),
+// while local set-view links carry only a set_id. We solve both: "songs"
+// imports directly; "set_id" only shows an explanatory message.
 
 export type SetLinkKind = 'songs' | 'set_id' | 'none';
 
@@ -165,8 +155,7 @@ export function parseSetLink(url: string): SetLinkInfo {
 }
 
 /**
- * Şarkı id listesini sıralı biçimde çeker. `onProgress` her tamamlanan
- * şarkıda (fetched, total) ile çağrılır; başarısız id'ler atlanır.
+ * Fetches songs by id in order, skipping failures and reporting progress.
  */
 export async function fetchSongsByIds(
   ids: number[],

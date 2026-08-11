@@ -46,9 +46,7 @@ export function useProjectorSync() {
 
   const thumbnailCache = useRef<Map<string, { url: string }>>(new Map());
   const prevSlidesRef = useRef<Slide[]>([]);
-  // Son üretimi başarısız olan (null dönen) slaytlar: içerik değişmese bile
-  // bir sonraki run'da yeniden denenir. Aksi halde prevSlidesRef ilerlediği
-  // için changed bir daha true olmaz ve önizleme kalıcı olarak boş kalır.
+  // Retry slides whose last generation failed (null) even if unchanged, so their preview never stays empty forever.
   const pendingRetryRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -96,7 +94,7 @@ export function useProjectorSync() {
             // FIX: partsMode slides must regenerate when activePart changes
             prev.activePart !== s.activePart ||
             JSON.stringify(prev.styles) !== JSON.stringify(s.styles) ||
-            // Son denemesi başarısız olan slayt tekrar denenir
+            // Retry slides whose last attempt failed
             pendingRetryRef.current.has(s.id);
 
           if (!changed) {
@@ -108,8 +106,7 @@ export function useProjectorSync() {
               pendingRetryRef.current.delete(s.id);
               thumbs[i] = url;
             } else if (!cancelled) {
-              // Üretim başarısız (ctx/taint hatası vb.): hiç boş göndermek
-              // yerine son geçerli görseli koru ve retry için işaretle.
+              // On failure keep the last valid image and flag for retry instead of sending an empty preview.
               pendingRetryRef.current.add(s.id);
               thumbs[i] = cachedEntry?.url ?? null;
             } else {
@@ -134,8 +131,7 @@ export function useProjectorSync() {
           window.electronAPI?.sendSlidePreview?.(liveThumb);
         }
 
-        // Canlı slaytın üretimi başarısızsa, kısa bir bekleyip bir kez daha
-        // dene — kullanıcı başka bir değişiklik yapmadan önizleme düzelir.
+        // If the live slide failed to generate, wait briefly and retry once so the preview self-heals.
         if (liveSlide && pendingRetryRef.current.has(liveSlide.id)) {
           setTimeout(async () => {
             if (cancelled) return;

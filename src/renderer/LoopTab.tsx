@@ -1,31 +1,7 @@
 /**
- * LoopTab.tsx — Tam Yeniden Yazım
- *
- * KRİTİK HATALAR DÜZELTİLDİ:
- *
- * [BUG-1] dragOver.current ref olduğu için JSX'i yeniden render ettirmiyordu
- *         → dragOverIndex artık useState ile yönetiliyor (görsel feedback çalışıyor)
- *
- * [BUG-2] Dosya adları görüntülenmiyordu ("Öğe 1", "Öğe 2" yerine)
- *         → getFileName() ile yol'dan ad ayrıştırılıp item'a ekleniyor
- *
- * [BUG-3] parseInt() NaN dönebiliyordu, parse doğrulaması eksikti
- *         → parseDurationSecs() ile sağlam NaN/sınır koruma eklendi
- *
- * [BUG-4] Süre kısıtlaması tutarsızdı (input min=1sn ama clamp 500ms idi)
- *         → Her yerde tutarlı: min 1000ms (1sn), max 300_000ms (300sn)
- *
- * [BUG-5] window as any ile typed olmayan electronAPI erişimi
- *         → ElectronAPI interface'i tanımlandı
- *
- * PERFORMANS:
- *  - totalMs useMemo ile hesaplanıyor (her render'da yeniden hesaplanmıyor)
- *  - DurationInput, LoopItemRow ve MediaThumbnail memo ile sarmalandı
- *  - DurationInput: her tuş vuruşunda parent'ı render ettirmemek için
- *    local state + isFocused ref kullanıyor; blur/Enter'da commit ediyor
- *  - handleDurationChange her row'da useCallback ile stabilize edildi
- *
- * NOT: types.ts'de LoopItem tipine `fileName: string` eklemeniz gerekiyor.
+ * LoopTab.tsx — full rewrite.
+ * Bugs fixed: drag indicator re-render, file names, safe duration parsing,
+ * consistent limits, typed electronAPI. Required `fileName` on LoopItem.
  */
 
 import {
@@ -71,7 +47,7 @@ const VIDEO_EXTS = new Set([
 const MIN_DURATION_MS = 1_000;   // 1 saniye
 const MAX_DURATION_MS = 300_000; // 300 saniye
 
-// ─── Yardımcı fonksiyonlar ────────────────────────────────────────────────────
+// Helper functions
 
 function toFileUrl(p: string): string {
   const n = p.replace(/\\/g, '/');
@@ -87,7 +63,7 @@ function getFileName(path: string): string {
   return path.replace(/\\/g, '/').split('/').pop() ?? path;
 }
 
-/** Herhangi bir girdiyi güvenli şekilde geçerli saniye değerine çevirir */
+/** Convert any input to a safe duration in seconds */
 function parseDurationSecs(value: string | number): number {
   const n = typeof value === 'string' ? parseFloat(value) : value;
   if (!isFinite(n) || n < 1) return 1;
@@ -95,7 +71,7 @@ function parseDurationSecs(value: string | number): number {
   return Math.round(n);
 }
 
-/** Toplam ms'yi insan okunabilir formata çevirir */
+/** Format total ms as human-readable text */
 function formatTotalTime(ms: number): string {
   const s = Math.round(ms / 1000);
   if (s < 60) return `${s}s`;
@@ -144,8 +120,7 @@ const MediaThumbnail = memo(function MediaThumbnail({
 });
 
 // ─── DurationInput ─────────────────────────────────────────────────────────────
-// Local state kullanarak parent'ı her tuş vuruşunda render ettirmez.
-// Sadece blur veya Enter'da commit eder.
+// Local state avoids parent re-renders per keystroke; commits on blur/Enter.
 
 const DurationInput = memo(function DurationInput({
   valueSecs,
@@ -157,7 +132,7 @@ const DurationInput = memo(function DurationInput({
   const [local, setLocal] = useState(String(valueSecs));
   const isFocused = useRef(false);
 
-  // Parent'tan gelen harici değişiklikleri, input odaklanmadıysa uygula
+  // Apply external changes from parent unless the input is focused
   useEffect(() => {
     if (!isFocused.current) {
       setLocal(String(valueSecs));
@@ -217,7 +192,7 @@ const LoopItemRow = memo(function LoopItemRow({
   onDurationChange,
 }: LoopItemRowProps) {
   const { t } = useTranslation();
-  // Her satır kendi callback'ini stabilize eder, parent prop değişikliği olmaz
+  // Each row stabilizes its own callback so parent props don't change
   const handleDurationChange = useCallback(
     (secs: number) => onDurationChange(item.id, secs * 1000),
     [item.id, onDurationChange],
@@ -237,7 +212,7 @@ const LoopItemRow = memo(function LoopItemRow({
         isDragOver && 'ring-1 ring-amber-500/50 bg-zinc-800 scale-[1.01]',
       )}
     >
-      {/* Sürükleme tutamacı */}
+      {/* Drag handle */}
       <div
         className="text-zinc-600 hover:text-zinc-400 cursor-grab active:cursor-grabbing shrink-0"
         title={t('common.loopDragToReorder')}
@@ -245,12 +220,12 @@ const LoopItemRow = memo(function LoopItemRow({
         <GripVertical className="w-3.5 h-3.5" />
       </div>
 
-      {/* Sıra numarası */}
+      {/* Row number */}
       <span className="text-[10px] font-mono text-zinc-600 w-5 shrink-0">
         {String(index + 1).padStart(2, '0')}
       </span>
 
-      {/* Küçük resim */}
+      {/* Thumbnail */}
       <MediaThumbnail item={item} />
 
       {/* Bilgi */}
@@ -270,7 +245,7 @@ const LoopItemRow = memo(function LoopItemRow({
         </div>
       </div>
 
-      {/* Süre girişi */}
+      {/* Duration input */}
       <DurationInput
         valueSecs={Math.round(item.duration / 1000)}
         onChange={handleDurationChange}
@@ -292,7 +267,7 @@ const LoopItemRow = memo(function LoopItemRow({
   );
 });
 
-// ─── LoopTab (Ana Bileşen) ────────────────────────────────────────────────────
+// LoopTab (Main Component)
 
 export default function LoopTab({ onAddLoopToPresentation }: LoopTabProps) {
   const { t } = useTranslation();
@@ -300,17 +275,17 @@ export default function LoopTab({ onAddLoopToPresentation }: LoopTabProps) {
   const [defaultDuration, setDefaultDuration] = useState(LOOP_DEFAULT_DURATION / 1000);
   const [isLoading, setIsLoading] = useState(false);
 
-  // DÜZELTME [BUG-1]: ref yerine state — yeniden render tetikler
+  // FIX [BUG-1]: state instead of ref — triggers re-render
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const dragItemIndex = useRef<number | null>(null);
 
-  // Toplam süreyi yalnızca items değiştiğinde hesapla
+  // Recompute total only when items change
   const totalMs = useMemo(
     () => items.reduce((acc, i) => acc + i.duration, 0),
     [items],
   );
 
-  // ── Dosya seçimi ───────────────────────────────────────────────────────────
+  // File selection
 
   const addFiles = useCallback(async () => {
     const api = (window as any).electronAPI as ElectronAPI | undefined;
@@ -334,7 +309,7 @@ export default function LoopTab({ onAddLoopToPresentation }: LoopTabProps) {
         id: crypto.randomUUID(),
         type: detectMediaType(p),
         mediaUrl: toFileUrl(p),
-        fileName: getFileName(p), // DÜZELTME [BUG-2]
+        fileName: getFileName(p), // FIX [BUG-2]
         duration: defaultDuration * 1000,
       }));
 
@@ -344,7 +319,7 @@ export default function LoopTab({ onAddLoopToPresentation }: LoopTabProps) {
     }
   }, [defaultDuration]);
 
-  // ── Öğe işlemleri ──────────────────────────────────────────────────────────
+  // Item operations
 
   const removeItem = useCallback((id: string) => {
     setItems((prev) => prev.filter((i) => i.id !== id));
@@ -353,19 +328,19 @@ export default function LoopTab({ onAddLoopToPresentation }: LoopTabProps) {
   const clearAll = useCallback(() => setItems([]), []);
 
   const updateItemDuration = useCallback((id: string, ms: number) => {
-    // DÜZELTME [BUG-4]: Tutarlı sınırlama — her yerde aynı
+    // FIX [BUG-4]: consistent clamping everywhere
     const clamped = Math.max(MIN_DURATION_MS, Math.min(MAX_DURATION_MS, ms));
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, duration: clamped } : i)));
   }, []);
 
-  // ── Sürükle & Bırak ────────────────────────────────────────────────────────
+  // Drag & drop
 
   const handleDragStart = useCallback((index: number) => {
     dragItemIndex.current = index;
   }, []);
 
   const handleDragEnter = useCallback((index: number) => {
-    setDragOverIndex(index); // DÜZELTME [BUG-1]: state = render tetiklenir
+    setDragOverIndex(index); // FIX [BUG-1]: state triggers render
   }, []);
 
   const handleDragEnd = useCallback(() => {
@@ -395,7 +370,7 @@ export default function LoopTab({ onAddLoopToPresentation }: LoopTabProps) {
 
   const handleDefaultDuration = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      setDefaultDuration(parseDurationSecs(e.target.value)); // DÜZELTME [BUG-3]
+      setDefaultDuration(parseDurationSecs(e.target.value)); // FIX [BUG-3]
     },
     [],
   );
@@ -405,10 +380,10 @@ export default function LoopTab({ onAddLoopToPresentation }: LoopTabProps) {
   return (
     <div className="flex flex-col h-full bg-[#1a1a1a] text-white overflow-hidden">
 
-      {/* ── Üst Bar ────────────────────────────────────────────────────────── */}
+      {/* ── Top Bar ────────────────────────────────────────────────────────── */}
       <div className="shrink-0 px-3 pt-3 pb-2.5 border-b border-white/[0.07] space-y-3">
 
-        {/* Başlık + Aksiyonlar */}
+        {/* Title + actions */}
         <div className="flex items-center justify-between">
           <h2 className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 flex items-center gap-1.5">
             <Repeat className="w-3 h-3" />
@@ -448,7 +423,7 @@ export default function LoopTab({ onAddLoopToPresentation }: LoopTabProps) {
           </div>
         </div>
 
-        {/* Varsayılan Süre */}
+        {/* Default duration */}
         <div className="flex items-center gap-2">
           <Clock className="w-3 h-3 text-zinc-600 shrink-0" />
           <label className="text-[10px] text-zinc-500 shrink-0">{t('common.loopDefaultDuration')}</label>
@@ -470,10 +445,10 @@ export default function LoopTab({ onAddLoopToPresentation }: LoopTabProps) {
         </div>
       </div>
 
-      {/* ── Öğe Listesi ────────────────────────────────────────────────────── */}
+      {/* Item list */}
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
         {items.length === 0 ? (
-          /* Boş durum — tıklanabilir alan */
+          /* Empty state — clickable area */
           <button
             onClick={addFiles}
             className={cn(
@@ -525,7 +500,7 @@ export default function LoopTab({ onAddLoopToPresentation }: LoopTabProps) {
       {/* ── Alt Bar ────────────────────────────────────────────────────────── */}
       {items.length > 0 && (
         <div className="shrink-0 px-3 py-3 border-t border-white/[0.07] space-y-2">
-          {/* İstatistikler */}
+          {/* Statistics */}
           <div className="flex items-center justify-between text-[10px] text-zinc-500">
             <span>{t('common.loopItemCount', { count: items.length })}</span>
             <span className="flex items-center gap-1">

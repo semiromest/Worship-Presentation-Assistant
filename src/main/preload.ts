@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  // ... invoke işlemleri (saveFile, openFile vb.) aynı kalacak ...
+  // ... invoke calls (saveFile, openFile, etc.) unchanged ...
   saveFile: (content: string) => ipcRenderer.invoke('save-file', content),
   openFile: () => ipcRenderer.invoke('open-file'),
   loadPresets: () => ipcRenderer.invoke('load-presets'),
@@ -73,7 +73,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('pptx-import-progress', subscription);
   },
 
-  // ─── Google Drive ──────────────────────────────────────────────────────────
+  // Google Drive
 
   driveSignIn: () => ipcRenderer.invoke('drive-sign-in'),
   driveSignOut: () => ipcRenderer.invoke('drive-sign-out'),
@@ -84,7 +84,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   driveDownload: (fileId: string) => ipcRenderer.invoke('drive-download', fileId),
   driveDeleteFile: (fileId: string) => ipcRenderer.invoke('drive-delete-file', fileId),
 
-  // ─── Updater ─────────────────────────────────────────────────────────────
+  // Updater
 
   getUpdaterInfo: () => ipcRenderer.invoke('updater:get-info'),
   checkForUpdates: () => ipcRenderer.invoke('updater:check'),

@@ -1,9 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import {
-  Globe, Undo2, Redo2, ChevronUp, ChevronDown, Copy, Trash2, HelpCircle, Monitor, Play, Smartphone, PanelRightClose, PanelRightOpen, Settings2
+  Undo2, Redo2, ChevronUp, ChevronDown, Copy, Trash2, HelpCircle, Monitor, Play, Smartphone, PanelRightClose, PanelRightOpen
 } from 'lucide-react';
 import { useStore } from '../state/useStore';
-import { useUpdaterStore } from '../state/useUpdaterStore';
 import { cn } from '../utils';
 import { useState, useRef, useCallback } from 'react';
 
@@ -16,14 +15,10 @@ interface ToolbarProps {
 }
 
 export default function Toolbar({ moveSelectedSlides, deleteSelectedSlides, duplicateSelectedSlides, openLive, closeLive }: ToolbarProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
 
   const {
     presentation,
-    panels,
-    setPanels,
-    remoteQr,
-    remoteUrl,
     undoState,
     dispatchUndo,
     selectedSlideIds,
@@ -32,10 +27,8 @@ export default function Toolbar({ moveSelectedSlides, deleteSelectedSlides, dupl
     setPresentationName,
     isRightPanelOpen,
     setIsRightPanelOpen,
-    setIsUpdatesOpen,
+    setIsRemoteOpen,
   } = useStore();
-
-  const updaterStatus = useUpdaterStore((s) => s.status);
 
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState('');
@@ -100,92 +93,18 @@ export default function Toolbar({ moveSelectedSlides, deleteSelectedSlides, dupl
       </div>
 
       <div className="flex items-center gap-2">
-        {/* Updates */}
-        <button
-          onClick={() => setIsUpdatesOpen(true)}
-          title={t('updates.title')}
-          aria-label={t('updates.title')}
-          className="relative p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]"
-        >
-          <Settings2 className="w-4 h-4" aria-hidden="true" />
-          {(updaterStatus === 'available' || updaterStatus === 'downloaded') && (
-            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-green-500" aria-hidden="true"
-              title={updaterStatus === 'downloaded' ? t('updates.updateDownloadedBadge') : t('updates.updateAvailableBadge')} />
-          )}
-        </button>
-
-        {/* Language Switcher */}
-        <div className="relative shrink-0">
-          <button
-            onClick={() => {
-              const langs = Object.keys(i18n.options.resources ?? {});
-              const next = langs[(langs.indexOf(i18n.language) + 1) % langs.length];
-              i18n.changeLanguage(next);
-            }}
-            className="flex items-center justify-center w-12 py-1.5 rounded-md bg-white/5 hover:bg-white/10 text-white border border-white/10 transition-colors text-sm font-medium focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.96]"
-            title={Object.keys(i18n.options.resources ?? {}).map(l => t(`language.${l}`)).join(' / ')}
-            aria-label={t('common.switchLanguage')}
-          >
-            <Globe className="w-4 h-4 shrink-0" />
-            <span className="truncate">{i18n.language.toUpperCase()}</span>
-          </button>
-        </div>
-
         <div className="w-px h-6 bg-white/10 mx-1" />
 
         {/* Remote Panel */}
         <div className="relative shrink-0">
           <button
-            onClick={() => setPanels((p) => ({ ...p, remote: !p.remote }))}
-            aria-expanded={panels.remote}
-            aria-controls="remote-panel"
-            aria-haspopup="true"
-            className={cn(
-              'flex items-center justify-center w-[150px] py-1.5 rounded-md transition-colors text-sm font-medium focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.97]',
-              panels.remote ? 'bg-blue-600 text-white' : 'bg-white/5 hover:bg-white/10 text-white'
-            )}
+            onClick={() => setIsRemoteOpen(true)}
+            aria-haspopup="dialog"
+            className="flex items-center justify-center w-[150px] py-1.5 rounded-md transition-colors text-sm font-medium focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.97] bg-white/5 hover:bg-white/10 text-white"
           >
             <Smartphone className="w-4 h-4 shrink-0" aria-hidden="true" />
             <span className="truncate">{t('common.remoteControl')}</span>
           </button>
-
-          {panels.remote && (
-            <div
-              id="remote-panel"
-              role="region"
-              aria-label={t('common.remoteTitle')}
-              className="absolute right-0 top-full mt-2 w-[320px] max-h-[520px] overflow-hidden rounded-2xl border border-white/10 bg-[#121212] shadow-2xl shadow-black/50 z-50"
-            >
-              <div className="p-4 border-b border-white/10">
-                <p className="text-sm font-semibold mb-1">{t('common.remoteTitle')}</p>
-                <p className="text-[11px] text-white/50">{t('common.remoteDesc')}</p>
-              </div>
-              <div className="p-4 space-y-4">
-                {remoteQr ? (
-                  <>
-                    <div className="flex justify-center">
-                      <div className="bg-white p-3 rounded-lg">
-                        <img src={remoteQr} alt={t('common.remoteQrAlt')} className="w-40 h-40" />
-                      </div>
-                    </div>
-                    {remoteUrl && (
-                      <div className="space-y-1.5">
-                        <p className="text-[10px] text-white/40 uppercase font-bold">{t('common.remoteUrlLabel')}</p>
-                        <div className="text-xs text-white/70 bg-black/20 p-2.5 rounded-lg border border-white/10 break-all font-mono">
-                          {remoteUrl}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="rounded-lg bg-yellow-600/10 border border-yellow-500/30 p-3 space-y-1.5">
-                    <p className="text-[10px] font-bold text-yellow-400 uppercase">⚠ {t('common.remoteLoading')}</p>
-                    <p className="text-[11px] text-yellow-300/80">{t('common.remoteLoadingDesc')}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
 
         <div className="w-px h-6 bg-white/10 mx-1" />
@@ -261,7 +180,7 @@ export default function Toolbar({ moveSelectedSlides, deleteSelectedSlides, dupl
           <HelpCircle className="w-4 h-4" aria-hidden="true" />
         </button>
 
-        {/* Background Music bölümü kaldırıldı */}
+        {/* Background Music section removed */}
 
         <div className="w-px h-6 bg-white/10 mx-1" />
 

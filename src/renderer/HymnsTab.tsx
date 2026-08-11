@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Music, Plus, Search, Trash2, FolderUp, CheckSquare, Pencil, X, ListOrdered, Cloud, Link2 } from 'lucide-react';
+import { Music, Plus, Search, Trash2, FolderUp, CheckSquare, Pencil, X, ListOrdered, Cloud, Link2, CheckCircle } from 'lucide-react';
 import { Skeleton } from './components/Skeleton';
 import OnlineHymnsPanel from './components/OnlineHymnsPanel';
 import SetLinkImportDialog from './components/SetLinkImportDialog';
@@ -8,6 +8,7 @@ import { mergeImportedHymns } from './hymnImport';
 import { cn, useDebounce } from './utils';
 import { confirmDialog } from './dialogs';
 import Dialog from './components/Dialog';
+import ProgressBar from './components/ProgressBar';
 
 export interface Hymn {
   id: string;
@@ -221,8 +222,9 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
   const debouncedSearch                 = useDebounce(searchTerm, 200);
   const [isAddingNew, setIsAddingNew]   = useState(false);
   const [newHymn, setNewHymn]           = useState({ title: '', lyrics: '' });
-  const [importProgress, setImportProgress] = useState<number | null>(null);
+  const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [importSuccess, setImportSuccess] = useState<number | null>(null);
   const [editingHymn, setEditingHymn] = useState<Hymn | null>(null);
   const [editForm, setEditForm] = useState({ title: '', lyrics: '' });
   const [partsModeEnabled, setPartsModeEnabled] = useState(true);
@@ -265,9 +267,11 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
       }
     }
 
-    setImportProgress(0);
+    setImportProgress({ current: 0, total: result.results.length });
     setImportError(null);
-    const { hymns: imported, failedCount } = await parseXmlFiles(result.results, count => setImportProgress(count));
+    const { hymns: imported, failedCount } = await parseXmlFiles(result.results, count =>
+      setImportProgress({ current: count, total: result.results.length }),
+    );
     setImportProgress(null);
 
     if (failedCount > 0) {
@@ -309,9 +313,21 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
     setIsAddingNew(false);
   }, [newHymn]);
 
-  const handleOnlineImport = useCallback((imported: Hymn[]) => {
+  const handleOnlineImport = useCallback((imported: Hymn[], failedCount = 0) => {
+    if (imported.length === 0) return;
     setHymns(prev => mergeImportedHymns(prev, imported.map(h => ({ ...h, lyrics: cleanLyrics(h.lyrics) }))));
-  }, []);
+    setImportSuccess(imported.length);
+    if (failedCount > 0) {
+      setImportError(t('common.onlineHymnsImportFailed', { count: failedCount }));
+    }
+  }, [t]);
+
+  // Auto-dismiss success banner after 4 seconds
+  useEffect(() => {
+    if (importSuccess === null) return;
+    const timer = setTimeout(() => setImportSuccess(null), 4000);
+    return () => clearTimeout(timer);
+  }, [importSuccess]);
 
   // Auto-persist hymns to cache whenever the list changes (covers all mutations:
   // bulk import, online import, add new, remove, edit)
@@ -374,7 +390,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
 
   return (
     <div className="flex flex-col h-full bg-surface-raised">
-      {/* Üst bar */}
+      {/* Top bar */}
       <div className="p-4 border-b border-white/10 space-y-4">
         <div className="flex items-center justify-end">
           <h2 className="font-bold text-xs uppercase tracking-widest text-white/40 flex items-center gap-2 mr-auto">
@@ -387,14 +403,13 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
             )}
           </h2>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setPartsModeEnabled(v => !v)}
               aria-pressed={partsModeEnabled}
-              aria-label={partsModeEnabled ? t('common.hymnsPartsModeOn') : t('common.hymnsPartsModeOff')}
               className={cn(
-                'p-1.5 rounded border transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none',
+                'inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none',
                 partsModeEnabled
                   ? 'bg-purple-600/20 border-purple-500/40 text-purple-300'
                   : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
@@ -402,65 +417,93 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
               title={partsModeEnabled ? t('common.hymnsPartsModeOn') : t('common.hymnsPartsModeOff')}
             >
               <ListOrdered className="w-4 h-4" aria-hidden="true" />
+              {t('common.hymnsPartsMode')}
             </button>
 
             <button
               onClick={() => handleBulkImport()}
               disabled={importProgress !== null}
-              className="p-1.5 bg-green-600/20 hover:bg-green-600/40 text-green-400 rounded border border-green-500/30 disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium bg-green-600/20 hover:bg-green-600/40 text-green-400 rounded-lg border border-green-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title={t('common.hymnsImport')}
-              aria-label={t('common.hymnsImport')}
             >
               <FolderUp className="w-4 h-4" aria-hidden="true" />
+              {t('common.hymnsImport')}
             </button>
 
             <button
               onClick={() => setShowOnlinePanel(v => !v)}
               className={cn(
-                'p-1.5 rounded border transition-colors',
+                'inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors',
                 showOnlinePanel
                   ? 'bg-sky-600/20 border-sky-500/40 text-sky-300'
                   : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
               )}
               title={t('common.hymnsOnline')}
-              aria-label={t('common.hymnsOnline')}
             >
               <Cloud className="w-4 h-4" aria-hidden="true" />
+              {t('common.hymnsOnline')}
             </button>
 
             <button
               onClick={() => setShowSetLinkDialog(true)}
-              className="p-1.5 bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 rounded border border-cyan-500/30"
+              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 rounded-lg border border-cyan-500/30 transition-colors"
               title={t('common.setImportTitle')}
-              aria-label={t('common.setImportTitle')}
             >
               <Link2 className="w-4 h-4" aria-hidden="true" />
+              {t('common.setImportButton')}
             </button>
 
             <button
               onClick={clearHymns}
-              className="p-1.5 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded border border-red-500/30"
+              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg border border-red-500/30 transition-colors"
               title={t('common.hymnsClearAll')}
-              aria-label={t('common.hymnsClearAll')}
             >
               <Trash2 className="w-4 h-4" aria-hidden="true" />
+              {t('common.hymnsClearButton')}
             </button>
 
             <button
               onClick={() => setIsAddingNew(v => !v)}
-              className="p-1.5 bg-blue-600 hover:bg-blue-700 rounded"
-              aria-label={t('common.add')}
+              className={cn(
+                'inline-flex items-center gap-2 px-3 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors',
+                isAddingNew && 'bg-blue-700'
+              )}
+              title={t('common.add')}
             >
-              <Plus className={cn('w-4 h-4', isAddingNew && 'rotate-45')} aria-hidden="true" />
+              <Plus className={cn('w-4 h-4 transition-transform', isAddingNew && 'rotate-45')} aria-hidden="true" />
+              {t('common.add')}
             </button>
           </div>
         </div>
 
         <div aria-live="polite" role="status">
-          {importProgress !== null && (
-            <div className="text-xs text-white/60">{t('common.hymnsImportProgress', { count: importProgress })}</div>
+          {importProgress && (
+            <div className="space-y-1.5">
+              <ProgressBar
+                value={(importProgress.current / importProgress.total) * 100}
+                ariaLabel={t('common.hymnsImportProgress', { count: importProgress.current, total: importProgress.total })}
+              />
+              <div className="flex items-center justify-between text-xs text-white/60">
+                <span>{t('common.hymnsImportProgress', { count: importProgress.current, total: importProgress.total })}</span>
+                <span className="font-mono text-white/35">
+                  {Math.round((importProgress.current / importProgress.total) * 100)}%
+                </span>
+              </div>
+            </div>
           )}
         </div>
+
+        {importSuccess !== null && (
+          <div role="status" className="rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs text-green-200 flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-green-400 shrink-0" aria-hidden="true" />
+              {t('common.onlineHymnsImported', { count: importSuccess })}
+            </span>
+            <button type="button" onClick={() => setImportSuccess(null)} className="text-green-300 hover:text-green-100" aria-label={t('common.close')}>
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {importError && (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200 flex items-center justify-between gap-2">
@@ -471,7 +514,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
           </div>
         )}
 
-        {!isAddingNew && !showOnlinePanel && (
+        {!isAddingNew && (
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/45" />
             <input
@@ -498,11 +541,8 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
         )}
       </div>
 
-      {/* İçerik */}
-      {showOnlinePanel ? (
-        <OnlineHymnsPanel onImport={handleOnlineImport} />
-      ) : (
-        <div ref={listRef} className="flex-1 overflow-y-auto">
+      {/* Content */}
+      <div ref={listRef} className="flex-1 overflow-y-auto">
           {isAddingNew ? (
           <form
             className="p-4 space-y-4"
@@ -577,9 +617,18 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
           </div>
         )}
       </div>
-        )}
 
-      {/* Düzenleme modalı */}
+      {/* Online hymn modal */}
+      <Dialog
+        open={showOnlinePanel}
+        onClose={() => setShowOnlinePanel(false)}
+        labelledBy="online-hymns-dialog-title"
+        className="bg-surface-overlay rounded-xl border border-white/10 w-full max-w-3xl mx-4 shadow-2xl h-[80vh] flex flex-col overflow-hidden"
+      >
+        <OnlineHymnsPanel onImport={handleOnlineImport} onClose={() => setShowOnlinePanel(false)} />
+      </Dialog>
+
+      {/* Edit modal */}
       <Dialog
         open={!!editingHymn}
         onClose={closeEditModal}
@@ -643,7 +692,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
             </div>
       </Dialog>
 
-      {/* Set linki ile toplu ilahi içe aktarma */}
+      {/* Bulk import hymns via set link */}
       <SetLinkImportDialog
         open={showSetLinkDialog}
         onClose={() => setShowSetLinkDialog(false)}

@@ -7,7 +7,6 @@ export interface UpdaterState {
   currentVersion: string;
   updaterActive: boolean;
   nextVersion: string | null;
-  releaseNotes: string | Array<{ version: string; note: string; date: string }> | null;
   percent: number;
   transferred: number;
   total: number;
@@ -19,7 +18,6 @@ export const initialUpdaterState: UpdaterState = {
   currentVersion: '',
   updaterActive: false,
   nextVersion: null,
-  releaseNotes: null,
   percent: 0,
   transferred: 0,
   total: 0,
@@ -31,13 +29,12 @@ export function updaterReducer(state: UpdaterState, event: { type: string; paylo
     case 'checking-for-update':
       return { ...state, status: 'checking', errorMessage: null };
     case 'update-not-available':
-      return { ...state, status: 'uptodate', nextVersion: null, releaseNotes: null };
+      return { ...state, status: 'uptodate', nextVersion: null };
     case 'update-available':
       return {
         ...state,
         status: 'available',
         nextVersion: event.payload?.version ?? null,
-        releaseNotes: event.payload?.releaseNotes ?? null,
       };
     case 'download-progress':
       return {
@@ -68,7 +65,7 @@ const api = () => window.electronAPI;
 
 let initialized = false;
 
-/** Preload olaylarını store'a bağlar; App mount'ta bir kez çağrılır. */
+/** Binds preload events to the store; called once on App mount. */
 export function initUpdaterSync(): void {
   if (initialized) return;
   initialized = true;
@@ -81,7 +78,7 @@ export function initUpdaterSync(): void {
   api()
     .getUpdaterInfo()
     .then((info) => useUpdaterStore.setState({ currentVersion: info.version, updaterActive: info.updaterActive }))
-    .catch(() => { /* electron API yok (ör. web önizleme) */ });
+    .catch(() => { /* electron API unavailable (e.g., web preview) */ });
 }
 
 export async function checkUpdates(): Promise<void> {

@@ -25,6 +25,7 @@ import { convertPptxToSlides, type PptxImportResult } from './utils';
 import type { Presentation, Preset, Slide } from './types';
 import { confirmDialog } from './dialogs';
 import { useStore } from './state/useStore';
+import { LIVE_SAVE_PRESET_NAME } from './hooks/useLiveSave';
 import DrivePanel from './components/DrivePanel';
 
 // ─── Shared action/styles (page-scoped) ────────────────────────────────────
@@ -105,6 +106,7 @@ const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelet
   const [draftName, setDraftName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const firstSlide = preset.presentation.slides[0];
+  const isLiveSave = preset.name === LIVE_SAVE_PRESET_NAME;
 
   const startRename = () => {
     setDraftName(preset.name);
@@ -179,9 +181,18 @@ const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelet
               />
             </div>
           ) : (
-            <h3 className="flex-1 font-semibold text-sm truncate group-hover:text-blue-300 transition-colors">
-              {preset.name}
-            </h3>
+            <>
+              <h3 className="flex-1 font-semibold text-sm truncate group-hover:text-blue-300 transition-colors">
+                {isLiveSave ? t('common.liveSaveBadge') : preset.name}
+              </h3>
+              {isLiveSave && (
+                <span
+                  className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"
+                  aria-hidden="true"
+                  title={t('common.liveSaveBadge')}
+                />
+              )}
+            </>
           )}
           <button
             type="button"

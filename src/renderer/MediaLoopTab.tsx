@@ -425,7 +425,7 @@ export default function MediaLoopTab({ onAddMediaToPresentation, onAddAllMediaTo
     setMediaItems(prev => prev.filter(i => i.origin !== 'folder'));
   }, [updateFolderSettings, setMediaItems]);
 
-  // Folder ayarları değiştiğinde (açılış yüklemesi dahil) otomatik tara
+  // Auto-scan when folder settings change (including initial load)
   useEffect(() => {
     if (folderSettings.path) scanFolder(folderSettings);
   }, [folderSettings, scanFolder]);

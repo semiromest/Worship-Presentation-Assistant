@@ -726,7 +726,7 @@ export default function CalendarTab({
                   />
                 </div>
 
-                {/* Sunum adı */}
+                {/* Presentation name */}
                 <div>
                   <label htmlFor="cal-event-pres-name" className="block text-xs uppercase tracking-wider text-white/35 mb-2">
                     {t('common.calendarPresNameLabel')}

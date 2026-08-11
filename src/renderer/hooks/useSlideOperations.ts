@@ -340,7 +340,7 @@ export function useSlideOperations() {
       },
     });
     setSelectedSlideId(slides[0].id);
-    // Yeni dosya açılımında canlı pozisyon sıfırlanır (taşma/eskimiş indeks olmasın).
+    // Reset live position on open so it never points to a stale/out-of-range index.
     setLiveIndex(0);
   }, [t, dispatchUndo, setSelectedSlideId, setLiveIndex]);
 
@@ -348,7 +348,7 @@ export function useSlideOperations() {
     dispatchUndo({ type: 'RESET', payload: preset.presentation });
     setPresentationName(preset.name);
     setSelectedSlideId(preset.presentation.slides[0]?.id ?? '1');
-    // Preset yüklendiğinde canlı pozisyon da baştan başlar.
+    // Loading a preset also restarts the live position.
     setLiveIndex(0);
     setSelectedPresetName(preset.name);
     setActiveTab('slides');
@@ -396,13 +396,11 @@ export function useSlideOperations() {
 
   const appendSlides = useCallback((newSlides: Slide[], goLive?: boolean) => {
     if (newSlides.length === 0) return;
-    // Her çağrıda en güncel durumu oku: ardışık eklemeler (örn. set linkinden
-    // toplu ilahi ekleme) aynı render kapanışına (stale closure) takılı kalmasın.
+    // Read the latest state on each call so chained appends (e.g. bulk hymn inserts) don't stick to a stale closure.
     const current = useStore.getState();
     const slides = [...current.presentation.slides, ...newSlides];
     const newIndex = current.presentation.slides.length;
-    // Yalnızca açık "goLive" bayrağı içerik eklemesini canlıya taşır (bilinçli eylem).
-    // Aksi halde yeni slayt sadece seçim olur; canlıya geçiş Enter ile yapılır.
+    // Only an explicit goLive flag sends appended content live; otherwise the slide is just selected (Enter goes live).
     if (goLive) {
       setLiveIndex(newIndex);
     }
@@ -608,15 +606,13 @@ export function useSlideOperations() {
     }
 
     setLastSelectedIndex(index);
-    // Canlı yayın açıkken tek tık seçili slaytı doğrudan canlıya taşır.
-    // Yayın kapalıyken tıklama yalnızca seçimi değiştirir; canlıya geçiş
-    // Enter (Canlıya Gönder) veya çift tık ile olur.
+    // Live broadcast open: single click sends the selected slide straight to live.
+    // Broadcast closed: click only selects; go live via Enter or double click.
     if (isProjectorWindowOpen) setLiveIndex(index);
   }, [presentation.slides, lastSelectedIndex, isProjectorWindowOpen, setSelectedSlideIds, setSelectedSlideId, setLastSelectedIndex, setLiveIndex]);
 
   const handleSlideDoubleClick = useCallback((id: string, index: number) => {
-    // Çift tık = hızlı Canlıya Gönder; yalnızca yayın kapalıyken çalışır.
-    // Yayın açıkken tek tık zaten canlıya taşıdığı için çift tık devre dışıdır.
+    // Double click = quick Send to Live, active only while the broadcast is closed (single click already covers it when open).
     if (isProjectorWindowOpen) return;
     setSelectedSlideIds(new Set([id]));
     setSelectedSlideId(id);

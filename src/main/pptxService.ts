@@ -5,14 +5,14 @@ import { randomUUID } from 'node:crypto';
 import { app } from 'electron';
 import { convertPptxToPng, type SlideImage } from 'pptx-glimpse';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// Constants
 
 const SLIDE_WIDTH = 1024;
 const CONCURRENCY = Math.max(2, Math.min(os.cpus().length, 8));
 const VALID_EXTS = new Set(['.pptx', '.ppt']);
 const IMPORT_TIMEOUT = 120000;
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 export type ImageFormat = 'png';
 
@@ -40,12 +40,9 @@ export interface PptxImportError {
 export type PptxResult = PptxImportResult | PptxImportError;
 export type ProgressCallback = (current: number, total: number) => void;
 
-// ─── Async Worker Pool (Memory Optimized) ─────────────────────────────────────
+// Async Worker Pool (Memory Optimized)
 
-/**
- * Bekleyen yüzlerce Promise yaratmak yerine, sadece aktif olarak
- * işlenen slaytlar için bellek ayıran yüksek performanslı havuz.
- */
+/** High-performance pool: allocates only for actively processed slides. */
 async function runWithWorkerPool<T, R>(
   items: T[],
   concurrency: number,
@@ -75,7 +72,7 @@ async function runWithWorkerPool<T, R>(
   return results;
 }
 
-// ─── Service ──────────────────────────────────────────────────────────────────
+// Service
 
 export class PptxService {
   private readonly sessionId: string;
@@ -173,14 +170,14 @@ export class PptxService {
         onProgress?.(completed, total);
       };
 
-      // Yüksek performanslı havuzumuzu (Worker Pool) kullanıyoruz
+      // use our high-performance worker pool
       const settled = await runWithWorkerPool(
         slideImages,
         CONCURRENCY,
         (slide) => this.processSlide(slide, presentationName, reportProgress)
       );
 
-      // Pre-allocated dizi (Push maliyetinden kaçınmak için)
+      // Pre-allocated array (avoids push cost)
       const slides: PptxSlideResult[] = new Array(total);
       const warnings: string[] = [];
       let validCount = 0;
@@ -200,7 +197,7 @@ export class PptxService {
         throw new Error(warnings[0] ?? 'All slides failed to process');
       }
 
-      // Diziyi küçült ve sırala (Sıralama garantisi için)
+      // trim the array and sort (ordering guarantee)
       const finalSlides = slides.slice(0, validCount).sort((a, b) => a.slideNumber - b.slideNumber);
 
       return {
@@ -238,12 +235,12 @@ export class PptxService {
     try {
       await fs.unlink(resolved);
     } catch {
-      // Ignored - Zaten silinmiş olabilir
+      // ignored - file may already have been deleted
     }
   }
 }
 
-// ─── Singleton ────────────────────────────────────────────────────────────────
+// Singleton
 
 let pptxServiceInstance: PptxService | null = null;
 

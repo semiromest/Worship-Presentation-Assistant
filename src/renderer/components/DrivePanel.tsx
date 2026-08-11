@@ -149,8 +149,7 @@ const [loading, setLoading] = useState(false);
     }
   }, [setDriveFiles, setDriveFilesLoaded, t, clearFeedback]);
 
-  // Panel her açıldığında/yeniden mount olduğunda Drive'ı yeniden tarama:
-  // liste bir kez çekildiyse bir daha otomatik çekilmez, manuel "Yenile" ile çekilir.
+  // Rescan Drive whenever the panel opens/remounts; auto-fetch only once.
   useEffect(() => {
     if (drivePanelOpen && driveSignedIn && !driveFilesLoaded) {
       refreshFiles();

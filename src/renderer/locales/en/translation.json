@@ -9,6 +9,7 @@
     "screen": "Screen",
     "loop": "Loop",
     "calendar": "Calendar",
+    "settings": "Settings",
     "sidebarLabel": "Main Navigation"
   },
   "common": {
@@ -115,6 +116,7 @@
     "zoomControls": "Zoom Controls",
     "autoGoLive": "Instant Live",
     "autoGoLiveHint": "The slide selected with keyboard/remote is sent live instantly",
+    "liveSaveBadge": "Live Save (Automatic)",
     "transitionHeading": "Transition Settings",
     "presetsTitle": "Presentations",
     "presetsSubtitle": "Save, load and quickly switch",
@@ -156,9 +158,10 @@
     "hymnsTitle": "Hymns",
     "hymnsList": "Hymn List",
     "hymnsImport": "Import",
-    "hymnsImportProgress": "Importing… {{count}} files",
+    "hymnsImportProgress": "Importing… {{count}}/{{total}} files",
     "hymnsImportPartialError": "{{count}} file(s) could not be imported",
     "hymnsClearAll": "Clear All Hymns",
+    "hymnsClearButton": "Clear",
     "hymnsConfirmClear": "Are you sure you want to clear all hymns?",
     "hymnsSearch": "Search hymns...",
     "hymnsSearchLyricsOff": "Disable lyrics search",
@@ -175,6 +178,7 @@
     "hymnsEdit": "Edit",
     "hymnsPartsModeOn": "Part Mode ON - Hymn split into one slide",
     "hymnsPartsModeOff": "Part Mode OFF - Hymn split into multiple slides",
+    "hymnsPartsMode": "Parts Mode",
     "hymnsOnline": "Online Hymns",
     "onlineHymnsTitle": "Online Hymns",
     "onlineHymnsSearch": "Search hymns...",
@@ -186,7 +190,11 @@
     "onlineHymnsClearSelection": "Clear Selection",
     "onlineHymnsConfirmAll": "Are you sure you want to import all hymns?",
     "onlineHymnsImportFailed": "{{count}} hymn(s) failed to import",
+    "onlineHymnsBack": "Back",
+    "onlineHymnsImported": "{{count}} hymn(s) added",
+    "onlineHymnsImportAllFailed": "No hymns could be imported",
     "setImportTitle": "Import from Set Link",
+    "setImportButton": "Set Link",
     "setImportHint": "Paste the set share link from Worship Leader for your weekly list",
     "setImportPlaceholder": "https://songs.worshipleaderapp.com/#page-set-list?new_set=...&song_ids=...",
     "setImportFetch": "Fetch Hymns",
@@ -364,6 +372,7 @@
       "tabCountdown": "Create countdown timer slides",
       "tabScreen": "Select screen capture source",
       "tabCalendar": "Open saved presentations from calendar",
+      "tabSettings": "App settings: language, instant live and updates",
       "hint": "Hold keys at the same time for combinations",
       "doubleClickGoLive": "Send slide live with double-click"
     },
@@ -637,9 +646,17 @@
     "later": "Later",
     "errorTitle": "Couldn't check for updates",
     "errorDesc": "{{message}}",
-    "releaseNotes": "Release Notes",
     "devMode": "You're in developer mode — update checking is disabled.",
     "updateAvailableBadge": "A new version is available",
     "updateDownloadedBadge": "Update downloaded — restart to apply"
+  },
+  "settings": {
+    "language": "Language",
+    "languageDesc": "Select the app interface language",
+    "updates": "Updates",
+    "updatesDesc": "Check for and download new app versions",
+    "openUpdates": "Open Updates",
+    "liveSave": "Live Save",
+    "liveSaveLastSaved": "Last saved: {{time}}"
   }
 }

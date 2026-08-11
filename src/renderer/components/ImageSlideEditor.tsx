@@ -30,9 +30,9 @@ export default function ImageSlideEditor({
   const update = (partial: Partial<Slide['styles']>) => updateSlideStyles(partial);
 
   const fitOptions = [
-    { value: 'contain', label: t('editorFitContain') },
-    { value: 'cover', label: t('editorFitCover') },
-    { value: 'fill', label: t('editorFitFill') },
+    { value: 'contain', label: t('common.editorFitContain') },
+    { value: 'cover', label: t('common.editorFitCover') },
+    { value: 'fill', label: t('common.editorFitFill') },
   ] as const;
 
   return (
@@ -75,7 +75,7 @@ export default function ImageSlideEditor({
       {/* Object Fit */}
       <div className="space-y-1.5">
         <span className="block text-[10px] text-white/45 uppercase font-bold tracking-tight">
-          {t('editorFitLabel')}
+          {t('common.editorFitLabel')}
         </span>
         <div className="flex gap-1.5">
           {fitOptions.map((opt) => (
@@ -98,7 +98,7 @@ export default function ImageSlideEditor({
       {/* Opacity */}
       <div className="space-y-1.5">
         <div className="flex justify-between items-center">
-          <span className="text-[10px] text-white/45 uppercase font-bold tracking-tight">{t('editorOpacity')}</span>
+          <span className="text-[10px] text-white/45 uppercase font-bold tracking-tight">{t('common.editorOpacity')}</span>
           <span className="text-[10px] text-white/45 font-mono">{Math.round((styles.opacity ?? 1) * 100)}%</span>
         </div>
         <input
@@ -108,7 +108,7 @@ export default function ImageSlideEditor({
           step={0.05}
           value={styles.opacity ?? 1}
           onChange={(e) => update({ opacity: parseFloat(e.target.value) })}
-          aria-label={t('editorOpacity')}
+          aria-label={t('common.editorOpacity')}
           className={RANGE_STYLES}
         />
       </div>
@@ -116,7 +116,7 @@ export default function ImageSlideEditor({
       {/* Brightness */}
       <div className="space-y-1.5">
         <div className="flex justify-between items-center">
-          <span className="text-[10px] text-white/45 uppercase font-bold tracking-tight">{t('editorBrightness')}</span>
+          <span className="text-[10px] text-white/45 uppercase font-bold tracking-tight">{t('common.editorBrightness')}</span>
           <span className="text-[10px] text-white/45 font-mono">{Math.round((styles.imageBrightness ?? 1) * 100)}%</span>
         </div>
         <input
@@ -126,7 +126,7 @@ export default function ImageSlideEditor({
           step={0.05}
           value={styles.imageBrightness ?? 1}
           onChange={(e) => update({ imageBrightness: parseFloat(e.target.value) })}
-          aria-label={t('editorBrightness')}
+          aria-label={t('common.editorBrightness')}
           className={RANGE_STYLES}
         />
       </div>
@@ -134,7 +134,7 @@ export default function ImageSlideEditor({
       {/* Contrast */}
       <div className="space-y-1.5">
         <div className="flex justify-between items-center">
-          <span className="text-[10px] text-white/45 uppercase font-bold tracking-tight">{t('editorContrast')}</span>
+          <span className="text-[10px] text-white/45 uppercase font-bold tracking-tight">{t('common.editorContrast')}</span>
           <span className="text-[10px] text-white/45 font-mono">{Math.round((styles.imageContrast ?? 1) * 100)}%</span>
         </div>
         <input
@@ -144,7 +144,7 @@ export default function ImageSlideEditor({
           step={0.05}
           value={styles.imageContrast ?? 1}
           onChange={(e) => update({ imageContrast: parseFloat(e.target.value) })}
-          aria-label={t('editorContrast')}
+          aria-label={t('common.editorContrast')}
           className={RANGE_STYLES}
         />
       </div>
@@ -152,7 +152,7 @@ export default function ImageSlideEditor({
       {/* Blur */}
       <div className="space-y-1.5">
         <div className="flex justify-between items-center">
-          <span className="text-[10px] text-white/45 uppercase font-bold tracking-tight">{t('editorBlur')}</span>
+          <span className="text-[10px] text-white/45 uppercase font-bold tracking-tight">{t('common.editorBlur')}</span>
           <span className="text-[10px] text-white/45 font-mono">{styles.imageBlur ?? 0}px</span>
         </div>
         <input
@@ -162,7 +162,7 @@ export default function ImageSlideEditor({
           step={0.5}
           value={styles.imageBlur ?? 0}
           onChange={(e) => update({ imageBlur: parseFloat(e.target.value) })}
-          aria-label={t('editorBlur')}
+          aria-label={t('common.editorBlur')}
           className={RANGE_STYLES}
         />
       </div>
@@ -170,7 +170,7 @@ export default function ImageSlideEditor({
       {/* Grayscale */}
       <div className="space-y-1.5">
         <div className="flex justify-between items-center">
-          <span className="text-[10px] text-white/45 uppercase font-bold tracking-tight">{t('editorGrayscale')}</span>
+          <span className="text-[10px] text-white/45 uppercase font-bold tracking-tight">{t('common.editorGrayscale')}</span>
           <span className="text-[10px] text-white/45 font-mono">{Math.round((styles.imageGrayscale ?? 0) * 100)}%</span>
         </div>
         <input
@@ -180,7 +180,7 @@ export default function ImageSlideEditor({
           step={0.05}
           value={styles.imageGrayscale ?? 0}
           onChange={(e) => update({ imageGrayscale: parseFloat(e.target.value) })}
-          aria-label={t('editorGrayscale')}
+          aria-label={t('common.editorGrayscale')}
           className={RANGE_STYLES}
         />
       </div>
@@ -188,7 +188,7 @@ export default function ImageSlideEditor({
       {/* Sepia */}
       <div className="space-y-1.5">
         <div className="flex justify-between items-center">
-          <span className="text-[10px] text-white/45 uppercase font-bold tracking-tight">{t('editorSepia')}</span>
+          <span className="text-[10px] text-white/45 uppercase font-bold tracking-tight">{t('common.editorSepia')}</span>
           <span className="text-[10px] text-white/45 font-mono">{Math.round((styles.imageSepia ?? 0) * 100)}%</span>
         </div>
         <input
@@ -198,7 +198,7 @@ export default function ImageSlideEditor({
           step={0.05}
           value={styles.imageSepia ?? 0}
           onChange={(e) => update({ imageSepia: parseFloat(e.target.value) })}
-          aria-label={t('editorSepia')}
+          aria-label={t('common.editorSepia')}
           className={RANGE_STYLES}
         />
       </div>
@@ -207,7 +207,7 @@ export default function ImageSlideEditor({
       <div className="flex gap-2">
         <button
           onClick={() => update({ imageFlipX: !styles.imageFlipX })}
-          aria-label={t('editorFlipX')}
+          aria-label={t('common.editorFlipX')}
           className={cn(
             'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-[background-color,border-color] border active:scale-[0.96]',
             styles.imageFlipX
@@ -216,11 +216,11 @@ export default function ImageSlideEditor({
           )}
         >
           <FlipHorizontal className="w-3.5 h-3.5" aria-hidden="true" />
-          {t('editorFlipX')}
+          {t('common.editorFlipX')}
         </button>
         <button
           onClick={() => update({ imageFlipY: !styles.imageFlipY })}
-          aria-label={t('editorFlipY')}
+          aria-label={t('common.editorFlipY')}
           className={cn(
             'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-[background-color,border-color] border active:scale-[0.96]',
             styles.imageFlipY
@@ -229,7 +229,7 @@ export default function ImageSlideEditor({
           )}
         >
           <FlipVertical className="w-3.5 h-3.5" aria-hidden="true" />
-          {t('editorFlipY')}
+          {t('common.editorFlipY')}
         </button>
       </div>
 

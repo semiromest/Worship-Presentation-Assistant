@@ -2,14 +2,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { initialUpdaterState, updaterReducer } from './useUpdaterStore';
 
-test('update-available → status available, version + notes set', () => {
+test('update-available → status available, version set', () => {
   const s = updaterReducer(initialUpdaterState, {
     type: 'update-available',
-    payload: { version: '1.2.0', releaseNotes: '• Slayt geçişleri düzeltildi' },
+    payload: { version: '1.2.0' },
   });
   assert.equal(s.status, 'available');
   assert.equal(s.nextVersion, '1.2.0');
-  assert.equal(s.releaseNotes, '• Slayt geçişleri düzeltildi');
 });
 
 test('download-progress → status downloading, progress fields', () => {

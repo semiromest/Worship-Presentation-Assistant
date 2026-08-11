@@ -5,10 +5,7 @@ export interface Hymn {
 }
 
 /**
- * Import edilen ilahileri mevcut listeyle birleştirir.
- * Aynı başlıklı (küçük/büyük harf duyarsız) mevcut kayıtlar, taze import verisiyle
- * değiştirilir — böylece önbellekteki bozuk/eski sözler yeniden içe aktarma ile
- * kendini onarır. Taze karşılığı olmayan kayıtlar (kullanıcı düzenlemeleri) korunur.
+ * Merges imported hymns into the existing list, replacing stale cached entries.
  */
 function normalizeTitle(title: string): string {
   return title

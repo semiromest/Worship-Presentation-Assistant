@@ -17,12 +17,13 @@ const TAB_KEYS: Record<string, string> = {
   '6': 'countdown',
   '7': 'screen',
   '8': 'calendar',
+  '9': 'settings',
 };
 
 interface KeyboardNavigationOptions {
-  /** Seçili slaytları sil (Delete) */
+  /** Delete selected slides (Delete) */
   onDeleteSlides?: () => void;
-  /** Seçili slaytları kopyala (Ctrl+D) */
+  /** Duplicate selected slides (Ctrl+D) */
   onDuplicateSlides?: () => void;
 }
 
@@ -79,17 +80,14 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
 
       const navigate = (index: number) => {
         if (index < 0 || index > lastIndex) return;
-        // Ok/Home/End/Space/J/K tuşları her koşulda sadece SEÇİMİ değiştirir.
-        // Canlı pozisyon ancak Enter (Canlıya Gönder) ile bilinçli olarak taşınır.
-        // Tekil seçim ve badge/çerçevenin dayandığı set ile anchor senkron tutulur:
-        // kullanıcı Enter'a basmadan önce son klavye hedefini "seçili" olarak görür.
+        // Arrow/Home/End/Space/J/K only change the selection; live position moves only via Enter (Send to Live).
+        // Keep the selection set and anchor in sync so the last keyboard target reads as selected.
         const id = slides[index].id;
         setSelectedSlideId(id);
         setSelectedSlideIds(new Set([id]));
         setLastSelectedIndex(index);
-        // "Anında Canlı" modu: yayın açıkken seçim değişimi canlıya da taşınır.
-        // Enter görmediği için sadece sol/sağ tuş kullanabilen uzaktan
-        // kumandalar için gereklidir; kapalıyken eski davranış korunur.
+        // "Instant Live" mode: while the broadcast is open, selection changes also go live.
+        // Needed for remotes that only send left/right keys; off preserves the old behavior.
         if (state.autoGoLive && canLive) {
           setLiveIndex(index);
         }
@@ -148,8 +146,7 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
         navigate(lastIndex);
       } else if (e.key === 'Enter' && selectedIdx >= 0) {
         e.preventDefault();
-        // Enter = "Canlıya Gönder": seçili slayt canlıya taşınır. Yayın kapalıyken
-        // canlı pozisyon hazırlanır (staging); açıkken perdeye yansıtılır.
+        // Enter = "Send to Live": moves the selected slide live (staged when broadcast is off, projected when on).
         setLiveIndex(selectedIdx);
       } else if (e.key === 'Escape' && state.isProjectorWindowOpen) {
         e.preventDefault();

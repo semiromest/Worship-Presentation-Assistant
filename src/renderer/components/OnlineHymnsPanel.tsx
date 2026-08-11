@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Download, Search, Cloud, Loader2, Globe, AlertTriangle } from 'lucide-react';
+import { Download, Search, Cloud, Loader2, Globe, AlertTriangle, X } from 'lucide-react';
 import { cn, useDebounce } from '../utils';
 import { listSongs, getSong, parseSongXml, WorshipSong } from '../worshipLeaderApi';
+import ProgressBar from './ProgressBar';
 
 interface Hymn {
   id: string;
@@ -11,7 +12,8 @@ interface Hymn {
 }
 
 interface OnlineHymnsPanelProps {
-  onImport: (hymns: Hymn[]) => void;
+  onImport: (hymns: Hymn[], failedCount?: number) => void;
+  onClose?: () => void;
 }
 
 interface FetchBatchResult {
@@ -45,7 +47,7 @@ const LANGUAGES = [
   { code: 'uk', name: 'Українська', flag: '🇺🇦' },
 ];
 
-export default function OnlineHymnsPanel({ onImport }: OnlineHymnsPanelProps) {
+export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanelProps) {
   const { t } = useTranslation();
   const [lang, setLang] = useState('tr');
   const [songs, setSongs] = useState<WorshipSong[]>([]);
@@ -235,11 +237,11 @@ export default function OnlineHymnsPanel({ onImport }: OnlineHymnsPanelProps) {
     const { hymns, failedCount } = await fetchSongBatch(Array.from(selected));
     setImporting(false);
     setSelected(new Set());
-    if (failedCount > 0) {
-      setImportWarning(t('common.onlineHymnsImportFailed', { count: failedCount }));
-    }
     if (hymns.length > 0) {
-      onImport(hymns);
+      onImport(hymns, failedCount);
+      onClose?.();
+    } else if (failedCount > 0) {
+      setImportWarning(t('common.onlineHymnsImportFailed', { count: failedCount }));
     }
   };
 
@@ -286,11 +288,14 @@ export default function OnlineHymnsPanel({ onImport }: OnlineHymnsPanelProps) {
       }
       
       setImportAllProgress(null);
-      if (totalFailed > 0) {
-        setImportWarning(t('common.onlineHymnsImportFailed', { count: totalFailed }));
-      }
       if (allImported.length > 0) {
-        onImport(allImported);
+        onImport(allImported, totalFailed);
+        onClose?.();
+      } else {
+        if (totalFailed > 0) {
+          setImportWarning(t('common.onlineHymnsImportFailed', { count: totalFailed }));
+        }
+        setError(t('common.onlineHymnsImportAllFailed') || `Failed to import songs (${totalFailed} failed)`);
       }
     } catch (e: any) {
       setLoading(false);
@@ -304,11 +309,24 @@ export default function OnlineHymnsPanel({ onImport }: OnlineHymnsPanelProps) {
       <div className="flex flex-col flex-1 min-h-0">
       <div className="p-4 border-b border-white/10 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-white/40 flex items-center gap-2">
+          <h3 id="online-hymns-dialog-title" className="text-xs font-bold uppercase tracking-widest text-white/40 flex items-center gap-2">
             <Cloud className="w-3.5 h-3.5" />
             {t('common.onlineHymnsTitle')}
           </h3>
-          <span className="text-xs text-white/45">{total} ilahi</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-white/45">{total} ilahi</span>
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 rounded-md text-white/50 hover:text-white hover:bg-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+                aria-label={t('common.onlineHymnsBack')}
+                title={t('common.onlineHymnsBack')}
+              >
+                <X className="w-4 h-4" aria-hidden="true" />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="relative">
@@ -368,11 +386,23 @@ export default function OnlineHymnsPanel({ onImport }: OnlineHymnsPanelProps) {
       )}
 
       {loading ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-3">
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6">
           <Loader2 className="w-6 h-6 text-white/45 animate-spin" />
-          <div className="text-xs text-white/45">
-            {t('common.onlineHymnsLoading', { count: loadingProgress, total: total || '?' })}
-          </div>
+          {total > 0 ? (
+            <div className="w-full max-w-xs space-y-1.5">
+              <ProgressBar
+                value={(loadingProgress / total) * 100}
+                ariaLabel={t('common.onlineHymnsLoading', { count: loadingProgress, total })}
+              />
+              <div className="text-center text-xs text-white/45">
+                {t('common.onlineHymnsLoading', { count: loadingProgress, total })}
+              </div>
+            </div>
+          ) : (
+            <div className="text-xs text-white/45">
+              {t('common.onlineHymnsLoading', { count: loadingProgress, total: '?' })}
+            </div>
+          )}
         </div>
       ) : filteredSongs.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-white/45 text-sm">
@@ -425,19 +455,35 @@ export default function OnlineHymnsPanel({ onImport }: OnlineHymnsPanelProps) {
               </div>
             ))}
             {loadingMore && (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="w-4 h-4 text-white/45 animate-spin" />
+              <div className="px-6 py-3 space-y-1.5">
+                <ProgressBar
+                  value={total > 0 ? (loadingProgress / total) * 100 : 0}
+                  ariaLabel={t('common.onlineHymnsLoading', { count: loadingProgress, total })}
+                />
+                <div className="flex items-center justify-center gap-2 text-xs text-white/45">
+                  <Loader2 className="w-3.5 h-3.5 text-white/45 animate-spin" />
+                  <span>{t('common.onlineHymnsLoading', { count: loadingProgress, total })}</span>
+                </div>
               </div>
             )}
           </div>
 
           <div className="border-t border-white/10 p-4 space-y-3">
             {importAllProgress ? (
-              <div className="flex items-center justify-center gap-3 h-12">
-                <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
-                <span className="text-sm text-white/50">
-                  {t('common.onlineHymnsImportAllProgress', { count: importAllProgress.current, total: importAllProgress.total })}
-                </span>
+              <div className="space-y-1.5">
+                <ProgressBar
+                  value={(importAllProgress.current / importAllProgress.total) * 100}
+                  ariaLabel={t('common.onlineHymnsImportAllProgress', { count: importAllProgress.current, total: importAllProgress.total })}
+                />
+                <div className="flex items-center justify-center gap-2 text-sm text-white/50">
+                  <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                  <span>
+                    {t('common.onlineHymnsImportAllProgress', { count: importAllProgress.current, total: importAllProgress.total })}
+                  </span>
+                  <span className="text-white/35 font-mono">
+                    {Math.round((importAllProgress.current / importAllProgress.total) * 100)}%
+                  </span>
+                </div>
               </div>
             ) : (
               <>

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Presentation, Preset, MediaItem, MediaKind, LoopItem, DriveFile, DriveStatus } from '../types';
+import { Presentation, Preset, MediaItem, LoopItem, DriveFile } from '../types';
 import { undoReducer, UndoState, UndoAction } from './undoReducer';
 // UndoAction is used in setPresentationName to keep rename in undo history
 import { DEFAULT_STYLES, DEFAULT__TRANSITION } from '../constants';
@@ -49,13 +49,19 @@ interface AppState {
   isBlackout: boolean;
   setIsBlackout: (blackout: boolean | ((prev: boolean) => boolean)) => void;
 
-  // Navigation Mode: seçim değişince canlıya anında taşı
+  // Navigation Mode: go live instantly on selection change
   autoGoLive: boolean;
   setAutoGoLive: (auto: boolean) => void;
 
+  // Live Save: regularly write presentation changes to a local backup (power-outage safety)
+  liveSaveEnabled: boolean;
+  setLiveSaveEnabled: (enabled: boolean) => void;
+  liveSaveLastSaved: number | null;
+  setLiveSaveLastSaved: (ts: number | null) => void;
+
   // UI State
-  activeTab: 'presentations' | 'slides' | 'bible' | 'media' | 'hymns' | 'countdown' | 'screen' | 'loop' | 'calendar';
-  setActiveTab: (tab: 'presentations' | 'slides' | 'bible' | 'media' | 'hymns' | 'countdown' | 'screen' | 'loop' | 'calendar') => void;
+  activeTab: 'presentations' | 'slides' | 'bible' | 'media' | 'hymns' | 'countdown' | 'screen' | 'loop' | 'calendar' | 'settings';
+  setActiveTab: (tab: 'presentations' | 'slides' | 'bible' | 'media' | 'hymns' | 'countdown' | 'screen' | 'loop' | 'calendar' | 'settings') => void;
   presets: Preset[];
   setPresets: (presets: Preset[]) => void;
   panels: { preset: boolean; remote: boolean; styles: boolean; imageStyles: boolean };
@@ -114,6 +120,8 @@ interface AppState {
   setIsCheatsheetOpen: (open: boolean) => void;
   isUpdatesOpen: boolean;
   setIsUpdatesOpen: (open: boolean) => void;
+  isRemoteOpen: boolean;
+  setIsRemoteOpen: (open: boolean) => void;
 
   // Toast notification
   toastMessage: string | null;
@@ -129,7 +137,7 @@ interface AppState {
   driveFiles: DriveFile[];
   drivePanelOpen: boolean;
   driveSigningIn: boolean;
-  /** İlk liste taraması yapıldı mı? (panel her açıldığında yeniden taramayı önler) */
+  /** Has the first list scan been done? (avoids rescanning every time the panel opens) */
   driveFilesLoaded: boolean;
   setDriveSignedIn: (signedIn: boolean, email?: string | null) => void;
   setDriveFiles: (files: DriveFile[]) => void;
@@ -194,7 +202,22 @@ export const useStore = create<AppState>((set) => ({
   autoGoLive: false,
   setAutoGoLive: (auto) => set({ autoGoLive: auto }),
 
-  activeTab: 'slides',
+  liveSaveEnabled: (() => {
+    try {
+      const v = localStorage.getItem('liveSaveEnabled');
+      return v === null ? true : v === '1';
+    } catch { return true; }
+  })(),
+  setLiveSaveEnabled: (enabled) => {
+    try { localStorage.setItem('liveSaveEnabled', enabled ? '1' : '0'); } catch {
+      console.warn('canlı kayıt tercihi saklanamadı');
+    }
+    set({ liveSaveEnabled: enabled });
+  },
+  liveSaveLastSaved: null,
+  setLiveSaveLastSaved: (ts) => set({ liveSaveLastSaved: ts }),
+
+  activeTab: 'presentations',
   setActiveTab: (tab) => set({ activeTab: tab }),
 
   presets: [],
@@ -267,6 +290,9 @@ export const useStore = create<AppState>((set) => ({
 
   isUpdatesOpen: false,
   setIsUpdatesOpen: (open) => set({ isUpdatesOpen: open }),
+
+  isRemoteOpen: false,
+  setIsRemoteOpen: (open) => set({ isRemoteOpen: open }),
 
   setPresentationName: (name) => set((state) => {
     const action: UndoAction = { type: 'SET', payload: { ...state.presentation, name } };

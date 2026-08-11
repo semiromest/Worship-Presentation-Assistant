@@ -17,6 +17,10 @@ release/
 # Credentials
 src/main/driveCredentials.ts
 
+# Planning / scratch files
+docs/superpowers/plans/
+todo.txt
+
 # IDE
 .vscode/
 .idea/
