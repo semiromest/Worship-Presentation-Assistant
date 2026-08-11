@@ -27,6 +27,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate Drive credentials from secrets
+        shell: bash
+        run: |
+          cat > src/main/driveCredentials.ts <<'EOF'
+          export const DRIVE_CREDENTIALS = {
+            clientId: '${{ secrets.DRIVE_CLIENT_ID }}',
+            clientSecret: '${{ secrets.DRIVE_CLIENT_SECRET }}',
+            scopes: [
+              'https://www.googleapis.com/auth/drive.file',
+            ],
+            redirectPort: 0,
+          };
+          EOF
+
       - name: Build
         run: npx vite build
 
