@@ -1,6 +1,6 @@
 {
   "name": "worship-presentation-assistant",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "main": "dist-electron/main.js",
   "description": "Worship Presentation Assistant - Simple Worship Presentation App",
   "author": "IPCA",
@@ -100,7 +100,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Worship Presentation Assistant",
-      "artifactName": "Worship-Presentation-Assistant-Setup-${version}.${ext}",
+      "artifactName": "Worship-Presentation-Assistant-${version}-Windows-Setup.${ext}",
       "uninstallDisplayName": "Worship Presentation Assistant",
       "deleteAppDataOnUninstall": true
     },
@@ -123,7 +123,7 @@
           ]
         }
       ],
-      "artifactName": "Worship-Presentation-Assistant-${version}-${arch}.${ext}"
+      "artifactName": "Worship-Presentation-Assistant-${version}-macOS-${arch}.${ext}"
     },
     "linux": {
       "icon": "build/icon.png",
@@ -136,7 +136,7 @@
           ]
         }
       ],
-      "artifactName": "Worship-Presentation-Assistant-${version}.${ext}"
+      "artifactName": "Worship-Presentation-Assistant-${version}-Linux.${ext}"
     }
   },
   "repository": {
