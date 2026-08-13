@@ -57,7 +57,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-${{ matrix.os }}
-          path: release/${{ github.ref_name }}
+          path: release/**
           if-no-files-found: error
 
   release:
@@ -65,26 +65,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download Windows build
+      - name: Download all platform builds
         uses: actions/download-artifact@v4
         with:
-          name: build-windows-latest
-          path: release
-
-      - name: Download macOS build
-        uses: actions/download-artifact@v4
-        with:
-          name: build-macos-latest
-          path: release
-
-      - name: Download Linux build
-        uses: actions/download-artifact@v4
-        with:
-          name: build-ubuntu-latest
-          path: release
+          path: release-artifacts
+          merge-multiple: true
 
       - name: Show release files
-        run: find release -type f
+        run: find release-artifacts -type f | sort
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -92,9 +80,9 @@ jobs:
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
           files: |
-            release/**/*.exe
-            release/**/*.dmg
-            release/**/*.zip
-            release/**/*.AppImage
+            release-artifacts/**/*.exe
+            release-artifacts/**/*.dmg
+            release-artifacts/**/*.zip
+            release-artifacts/**/*.AppImage
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
