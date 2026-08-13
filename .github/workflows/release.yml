@@ -50,8 +50,18 @@ jobs:
       - name: Build Vite
         run: npx vite build
 
-      - name: Package Electron
+      - name: Publish Windows update metadata
+        if: matrix.os == 'windows-latest'
+        run: npx electron-builder --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Package non-Windows installers
+        if: matrix.os != 'windows-latest'
         run: npx electron-builder --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
       - name: Upload Electron artifacts
         uses: actions/upload-artifact@v4
@@ -74,7 +84,7 @@ jobs:
       - name: Show release files
         run: find release-artifacts -type f | sort
 
-      - name: Create GitHub Release
+      - name: Attach platform installers to GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
