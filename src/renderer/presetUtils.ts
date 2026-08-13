@@ -1,4 +1,5 @@
 import type { Preset } from './types';
+import { isLiveSavePreset } from './hooks/useLiveSave';
 
 /** Normalize a presentation reference string. */
 export function normalizePresentationRef(ref: string): string {
@@ -13,12 +14,13 @@ export function findPresetByRef(ref: string, presets: Preset[]): Preset | undefi
   const trimmed = normalizePresentationRef(ref);
   if (!trimmed) return undefined;
 
-  const exact = presets.find(p => p.name.toLowerCase() === trimmed.toLowerCase());
+  const visible = presets.filter((preset) => !isLiveSavePreset(preset.name));
+  const exact = visible.find(p => p.name.toLowerCase() === trimmed.toLowerCase());
   if (exact) return exact;
 
   const num = parseInt(trimmed, 10);
-  if (String(num) === trimmed && num >= 1 && num <= presets.length) {
-    return presets[num - 1];
+  if (String(num) === trimmed && num >= 1 && num <= visible.length) {
+    return visible[num - 1];
   }
 
   return undefined;

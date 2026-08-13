@@ -164,6 +164,7 @@ export interface Slide {
 }
 
 export interface Presentation {
+  id?: string;
   name: string;
   slides: Slide[];
   transition?: {

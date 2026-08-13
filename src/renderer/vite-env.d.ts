@@ -7,7 +7,7 @@ declare global {
       saveFile: (content: string) => Promise<string>;
       openFile: () => Promise<{ content: string; path: string }>;
       loadPresets: () => Promise<any[]>;
-      savePreset: (preset: { name: string; presentation: any }) => Promise<any[]>;
+      savePreset: (preset: { name: string; presentation: any; retentionMs?: number }) => Promise<any[]>;
       deletePreset: (name: string) => Promise<any[]>;
       renamePreset: (oldName: string, newName: string) => Promise<any[]>;
       toggleProjector: (initialData?: any) => Promise<boolean>;

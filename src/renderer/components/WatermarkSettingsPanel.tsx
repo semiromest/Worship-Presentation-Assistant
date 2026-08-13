@@ -7,9 +7,9 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { Position, Slide } from '../types';
+import type { Position } from '../types';
 import { useWatermarkStore } from '../state/useWatermarkStore';
-import { cn, isTargetSlide } from '../utils';
+import { cn } from '../utils';
 
 const MAX_LOGO_BYTES = 2 * 1024 * 1024; // 2 MB
 const ACCEPTED_MIME = ['image/png', 'image/jpeg', 'image/svg+xml'];
@@ -23,7 +23,7 @@ const POSITION_OPTIONS: { value: Position; label: string }[] = [
   { value: 'bottom-right', label: '↘' },
 ];
 
-export function WatermarkSettingsPanel({ selectedSlide }: { selectedSlide?: Slide }) {
+export function WatermarkSettingsPanel() {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [inlineMsg, setInlineMsg] = useState<{ text: string; kind: 'error' | 'warn' } | null>(null);
@@ -32,8 +32,6 @@ export function WatermarkSettingsPanel({ selectedSlide }: { selectedSlide?: Slid
   const { config, setWatermarkConfig } = useWatermarkStore();
 
   const hasLogo = config.logoDataUrl !== null;
-
-  if (!isTargetSlide(selectedSlide)) return null;
 
   const showMsg = (text: string, kind: 'error' | 'warn' = 'error', ms = 3000) => {
     setInlineMsg({ text, kind });

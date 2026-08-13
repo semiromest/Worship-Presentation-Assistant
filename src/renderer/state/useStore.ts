@@ -7,6 +7,7 @@ import { makeSlideId } from '../utils';
 import i18n from '../i18n';
 
 const createInitialPresentation = (): Presentation => ({
+  id: crypto.randomUUID(),
   name: i18n.t('common.presentation'),
   slides: [
     {
@@ -56,12 +57,14 @@ interface AppState {
   // Live Save: regularly write presentation changes to a local backup (power-outage safety)
   liveSaveEnabled: boolean;
   setLiveSaveEnabled: (enabled: boolean) => void;
+  liveSaveRetentionMs: number;
+  setLiveSaveRetentionMs: (ms: number) => void;
   liveSaveLastSaved: number | null;
   setLiveSaveLastSaved: (ts: number | null) => void;
 
   // UI State
-  activeTab: 'presentations' | 'slides' | 'bible' | 'media' | 'hymns' | 'countdown' | 'screen' | 'loop' | 'calendar' | 'settings';
-  setActiveTab: (tab: 'presentations' | 'slides' | 'bible' | 'media' | 'hymns' | 'countdown' | 'screen' | 'loop' | 'calendar' | 'settings') => void;
+  activeTab: 'presentations' | 'slides' | 'bible' | 'media' | 'hymns' | 'countdown' | 'screen' | 'loop' | 'calendar' | 'autosaves' | 'settings';
+  setActiveTab: (tab: 'presentations' | 'slides' | 'bible' | 'media' | 'hymns' | 'countdown' | 'screen' | 'loop' | 'calendar' | 'autosaves' | 'settings') => void;
   presets: Preset[];
   setPresets: (presets: Preset[]) => void;
   panels: { preset: boolean; remote: boolean; styles: boolean; imageStyles: boolean };
@@ -213,6 +216,20 @@ export const useStore = create<AppState>((set) => ({
       console.warn('canlı kayıt tercihi saklanamadı');
     }
     set({ liveSaveEnabled: enabled });
+  },
+  liveSaveRetentionMs: (() => {
+    try {
+      const raw = Number(localStorage.getItem('liveSaveRetentionMs'));
+      if (!Number.isFinite(raw) || raw < 0) return 7 * 24 * 60 * 60 * 1000;
+      return raw;
+    } catch { return 7 * 24 * 60 * 60 * 1000; }
+  })(),
+  setLiveSaveRetentionMs: (ms) => {
+    const safeMs = Number.isFinite(ms) ? Math.max(0, ms) : 0;
+    try { localStorage.setItem('liveSaveRetentionMs', String(safeMs)); } catch {
+      console.warn('canlı kayıt saklama süresi kaydedilemedi');
+    }
+    set({ liveSaveRetentionMs: safeMs });
   },
   liveSaveLastSaved: null,
   setLiveSaveLastSaved: (ts) => set({ liveSaveLastSaved: ts }),

@@ -6,6 +6,7 @@ import { DEFAULT_STYLES, DEFAULT__TRANSITION } from '../constants';
 import { makeSlideId, toFileUrl } from '../utils';
 import { confirmDialog, alertDialog } from '../dialogs';
 import { findPresetByRef } from '../presetUtils';
+import { isLiveSavePreset } from './useLiveSave';
 import { parseCountdownContent, serializeCountdownContent, CountdownSlideData } from '../countdownUtils';
 import { splitHymnLyrics } from '../hymnSplit';
 
@@ -334,6 +335,7 @@ export function useSlideOperations() {
     dispatchUndo({
       type: 'RESET',
       payload: {
+        id: data.id || crypto.randomUUID(),
         name: result.path.split('\\').pop()?.replace('.gpres', '') ?? data.name ?? t('common.presentation'),
         slides,
         transition: data.transition ?? { ...DEFAULT__TRANSITION },
@@ -345,8 +347,13 @@ export function useSlideOperations() {
   }, [t, dispatchUndo, setSelectedSlideId, setLiveIndex]);
 
   const applyPreset = useCallback((preset: Preset) => {
-    dispatchUndo({ type: 'RESET', payload: preset.presentation });
-    setPresentationName(preset.name);
+    const presentationWithId = {
+      ...preset.presentation,
+      id: preset.presentation.id || crypto.randomUUID(),
+    };
+    dispatchUndo({ type: 'RESET', payload: presentationWithId });
+    const displayName = isLiveSavePreset(preset.name) ? preset.presentation.name : preset.name;
+    setPresentationName(displayName);
     setSelectedSlideId(preset.presentation.slides[0]?.id ?? '1');
     // Loading a preset also restarts the live position.
     setLiveIndex(0);
@@ -381,6 +388,7 @@ export function useSlideOperations() {
     dispatchUndo({
       type: 'RESET',
       payload: {
+        id: crypto.randomUUID(),
         name: t('common.newPresentation'),
         slides: [newSlide],
         transition: { ...DEFAULT__TRANSITION },

@@ -17,7 +17,8 @@ const TAB_KEYS: Record<string, string> = {
   '6': 'countdown',
   '7': 'screen',
   '8': 'calendar',
-  '9': 'settings',
+  '9': 'autosaves',
+  '0': 'settings',
 };
 
 interface KeyboardNavigationOptions {

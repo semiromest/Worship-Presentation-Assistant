@@ -18,6 +18,8 @@ import {
   Cloud,
   Plus,
   ChevronDown,
+  DatabaseBackup,
+  ShieldCheck,
 } from 'lucide-react';
 import { AnimatedPreview } from './AnimatedPreview';
 import { cn } from './utils';
@@ -25,7 +27,7 @@ import { convertPptxToSlides, type PptxImportResult } from './utils';
 import type { Presentation, Preset, Slide } from './types';
 import { confirmDialog } from './dialogs';
 import { useStore } from './state/useStore';
-import { LIVE_SAVE_PRESET_NAME } from './hooks/useLiveSave';
+import { isLiveSavePreset } from './hooks/useLiveSave';
 import DrivePanel from './components/DrivePanel';
 
 // ─── Shared action/styles (page-scoped) ────────────────────────────────────
@@ -106,7 +108,7 @@ const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelet
   const [draftName, setDraftName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const firstSlide = preset.presentation.slides[0];
-  const isLiveSave = preset.name === LIVE_SAVE_PRESET_NAME;
+  const isLiveSave = isLiveSavePreset(preset.name);
 
   const startRename = () => {
     setDraftName(preset.name);
@@ -131,9 +133,11 @@ const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelet
       }}
       className={cn(
         'group relative rounded-2xl border overflow-hidden transition-all duration-200 cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none',
-        isActive
-          ? 'border-blue-500/50 bg-blue-500/[0.06] shadow-lg shadow-blue-500/10 ring-1 ring-blue-500/30'
-          : 'border-white/5 bg-white/[0.03] hover:border-blue-500/25 hover:bg-white/[0.05]'
+        isLiveSave
+          ? 'border-emerald-500/35 bg-emerald-500/[0.05] shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500/20'
+          : isActive
+            ? 'border-blue-500/50 bg-blue-500/[0.06] shadow-lg shadow-blue-500/10 ring-1 ring-blue-500/30'
+            : 'border-white/5 bg-white/[0.03] hover:border-blue-500/25 hover:bg-white/[0.05]'
       )}
     >
       <div className="relative aspect-video bg-black overflow-hidden pointer-events-none">
@@ -182,8 +186,11 @@ const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelet
             </div>
           ) : (
             <>
-              <h3 className="flex-1 font-semibold text-sm truncate group-hover:text-blue-300 transition-colors">
-                {isLiveSave ? t('common.liveSaveBadge') : preset.name}
+              <h3 className={cn(
+                'flex-1 font-semibold text-sm truncate transition-colors',
+                isLiveSave ? 'group-hover:text-emerald-300 text-emerald-100' : 'group-hover:text-blue-300 text-white'
+              )}>
+                {isLiveSave ? `${t('common.liveSaveBadge')} - ${preset.presentation.name}` : preset.name}
               </h3>
               {isLiveSave && (
                 <span
@@ -214,10 +221,12 @@ const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelet
           </span>
           <span className="flex items-center gap-1 min-w-0 truncate">
             <Clock className="w-3 h-3 shrink-0" />
-            {new Date(preset.createdAt).toLocaleDateString('tr-TR', {
+            {new Date(preset.createdAt).toLocaleString('tr-TR', {
               day: 'numeric',
               month: 'short',
               year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
             })}
           </span>
         </div>
@@ -315,6 +324,7 @@ export default function PresentationsTab({
   const drivePanelOpen = useStore((s) => s.drivePanelOpen);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
+  const [isAutosaveOpen, setIsAutosaveOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
   const [importError, setImportError] = useState<string | null>(null);
@@ -354,9 +364,15 @@ export default function PresentationsTab({
     return () => unsubscribe();
   }, []);
 
+  const liveSavePresets = useMemo(
+    () => [...presets].filter((p) => isLiveSavePreset(p.name)).sort((a, b) => b.createdAt - a.createdAt),
+    [presets]
+  );
+
   const filteredPresets = useMemo(() => {
+    const visible = presets.filter((p) => !isLiveSavePreset(p.name));
     const q = searchQuery.trim().toLowerCase();
-    return q ? presets.filter((p) => p.name.toLowerCase().includes(q)) : presets;
+    return q ? visible.filter((p) => p.name.toLowerCase().includes(q)) : visible;
   }, [presets, searchQuery]);
 
   const sortedPresets = useMemo(() => {
@@ -523,6 +539,18 @@ export default function PresentationsTab({
             )}
             <button
               type="button"
+              onClick={() => setIsAutosaveOpen((prev) => !prev)}
+              className={cn(
+                BTN_SECONDARY,
+                isAutosaveOpen &&
+                  'border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/10 shadow-lg shadow-emerald-500/10'
+              )}
+            >
+              <DatabaseBackup className="w-4 h-4" aria-hidden="true" />
+              {t('nav.autosaves')}
+            </button>
+            <button
+              type="button"
               onClick={() => setDrivePanelOpen(!drivePanelOpen)}
               aria-pressed={drivePanelOpen}
               className={cn(
@@ -671,6 +699,90 @@ export default function PresentationsTab({
           )}
         </div>
       </header>
+
+      {isAutosaveOpen && (
+        <div className="absolute inset-0 z-40 bg-slate-950/60 backdrop-blur-[2px] flex items-center justify-center p-4" onClick={() => setIsAutosaveOpen(false)}>
+          <div className="w-full max-w-3xl max-h-[80vh] overflow-hidden rounded-3xl border border-emerald-500/20 bg-surface-raised shadow-2xl shadow-emerald-500/10" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                  <ShieldCheck className="w-5 h-5 text-emerald-300" aria-hidden="true" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-white">{t('nav.autosaves')}</h3>
+                  <p className="text-[11px] text-white/45">{t('common.liveSaveBadge')}</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setIsAutosaveOpen(false)} className="rounded-lg bg-white/5 p-2 text-white/60 hover:bg-white/10 hover:text-white">
+                <X className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="max-h-[60vh] overflow-y-auto p-4">
+              {liveSavePresets.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-emerald-500/20 bg-emerald-500/5 p-8 text-center text-white/60">
+                  {t('settings.liveSaveEmpty')}
+                </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {liveSavePresets.map((preset) => (
+                    <article key={preset.name} className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04] p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 text-emerald-200">
+                            <ShieldCheck className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.12em]">{t('common.liveSaveBadge')}</span>
+                          </div>
+                          <h4 className="mt-2 text-sm font-semibold text-white break-words line-clamp-2">{preset.presentation.name}</h4>
+                        </div>
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 mt-1" aria-hidden="true" />
+                      </div>
+
+                      <p className="mt-3 text-[11px] text-white/50">
+                        {new Date(preset.createdAt).toLocaleString('tr-TR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </p>
+
+                      <div className="mt-4 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onApplyPreset(preset);
+                            setIsAutosaveOpen(false);
+                          }}
+                          className="flex-1 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-100 hover:bg-emerald-500/15 transition-colors"
+                        >
+                          {t('common.openPreset')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const confirmed = await confirmDialog(t('common.confirmDeletePreset', { name: preset.name }));
+                            if (!confirmed) return;
+                            const updated = await window.electronAPI?.deletePreset?.(preset.name);
+                            if (Array.isArray(updated)) {
+                              onPresetsChange(updated);
+                            }
+                          }}
+                          className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/70 hover:bg-white/10 transition-colors"
+                          aria-label={t('common.deletePreset')}
+                        >
+                          {t('common.deletePreset')}
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 flex flex-col overflow-hidden min-h-0">
         <div className="flex-shrink-0 p-5 pb-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">

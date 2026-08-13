@@ -227,7 +227,14 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
   const [importSuccess, setImportSuccess] = useState<number | null>(null);
   const [editingHymn, setEditingHymn] = useState<Hymn | null>(null);
   const [editForm, setEditForm] = useState({ title: '', lyrics: '' });
-  const [partsModeEnabled, setPartsModeEnabled] = useState(true);
+  const [partsModeEnabled, setPartsModeEnabled] = useState(() => {
+    try {
+      const v = localStorage.getItem('hymnsPartsModeEnabled');
+      return v === null ? true : v === '1';
+    } catch {
+      return true;
+    }
+  });
   const [showOnlinePanel, setShowOnlinePanel] = useState(false);
   const [showSetLinkDialog, setShowSetLinkDialog] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
@@ -406,7 +413,13 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setPartsModeEnabled(v => !v)}
+              onClick={() => {
+                setPartsModeEnabled(prev => {
+                  const next = !prev;
+                  try { localStorage.setItem('hymnsPartsModeEnabled', next ? '1' : '0'); } catch {}
+                  return next;
+                });
+              }}
               aria-pressed={partsModeEnabled}
               className={cn(
                 'inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none',

@@ -10,6 +10,7 @@
     "loop": "Loop",
     "calendar": "Calendar",
     "settings": "Settings",
+    "autosaves": "Auto Saves",
     "sidebarLabel": "Main Navigation"
   },
   "common": {
@@ -657,6 +658,12 @@
     "updatesDesc": "Check for and download new app versions",
     "openUpdates": "Open Updates",
     "liveSave": "Live Save",
-    "liveSaveLastSaved": "Last saved: {{time}}"
+    "liveSaveRetention": "Auto-save retention period",
+    "retentionOff": "Off",
+    "retention1d": "1 day",
+    "retention7d": "7 days (default)",
+    "retention30d": "30 days",
+    "liveSaveLastSaved": "Last saved: {{time}}",
+    "liveSaveEmpty": "No auto-save backup exists."
   }
 }

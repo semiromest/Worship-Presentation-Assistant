@@ -10,6 +10,7 @@
     "loop": "Loop",
     "calendar": "Takvim",
     "settings": "Ayarlar",
+    "autosaves": "Otomatik Yedekler",
     "sidebarLabel": "Ana Navigasyon"
   },
   "common": {
@@ -657,6 +658,12 @@
     "updatesDesc": "Uygulamanın yeni sürümlerini kontrol edin ve indirin",
     "openUpdates": "Güncellemeleri Aç",
     "liveSave": "Canlı Kayıt",
-    "liveSaveLastSaved": "Son kayıt: {{time}}"
+    "liveSaveRetention": "Otomatik yedek saklama süresi",
+    "retentionOff": "Kapalı",
+    "retention1d": "1 gün",
+    "retention7d": "7 gün (varsayılan)",
+    "retention30d": "30 gün",
+    "liveSaveLastSaved": "Son kayıt: {{time}}",
+    "liveSaveEmpty": "Otomatik yedek kayıt yok."
   }
 }

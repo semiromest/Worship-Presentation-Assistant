@@ -1,15 +1,47 @@
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Globe, Zap, Settings2, Save } from 'lucide-react';
+import { Globe, Zap, Settings2, Save, Trash2, DatabaseBackup } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { useUpdaterStore } from '../state/useUpdaterStore';
+import { WatermarkSettingsPanel } from './WatermarkSettingsPanel';
 import { cn } from '../utils';
+import { DEFAULT_LIVE_SAVE_RETENTION_MS, isLiveSavePreset, LIVE_SAVE_RETENTION_OPTIONS } from '../hooks/useLiveSave';
 
 export default function SettingsTab() {
   const { t, i18n } = useTranslation();
-  const { autoGoLive, setAutoGoLive, setIsUpdatesOpen, liveSaveEnabled, setLiveSaveEnabled, liveSaveLastSaved } = useStore();
+  const {
+    autoGoLive,
+    setAutoGoLive,
+    setIsUpdatesOpen,
+    liveSaveEnabled,
+    setLiveSaveEnabled,
+    liveSaveLastSaved,
+    liveSaveRetentionMs,
+    setLiveSaveRetentionMs,
+    presets,
+    setPresets,
+  } = useStore();
   const updaterStatus = useUpdaterStore((s) => s.status);
 
   const languages = Object.keys(i18n.options.resources ?? {});
+  const liveSavePresets = useMemo(
+    () => [...presets].filter((preset) => isLiveSavePreset(preset.name)).sort((a, b) => b.createdAt - a.createdAt),
+    [presets]
+  );
+  const latestLiveSave = liveSavePresets[0] ?? null;
+
+  const clearLiveSaves = async () => {
+    const names = liveSavePresets.map((preset) => preset.name);
+    if (names.length === 0) return;
+
+    let next = [...presets];
+    for (const name of names) {
+      const updated = await window.electronAPI?.deletePreset?.(name);
+      if (Array.isArray(updated)) next = updated;
+    }
+
+    setPresets(next);
+  };
 
   return (
     <div className="h-full overflow-y-auto">
@@ -105,6 +137,53 @@ export default function SettingsTab() {
               />
             </button>
           </div>
+
+          <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+            <div className="flex items-center gap-2 text-emerald-100/90 text-[11px] font-medium uppercase tracking-[0.12em]">
+              <DatabaseBackup className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>{t('settings.liveSaveRetention')}</span>
+            </div>
+            <select
+              value={String(liveSaveRetentionMs)}
+              onChange={(e) => setLiveSaveRetentionMs(Number(e.target.value))}
+              className="mt-2 w-full rounded-lg border border-white/10 bg-surface-overlay px-3 py-2 text-sm text-white outline-none focus-visible:border-emerald-400 focus-visible:ring-2 focus-visible:ring-emerald-500/30"
+              aria-label={t('settings.liveSaveRetention')}
+            >
+              {LIVE_SAVE_RETENTION_OPTIONS.map((option) => (
+                <option key={option} value={String(option)} className="bg-surface-overlay text-white">
+                  {option === 0 ? t('settings.retentionOff') : option === DEFAULT_LIVE_SAVE_RETENTION_MS ? t('settings.retention7d') : option === 24 * 60 * 60 * 1000 ? t('settings.retention1d') : t('settings.retention30d')}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[11px] text-emerald-100/80">
+            {latestLiveSave ? (
+              <div className="flex items-center justify-between gap-3">
+                <span>
+                  {t('settings.liveSaveLastSaved', {
+                    time: new Date(latestLiveSave.createdAt).toLocaleString('tr-TR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    }),
+                  })}
+                </span>
+                <button
+                  type="button"
+                  onClick={clearLiveSaves}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-medium text-white/75 hover:bg-white/10 transition-colors"
+                >
+                  <Trash2 className="w-3 h-3" aria-hidden="true" />
+                  {t('common.deletePreset')}
+                </button>
+              </div>
+            ) : (
+              <span>{t('settings.liveSaveEmpty')}</span>
+            )}
+          </div>
         </section>
 
         {/* Updates */}
@@ -129,6 +208,9 @@ export default function SettingsTab() {
             </button>
           </div>
         </section>
+
+        {/* Logo filigran */}
+        <WatermarkSettingsPanel />
       </div>
     </div>
   );

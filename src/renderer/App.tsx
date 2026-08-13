@@ -135,7 +135,7 @@ export default function App() {
   );
 
   const savedPresentationNames = useMemo(
-    () => presets.map((p) => p.name),
+    () => presets.filter((p) => !p.name.startsWith('__live_autosave_')).map((p) => p.name),
     [presets]
   );
 
@@ -143,6 +143,21 @@ export default function App() {
   useEffect(() => {
     document.documentElement.lang = i18n.language?.split('-')[0] ?? 'tr';
   });
+
+  useEffect(() => {
+    let alive = true;
+
+    const hydratePresets = async () => {
+      const loaded = await window.electronAPI?.loadPresets?.();
+      if (!alive || !Array.isArray(loaded)) return;
+      setPresets(loaded);
+    };
+
+    void hydratePresets();
+    return () => {
+      alive = false;
+    };
+  }, [setPresets]);
 
   // ─── Updater sync (preload events → store) ────────────────────────────────
   useEffect(() => { initUpdaterSync(); }, []);

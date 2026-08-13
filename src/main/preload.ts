@@ -5,7 +5,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveFile: (content: string) => ipcRenderer.invoke('save-file', content),
   openFile: () => ipcRenderer.invoke('open-file'),
   loadPresets: () => ipcRenderer.invoke('load-presets'),
-  savePreset: (preset: { name: string; presentation: any }) => ipcRenderer.invoke('save-preset', preset),
+  savePreset: (preset: { name: string; presentation: any; retentionMs?: number }) => ipcRenderer.invoke('save-preset', preset),
   deletePreset: (name: string) => ipcRenderer.invoke('delete-preset', name),
   renamePreset: (oldName: string, newName: string) => ipcRenderer.invoke('rename-preset', oldName, newName),
   toggleProjector: (initialData?: any) => ipcRenderer.invoke('toggle-projector', initialData),

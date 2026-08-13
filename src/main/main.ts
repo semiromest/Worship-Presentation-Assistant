@@ -222,20 +222,55 @@ function getLocalIPv4(): string {
 
 type PresetItem = { name: string; presentation: unknown; createdAt: number };
 let presetsCache: PresetItem[] | null = null;
+const DEFAULT_LIVE_SAVE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+function isLiveSavePresetName(name: string): boolean {
+  return name === '__live_autosave__' || (name.startsWith('__live_autosave_') && name.endsWith('__'));
+}
+
+function getLiveSaveBaseKey(name: string): string {
+  if (!isLiveSavePresetName(name)) return name;
+  return name.replace(/^__live_autosave_/, '').replace(/__$/, '');
+}
+
+function prunePresetStore(list: PresetItem[], now = Date.now(), retentionMs = DEFAULT_LIVE_SAVE_RETENTION_MS): PresetItem[] {
+  const regular: PresetItem[] = [];
+  const latestLiveByEntry = new Map<string, PresetItem>();
+
+  for (const item of list) {
+    if (!isLiveSavePresetName(item.name)) {
+      regular.push(item);
+      continue;
+    }
+
+    if (retentionMs <= 0) continue;
+
+    const age = now - item.createdAt;
+    if (age > retentionMs) continue;
+
+    const key = getLiveSaveBaseKey(item.name);
+    const current = latestLiveByEntry.get(key);
+    if (!current || item.createdAt > current.createdAt) {
+      latestLiveByEntry.set(key, item);
+    }
+  }
+
+  return [...regular, ...Array.from(latestLiveByEntry.values())].sort((a, b) => b.createdAt - a.createdAt);
+}
 
 async function readPresets(): Promise<PresetItem[]> {
   if (presetsCache) return presetsCache;
-  try { presetsCache = JSON.parse(await fs.readFile(PRESETS_FILE, 'utf-8')); }
+  try { presetsCache = prunePresetStore(JSON.parse(await fs.readFile(PRESETS_FILE, 'utf-8'))); }
   catch { presetsCache = []; }
   return presetsCache!;
 }
 
 async function writePresets(list: PresetItem[]): Promise<void> {
-  presetsCache = list;
+  presetsCache = prunePresetStore(list);
   await fs.mkdir(path.dirname(PRESETS_FILE), { recursive: true });
   // Write to a temp file then rename, so a crash mid-write can't corrupt presets.json.
   const tempFile = `${PRESETS_FILE}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
-  await fs.writeFile(tempFile, JSON.stringify(list, null, 2), 'utf-8');
+  await fs.writeFile(tempFile, JSON.stringify(presetsCache, null, 2), 'utf-8');
   await fs.rename(tempFile, PRESETS_FILE);
 }
 
@@ -405,6 +440,8 @@ function createProjectorWindow(initialData?: any): void {
     if (initialData) pendingProjectorPayload = initialData;
     if (projectorWin && !projectorWin.isDestroyed()) {
       projectorWin.show();
+      // Keep keyboard focus on the control window so the operator can keep
+      // navigating with the keyboard immediately after going live.
       projectorWin.focus();
     }
   });
@@ -412,6 +449,39 @@ function createProjectorWindow(initialData?: any): void {
   process.env.VITE_DEV_SERVER_URL
     ? projectorWin.loadURL(`${process.env.VITE_DEV_SERVER_URL}?mode=projector`)
     : projectorWin.loadFile(path.join(DIST, 'index.html'), { query: { mode: 'projector' } });
+
+  // Keyboard bridge: the projector window is fullscreen on a second display, so
+  // it frequently holds focus. Forward navigation keys to the control window's
+  // existing 'remote-action' channel (next/prev/goto/blackout handled in the
+  // renderer) so keyboard slide control keeps working while it is focused.
+  const PROJECTOR_NAV_NEXT = new Set(['ArrowRight', 'ArrowDown', ' ', 'PageDown', 'j', 'J']);
+  const PROJECTOR_NAV_PREV = new Set(['ArrowLeft', 'ArrowUp', 'PageUp', 'k', 'K']);
+
+  projectorWin.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' || input.isAutoRepeat) return;
+    if (input.control || input.alt || input.meta) return; // only plain keys
+    const sendRemote = (action: string, value?: unknown) => {
+      if (win && !win.isDestroyed()) win.webContents.send('remote-action', { action, value });
+    };
+
+    const key = input.key;
+    let handled = false;
+    if (PROJECTOR_NAV_NEXT.has(key)) {
+      sendRemote('next'); handled = true;
+    } else if (PROJECTOR_NAV_PREV.has(key)) {
+      sendRemote('prev'); handled = true;
+    } else if (key === 'Home') {
+      sendRemote('goto', 0); handled = true;
+    } else if (key === 'End') {
+      sendRemote('goto', 2 ** 31 - 1); handled = true; // renderer clamps to lastIndex
+    } else if (key === 'b' || key === 'B') {
+      sendRemote('blackout'); handled = true;
+    } else if (key === 'Escape') {
+      handled = true;
+      if (projectorWin && !projectorWin.isDestroyed()) projectorWin.close();
+    }
+    if (handled) event.preventDefault();
+  });
 
   projectorWin.on('closed', () => {
     projectorWin = null;
@@ -819,10 +889,19 @@ ipcMain.handle(
 
 ipcMain.handle('load-presets', () => readPresets());
 
-ipcMain.handle('save-preset', async (_, preset: { name: string; presentation: unknown }) => {
-  const list  = await readPresets();
-  const idx   = list.findIndex(p => p.name === preset.name);
+ipcMain.handle('save-preset', async (_, preset: { name: string; presentation: unknown; retentionMs?: number }) => {
+  const retentionMs = typeof preset.retentionMs === 'number' ? preset.retentionMs : DEFAULT_LIVE_SAVE_RETENTION_MS;
+  const list = prunePresetStore(await readPresets(), Date.now(), retentionMs);
+  const idx = list.findIndex(p => p.name === preset.name);
   const entry = { name: preset.name, presentation: preset.presentation, createdAt: Date.now() };
+
+  if (isLiveSavePresetName(preset.name)) {
+    const filtered = list.filter((item) => !isLiveSavePresetName(item.name) || getLiveSaveBaseKey(item.name) !== getLiveSaveBaseKey(preset.name));
+    if (retentionMs > 0) filtered.push(entry);
+    await writePresets(filtered);
+    return filtered;
+  }
+
   idx >= 0 ? (list[idx] = entry) : list.push(entry);
   await writePresets(list);
   return list;

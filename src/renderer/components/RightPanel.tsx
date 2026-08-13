@@ -12,11 +12,9 @@ import { LivePreview } from '../LivePreview';
 import CountdownSlideEditor from '../CountdownSlideEditor';
 import SlideStyleEditor from './SlideStyleEditor';
 import ImageSlideEditor from './ImageSlideEditor';
-import { WatermarkSettingsPanel } from './WatermarkSettingsPanel';
 import { DEFAULT__TRANSITION, TRANSITION_OPTIONS, DURATION_OPTIONS } from '../constants';
 import type { Slide, TransitionType, LoopItem } from '../types';
 import type { CountdownSlideData } from '../countdownUtils';
-import { isTargetSlide } from '../utils';
 
 interface RightPanelProps {
   addSlide: () => void;
@@ -373,10 +371,6 @@ export default function RightPanel({
                 <MousePointer2 className="w-10 h-10" />
                 <div className="text-sm font-medium">{t('common.selectSlideToEdit')}</div>
               </div>
-            )}
-
-            {isTargetSlide(selectedSlide) && (
-              <WatermarkSettingsPanel selectedSlide={selectedSlide} />
             )}
           </div>
         </div>
