@@ -167,6 +167,7 @@ export interface Presentation {
   id?: string;
   name: string;
   slides: Slide[];
+  zoom?: number;  // Slide preview zoom level (default: 1)
   transition?: {
     type: TransitionType;
     duration: number;

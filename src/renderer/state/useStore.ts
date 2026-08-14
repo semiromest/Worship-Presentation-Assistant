@@ -17,6 +17,7 @@ const createInitialPresentation = (): Presentation => ({
       styles: { ...DEFAULT_STYLES },
     },
   ],
+  zoom: 1,
   transition: { ...DEFAULT__TRANSITION },
 });
 
@@ -283,9 +284,17 @@ export const useStore = create<AppState>((set) => ({
 
   slideZoom: 1,
   setSlideZoom: (zoom) =>
-    set((state) => ({
-      slideZoom: typeof zoom === 'function' ? zoom(state.slideZoom) : zoom,
-    })),
+    set((state) => {
+      const newZoom = typeof zoom === 'function' ? zoom(state.slideZoom) : zoom;
+      return {
+        slideZoom: newZoom,
+        // Sync zoom to presentation so it persists when saved
+        presentation: {
+          ...state.presentation,
+          zoom: newZoom,
+        },
+      };
+    }),
 
   isEditorOpen: false,
   setIsEditorOpen: (open) => set({ isEditorOpen: open }),

@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Global HTML/Body Reset for Fullscreen ─────────────────────────── */
+html, body {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
 /* ─── Design Tokens ─────────────────────────────────────── */
 :root {
   /* Background scale */

@@ -52,6 +52,7 @@ export function useSlideOperations() {
     setSelectedPresetName,
     setPresets,
     setPresentationName,
+    setSlideZoom,
   } = useStore();
 
   const addSlide = useCallback(() => {
@@ -338,13 +339,18 @@ export function useSlideOperations() {
         id: data.id || crypto.randomUUID(),
         name: result.path.split('\\').pop()?.replace('.gpres', '') ?? data.name ?? t('common.presentation'),
         slides,
+        zoom: typeof data.zoom === 'number' ? data.zoom : 1,
         transition: data.transition ?? { ...DEFAULT__TRANSITION },
       },
     });
     setSelectedSlideId(slides[0].id);
+    // Restore zoom level
+    if (typeof data.zoom === 'number') {
+      setSlideZoom(data.zoom);
+    }
     // Reset live position on open so it never points to a stale/out-of-range index.
     setLiveIndex(0);
-  }, [t, dispatchUndo, setSelectedSlideId, setLiveIndex]);
+  }, [t, dispatchUndo, setSelectedSlideId, setSlideZoom, setLiveIndex]);
 
   const applyPreset = useCallback((preset: Preset) => {
     const presentationWithId = {
@@ -355,11 +361,15 @@ export function useSlideOperations() {
     const displayName = isLiveSavePreset(preset.name) ? preset.presentation.name : preset.name;
     setPresentationName(displayName);
     setSelectedSlideId(preset.presentation.slides[0]?.id ?? '1');
+    // Restore zoom level
+    if (typeof preset.presentation.zoom === 'number') {
+      setSlideZoom(preset.presentation.zoom);
+    }
     // Loading a preset also restarts the live position.
     setLiveIndex(0);
     setSelectedPresetName(preset.name);
     setActiveTab('slides');
-  }, [dispatchUndo, setPresentationName, setSelectedSlideId, setLiveIndex, setSelectedPresetName, setActiveTab]);
+  }, [dispatchUndo, setPresentationName, setSelectedSlideId, setSlideZoom, setLiveIndex, setSelectedPresetName, setActiveTab]);
 
   const openSavedPresentationByName = useCallback(async (presentationName: string) => {
     const loaded = await window.electronAPI?.loadPresets?.();

@@ -416,13 +416,18 @@ function createWindow(): void {
 
 function createProjectorWindow(initialData?: any): void {
   const ext = screen.getAllDisplays().find(d => d.bounds.x !== 0 || d.bounds.y !== 0);
+  
+  // macOS fix: Use simulated fullscreen instead of native fullscreen
+  // This ensures the window covers the entire display without Space switching
+  const useSimulatedFullscreen = !!ext;
+  const displayBounds = ext?.bounds || screen.getPrimaryDisplay().bounds;
 
   projectorWin = new BrowserWindow({
-    x: ext?.bounds.x ?? 0,
-    y: ext?.bounds.y ?? 0,
-    width:      ext?.bounds.width  ?? 1280,
-    height:     ext?.bounds.height ?? 720,
-    fullscreen: !!ext,
+    x: displayBounds.x,
+    y: displayBounds.y,
+    width:      displayBounds.width,
+    height:     displayBounds.height,
+    fullscreen: false,  // Disable native fullscreen mode
     autoHideMenuBar: true,
     show: false,
     backgroundColor: '#000000',
@@ -434,6 +439,11 @@ function createProjectorWindow(initialData?: any): void {
       webSecurity:      true,
     },
   });
+
+  // macOS: Enable simulated fullscreen (no menu bar or dock switching)
+  if (useSimulatedFullscreen) {
+    projectorWin.setSimpleFullScreen(true);
+  }
 
   // Buffer the payload until load finishes, then reveal the window.
   projectorWin.webContents.once('did-finish-load', () => {

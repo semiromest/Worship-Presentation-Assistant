@@ -14,6 +14,8 @@ export type PresentationPatch = {
   nextOrder: string[];
   prevName?: string;
   nextName?: string;
+  prevZoom?: number;
+  nextZoom?: number;
   prevTransition?: Presentation['transition'];
   nextTransition?: Presentation['transition'];
 };
@@ -104,6 +106,11 @@ function computePatch(prev: Presentation, next: Presentation): PresentationPatch
     patch.nextName = next.name;
   }
 
+  if (prev.zoom !== next.zoom) {
+    patch.prevZoom = prev.zoom;
+    patch.nextZoom = next.zoom;
+  }
+
   if (!shallowEqual(prev.transition, next.transition)) {
     patch.prevTransition = prev.transition;
     patch.nextTransition = next.transition;
@@ -144,6 +151,7 @@ function applyPatch(current: Presentation, patch: PresentationPatch): Presentati
   return {
     name: patch.nextName ?? current.name,
     slides: reordered,
+    zoom: patch.nextZoom ?? current.zoom,
     transition: patch.nextTransition ?? current.transition,
   };
 }
@@ -180,6 +188,7 @@ function applyInversePatch(current: Presentation, patch: PresentationPatch): Pre
   return {
     name: patch.prevName ?? current.name,
     slides: reordered,
+    zoom: patch.prevZoom ?? current.zoom,
     transition: patch.prevTransition ?? current.transition,
   };
 }
@@ -202,6 +211,7 @@ export function undoReducer(state: UndoState, action: UndoAction): UndoState {
       if (
         patch.slidesPatch.length === 0 &&
         !patch.prevName &&
+        !patch.prevZoom &&
         !patch.prevTransition &&
         !orderChanged
       ) return state;
