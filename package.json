@@ -69,7 +69,8 @@
     "publish": {
       "provider": "github",
       "owner": "semiromest",
-      "repo": "Worship-Presentation-Assistant"
+      "repo": "Worship-Presentation-Assistant",
+      "releaseType": "release"
     },
     "productName": "Worship Presentation Assistant",
     "directories": {
@@ -123,7 +124,7 @@
           ]
         }
       ],
-      "artifactName": "Worship-Presentation-Assistant-${version}-macOS-${arch}.${ext}"
+      "artifactName": "Worship-Presentation-Assistant-${version}-${arch}-mac.${ext}"
     },
     "linux": {
       "icon": "build/icon.png",

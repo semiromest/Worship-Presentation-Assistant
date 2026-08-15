@@ -63,7 +63,9 @@ export function initUpdater(win: BrowserWindow): void {
       await autoUpdater.checkForUpdates();
       return { ok: true };
     } catch (err) {
-      return { ok: false, error: (err as Error)?.message ?? String(err) };
+      const errorMsg = (err as Error)?.message ?? String(err);
+      console.error('❌ Updater check failed:', errorMsg);
+      return { ok: false, error: errorMsg };
     }
   });
 
@@ -72,7 +74,9 @@ export function initUpdater(win: BrowserWindow): void {
       await autoUpdater.downloadUpdate();
       return { ok: true };
     } catch (err) {
-      return { ok: false, error: (err as Error)?.message ?? String(err) };
+      const errorMsg = (err as Error)?.message ?? String(err);
+      console.error('❌ Updater download failed:', errorMsg);
+      return { ok: false, error: errorMsg };
     }
   });
 

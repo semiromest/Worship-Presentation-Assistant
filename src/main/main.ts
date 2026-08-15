@@ -416,18 +416,26 @@ function createWindow(): void {
 
 function createProjectorWindow(initialData?: any): void {
   const ext = screen.getAllDisplays().find(d => d.bounds.x !== 0 || d.bounds.y !== 0);
-  
-  // macOS fix: Use simulated fullscreen instead of native fullscreen
-  // This ensures the window covers the entire display without Space switching
-  const useSimulatedFullscreen = !!ext;
   const displayBounds = ext?.bounds || screen.getPrimaryDisplay().bounds;
+  const isMac = process.platform === 'darwin';
+
+  // Windows: keep current behaviour unchanged.
+  // macOS: start as a normal window on the secondary display so it does not cover the screen,
+  // but keep native fullscreen enabled so the user can still switch to a true full-screen view.
+  const startWidth = isMac ? Math.min(Math.max(displayBounds.width * 0.92, 1280), displayBounds.width) : displayBounds.width;
+  const startHeight = isMac ? Math.min(Math.max(displayBounds.height * 0.92, 720), displayBounds.height) : displayBounds.height;
 
   projectorWin = new BrowserWindow({
     x: displayBounds.x,
     y: displayBounds.y,
-    width:      displayBounds.width,
-    height:     displayBounds.height,
-    fullscreen: false,  // Disable native fullscreen mode
+    width: startWidth,
+    height: startHeight,
+    fullscreen: false,
+    fullscreenable: true,
+    frame: true,
+    resizable: true,
+    movable: true,
+    titleBarStyle: 'default',
     autoHideMenuBar: true,
     show: false,
     backgroundColor: '#000000',
@@ -440,19 +448,20 @@ function createProjectorWindow(initialData?: any): void {
     },
   });
 
-  // macOS: Enable simulated fullscreen (no menu bar or dock switching)
-  if (useSimulatedFullscreen) {
-    projectorWin.setSimpleFullScreen(true);
-  }
+  // BrowserWindow's native fullscreen can still be triggered by the user on macOS.
+  // We intentionally do not force fullscreen here, so the app starts in a normal-sized window.
 
   // Buffer the payload until load finishes, then reveal the window.
   projectorWin.webContents.once('did-finish-load', () => {
     if (initialData) pendingProjectorPayload = initialData;
     if (projectorWin && !projectorWin.isDestroyed()) {
-      projectorWin.show();
-      // Keep keyboard focus on the control window so the operator can keep
-      // navigating with the keyboard immediately after going live.
-      projectorWin.focus();
+      if (isMac) {
+        projectorWin.show();
+        projectorWin.focus();
+      } else {
+        projectorWin.show();
+        projectorWin.focus();
+      }
     }
   });
 
@@ -702,7 +711,10 @@ function fileUrlToPath(fileUrl: string): string {
   // Presentations re-opened from disk carry local-resource:// URLs pointing
   // into the temp dir; convert those back to a real path so re-saving can
   // re-embed the media.
+  if (!fileUrl) return fileUrl;
   if (fileUrl.startsWith('local-resource://')) return localResourceUrlToPath(fileUrl);
+  if (fileUrl.startsWith('file://')) return nodeFileURLToPath(fileUrl);
+  if (fileUrl.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(fileUrl)) return fileUrl;
   return nodeFileURLToPath(fileUrl);
 }
 
@@ -724,7 +736,19 @@ function walkStrings(node: any, onString: (value: string, parent: any, key: stri
   }
 }
 
-const isEmbeddableUrl = (v: string) => v.startsWith('file:///') || v.startsWith('local-resource://');
+function normalizeLocalSourcePath(value: string): string {
+  if (!value) return '';
+  if (value.startsWith('local-resource://')) return localResourceUrlToPath(value);
+  if (value.startsWith('file://')) return nodeFileURLToPath(value);
+  return value;
+}
+
+const isEmbeddableUrl = (v: string) => {
+  if (!v) return false;
+  if (v.startsWith('file:///') || v.startsWith('local-resource://')) return true;
+  if (v.startsWith('http://') || v.startsWith('https://') || v.startsWith('data:')) return false;
+  return v.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(v);
+};
 
 /** Bidirectional registry so repeated files reuse one name in O(1). */
 interface MediaNameRegistry {
@@ -801,7 +825,7 @@ async function buildGpresZip(data: any): Promise<{ zip: AdmZip; embeddedCount: n
   const urlToMedia = new Map<string, string>();
 
   await Promise.all([...urls].map(async (url) => {
-    const sourcePath = fileUrlToPath(url);
+    const sourcePath = normalizeLocalSourcePath(url);
     try {
       await fs.access(sourcePath);
       const mediaPath = toMediaFileName(url, registry);
