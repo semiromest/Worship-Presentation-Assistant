@@ -12,6 +12,7 @@ jobs:
   build:
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         os:
           - windows-latest
@@ -87,5 +88,6 @@ jobs:
             release-artifacts/**/*.dmg
             release-artifacts/**/*.zip
             release-artifacts/**/*.AppImage
+            release-artifacts/**/*.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
