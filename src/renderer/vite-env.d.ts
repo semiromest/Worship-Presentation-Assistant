@@ -6,10 +6,10 @@ declare global {
       [x: string]: any;
       saveFile: (content: string) => Promise<string>;
       openFile: () => Promise<{ content: string; path: string }>;
-      loadPresets: () => Promise<any[]>;
+      loadPresets: (retentionMs?: number) => Promise<any[]>;
       savePreset: (preset: { name: string; presentation: any; retentionMs?: number }) => Promise<any[]>;
-      deletePreset: (name: string) => Promise<any[]>;
-      renamePreset: (oldName: string, newName: string) => Promise<any[]>;
+      deletePreset: (name: string, retentionMs?: number) => Promise<any[]>;
+      renamePreset: (oldName: string, newName: string, retentionMs?: number) => Promise<any[]>;
       toggleProjector: (initialData?: any) => Promise<boolean>;
       updateProjector: (data: any) => Promise<boolean>;
       getProjectorStatus: () => Promise<boolean>;
@@ -35,6 +35,7 @@ declare global {
       updateRemoteStatus: (status: any) => Promise<void>;
       quitApp: () => Promise<boolean>;
       updateAllSlidePreviews: (previews: (string | null)[]) => Promise<void>;
+      updateSlidePreviewsDelta: (updates: { i: number; url: string }[]) => Promise<void>;
       sendSlidePreview: (dataUrl: string) => Promise<void>;
       showConfirmDialog: (options: {
         message: string;
@@ -53,6 +54,7 @@ declare global {
       onRemoteAction: (callback: (data: any) => void) => () => void;
       onProjectorUpdate: (callback: (data: any) => void) => () => void;
       onProjectorClosed: (callback: () => void) => () => void;
+      onProjectorReady: (callback: () => void) => () => void;
       onPptxImportProgress: (callback: (data: { current: number; total: number }) => void) => () => void;
       onPptxExportProgress: (callback: (data: { current: number; total: number }) => void) => () => void;
       selectMediaFiles?: (type: MediaKind) => Promise<string[] | string | null>;

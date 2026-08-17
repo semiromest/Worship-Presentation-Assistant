@@ -3,18 +3,24 @@ import { useTranslation } from 'react-i18next';
 import { Link2, Loader2, Download, CheckSquare, AlertTriangle, X } from 'lucide-react';
 import Dialog from './Dialog';
 import { cn } from '../utils';
-import { parseSetLink, fetchSongsByIds, parseSongXml } from '../worshipLeaderApi';
+import { parseSetLink, fetchSongsByIds, parseSongXml, extractSongAuthor, extractSongSource } from '../worshipLeaderApi';
 
 export interface SetImportHymn {
   id: string;
   title: string;
   lyrics: string;
+  author?: string;
+  key?: string;
+  source?: string;
 }
 
 interface ResultSong {
   id: number;
   title: string;
   lyrics: string;
+  author?: string;
+  key?: string;
+  source?: string;
 }
 
 interface Props {
@@ -83,7 +89,14 @@ export default function SetLinkImportDialog({
       for (const d of details) {
         const lyrics = parseSongXml(d.songxml);
         if (!lyrics.trim()) continue;
-        results.push({ id: d.id, title: d.title, lyrics });
+        results.push({
+          id: d.id,
+          title: d.title,
+          lyrics,
+          author: extractSongAuthor(d) ?? undefined,
+          key: d.songkey ?? undefined,
+          source: extractSongSource(d) ?? undefined,
+        });
       }
       setSongs(results);
       setSelectedIds(new Set(results.map((s) => s.id)));
@@ -120,6 +133,9 @@ export default function SetLinkImportDialog({
       id: String(s.id),
       title: s.title,
       lyrics: s.lyrics,
+      author: s.author,
+      key: s.key,
+      source: s.source,
     }));
 
     for (const hymn of imported) {

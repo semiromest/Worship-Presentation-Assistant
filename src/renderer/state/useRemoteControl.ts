@@ -25,7 +25,6 @@ export function useRemoteControl() {
     setMediaVolume,
     setIsMediaMuted,
     dispatchUndo,
-    setPresets,
     setRemoteUrl,
     setRemoteQr,
     setRemoteDebug,
@@ -41,7 +40,10 @@ export function useRemoteControl() {
     setLiveIndex(initialIndex);
 
     const initialData = {
-      presentation: state.presentation,
+      // Phase 4: the first snapshot uses fullPresentation (projector applies
+      // it as a history-clearing RESET). Subsequent syncs are {patch} deltas
+      // sent by useProjectorSync once the projector signals ready.
+      fullPresentation: state.presentation,
       liveIndex: initialIndex,
       isBlackout: state.isBlackout,
       volume: state.mediaVolume,
@@ -51,11 +53,9 @@ export function useRemoteControl() {
     const isOpen = await window.electronAPI?.toggleProjector?.(initialData);
     setIsProjectorWindowOpen(isOpen);
 
-    if (isOpen) {
-      setTimeout(() => {
-        window.electronAPI?.updateProjector?.(initialData);
-      }, 220);
-    }
+    // No manual retry here: main flushes pendingProjectorPayload on
+    // 'projector-ready' and acks the control window, which triggers
+    // useProjectorSync to (re)establish the base with a full snapshot.
   };
 
   const closeLive = async () => {
@@ -66,11 +66,8 @@ export function useRemoteControl() {
   };
 
   useEffect(() => {
-    // Load presets
-    (async () => {
-      const loaded = await window.electronAPI?.loadPresets?.();
-      if (Array.isArray(loaded)) setPresets(loaded);
-    })();
+    // Note: presets are hydrated once by App.tsx — do NOT reload them here
+    // (was a duplicate loadPresets IPC call on every mount).
 
     // Remote URL al
     const fetchRemoteUrl = async () => {
@@ -184,8 +181,14 @@ export function useRemoteControl() {
 
   removeProjectorUpdate = window.electronAPI?.onProjectorUpdate?.((data: any) => {
     if (data && typeof data === 'object') {
-      if (data.presentation) {
-        dispatchUndo({ type: 'SET', payload: data.presentation });
+      if (data.fullPresentation) {
+        // Initial snapshot (open) or re-sync after reload: replace the state
+        // and clear history — the projector never uses undo, so SET used to
+        // grow an unbounded history on every sync (wasted memory).
+        dispatchUndo({ type: 'RESET', payload: data.fullPresentation });
+      } else if (data.patch) {
+        // Delta sync (Phase 4): apply without touching the undo history.
+        useStore.getState().applyProjectorDelta(data.patch);
       }
 
       if (typeof data.liveIndex === 'number') {

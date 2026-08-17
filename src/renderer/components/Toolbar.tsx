@@ -17,18 +17,16 @@ interface ToolbarProps {
 export default function Toolbar({ moveSelectedSlides, deleteSelectedSlides, duplicateSelectedSlides, openLive, closeLive }: ToolbarProps) {
   const { t } = useTranslation();
 
-  const {
-    presentation,
-    undoState,
-    dispatchUndo,
-    selectedSlideIds,
-    setIsCheatsheetOpen,
-    isProjectorWindowOpen,
-    setPresentationName,
-    isRightPanelOpen,
-    setIsRightPanelOpen,
-    setIsRemoteOpen,
-  } = useStore();
+  const presentation = useStore((s) => s.presentation);
+  const undoState = useStore((s) => s.undoState);
+  const dispatchUndo = useStore((s) => s.dispatchUndo);
+  const selectedSlideIds = useStore((s) => s.selectedSlideIds);
+  const setIsCheatsheetOpen = useStore((s) => s.setIsCheatsheetOpen);
+  const isProjectorWindowOpen = useStore((s) => s.isProjectorWindowOpen);
+  const setPresentationName = useStore((s) => s.setPresentationName);
+  const isRightPanelOpen = useStore((s) => s.isRightPanelOpen);
+  const setIsRightPanelOpen = useStore((s) => s.setIsRightPanelOpen);
+  const setIsRemoteOpen = useStore((s) => s.setIsRemoteOpen);
 
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState('');

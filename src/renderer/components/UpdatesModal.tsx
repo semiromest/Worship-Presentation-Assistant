@@ -13,7 +13,8 @@ const secondaryButtonClass =
 
 export default function UpdatesModal() {
   const { t } = useTranslation();
-  const { isUpdatesOpen, setIsUpdatesOpen } = useStore();
+  const isUpdatesOpen = useStore((s) => s.isUpdatesOpen);
+  const setIsUpdatesOpen = useStore((s) => s.setIsUpdatesOpen);
   const updater = useUpdaterStore();
   const { status, currentVersion, updaterActive, nextVersion, percent, transferred, total, errorMessage } = updater;
 

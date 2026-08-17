@@ -107,17 +107,15 @@ export default function SlideGrid({
   handleSlideDoubleClick,
 }: SlideGridProps) {
   const { t } = useTranslation();
-  const {
-    presentation,
-    searchQuery,
-    setSearchQuery,
-    selectedSlideIds,
-    selectedSlideId,
-    isProjectorWindowOpen,
-    liveIndex,
-    slideZoom,
-    setSlideZoom,
-  } = useStore();
+  const presentation = useStore((s) => s.presentation);
+  const searchQuery = useStore((s) => s.searchQuery);
+  const setSearchQuery = useStore((s) => s.setSearchQuery);
+  const selectedSlideIds = useStore((s) => s.selectedSlideIds);
+  const selectedSlideId = useStore((s) => s.selectedSlideId);
+  const isProjectorWindowOpen = useStore((s) => s.isProjectorWindowOpen);
+  const liveIndex = useStore((s) => s.liveIndex);
+  const slideZoom = useStore((s) => s.slideZoom);
+  const setSlideZoom = useStore((s) => s.setSlideZoom);
 
   const { handleDragStart, handleDragOver, handleDragEnd, handleDrop, resetDragState, draggedSlideId, dragOverIndex } =
     useDragAndDrop(reorderSlides);

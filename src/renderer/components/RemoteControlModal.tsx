@@ -5,7 +5,10 @@ import Dialog from './Dialog';
 
 export default function RemoteControlModal() {
   const { t } = useTranslation();
-  const { isRemoteOpen, setIsRemoteOpen, remoteQr, remoteUrl } = useStore();
+  const isRemoteOpen = useStore((s) => s.isRemoteOpen);
+  const setIsRemoteOpen = useStore((s) => s.setIsRemoteOpen);
+  const remoteQr = useStore((s) => s.remoteQr);
+  const remoteUrl = useStore((s) => s.remoteUrl);
 
   return (
     <Dialog

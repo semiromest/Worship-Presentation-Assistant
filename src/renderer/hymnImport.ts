@@ -2,6 +2,12 @@ export interface Hymn {
   id: string;
   title: string;
   lyrics: string;
+  /** Author / lyricist / composer, when known. */
+  author?: string;
+  /** Musical key (ton), when known. */
+  key?: string;
+  /** Source book reference (e.g. "TY527, RT38"), when known. */
+  source?: string;
 }
 
 /**

@@ -3,6 +3,7 @@ import { twMerge } from 'tailwind-merge';
 import { useEffect, useState, useRef } from 'react';
 import type { Slide, WatermarkConfig, Position } from './types';
 import { useWatermarkStore } from './state/useWatermarkStore';
+import { rendererPerf } from './perf';
 
 // Precompiled regexes (compiled once, not per call)
 const SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
@@ -423,7 +424,7 @@ async function drawWatermarkOnCanvas(
   }
 }
 
-export async function generateSlideThumbnail(slide: Slide): Promise<string | null> {
+async function generateSlideThumbnailInner(slide: Slide): Promise<string | null> {
   const W = THUMB_W;
   const H = THUMB_H;
   const canvas = document.createElement('canvas');
@@ -487,6 +488,21 @@ export async function generateSlideThumbnail(slide: Slide): Promise<string | nul
   }
 }
 
+/** Phase 0: times thumbnail generation (dev-only, zero overhead in prod). */
+export async function generateSlideThumbnail(slide: Slide): Promise<string | null> {
+  if (!rendererPerf.enabled) return generateSlideThumbnailInner(slide);
+  const t0 = performance.now();
+  const result = await generateSlideThumbnailInner(slide);
+  rendererPerf.push({
+    kind: 'thumbnail',
+    label: slide.type,
+    ms: performance.now() - t0,
+    bytes: result ? result.length * 2 : 0,
+    t: Date.now(),
+  });
+  return result;
+}
+
 // ─── PPTX Import Helpers ──────────────────────────────────────────────────
 export interface PptxSlideResult {
   slideNumber: number;
@@ -517,8 +533,9 @@ export function convertPptxToSlides(
       id: makeId(),
       type: 'image',
       content: `Slayt ${pptx.slideNumber}`,
-      // Data URI (not a temp-file path): stays intact through local save,
-      // autosave/presets, Drive and reopening.
+      // Phase 6: imageData is a persistent media-library ref
+      // (local-resource://media/<hash>.png) or a data URI fallback; either
+      // stays intact through local save, autosave/presets, Drive and reopening.
       mediaUrl: pptx.imageData,
       thumbnailUrl: pptx.imageData,
       styles: {

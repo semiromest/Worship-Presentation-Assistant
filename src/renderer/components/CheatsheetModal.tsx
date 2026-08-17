@@ -4,7 +4,9 @@ import Dialog from './Dialog';
 
 export default function CheatsheetModal() {
   const { t } = useTranslation();
-  const { isCheatsheetOpen, setIsCheatsheetOpen, isMediaMuted } = useStore();
+  const isCheatsheetOpen = useStore((s) => s.isCheatsheetOpen);
+  const setIsCheatsheetOpen = useStore((s) => s.setIsCheatsheetOpen);
+  const isMediaMuted = useStore((s) => s.isMediaMuted);
 
   return (
     <Dialog

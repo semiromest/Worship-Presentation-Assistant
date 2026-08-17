@@ -1,13 +1,59 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import { PerfBuffer, estimatePayloadBytes, defaultPerfEnabled } from '../shared/perf';
 
-contextBridge.exposeInMainWorld('electronAPI', {
+// ─── Phase 0 perf instrumentation ───────────────────────────────────────────
+// Times every invoke round-trip from the renderer's point of view and
+// estimates request + response payload sizes (dev-only).
+
+const preloadPerf = new PerfBuffer('preload');
+preloadPerf.enabled = defaultPerfEnabled();
+
+type AnyFn = (...args: any[]) => any;
+
+function wrapApi(api: Record<string, AnyFn>): Record<string, AnyFn> {
+  const wrapped: Record<string, AnyFn> = {};
+  for (const [name, fn] of Object.entries(api)) {
+    if (name.startsWith('on')) {
+      // Event subscriptions return an unsubscribe function, not a promise.
+      wrapped[name] = fn;
+      continue;
+    }
+    if (!preloadPerf.enabled) {
+      wrapped[name] = fn;
+      continue;
+    }
+    wrapped[name] = async (...args: any[]) => {
+      const reqBytes = estimatePayloadBytes(args);
+      const t0 = performance.now();
+      try {
+        const result = await fn(...args);
+        preloadPerf.push({
+          kind: 'ipc-invoke',
+          label: name,
+          ms: performance.now() - t0,
+          bytes: reqBytes + estimatePayloadBytes(result),
+          t: Date.now(),
+        });
+        return result;
+      } catch (err) {
+        preloadPerf.push({ kind: 'ipc-invoke', label: name, ms: performance.now() - t0, bytes: reqBytes, t: Date.now() });
+        throw err;
+      }
+    };
+  }
+  wrapped.getPerfSnapshot = () => preloadPerf.snapshot();
+  wrapped.resetPerf = () => preloadPerf.reset();
+  return wrapped;
+}
+
+contextBridge.exposeInMainWorld('electronAPI', wrapApi({
   // ... invoke calls (saveFile, openFile, etc.) unchanged ...
   saveFile: (content: string) => ipcRenderer.invoke('save-file', content),
   openFile: () => ipcRenderer.invoke('open-file'),
-  loadPresets: () => ipcRenderer.invoke('load-presets'),
+  loadPresets: (retentionMs?: number) => ipcRenderer.invoke('load-presets', retentionMs),
   savePreset: (preset: { name: string; presentation: any; retentionMs?: number }) => ipcRenderer.invoke('save-preset', preset),
-  deletePreset: (name: string) => ipcRenderer.invoke('delete-preset', name),
-  renamePreset: (oldName: string, newName: string) => ipcRenderer.invoke('rename-preset', oldName, newName),
+  deletePreset: (name: string, retentionMs?: number) => ipcRenderer.invoke('delete-preset', name, retentionMs),
+  renamePreset: (oldName: string, newName: string, retentionMs?: number) => ipcRenderer.invoke('rename-preset', oldName, newName, retentionMs),
   toggleProjector: (initialData?: any) => ipcRenderer.invoke('toggle-projector', initialData),
   updateProjector: (data: any) => ipcRenderer.invoke('update-projector', data),
   getProjectorStatus: () => ipcRenderer.invoke('get-projector-status'),
@@ -26,6 +72,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateRemoteStatus: (status: any) => ipcRenderer.invoke('update-remote-status', status),
   quitApp: () => ipcRenderer.invoke('quit-app'),
   updateAllSlidePreviews: (previews: any) => ipcRenderer.invoke('update-all-slide-previews', previews),
+  updateSlidePreviewsDelta: (updates: any) => ipcRenderer.invoke('update-slide-previews-delta', updates),
   sendSlidePreview: (dataUrl: string) => ipcRenderer.invoke('send-slide-preview', dataUrl),
   showConfirmDialog: (options: {
     message: string;
@@ -71,6 +118,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('projector-closed', subscription);
   },
 
+  onProjectorReady: (callback: () => void) => {
+    const subscription = () => callback();
+    ipcRenderer.on('projector-ready-ack', subscription);
+    return () => ipcRenderer.removeListener('projector-ready-ack', subscription);
+  },
+
   onPptxImportProgress: (callback: (data: { current: number; total: number }) => void) => {
     const subscription = (_event: any, data: { current: number; total: number }) => callback(data);
     ipcRenderer.on('pptx-import-progress', subscription);
@@ -106,4 +159,4 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('updater-event', subscription);
     return () => ipcRenderer.removeListener('updater-event', subscription);
   },
-});
+}));

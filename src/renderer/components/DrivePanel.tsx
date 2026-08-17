@@ -99,18 +99,16 @@ function SkeletonRow() {
 
 export default function DrivePanel() {
   const { t } = useTranslation();
-  const {
-    presentation,
-    driveSignedIn,
-    driveEmail,
-    driveFiles,
-    setDriveSignedIn,
-    setDriveFiles,
-    drivePanelOpen,
-    setDrivePanelOpen,
-    driveSigningIn,
-    setDriveSigningIn,
-  } = useStore();
+  const presentation = useStore((s) => s.presentation);
+  const driveSignedIn = useStore((s) => s.driveSignedIn);
+  const driveEmail = useStore((s) => s.driveEmail);
+  const driveFiles = useStore((s) => s.driveFiles);
+  const setDriveSignedIn = useStore((s) => s.setDriveSignedIn);
+  const setDriveFiles = useStore((s) => s.setDriveFiles);
+  const drivePanelOpen = useStore((s) => s.drivePanelOpen);
+  const setDrivePanelOpen = useStore((s) => s.setDrivePanelOpen);
+  const driveSigningIn = useStore((s) => s.driveSigningIn);
+  const setDriveSigningIn = useStore((s) => s.setDriveSigningIn);
 
 const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { Presentation, Preset, MediaItem, LoopItem, DriveFile } from '../types';
-import { undoReducer, UndoState, UndoAction } from './undoReducer';
+import { undoReducer, UndoState, UndoAction, applyProjectorPatch, ProjectorPatch } from './undoReducer';
 // UndoAction is used in setPresentationName to keep rename in undo history
 import { DEFAULT_STYLES, DEFAULT__TRANSITION } from '../constants';
 import { makeSlideId } from '../utils';
@@ -31,6 +31,8 @@ interface AppState {
   // Undo State
   undoState: UndoState;
   dispatchUndo: (action: UndoAction) => void;
+  /** Projector-only: applies a delta without growing the undo history. */
+  applyProjectorDelta: (patch: ProjectorPatch) => void;
   presentation: Presentation;
 
   // Selected State
@@ -172,6 +174,15 @@ export const useStore = create<AppState>((set) => ({
         toastKey: toast ? Date.now() : state.toastKey,
       };
     }),
+  applyProjectorDelta: (patch) =>
+    set((state) => {
+      const next = applyProjectorPatch(state.presentation, patch);
+      if (next === state.presentation) return {};
+      return {
+        undoState: { ...state.undoState, present: next },
+        presentation: next,
+      };
+    }),
 
   selectedSlideId: initialUndoState.present.slides[0].id,
   setSelectedSlideId: (id) => set({ selectedSlideId: id }),
@@ -286,14 +297,11 @@ export const useStore = create<AppState>((set) => ({
   setSlideZoom: (zoom) =>
     set((state) => {
       const newZoom = typeof zoom === 'function' ? zoom(state.slideZoom) : zoom;
-      return {
-        slideZoom: newZoom,
-        // Sync zoom to presentation so it persists when saved
-        presentation: {
-          ...state.presentation,
-          zoom: newZoom,
-        },
-      };
+      // Zoom is UI-only state. It must NOT write into `presentation`: doing so
+      // re-triggered the entire pipeline (autosave, projector IPC, thumbnail
+      // scan, remote status) on every zoom change. It is re-attached to the
+      // payload only at save time (see useSlideOperations.savePresentation).
+      return { slideZoom: newZoom };
     }),
 
   isEditorOpen: false,

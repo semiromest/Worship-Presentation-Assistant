@@ -14,6 +14,12 @@ export interface Hymn {
   id: string;
   title: string;
   lyrics: string;
+  /** Author / lyricist / composer, when known. */
+  author?: string;
+  /** Musical key (ton), when known. */
+  key?: string;
+  /** Source book reference (e.g. "TY527, RT38"), when known. */
+  source?: string;
 }
 
 interface HymnsTabProps {
@@ -115,9 +121,9 @@ function cleanLyrics(lyrics: string): string {
 
 // ─── Cache helpers ────────────────────────────────────────────────────────
 
-// Cache key version: v2 invalidates pre-fix caches whose lyrics lost their
-// stanza separators (whole hymn rendered as a single slide).
-const CACHE_VERSION = 'v2';
+// Cache key version: v3 adds author/key/source metadata to cached entries,
+// so older caches are invalidated and re-parsed on next launch.
+const CACHE_VERSION = 'v3';
 
 function cacheHymns(path: string, list: Hymn[]) {
   try { localStorage.setItem(`hymnsCache:${CACHE_VERSION}:${path}`, JSON.stringify(list)); } catch {}
@@ -131,6 +137,34 @@ function loadCachedHymns(path: string): Hymn[] | null {
 }
 
 // ─── XML parsing — chunked to keep main thread free ───────────────────────
+
+/** Pull author / key metadata out of a parsed <song> node, when present. */
+function extractXmlMeta(node: Element): { author?: string; key?: string } {
+  const meta: { author?: string; key?: string } = {};
+
+  // Authors — handles both <author>Name</author> and <authors><author>…</author></authors>
+  const authorsEl = node.querySelector('authors');
+  if (authorsEl) {
+    const names = Array.from(authorsEl.querySelectorAll('author'))
+      .map(a => a.textContent?.trim())
+      .filter((n): n is string => !!n);
+    if (names.length > 0) {
+      meta.author = [...new Set(names)].join(', ');
+    } else {
+      const t = authorsEl.textContent?.trim();
+      if (t) meta.author = t;
+    }
+  } else {
+    const t = node.querySelector('author')?.textContent?.trim();
+    if (t) meta.author = t;
+  }
+
+  // Musical key (ton), e.g. OpenLyrics <properties><key>E</key></properties>
+  const k = node.querySelector('key')?.textContent?.trim();
+  if (k) meta.key = k;
+
+  return meta;
+}
 
 async function parseXmlFiles(
   files: { name: string; content: string }[],
@@ -162,7 +196,7 @@ async function parseXmlFiles(
           const key = cleaned.toLowerCase();
 
           if (!titleMap.has(key)) {
-            const hymn = { id: crypto.randomUUID(), title: cleaned, lyrics };
+            const hymn = { id: crypto.randomUUID(), title: cleaned, lyrics, ...extractXmlMeta(node) };
             titleMap.set(key, hymn);
             results.push(hymn);
           }
@@ -181,7 +215,7 @@ async function parseXmlFiles(
 
 // ─── Virtual list ─────────────────────────────────────────────────────────
 
-const ITEM_H = 64;
+const ITEM_H = 80;
 const OVERSCAN = 5;
 
 function useVirtualList(items: Hymn[], containerRef: React.RefObject<HTMLDivElement>) {
@@ -221,12 +255,12 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
   const [searchInLyrics, setSearchInLyrics] = useState(false);
   const debouncedSearch                 = useDebounce(searchTerm, 200);
   const [isAddingNew, setIsAddingNew]   = useState(false);
-  const [newHymn, setNewHymn]           = useState({ title: '', lyrics: '' });
+  const [newHymn, setNewHymn]           = useState({ title: '', lyrics: '', author: '' });
   const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<number | null>(null);
   const [editingHymn, setEditingHymn] = useState<Hymn | null>(null);
-  const [editForm, setEditForm] = useState({ title: '', lyrics: '' });
+  const [editForm, setEditForm] = useState({ title: '', lyrics: '', author: '' });
   const [partsModeEnabled, setPartsModeEnabled] = useState(() => {
     try {
       const v = localStorage.getItem('hymnsPartsModeEnabled');
@@ -311,23 +345,22 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
   const addNewHymn = useCallback(() => {
     const title = newHymn.title.trim();
     const lyrics = newHymn.lyrics.trim();
+    const author = newHymn.author.trim();
     if (!title || !lyrics) return;
     setHymns(prev => [
       ...prev,
-      { id: crypto.randomUUID(), title: cleanTitle(title), lyrics: cleanLyrics(lyrics) },
+      { id: crypto.randomUUID(), title: cleanTitle(title), lyrics: cleanLyrics(lyrics), author: author || undefined },
     ]);
-    setNewHymn({ title: '', lyrics: '' });
+    setNewHymn({ title: '', lyrics: '', author: '' });
     setIsAddingNew(false);
   }, [newHymn]);
 
-  const handleOnlineImport = useCallback((imported: Hymn[], failedCount = 0) => {
+  const handleOnlineImport = useCallback((imported: Hymn[], _failedCount = 0) => {
     if (imported.length === 0) return;
     setHymns(prev => mergeImportedHymns(prev, imported.map(h => ({ ...h, lyrics: cleanLyrics(h.lyrics) }))));
     setImportSuccess(imported.length);
-    if (failedCount > 0) {
-      setImportError(t('common.onlineHymnsImportFailed', { count: failedCount }));
-    }
-  }, [t]);
+    // Import failures are intentionally silent: the success banner is enough.
+  }, []);
 
   // Auto-dismiss success banner after 4 seconds
   useEffect(() => {
@@ -365,24 +398,25 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
 
   const openEditModal = useCallback((hymn: Hymn) => {
     setEditingHymn(hymn);
-    setEditForm({ title: hymn.title, lyrics: hymn.lyrics });
+    setEditForm({ title: hymn.title, lyrics: hymn.lyrics, author: hymn.author ?? '' });
   }, []);
 
   const closeEditModal = useCallback(() => {
     setEditingHymn(null);
-    setEditForm({ title: '', lyrics: '' });
+    setEditForm({ title: '', lyrics: '', author: '' });
   }, []);
 
   const saveEditedHymn = useCallback(() => {
     if (!editingHymn) return;
     const trimmedTitle = editForm.title.trim();
     const trimmedLyrics = editForm.lyrics.trim();
+    const author = editForm.author.trim();
     if (!trimmedTitle || !trimmedLyrics) return;
 
     setHymns(prev => {
       const updated = prev.map(h =>
         h.id === editingHymn.id
-          ? { ...h, title: cleanTitle(trimmedTitle), lyrics: cleanLyrics(trimmedLyrics) }
+          ? { ...h, title: cleanTitle(trimmedTitle), lyrics: cleanLyrics(trimmedLyrics), author: author || undefined }
           : h
       );
       const savedPath = localStorage.getItem('defaultHymnArchivePath');
@@ -576,6 +610,19 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
               />
             </div>
             <div className="space-y-1">
+              <label htmlFor="new-hymn-author" className="block text-xs text-white/50 font-semibold">
+                {t('common.hymnsAddAuthor')}
+              </label>
+              <input
+                id="new-hymn-author"
+                type="text"
+                placeholder={t('common.hymnsAddAuthor')}
+                value={newHymn.author}
+                onChange={e => setNewHymn(p => ({ ...p, author: e.target.value }))}
+                className="w-full bg-black/20 border border-white/10 rounded-md p-2 text-sm focus-visible:border-blue-500/60 focus-visible:outline-none"
+              />
+            </div>
+            <div className="space-y-1">
               <label htmlFor="new-hymn-lyrics" className="block text-xs text-white/50 font-semibold">
                 {t('common.hymnsAddLyrics')}
               </label>
@@ -676,6 +723,19 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
               </div>
 
               <div>
+                <label htmlFor="edit-hymn-author" className="block text-xs text-white/60 font-semibold mb-1">
+                  {t('common.hymnsAddAuthor')}
+                </label>
+                <input
+                  id="edit-hymn-author"
+                  type="text"
+                  value={editForm.author}
+                  onChange={e => setEditForm(p => ({ ...p, author: e.target.value }))}
+                  className="w-full bg-black/30 border border-white/10 rounded-md p-2 text-sm text-white focus-visible:border-blue-500/60 focus-visible:outline-none"
+                />
+              </div>
+
+              <div>
                 <label htmlFor="edit-hymn-lyrics" className="block text-xs text-white/60 font-semibold mb-1">
                   {t('common.hymnsLyricsLabel')}
                 </label>
@@ -730,11 +790,17 @@ interface HymnRowProps {
 
 const HymnRow = memo(({ hymn, top, onSelect, onDoubleClick, onEdit, onRemove }: HymnRowProps) => {
   const { t } = useTranslation();
+
+  const metaParts = [
+    hymn.author ? `${t('common.hymnsAuthorLabel')}: ${hymn.author}` : '',
+    hymn.source ? `${t('common.hymnsSourceLabel')}: ${hymn.source}` : '',
+  ].filter(Boolean);
+
   return (
     <div
       role="button"
       tabIndex={0}
-      aria-label={`${hymn.title}: ${hymn.lyrics?.substring(0, 60)}`}
+      aria-label={`${hymn.title}${hymn.author ? ` — ${hymn.author}` : ''}: ${hymn.lyrics?.substring(0, 60)}`}
       onClick={() => onSelect(hymn)}
       onDoubleClick={() => onDoubleClick?.(hymn)}
       onKeyDown={(e) => {
@@ -744,11 +810,14 @@ const HymnRow = memo(({ hymn, top, onSelect, onDoubleClick, onEdit, onRemove }: 
         }
       }}
       style={{ position: 'absolute', top, left: 8, right: 8, height: ITEM_H - 8 }}
-      className="p-3 bg-white/5 hover:bg-white/10 rounded-lg cursor-pointer flex justify-between items-center"
+      className="p-2.5 bg-white/5 hover:bg-white/10 rounded-lg cursor-pointer flex justify-between items-center"
     >
       <div className="min-w-0 mr-2">
         <div className="text-sm font-semibold truncate">{hymn.title}</div>
         <div className="text-xs text-white/40 truncate">{hymn.lyrics.split('\n')[0]}</div>
+        {metaParts.length > 0 && (
+          <div className="text-[11px] leading-4 text-white/30 truncate">{metaParts.join(' · ')}</div>
+        )}
       </div>
 
       <div className="flex items-center gap-1 shrink-0">

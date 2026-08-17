@@ -3,12 +3,17 @@ export interface WorshipSong {
   title: string;
   songkey: string | null;
   song_usage_2m: number;
+  source_title?: string | null;
 }
 
 export interface WorshipSongDetail {
   id: number;
   title: string;
   songxml: string;
+  songkey?: string | null;
+  source_title?: string | null;
+  info?: { type: string; value: string }[];
+  sources?: { id?: number; number?: number }[];
 }
 
 interface ListSongsResponse {
@@ -18,6 +23,7 @@ interface ListSongsResponse {
     title: string;
     songkey?: string | null;
     song_usage_2m?: number;
+    source_title?: string | null;
   }[];
   total: number;
 }
@@ -28,6 +34,10 @@ interface GetSongResponse {
     id: number;
     title: string;
     songxml?: string;
+    songkey?: string | null;
+    source_title?: string | null;
+    info?: { type: string; value: string }[];
+    sources?: { id?: number; number?: number }[];
   };
 }
 
@@ -53,6 +63,7 @@ export async function listSongs(
       title: d.title,
       songkey: d.songkey ?? null,
       song_usage_2m: d.song_usage_2m ?? 0,
+      source_title: d.source_title ?? null,
     })),
     total: json.total,
   };
@@ -63,11 +74,57 @@ export async function getSong(id: number): Promise<WorshipSongDetail> {
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   const json: GetSongResponse = await res.json();
   if (!json.success || !json.data) throw new Error('Song not found');
+  const d = json.data;
   return {
-    id: json.data.id,
-    title: json.data.title,
-    songxml: json.data.songxml ?? '',
+    id: d.id,
+    title: d.title,
+    songxml: d.songxml ?? '',
+    songkey: d.songkey ?? null,
+    source_title: d.source_title ?? null,
+    info: d.info ?? [],
+    sources: d.sources ?? [],
   };
+}
+
+// ─── Author / source metadata ────────────────────────────────────────────
+
+// Info entry types that carry attribution (who wrote/composed the song).
+const AUTHOR_INFO_TYPES = new Set([
+  'wordsandmusic',
+  'words',
+  'music',
+  'lyrics',
+  'writer',
+  'author',
+  'composer',
+]);
+
+/**
+ * Extracts author(s) from the song detail's `info` entries.
+ * Returns null when no attribution is present.
+ */
+export function extractSongAuthor(detail: Pick<WorshipSongDetail, 'info'>): string | null {
+  const authors = (detail.info ?? [])
+    .filter((i) => i?.value && AUTHOR_INFO_TYPES.has(i.type))
+    .map((i) => i.value.trim())
+    .filter(Boolean);
+  if (authors.length === 0) return null;
+  return [...new Set(authors)].join(', ');
+}
+
+/**
+ * Builds a displayable source reference (hymn book numbers, e.g. "TY527, RT38").
+ * Prefers the ready-made `source_title`; falls back to joining `sources` numbers.
+ */
+export function extractSongSource(
+  detail: Pick<WorshipSongDetail, 'source_title' | 'sources'>
+): string | null {
+  const title = detail.source_title?.trim();
+  if (title) return title;
+  const numbers = (detail.sources ?? [])
+    .map((s) => s?.number)
+    .filter((n): n is number => typeof n === 'number' && n > 0);
+  return numbers.length > 0 ? numbers.join(', ') : null;
 }
 
 // Tags treated as stanza boundaries: opening/closing map to \n\n

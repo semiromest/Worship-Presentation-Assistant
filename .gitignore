@@ -8,7 +8,8 @@ dist/
 dist-electron/
 out/
 release/
-
+perf/
+.freebuff/
 # Environment
 .env
 .env.local

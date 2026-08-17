@@ -24,7 +24,7 @@ import { useStore } from './state/useStore';
 import { useRemoteControl } from './state/useRemoteControl';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation';
 import { useProjectorSync } from './hooks/useProjectorSync';
-import { useLiveSave } from './hooks/useLiveSave';
+import { useLiveSave, getLiveSaveRetention } from './hooks/useLiveSave';
 import { useSlideOperations } from './hooks/useSlideOperations';
 import { initUpdaterSync } from './state/useUpdaterStore';
 
@@ -45,30 +45,31 @@ export default function App() {
   useProjectorSync();
   useLiveSave();
 
-  const {
-    presentation,
-    selectedSlideId,
-    liveIndex,
-    projectorReady,
-    isBlackout,
-    mediaVolume,
-    isMediaMuted,
-    activeTab,
-    setActiveTab,
-    presets,
-    setPresets,
-    panels,
-    setPanels,
-    selectedPresetName,
-    setSelectedPresetName,
-    isEditorOpen,
-    setIsEditorOpen,
-    activeColorPicker,
-    setActiveColorPicker,
-    dispatchUndo,
-    isRightPanelOpen,
-    setIsRightPanelOpen,
-  } = useStore();
+  // Field-level selectors: subscribing to the whole store re-rendered App on
+  // every state change (toast, search, liveIndex, …). Each selector returns a
+  // stable reference, so re-renders are limited to actual field changes.
+  const presentation = useStore((s) => s.presentation);
+  const selectedSlideId = useStore((s) => s.selectedSlideId);
+  const liveIndex = useStore((s) => s.liveIndex);
+  const projectorReady = useStore((s) => s.projectorReady);
+  const isBlackout = useStore((s) => s.isBlackout);
+  const mediaVolume = useStore((s) => s.mediaVolume);
+  const isMediaMuted = useStore((s) => s.isMediaMuted);
+  const activeTab = useStore((s) => s.activeTab);
+  const setActiveTab = useStore((s) => s.setActiveTab);
+  const presets = useStore((s) => s.presets);
+  const setPresets = useStore((s) => s.setPresets);
+  const panels = useStore((s) => s.panels);
+  const setPanels = useStore((s) => s.setPanels);
+  const selectedPresetName = useStore((s) => s.selectedPresetName);
+  const setSelectedPresetName = useStore((s) => s.setSelectedPresetName);
+  const isEditorOpen = useStore((s) => s.isEditorOpen);
+  const setIsEditorOpen = useStore((s) => s.setIsEditorOpen);
+  const activeColorPicker = useStore((s) => s.activeColorPicker);
+  const setActiveColorPicker = useStore((s) => s.setActiveColorPicker);
+  const dispatchUndo = useStore((s) => s.dispatchUndo);
+  const isRightPanelOpen = useStore((s) => s.isRightPanelOpen);
+  const setIsRightPanelOpen = useStore((s) => s.setIsRightPanelOpen);
 
   const {
     addSlide,
@@ -142,13 +143,13 @@ export default function App() {
   // ─── Sync html lang with i18n ────────────────────────────────────────────
   useEffect(() => {
     document.documentElement.lang = i18n.language?.split('-')[0] ?? 'tr';
-  });
+  }, [i18n.language]);
 
   useEffect(() => {
     let alive = true;
 
     const hydratePresets = async () => {
-      const loaded = await window.electronAPI?.loadPresets?.();
+      const loaded = await window.electronAPI?.loadPresets?.(getLiveSaveRetention());
       if (!alive || !Array.isArray(loaded)) return;
       setPresets(loaded);
     };

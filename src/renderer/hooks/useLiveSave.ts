@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useStore } from '../state/useStore';
 import { IS_PROJECTOR_MODE } from '../constants';
+import type { Presentation } from '../types';
 
 export const LIVE_SAVE_PRESET_PREFIX = '__live_autosave_';
 export const LIVE_SAVE_PRESET_SUFFIX = '__';
@@ -46,6 +47,10 @@ export const getLiveSavePresetName = (
   return `${LIVE_SAVE_PRESET_PREFIX}${presentationIdOrName}${LIVE_SAVE_PRESET_SUFFIX}`;
 };
 
+/** Current live-save retention in ms (0 = keep forever). */
+export const getLiveSaveRetention = (): number =>
+  useStore.getState().liveSaveRetentionMs;
+
 export function normalizeVisiblePresets<T extends { name: string }>(
   items: T[]
 ): T[] {
@@ -61,7 +66,8 @@ export function pruneLiveSaveEntries<
   const regular: T[] = [];
   const latestByKey = new Map<string, T>();
 
-  const retentionMs = Math.max(0, useStore.getState().liveSaveRetentionMs || DEFAULT_LIVE_SAVE_RETENTION_MS);
+  // 0 means "keep forever" — never coerce it to the default via `||`.
+  const retentionMs = useStore.getState().liveSaveRetentionMs ?? DEFAULT_LIVE_SAVE_RETENTION_MS;
 
   for (const item of items) {
     if (!isLiveSavePreset(item.name)) {
@@ -71,8 +77,8 @@ export function pruneLiveSaveEntries<
 
     const age = now - item.createdAt;
 
-    // Remove live-save records older than the retention period.
-    if (retentionMs <= 0 || age > retentionMs) {
+    // retentionMs <= 0 means "keep forever" — only age-prune when > 0.
+    if (retentionMs > 0 && age > retentionMs) {
       continue;
     }
 
@@ -93,7 +99,7 @@ export function pruneLiveSaveEntries<
 
 const performSave = () => {
   const state = useStore.getState();
-  if (!state.liveSaveEnabled || state.liveSaveRetentionMs <= 0) {
+  if (!state.liveSaveEnabled) {
     return;
   }
 
@@ -105,10 +111,115 @@ const performSave = () => {
 
   return window.electronAPI?.savePreset?.({
     name,
-    presentation,
+    // Persist the live slide position too, so a backup can resume
+    // exactly where the service left off.
+    presentation: { ...presentation, liveIndex: state.liveIndex },
     retentionMs: state.liveSaveRetentionMs,
   });
 };
+
+// ─── Crash fallback (localStorage snapshot) ───────────────────────────────
+//
+// IPC saves are async, so on unload/pagehide the write may not finish before
+// the renderer is torn down. A tiny synchronous snapshot in localStorage
+// guarantees the latest state survives; it is merged back into the preset
+// store on next launch (only if newer than the on-disk backup).
+
+const FALLBACK_KEY = 'liveSaveFallback';
+
+interface FallbackSnapshot {
+  savedAt: number;
+  presentation: Presentation;
+}
+
+function readFallback(): FallbackSnapshot | null {
+  try {
+    const raw = localStorage.getItem(FALLBACK_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<FallbackSnapshot>;
+    if (!parsed.presentation || typeof parsed.savedAt !== 'number') return null;
+    return { savedAt: parsed.savedAt, presentation: parsed.presentation };
+  } catch {
+    return null;
+  }
+}
+
+function writeFallback(): void {
+  const state = useStore.getState();
+  if (!state.liveSaveEnabled) return;
+  try {
+    const snapshot: FallbackSnapshot = {
+      savedAt: Date.now(),
+      presentation: { ...state.presentation, liveIndex: state.liveIndex },
+    };
+    localStorage.setItem(FALLBACK_KEY, JSON.stringify(snapshot));
+  } catch {
+    // Storage may be unavailable (private mode / quota) — the IPC save still runs.
+    console.debug('live save: fallback snapshot write failed');
+  }
+}
+
+function clearFallback(): void {
+  try {
+    localStorage.removeItem(FALLBACK_KEY);
+  } catch {
+    // Best-effort cleanup; a stale snapshot is ignored on read anyway.
+    console.debug('live save: fallback snapshot clear failed');
+  }
+}
+
+/**
+ * Merges a crash snapshot back into the preset store on startup — but only
+ * when it is newer than the matching on-disk live-save record.
+ */
+async function recoverFallback(): Promise<void> {
+  const state = useStore.getState();
+  if (!state.liveSaveEnabled) {
+    clearFallback();
+    return;
+  }
+
+  const snapshot = readFallback();
+  if (!snapshot) return;
+
+  try {
+    const list = await window.electronAPI?.loadPresets?.(
+      state.liveSaveRetentionMs
+    );
+    if (!Array.isArray(list)) {
+      clearFallback();
+      return;
+    }
+
+    const name = getLiveSavePresetName(
+      snapshot.presentation.id || snapshot.presentation.name
+    );
+    const key = getLiveSavePresetKey(name);
+    const existing = list.find(
+      (p) => isLiveSavePreset(p.name) && getLiveSavePresetKey(p.name) === key
+    );
+
+    // The on-disk backup is at least as fresh — nothing to recover.
+    if (existing && existing.createdAt >= snapshot.savedAt) {
+      clearFallback();
+      return;
+    }
+
+    const updated = await window.electronAPI?.savePreset?.({
+      name,
+      presentation: snapshot.presentation,
+      retentionMs: state.liveSaveRetentionMs,
+    });
+    if (Array.isArray(updated)) {
+      useStore.getState().setPresets(updated);
+      clearFallback();
+    }
+    // If the IPC call failed (updated === undefined) the snapshot is kept
+    // so recovery can be retried on the next launch.
+  } catch {
+    // Keep the snapshot for a future launch.
+  }
+}
 
 /**
  * Automatically saves the current presentation:
@@ -135,6 +246,8 @@ export function useLiveSave(): null {
     // Do not clear dirtyRef here. If the feature is enabled again,
     // the next interval/change can still trigger a save.
     if (!useStore.getState().liveSaveEnabled) {
+      // Feature is off — don't keep stale crash snapshots around.
+      clearFallback();
       return;
     }
 
@@ -197,6 +310,9 @@ export function useLiveSave(): null {
       return;
     }
 
+    // Merge any crash snapshot from a previous session (if newer than disk).
+    void recoverFallback();
+
     const scheduleSave = () => {
       dirtyRef.current = true;
 
@@ -220,6 +336,8 @@ export function useLiveSave(): null {
       }
 
       if (dirtyRef.current) {
+        // Synchronous safety net for the async IPC save.
+        writeFallback();
         void persist();
       }
     };
@@ -244,7 +362,10 @@ export function useLiveSave(): null {
     };
 
     const unsubscribe = useStore.subscribe((state, prev) => {
-      if (state.presentation !== prev.presentation) {
+      if (
+        state.presentation !== prev.presentation ||
+        state.liveIndex !== prev.liveIndex
+      ) {
         scheduleSave();
       }
     });

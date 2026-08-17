@@ -69,9 +69,10 @@ function connect() {
         if (msg.data.slideMeta)   { mergeSlideMeta(msg.data.slideMeta); renderGrid(); }
       }
       else if (msg.type === 'status')      { applyStatus(msg.data); }
-      else if (msg.type === 'preview')     { showPreview(msg.data); }
-      else if (msg.type === 'allPreviews') { mergePreviews(msg.data); renderGrid(); }
-      else if (msg.type === 'slideMeta')   { mergeSlideMeta(msg.data); renderGrid(); }
+      else if (msg.type === 'preview')      { showPreview(msg.data); }
+      else if (msg.type === 'allPreviews')  { mergePreviews(msg.data); renderGrid(); }
+      else if (msg.type === 'previewsDelta'){ applyPreviewsDelta(msg.data); }
+      else if (msg.type === 'slideMeta')    { mergeSlideMeta(msg.data); renderGrid(); }
     } catch (e) {
       console.warn('[remote] ws parse error', e);
     }
@@ -265,6 +266,38 @@ function mergePreviews(newData) {
   newData.forEach((url, i) => { if (url) allPreviews[i] = url; });
 }
 
+/* ── Slides Grid: incremental thumbnail delta ─────────────────────────── */
+// Phase 3: a single-slide edit arrives as [{i, url}] and patches only that
+// grid node instead of rebuilding the whole grid (O(n) DOM per broadcast).
+function updateThumbNode(i, url) {
+  const th = slidesGrid.querySelector('.slide-thumb[data-index="' + i + '"]');
+  if (!th) return; // partsMode cards / not-yet-rendered nodes have no thumb to patch
+  if (th.dataset.url === url) return; // already showing this image
+  th.dataset.url = url;
+  let img = th.querySelector('img');
+  if (!img) {
+    const ph = th.querySelector('.thumb-ph');
+    if (!ph) return;
+    img = document.createElement('img');
+    img.alt = 'Slide ' + (i + 1) + ' of ' + allPreviews.length;
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    th.replaceChild(img, ph);
+  }
+  img.src = url;
+}
+
+function applyPreviewsDelta(updates) {
+  if (!Array.isArray(updates)) return;
+  updates.forEach(u => {
+    if (!u || typeof u.i !== 'number' || typeof u.url !== 'string') return;
+    while (allPreviews.length <= u.i) allPreviews.push(null);
+    if (allPreviews[u.i] === u.url) return;
+    allPreviews[u.i] = u.url;
+    updateThumbNode(u.i, u.url);
+  });
+}
+
 function mergeSlideMeta(meta) {
   if (!Array.isArray(meta)) return;
   const key = JSON.stringify(meta);
@@ -349,6 +382,7 @@ function renderGrid() {
     if (dataUrl) {
       const img = document.createElement('img');
       img.src = dataUrl;
+      img.dataset.url = dataUrl;
       img.alt = 'Slide ' + (i + 1) + ' of ' + allPreviews.length;
       // Keep the first viewport-sized batch immediately available; lazy-load
       // the rest so large presentations do not decode every thumbnail at once.

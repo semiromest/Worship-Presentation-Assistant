@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { convertPptxToPng, type SlideImage } from 'pptx-glimpse';
+import { storeBytesTo } from './mediaLibrary';
 
 // Constants
 
@@ -17,9 +18,9 @@ export type ImageFormat = 'png';
 export interface PptxSlideResult {
   slideNumber: number;
   /**
-   * Base64 data URI (`data:image/png;base64,...`) of the rendered slide.
-   * Self-contained on purpose: it survives local save, autosave/presets and
-   * reopening, unlike an ephemeral temp-file path.
+   * Media reference (`local-resource://media/<hash>.png`, Phase 6) of the
+   * rendered slide, or the base64 data URI as a fallback when the media
+   * library write fails. Either way the slide renders — never data loss.
    */
   imageData: string;
   width: number;
@@ -85,11 +86,21 @@ export class PptxService {
     }
   }
 
-  private processSlide(
+  private async processSlide(
     slide: SlideImage,
+    mediaDir: string | null,
     onSlideDone?: () => void
-  ): PptxSlideResult {
-    const imageData = `data:image/png;base64,${slide.png.toString('base64')}`;
+  ): Promise<PptxSlideResult> {
+    // Phase 6: write the PNG into the persistent media library so the huge
+    // base64 never enters the renderer state / undo / IPC / autosave. Falls
+    // back to an inline data URI only if the library write fails.
+    let imageData = '';
+    if (mediaDir) {
+      imageData = (await storeBytesTo(mediaDir, slide.png, 'png')) ?? '';
+    }
+    if (!imageData) {
+      imageData = `data:image/png;base64,${slide.png.toString('base64')}`;
+    }
 
     delete (slide as Partial<SlideImage>).png;
 
@@ -124,7 +135,8 @@ export class PptxService {
 
   async importPptx(
     filePath: string,
-    onProgress?: ProgressCallback
+    onProgress?: ProgressCallback,
+    mediaDir?: string | null
   ): Promise<PptxResult> {
     const presentationName = path.basename(filePath, path.extname(filePath));
 
@@ -151,7 +163,7 @@ export class PptxService {
       const settled = await runWithWorkerPool(
         slideImages,
         CONCURRENCY,
-        (slide) => Promise.resolve(this.processSlide(slide, reportProgress))
+        (slide) => this.processSlide(slide, mediaDir ?? null, reportProgress)
       );
 
       // Pre-allocated array (avoids push cost)

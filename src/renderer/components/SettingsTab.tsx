@@ -5,22 +5,20 @@ import { useStore } from '../state/useStore';
 import { useUpdaterStore } from '../state/useUpdaterStore';
 import { WatermarkSettingsPanel } from './WatermarkSettingsPanel';
 import { cn } from '../utils';
-import { DEFAULT_LIVE_SAVE_RETENTION_MS, isLiveSavePreset, LIVE_SAVE_RETENTION_OPTIONS } from '../hooks/useLiveSave';
+import { DEFAULT_LIVE_SAVE_RETENTION_MS, isLiveSavePreset, LIVE_SAVE_RETENTION_OPTIONS, getLiveSaveRetention } from '../hooks/useLiveSave';
 
 export default function SettingsTab() {
   const { t, i18n } = useTranslation();
-  const {
-    autoGoLive,
-    setAutoGoLive,
-    setIsUpdatesOpen,
-    liveSaveEnabled,
-    setLiveSaveEnabled,
-    liveSaveLastSaved,
-    liveSaveRetentionMs,
-    setLiveSaveRetentionMs,
-    presets,
-    setPresets,
-  } = useStore();
+  const autoGoLive = useStore((s) => s.autoGoLive);
+  const setAutoGoLive = useStore((s) => s.setAutoGoLive);
+  const setIsUpdatesOpen = useStore((s) => s.setIsUpdatesOpen);
+  const liveSaveEnabled = useStore((s) => s.liveSaveEnabled);
+  const setLiveSaveEnabled = useStore((s) => s.setLiveSaveEnabled);
+  const liveSaveLastSaved = useStore((s) => s.liveSaveLastSaved);
+  const liveSaveRetentionMs = useStore((s) => s.liveSaveRetentionMs);
+  const setLiveSaveRetentionMs = useStore((s) => s.setLiveSaveRetentionMs);
+  const presets = useStore((s) => s.presets);
+  const setPresets = useStore((s) => s.setPresets);
   const updaterStatus = useUpdaterStore((s) => s.status);
 
   const languages = Object.keys(i18n.options.resources ?? {});
@@ -36,7 +34,7 @@ export default function SettingsTab() {
 
     let next = [...presets];
     for (const name of names) {
-      const updated = await window.electronAPI?.deletePreset?.(name);
+      const updated = await window.electronAPI?.deletePreset?.(name, getLiveSaveRetention());
       if (Array.isArray(updated)) next = updated;
     }
 
@@ -151,7 +149,7 @@ export default function SettingsTab() {
             >
               {LIVE_SAVE_RETENTION_OPTIONS.map((option) => (
                 <option key={option} value={String(option)} className="bg-surface-overlay text-white">
-                  {option === 0 ? t('settings.retentionOff') : option === DEFAULT_LIVE_SAVE_RETENTION_MS ? t('settings.retention7d') : option === 24 * 60 * 60 * 1000 ? t('settings.retention1d') : t('settings.retention30d')}
+                  {option === 0 ? t('settings.retentionForever') : option === DEFAULT_LIVE_SAVE_RETENTION_MS ? t('settings.retention7d') : option === 24 * 60 * 60 * 1000 ? t('settings.retention1d') : t('settings.retention30d')}
                 </option>
               ))}
             </select>

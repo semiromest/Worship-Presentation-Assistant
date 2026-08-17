@@ -174,6 +174,9 @@
     "hymnsSearchLyricsOn": "Auch in Liedtexten suchen",
     "hymnsAddTitle": "Titel",
     "hymnsAddLyrics": "Liedtext",
+    "hymnsAddAuthor": "Autor (optional)",
+    "hymnsAuthorLabel": "Autor",
+    "hymnsSourceLabel": "Quelle",
     "hymnsAddButton": "HINZUFÜGEN",
     "hymnsEmpty": "Keine Lieder",
     "hymnsEditTitle": "Lied bearbeiten",
@@ -659,6 +662,12 @@
     "updatesDesc": "Nach neuen Versionen der App suchen und sie herunterladen",
     "openUpdates": "Updates öffnen",
     "liveSave": "Automatisches Speichern",
-    "liveSaveLastSaved": "Zuletzt gespeichert: {{time}}"
+    "liveSaveRetention": "Aufbewahrungsdauer der Sicherungen",
+    "retentionForever": "Für immer",
+    "retention1d": "1 Tag",
+    "retention7d": "7 Tage (Standard)",
+    "retention30d": "30 Tage",
+    "liveSaveLastSaved": "Zuletzt gespeichert: {{time}}",
+    "liveSaveEmpty": "Keine automatische Sicherung vorhanden."
   }
 }

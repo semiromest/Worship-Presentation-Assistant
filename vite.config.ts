@@ -18,6 +18,13 @@ export default defineConfig({
               external: [
                 'electron',
               ],
+              // Phase 7: second entry — the heavy-work UtilityProcess. Input
+              // overrides the single lib entry (see vite-plugin-electron docs).
+              input: {
+                main: path.join(__dirname, 'src/main/main.ts'),
+                heavyWorker: path.join(__dirname, 'src/main/utility/heavyWorker.ts'),
+              },
+              output: { entryFileNames: '[name].js' },
             },
           },
         },

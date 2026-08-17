@@ -1,14 +1,24 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Download, Search, Cloud, Loader2, Globe, AlertTriangle, X } from 'lucide-react';
+import { Download, Search, Cloud, Loader2, Globe, X } from 'lucide-react';
 import { cn, useDebounce } from '../utils';
-import { listSongs, getSong, parseSongXml, WorshipSong } from '../worshipLeaderApi';
+import {
+  listSongs,
+  getSong,
+  parseSongXml,
+  extractSongAuthor,
+  extractSongSource,
+  WorshipSong,
+} from '../worshipLeaderApi';
 import ProgressBar from './ProgressBar';
 
 interface Hymn {
   id: string;
   title: string;
   lyrics: string;
+  author?: string;
+  key?: string;
+  source?: string;
 }
 
 interface OnlineHymnsPanelProps {
@@ -61,7 +71,6 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearch = useDebounce(searchTerm, 300);
   const [error, setError] = useState('');
-  const [importWarning, setImportWarning] = useState('');
   const abortRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
   const langRef = useRef(lang);  // Language snapshot for race condition prevention
@@ -74,13 +83,6 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
   useEffect(() => {
     langRef.current = lang;
   }, [lang]);
-
-  // Auto-dismiss import warning after 5 seconds
-  useEffect(() => {
-    if (!importWarning) return;
-    const timer = setTimeout(() => setImportWarning(''), 5000);
-    return () => clearTimeout(timer);
-  }, [importWarning]);
 
   // Infinite scroll: load more pages when scrolling near bottom (Issue 4)
   const handleScroll = useCallback(() => {
@@ -111,7 +113,6 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
   // Load first page from cache or API (Issue 4 + 5)
   async function loadSongs(targetLang: string) {
     setError('');
-    setImportWarning('');
     setSelected(new Set());
     abortRef.current = false;
 
@@ -212,12 +213,29 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
   };
 
   async function fetchSongBatch(ids: number[]): Promise<FetchBatchResult> {
+    // Grid rows carry the ready-made source title (e.g. "TY527, RT38"),
+    // which the detail endpoint does not always include.
+    const gridBySongId = new Map(songs.map(s => [s.id, s]));
     const results = await Promise.all(
       ids.map(id =>
         getSong(id).then(detail => {
           const lyrics = parseSongXml(detail.songxml);
+          const gridSong = gridBySongId.get(id);
           return lyrics.trim()
-            ? { hymn: { id: crypto.randomUUID(), title: detail.title, lyrics } as Hymn, failed: false }
+            ? {
+                hymn: {
+                  id: crypto.randomUUID(),
+                  title: detail.title,
+                  lyrics,
+                  author: extractSongAuthor(detail) ?? undefined,
+                  key: detail.songkey ?? gridSong?.songkey ?? undefined,
+                  source: extractSongSource({
+                    source_title: gridSong?.source_title ?? null,
+                    sources: detail.sources,
+                  }) ?? undefined,
+                } as Hymn,
+                failed: false,
+              }
             : { hymn: null, failed: true };
         }).catch(e => {
           console.error(`Failed to import song #${id}`, e);
@@ -233,21 +251,18 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
   const handleImport = async () => {
     if (selected.size === 0) return;
     setImporting(true);
-    setImportWarning('');
     const { hymns, failedCount } = await fetchSongBatch(Array.from(selected));
     setImporting(false);
     setSelected(new Set());
     if (hymns.length > 0) {
       onImport(hymns, failedCount);
       onClose?.();
-    } else if (failedCount > 0) {
-      setImportWarning(t('common.onlineHymnsImportFailed', { count: failedCount }));
     }
+    // Failures are silent: nothing was imported, nothing to report.
   };
 
   const handleImportAll = async () => {
     if (!window.confirm(t('common.onlineHymnsConfirmAll'))) return;
-    setImportWarning('');
     setError('');
 
     // Capture current language to detect changes
@@ -292,9 +307,6 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
         onImport(allImported, totalFailed);
         onClose?.();
       } else {
-        if (totalFailed > 0) {
-          setImportWarning(t('common.onlineHymnsImportFailed', { count: totalFailed }));
-        }
         setError(t('common.onlineHymnsImportAllFailed') || `Failed to import songs (${totalFailed} failed)`);
       }
     } catch (e: any) {
@@ -374,14 +386,6 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
       {error && (
         <div className="mx-4 mt-4 p-3 bg-red-600/20 border border-red-500/30 rounded-xl text-xs text-red-400">
           {error}
-        </div>
-      )}
-
-      {importWarning && (
-        <div className="mx-4 mt-4 p-3 bg-amber-600/20 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          <span>{importWarning}</span>
-          <button onClick={() => setImportWarning('')} className="ml-auto text-amber-400 hover:text-amber-200" aria-label={t('common.close')}>✕</button>
         </div>
       )}
 

@@ -28,7 +28,7 @@ import { convertPptxToSlides, type PptxImportResult } from './utils';
 import type { Presentation, Preset, Slide } from './types';
 import { confirmDialog } from './dialogs';
 import { useStore } from './state/useStore';
-import { isLiveSavePreset } from './hooks/useLiveSave';
+import { isLiveSavePreset, getLiveSaveRetention } from './hooks/useLiveSave';
 import DrivePanel from './components/DrivePanel';
 
 // ─── Shared action/styles (page-scoped) ────────────────────────────────────
@@ -430,7 +430,11 @@ export default function PresentationsTab({
 
     startSaveTransition(() => {
       void (async () => {
-        const updated = await window.electronAPI?.savePreset?.({ name, presentation });
+        const updated = await window.electronAPI?.savePreset?.({
+          name,
+          presentation,
+          retentionMs: getLiveSaveRetention(),
+        });
         if (Array.isArray(updated)) {
           onPresetsChange(updated);
           onSelectedPresetNameChange(name);
@@ -447,7 +451,7 @@ export default function PresentationsTab({
     async (name: string) => {
       if (!(await confirmDialog(t('common.confirmDeletePreset', { name })))) return;
 
-      const updated = await window.electronAPI?.deletePreset?.(name);
+      const updated = await window.electronAPI?.deletePreset?.(name, getLiveSaveRetention());
       if (Array.isArray(updated)) {
         onPresetsChange(updated);
         onSelectedPresetNameChange(name === selectedPresetName ? null : selectedPresetName);
@@ -458,7 +462,7 @@ export default function PresentationsTab({
 
   const renamePreset = useCallback(
     async (oldName: string, newName: string) => {
-      const updated = await window.electronAPI?.renamePreset?.(oldName, newName);
+      const updated = await window.electronAPI?.renamePreset?.(oldName, newName, getLiveSaveRetention());
       if (Array.isArray(updated)) {
         onPresetsChange(updated);
         if (selectedPresetName === oldName) {
@@ -927,7 +931,7 @@ export default function PresentationsTab({
                           onClick={async () => {
                             const confirmed = await confirmDialog(t('common.confirmDeletePreset', { name: preset.name }));
                             if (!confirmed) return;
-                            const updated = await window.electronAPI?.deletePreset?.(preset.name);
+                            const updated = await window.electronAPI?.deletePreset?.(preset.name, getLiveSaveRetention());
                             if (Array.isArray(updated)) {
                               onPresetsChange(updated);
                             }

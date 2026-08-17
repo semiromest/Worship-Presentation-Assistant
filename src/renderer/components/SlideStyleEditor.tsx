@@ -33,12 +33,10 @@ export default function SlideStyleEditor({
   updateSlideProperty,
 }: SlideStyleEditorProps) {
   const { t } = useTranslation();
-  const {
-    activeColorPicker,
-    setActiveColorPicker,
-    panels,
-    setPanels,
-  } = useStore();
+  const activeColorPicker = useStore((s) => s.activeColorPicker);
+  const setActiveColorPicker = useStore((s) => s.setActiveColorPicker);
+  const panels = useStore((s) => s.panels);
+  const setPanels = useStore((s) => s.setPanels);
 
   const parts = selectedSlide.parts ?? [];
   const activePart = selectedSlide.activePart ?? 0;

@@ -172,6 +172,8 @@ export interface Presentation {
     type: TransitionType;
     duration: number;
   };
+  /** Index of the live (on-screen) slide, so backups can resume where you were. */
+  liveIndex?: number;
 }
 
 export interface Preset {

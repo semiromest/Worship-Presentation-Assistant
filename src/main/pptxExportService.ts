@@ -16,6 +16,7 @@ import path from 'node:path';
 import { fileURLToPath as nodeFileURLToPath } from 'node:url';
 import PptxGenJS from 'pptxgenjs';
 import type { Presentation, Slide, SlideItem } from '../renderer/types';
+import { mediaRefToName } from '../shared/mediaTree';
 
 // ─── Geometry ──────────────────────────────────────────────────────────────
 
@@ -84,9 +85,14 @@ function transformText(text: string, transform?: string): string {
   return text;
 }
 
+// Phase 6: media-library refs (local-resource://media/<name>) resolve into
+// userData/media. Set per export call (exports are serialized).
+let mediaLibraryDir: string | null = null;
+
 /**
- * Resolves a media reference (local-resource://, file://, http(s)://, data:,
- * or a plain path) to a base64 data URI so PptxGenJS can embed it.
+ * Resolves a media reference (local-resource://media/<name>, local-resource://,
+ * file://, http(s)://, data:, or a plain path) to a base64 data URI so
+ * PptxGenJS can embed it.
  */
 async function resolveImageData(url?: string): Promise<string | null> {
   if (!url) return null;
@@ -99,11 +105,14 @@ async function resolveImageData(url?: string): Promise<string | null> {
       const mime = (res.headers.get('content-type') ?? 'image/png').split(';')[0];
       return `data:${mime};base64,${buf.toString('base64')}`;
     }
-    const filePath = url.startsWith('local-resource://')
-      ? localResourceUrlToPath(url)
-      : url.startsWith('file://')
-        ? nodeFileURLToPath(url)
-        : url;
+    const mediaName = mediaLibraryDir ? mediaRefToName(url) : null;
+    const filePath = mediaName
+      ? path.join(mediaLibraryDir!, mediaName)
+      : url.startsWith('local-resource://')
+        ? localResourceUrlToPath(url)
+        : url.startsWith('file://')
+          ? nodeFileURLToPath(url)
+          : url;
     const buf = await fs.readFile(filePath);
     const ext = path.extname(filePath).toLowerCase();
     return `data:${MIME_BY_EXT[ext] ?? 'image/png'};base64,${buf.toString('base64')}`;
@@ -615,8 +624,10 @@ export async function exportPresentationToPptx(
   presentation: Presentation,
   filePath: string,
   onProgress?: ExportProgressCallback,
+  mediaDir?: string | null,
 ): Promise<PptxExportResult> {
   try {
+    mediaLibraryDir = mediaDir ?? null;
     const pptx = new PptxGenJS();
     pptx.layout = 'LAYOUT_16x9';
     pptx.author = 'Worship Presentation Assistant';

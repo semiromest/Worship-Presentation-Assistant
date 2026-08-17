@@ -1,8 +1,27 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../state/useStore';
 import { IS_PROJECTOR_MODE, DEFAULT__TRANSITION } from '../constants';
 import { generateSlideThumbnail, useThrottle } from '../utils';
-import type { Slide, TransitionType } from '../types';
+import { computePatch, isPatchEmpty, type ProjectorPatch } from '../state/undoReducer';
+import type { Presentation, Slide, TransitionType } from '../types';
+
+/**
+ * Top-level style equality (mirrors undoReducer.shallowEqual). Replaces
+ * `JSON.stringify(styles)` comparison which ran per slide per deck change.
+ * Immutable updates mean a changed nested field always produces a new
+ * top-level styles object, so top-level reference equality is sufficient.
+ */
+function stylesEqual(a: Slide['styles'], b: Slide['styles']): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const ka = Object.keys(a);
+  const kb = Object.keys(b);
+  if (ka.length !== kb.length) return false;
+  for (const k of ka) {
+    if ((a as Record<string, unknown>)[k] !== (b as Record<string, unknown>)[k]) return false;
+  }
+  return true;
+}
 
 const TRANSITION_MAP: Record<TransitionType, string> = {
   none: 'none',
@@ -23,6 +42,7 @@ export function useProjectorSync() {
     liveIndex,
     isBlackout,
     isProjectorWindowOpen,
+    projectorReady,
     mediaVolume,
     isMediaMuted,
   } = useStore();
@@ -32,17 +52,87 @@ export function useProjectorSync() {
 
   const throttledPresentation = useThrottle(presentation, 300);
 
+  // ── Phase 4: delta sync ────────────────────────────────────────────────
+  // The projector applies patches on top of the base it last received, so the
+  // control renderer tracks that base here. The base is reset to null (forcing
+  // a full snapshot) whenever the projector window (re)signals readiness — a
+  // fresh open or a reload of an existing window — via the ready handshake.
+  const lastSentPresentationRef = useRef<Presentation | null>(null);
+  // Epoch forces the sync effect to re-run on every ready ack even when the
+  // projector was already marked ready (reload case: store value doesn't change).
+  const [projectorEpoch, setProjectorEpoch] = useState(0);
+
   useEffect(() => {
-    if (!IS_PROJECTOR_MODE && isProjectorWindowOpen) {
-      window.electronAPI?.updateProjector?.({
-        presentation: throttledPresentation,
-        liveIndex: liveIndex,
-        isBlackout,
-        volume: mediaVolume,
-        muted: isMediaMuted,
-      });
+    const off = window.electronAPI?.onProjectorReady?.(() => {
+      useStore.getState().setProjectorReady(true);
+      lastSentPresentationRef.current = null;
+      setProjectorEpoch((e) => e + 1);
+    });
+    return off;
+  }, []);
+
+  // The projector window is destroyed on close and recreated per open, so its
+  // base state always starts from the first snapshot after (re)open.
+  useEffect(() => {
+    if (!isProjectorWindowOpen) lastSentPresentationRef.current = null;
+  }, [isProjectorWindowOpen]);
+
+  useEffect(() => {
+    if (IS_PROJECTOR_MODE || !isProjectorWindowOpen || !projectorReady) return;
+
+    const nav = {
+      liveIndex,
+      isBlackout,
+      volume: mediaVolume,
+      muted: isMediaMuted,
+    };
+
+    const base = lastSentPresentationRef.current;
+    if (base === null || base === throttledPresentation) {
+      if (base !== throttledPresentation) {
+        // First send after (re)open: full snapshot establishes the base.
+        lastSentPresentationRef.current = throttledPresentation;
+        window.electronAPI?.updateProjector?.({ ...nav, fullPresentation: throttledPresentation });
+      } else {
+        // Presentation unchanged — navigation/blackout/volume only.
+        window.electronAPI?.updateProjector?.(nav);
+      }
+      return;
     }
-  }, [throttledPresentation, liveIndex, isBlackout, isProjectorWindowOpen, mediaVolume, isMediaMuted]);
+
+    // Delta: send only what changed since the base. prevSlide/prevOrder are
+    // stripped (the projector never undoes); the order list is sent only when
+    // it actually changed (add/remove/reorder).
+    const patch = computePatch(base, throttledPresentation);
+    lastSentPresentationRef.current = throttledPresentation;
+    if (isPatchEmpty(patch)) {
+      window.electronAPI?.updateProjector?.(nav);
+      return;
+    }
+
+    const orderChanged =
+      patch.prevOrder.length !== patch.nextOrder.length ||
+      patch.prevOrder.some((id, i) => id !== patch.nextOrder[i]);
+
+    const transport: ProjectorPatch = {
+      slidesPatch: patch.slidesPatch.map(({ id, nextSlide }) => ({ id, nextSlide })),
+      ...(orderChanged && { nextOrder: patch.nextOrder }),
+      ...(patch.nextName !== undefined && { nextName: patch.nextName }),
+      ...(patch.nextZoom !== undefined && { nextZoom: patch.nextZoom }),
+      ...(patch.nextTransition !== undefined && { nextTransition: patch.nextTransition }),
+    };
+
+    window.electronAPI?.updateProjector?.({ ...nav, patch: transport });
+  }, [
+    throttledPresentation,
+    liveIndex,
+    isBlackout,
+    isProjectorWindowOpen,
+    projectorReady,
+    projectorEpoch,
+    mediaVolume,
+    isMediaMuted,
+  ]);
 
   const thumbnailCache = useRef<Map<string, { url: string }>>(new Map());
   const prevSlidesRef = useRef<Slide[]>([]);
@@ -68,14 +158,25 @@ export function useProjectorSync() {
 
       const prevMap = new Map(prevSlides.map(s => [s.id, s]));
 
+      // Structural change (add/remove/reorder) shifts every remote index, so
+      // those runs must send a full snapshot for the phone grid to re-index.
+      // A pure content change can send a {index, url} delta that the remote
+      // applies in place — the common case (editing one slide) stays O(1).
+      const structurePreserved =
+        prevSlides.length === currentSlides.length &&
+        prevSlides.every((p, i) => p.id === currentSlides[i].id);
+
+      // O(n) removal pass instead of prevMap.keys() × currentSlides.some() (O(n²)).
+      const currentIds = new Set(currentSlides.map((s) => s.id));
       for (const id of prevMap.keys()) {
-        if (!currentSlides.some(s => s.id === id)) {
+        if (!currentIds.has(id)) {
           thumbnailCache.current.delete(id);
           pendingRetryRef.current.delete(id);
         }
       }
 
-      const thumbs: (string | null)[] = new Array(currentSlides.length);
+      const thumbs: (string | null)[] = structurePreserved ? [] : new Array(currentSlides.length);
+      const delta: { i: number; url: string }[] = [];
       let idx = 0;
 
       const worker = async () => {
@@ -93,23 +194,24 @@ export function useProjectorSync() {
             (prev.loopItems?.length ?? 0) !== (s.loopItems?.length ?? 0) ||
             // FIX: partsMode slides must regenerate when activePart changes
             prev.activePart !== s.activePart ||
-            JSON.stringify(prev.styles) !== JSON.stringify(s.styles) ||
+            !stylesEqual(prev.styles, s.styles) ||
             // Retry slides whose last attempt failed
             pendingRetryRef.current.has(s.id);
 
           if (!changed) {
-            thumbs[i] = cachedEntry?.url ?? null;
+            if (!structurePreserved) thumbs[i] = cachedEntry?.url ?? null;
           } else {
             const url = await generateSlideThumbnail(s);
             if (url && !cancelled) {
               thumbnailCache.current.set(s.id, { url });
               pendingRetryRef.current.delete(s.id);
-              thumbs[i] = url;
+              if (structurePreserved) delta.push({ i, url });
+              else thumbs[i] = url;
             } else if (!cancelled) {
               // On failure keep the last valid image and flag for retry instead of sending an empty preview.
               pendingRetryRef.current.add(s.id);
-              thumbs[i] = cachedEntry?.url ?? null;
-            } else {
+              if (!structurePreserved) thumbs[i] = cachedEntry?.url ?? null;
+            } else if (!structurePreserved) {
               thumbs[i] = null;
             }
           }
@@ -123,10 +225,18 @@ export function useProjectorSync() {
       if (!cancelled) prevSlidesRef.current = currentSlides;
 
       if (!cancelled) {
-        window.electronAPI?.updateAllSlidePreviews?.(thumbs);
+        if (structurePreserved) {
+          if (delta.length > 0) {
+            window.electronAPI?.updateSlidePreviewsDelta?.(delta);
+          }
+        } else {
+          window.electronAPI?.updateAllSlidePreviews?.(thumbs);
+        }
 
         const liveSlide = currentSlides[liveIndex];
-        const liveThumb = liveSlide ? thumbs[liveIndex] : null;
+        // Read from cache (not thumbs[]): in delta mode thumbs is empty, and
+        // the cache always holds the freshest url for both modes anyway.
+        const liveThumb = liveSlide ? (thumbnailCache.current.get(liveSlide.id)?.url ?? null) : null;
         if (liveThumb) {
           window.electronAPI?.sendSlidePreview?.(liveThumb);
         }
@@ -160,9 +270,31 @@ export function useProjectorSync() {
     }
   }, [liveIndex, throttledPresentation.slides]);
 
+  // Per-slide metadata for phones. Recomputed ONLY when the deck changes,
+  // never on navigation — the map over all slides + IPC + main-side
+  // JSON.stringify comparison used to run on every liveIndex change (O(T)).
+  const slidePreviews = useMemo(
+    () =>
+      presentation.slides.map((slide) => ({
+        type: slide.type,
+        content: slide.content,
+        mediaUrl: slide.mediaUrl,
+        styles: slide.styles,
+        partsMode: !!slide.partsMode,
+        parts: slide.parts ?? null,
+        title: slide.group?.title ?? null,
+      })),
+    [presentation.slides],
+  );
+
   // Remote status rides the UNTHROTTLED presentation so part taps (partGoto)
   // reflect on phones immediately instead of lagging behind useThrottle().
   useEffect(() => {
+    // FIX: only the CONTROL window publishes remote status. The projector
+    // window also runs this hook, and its own store keeps isProjectorWindowOpen
+    // false (projector mode never flips it), so its status broadcast used to
+    // clobber the control's correct isProjectorOpen=true on phones.
+    if (IS_PROJECTOR_MODE) return;
     const remoteTransition = TRANSITION_MAP[transitionType as TransitionType] ?? 'fade';
     const liveSlide = presentation.slides[liveIndex];
 
@@ -176,18 +308,11 @@ export function useProjectorSync() {
       // partsMode: expose active part info so remote can show part navigation
       activePart: liveSlide?.partsMode ? (liveSlide.activePart ?? 0) : undefined,
       partsCount: liveSlide?.partsMode ? (liveSlide.parts?.length ?? 1) : undefined,
-      slidePreviews: presentation.slides.map((slide) => ({
-        type: slide.type,
-        content: slide.content,
-        mediaUrl: slide.mediaUrl,
-        styles: slide.styles,
-        partsMode: !!slide.partsMode,
-        parts: slide.parts ?? null,
-        title: slide.group?.title ?? null,
-      })),
+      slidePreviews,
     });
   }, [
     presentation.slides,
+    slidePreviews,
     liveIndex,
     isBlackout,
     isProjectorWindowOpen,

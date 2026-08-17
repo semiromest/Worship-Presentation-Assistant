@@ -22,7 +22,8 @@ export default function ImageSlideEditor({
   applyStyleFieldToAll,
 }: ImageSlideEditorProps) {
   const { t } = useTranslation();
-  const { panels, setPanels } = useStore();
+  const panels = useStore((s) => s.panels);
+  const setPanels = useStore((s) => s.setPanels);
 
   const styles = (selectedSlide.styles || {}) as Record<string, any>;
   const imageUrl = selectedSlide.mediaUrl;

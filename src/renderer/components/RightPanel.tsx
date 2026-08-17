@@ -57,22 +57,20 @@ export default function RightPanel({
   onClose,
 }: RightPanelProps) {
   const { t } = useTranslation();
-  const {
-    presentation,
-    liveIndex,
-    setLiveIndex,
-    isBlackout,
-    setIsBlackout,
-    selectedSlideId,
-    isProjectorWindowOpen,
-    mediaVolume,
-    setMediaVolume,
-    isMediaMuted,
-    setIsMediaMuted,
-    setIsEditorOpen,
-    isRightPanelOpen,
-    setIsRightPanelOpen,
-  } = useStore();
+  const presentation = useStore((s) => s.presentation);
+  const liveIndex = useStore((s) => s.liveIndex);
+  const setLiveIndex = useStore((s) => s.setLiveIndex);
+  const isBlackout = useStore((s) => s.isBlackout);
+  const setIsBlackout = useStore((s) => s.setIsBlackout);
+  const selectedSlideId = useStore((s) => s.selectedSlideId);
+  const isProjectorWindowOpen = useStore((s) => s.isProjectorWindowOpen);
+  const mediaVolume = useStore((s) => s.mediaVolume);
+  const setMediaVolume = useStore((s) => s.setMediaVolume);
+  const isMediaMuted = useStore((s) => s.isMediaMuted);
+  const setIsMediaMuted = useStore((s) => s.setIsMediaMuted);
+  const setIsEditorOpen = useStore((s) => s.setIsEditorOpen);
+  const isRightPanelOpen = useStore((s) => s.isRightPanelOpen);
+  const setIsRightPanelOpen = useStore((s) => s.setIsRightPanelOpen);
 
   const transitionType = presentation.transition?.type ?? DEFAULT__TRANSITION.type;
   const transitionDuration = presentation.transition?.duration ?? DEFAULT__TRANSITION.duration;

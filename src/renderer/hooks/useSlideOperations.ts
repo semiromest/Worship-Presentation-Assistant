@@ -6,7 +6,7 @@ import { DEFAULT_STYLES, DEFAULT__TRANSITION } from '../constants';
 import { makeSlideId, toFileUrl } from '../utils';
 import { confirmDialog, alertDialog } from '../dialogs';
 import { findPresetByRef } from '../presetUtils';
-import { isLiveSavePreset } from './useLiveSave';
+import { isLiveSavePreset, getLiveSaveRetention } from './useLiveSave';
 import { parseCountdownContent, serializeCountdownContent, CountdownSlideData } from '../countdownUtils';
 import { splitHymnLyrics } from '../hymnSplit';
 
@@ -273,13 +273,16 @@ export function useSlideOperations() {
   }, [presentation, dispatchUndo]);
 
   const savePresentation = useCallback(async () => {
-    const content = JSON.stringify(presentation, null, 2);
+    // Zoom lives in separate UI state; re-attach it to the saved payload so
+    // files keep carrying the zoom level (legacy field, read on open).
+    const payload = { ...presentation, zoom: useStore.getState().slideZoom };
+    const content = JSON.stringify(payload, null, 2);
     const path = await window.electronAPI?.saveFile?.(content);
     if (path) {
       dispatchUndo({
         type: 'SET',
         payload: {
-          ...presentation,
+          ...payload,
           name: path.split('\\').pop()?.replace('.gpres', '') ?? presentation.name,
         },
       });
@@ -365,14 +368,20 @@ export function useSlideOperations() {
     if (typeof preset.presentation.zoom === 'number') {
       setSlideZoom(preset.presentation.zoom);
     }
-    // Loading a preset also restarts the live position.
-    setLiveIndex(0);
+    // Resume the live slide position recorded in the backup (clamped to the
+    // current slide count); falls back to the first slide when unavailable.
+    const slidesCount = presentationWithId.slides.length;
+    const savedLiveIndex =
+      typeof presentationWithId.liveIndex === 'number'
+        ? Math.min(Math.max(0, Math.floor(presentationWithId.liveIndex)), Math.max(0, slidesCount - 1))
+        : 0;
+    setLiveIndex(savedLiveIndex);
     setSelectedPresetName(preset.name);
     setActiveTab('slides');
   }, [dispatchUndo, setPresentationName, setSelectedSlideId, setSlideZoom, setLiveIndex, setSelectedPresetName, setActiveTab]);
 
   const openSavedPresentationByName = useCallback(async (presentationName: string) => {
-    const loaded = await window.electronAPI?.loadPresets?.();
+    const loaded = await window.electronAPI?.loadPresets?.(getLiveSaveRetention());
     const list = Array.isArray(loaded) ? loaded : presets;
     if (Array.isArray(loaded)) setPresets(loaded);
 

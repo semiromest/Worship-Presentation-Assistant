@@ -8,27 +8,29 @@ import path       from 'node:path';
 import fs         from 'node:fs/promises';
 import http       from 'node:http';
 import os         from 'node:os';
-import { pathToFileURL, fileURLToPath as nodeFileURLToPath } from 'node:url';
-import AdmZip from 'adm-zip';
 import { WebSocketServer, WebSocket as WsSocket } from 'ws';
 import { REMOTE_HTML_NEW } from './remote-html';
-import { getPptxService } from './pptxService';
-import { exportPresentationToPptx } from './pptxExportService';
 import { driveService } from './driveService';
 import { initUpdater } from './updater';
+import { initPerfMonitor, mainPerf, recordWs } from './perfMonitor';
+import { createPresetStore } from './presetStore';
+import { localResourceUrlToPath, isZip, mediaRefToName } from '../shared/mediaTree';
+import { getMediaLibrary } from './mediaLibrary';
+import { heavyClient } from './heavyWorkerClient';
 
 // Paths
 
 const DIST         = path.join(__dirname, '../dist');
 const ICON_PATH    = path.join(__dirname, '../build', 'ico.png');
 const VITE_PUBLIC  = app.isPackaged ? DIST : path.join(DIST, '../public');
-const PRESETS_FILE = path.join(app.getPath('userData'), 'presets.json');
-
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tif', '.tiff', '.avif', '.svg']);
 const VIDEO_EXTS = new Set(['.mp4', '.webm', '.mov', '.mkv', '.avi', '.m4v', '.wmv', '.flv', '.mpeg', '.mpg']);
 
 process.env.DIST        = DIST;
 process.env.VITE_PUBLIC = VITE_PUBLIC;
+
+// Phase 0 perf monitor — MUST run before any ipcMain handler is registered.
+initPerfMonitor();
 
 // Window references
 
@@ -81,6 +83,7 @@ const wsClients = new Set<WsSocket>();
 
 function broadcast(msg: object): void {
   const str = JSON.stringify(msg);
+  recordWs(str.length);
   for (const client of wsClients) {
     if (client.readyState === WsSocket.OPEN) {
       try { client.send(str); } catch { /* dead socket, ignore */ }
@@ -219,61 +222,12 @@ function getLocalIPv4(): string {
   return cachedLocalIP;
 }
 
-// Preset cache (write-through)
+// Preset store (Phase 5): per-preset files under userData/presets/, see
+// presetStore.ts for the migration + atomic-write logic.
+const presetStore = createPresetStore(app.getPath('userData'), mainPerf);
 
-type PresetItem = { name: string; presentation: unknown; createdAt: number };
-let presetsCache: PresetItem[] | null = null;
-const DEFAULT_LIVE_SAVE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
-
-function isLiveSavePresetName(name: string): boolean {
-  return name === '__live_autosave__' || (name.startsWith('__live_autosave_') && name.endsWith('__'));
-}
-
-function getLiveSaveBaseKey(name: string): string {
-  if (!isLiveSavePresetName(name)) return name;
-  return name.replace(/^__live_autosave_/, '').replace(/__$/, '');
-}
-
-function prunePresetStore(list: PresetItem[], now = Date.now(), retentionMs = DEFAULT_LIVE_SAVE_RETENTION_MS): PresetItem[] {
-  const regular: PresetItem[] = [];
-  const latestLiveByEntry = new Map<string, PresetItem>();
-
-  for (const item of list) {
-    if (!isLiveSavePresetName(item.name)) {
-      regular.push(item);
-      continue;
-    }
-
-    if (retentionMs <= 0) continue;
-
-    const age = now - item.createdAt;
-    if (age > retentionMs) continue;
-
-    const key = getLiveSaveBaseKey(item.name);
-    const current = latestLiveByEntry.get(key);
-    if (!current || item.createdAt > current.createdAt) {
-      latestLiveByEntry.set(key, item);
-    }
-  }
-
-  return [...regular, ...Array.from(latestLiveByEntry.values())].sort((a, b) => b.createdAt - a.createdAt);
-}
-
-async function readPresets(): Promise<PresetItem[]> {
-  if (presetsCache) return presetsCache;
-  try { presetsCache = prunePresetStore(JSON.parse(await fs.readFile(PRESETS_FILE, 'utf-8'))); }
-  catch { presetsCache = []; }
-  return presetsCache!;
-}
-
-async function writePresets(list: PresetItem[]): Promise<void> {
-  presetsCache = prunePresetStore(list);
-  await fs.mkdir(path.dirname(PRESETS_FILE), { recursive: true });
-  // Write to a temp file then rename, so a crash mid-write can't corrupt presets.json.
-  const tempFile = `${PRESETS_FILE}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
-  await fs.writeFile(tempFile, JSON.stringify(presetsCache, null, 2), 'utf-8');
-  await fs.rename(tempFile, PRESETS_FILE);
-}
+// Persistent media library (Phase 6): userData/media/, see mediaLibrary.ts.
+const mediaLibrary = getMediaLibrary();
 
 // Generic recursive file finder
 // One directory walker, parametrized by a filter, replaces two near-identical
@@ -521,6 +475,12 @@ ipcMain.on('projector-ready', (event) => {
     projectorWin.webContents.send('projector-update', pendingProjectorPayload);
     pendingProjectorPayload = null;
   }
+
+  // Phase 4 handshake: tell the control window the projector is listening so
+  // it can (re)establish the delta base with a fresh full snapshot. This also
+  // covers projector reloads — after a reload the renderer's base is lost, and
+  // the ack forces a full re-sync instead of deltas against a stale base.
+  if (win && !win.isDestroyed()) win.webContents.send('projector-ready-ack');
 });
 
 // HTTP + WebSocket remote control server
@@ -639,33 +599,39 @@ const MIME_BY_EXT: Record<string, string> = {
 app.whenReady().then(() => {
   protocol.handle('local-resource', async (request) => {
     let filePath: string;
-    try {
-      filePath = localResourceUrlToPath(request.url);
-    } catch (err) {
-      console.error(`[local-resource] Bad URL: ${request.url}`, err);
-      return new Response('Bad request', { status: 400 });
+    const mediaName = mediaRefToName(request.url);
+    if (mediaName) {
+      // Phase 6 media library: userData/media/<name>, name validated above.
+      filePath = path.join(mediaLibrary.dir, mediaName);
+    } else {
+      try {
+        filePath = localResourceUrlToPath(request.url);
+      } catch (err) {
+        console.error(`[local-resource] Bad URL: ${request.url}`, err);
+        return new Response('Bad request', { status: 400 });
+      }
+
+      // Security: legacy refs only serve files inside our own <tmp>/presenter-*
+      // dirs (path.resolve collapses any ".." traversal before the check).
+      const resolved = path.resolve(filePath);
+      const tmpRoot = path.resolve(os.tmpdir());
+      const rel = path.relative(tmpRoot, resolved);
+      const insideTmp = rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+      const firstSegment = rel.split(path.sep)[0] ?? '';
+      if (!insideTmp || !firstSegment.startsWith('presenter-')) {
+        console.error(`[local-resource] Forbidden path: ${resolved}`);
+        return new Response('Forbidden', { status: 403 });
+      }
     }
 
-    // Security: only serve files inside our own <tmp>/presenter-* dirs.
-    // path.resolve collapses any ".." traversal before the check.
-    const resolved = path.resolve(filePath);
-    const tmpRoot = path.resolve(os.tmpdir());
-    const rel = path.relative(tmpRoot, resolved);
-    const insideTmp = rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
-    const firstSegment = rel.split(path.sep)[0] ?? '';
-    if (!insideTmp || !firstSegment.startsWith('presenter-')) {
-      console.error(`[local-resource] Forbidden path: ${resolved}`);
-      return new Response('Forbidden', { status: 403 });
-    }
-
     try {
-      const data = await fs.readFile(resolved);
-      const ext = path.extname(resolved).toLowerCase();
+      const data = await fs.readFile(filePath);
+      const ext = path.extname(filePath).toLowerCase();
       return new Response(data, {
         headers: { 'Content-Type': MIME_BY_EXT[ext] || 'application/octet-stream' },
       });
     } catch (err) {
-      console.error(`[local-resource] Failed to serve ${resolved}:`, err);
+      console.error(`[local-resource] Failed to serve ${filePath}:`, err);
       return new Response('Not found', { status: 404 });
     }
   });
@@ -686,178 +652,43 @@ app.on('will-quit', () => {
 
 // .gpres (ZIP) helpers
 
-let currentTempDir: string | null = null;
-
+/** Sweeps leftover temp dirs from pre-Phase-6 versions (presenter-*). */
 async function cleanupTempDir(): Promise<void> {
-  if (!currentTempDir) return;
-  try { await fs.rm(currentTempDir, { recursive: true, force: true }); }
-  catch { /* file may still be in use, not fatal */ }
-  currentTempDir = null;
-}
-
-// Windows drive letters, spaces, and Unicode in paths need Node's URL API
-// for path <-> local-resource conversions; manual string concatenation
-// (`local-resource://${p}`) misparses "C:" as a URL host and drops the
-// drive letter.
-function pathToLocalResourceUrl(filePath: string): string {
-  return pathToFileURL(filePath).href.replace(/^file:\/\//, 'local-resource://');
-}
-
-function localResourceUrlToPath(resourceUrl: string): string {
-  const fileUrl = resourceUrl.replace(/^local-resource:\/\//, 'file://');
-  return nodeFileURLToPath(fileUrl);
-}
-
-function fileUrlToPath(fileUrl: string): string {
-  // Presentations re-opened from disk carry local-resource:// URLs pointing
-  // into the temp dir; convert those back to a real path so re-saving can
-  // re-embed the media.
-  if (!fileUrl) return fileUrl;
-  if (fileUrl.startsWith('local-resource://')) return localResourceUrlToPath(fileUrl);
-  if (fileUrl.startsWith('file://')) return nodeFileURLToPath(fileUrl);
-  if (fileUrl.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(fileUrl)) return fileUrl;
-  return nodeFileURLToPath(fileUrl);
-}
-
-/**
- * Recursive walker over a JSON-like tree hitting every string leaf.
- * Replaces three near-identical tree walks; callback may mutate in place.
- */
-function walkStrings(node: any, onString: (value: string, parent: any, key: string) => void): void {
-  if (!node || typeof node !== 'object') return;
-  for (const key of Object.keys(node)) {
-    const val = node[key];
-    if (typeof val === 'string') {
-      onString(val, node, key);
-    } else if (Array.isArray(val)) {
-      for (const item of val) walkStrings(item, onString);
-    } else if (typeof val === 'object') {
-      walkStrings(val, onString);
-    }
-  }
-}
-
-function normalizeLocalSourcePath(value: string): string {
-  if (!value) return '';
-  if (value.startsWith('local-resource://')) return localResourceUrlToPath(value);
-  if (value.startsWith('file://')) return nodeFileURLToPath(value);
-  return value;
-}
-
-const isEmbeddableUrl = (v: string) => {
-  if (!v) return false;
-  if (v.startsWith('file:///') || v.startsWith('local-resource://')) return true;
-  if (v.startsWith('http://') || v.startsWith('https://') || v.startsWith('data:')) return false;
-  return v.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(v);
-};
-
-/** Bidirectional registry so repeated files reuse one name in O(1). */
-interface MediaNameRegistry {
-  usedNames: Map<string, string>; // sanitized name -> source path (collision check)
-  byPath:    Map<string, string>; // source path -> media/xxx (reverse lookup)
-}
-function createMediaNameRegistry(): MediaNameRegistry {
-  return { usedNames: new Map(), byPath: new Map() };
-}
-
-function toMediaFileName(fileUrl: string, registry: MediaNameRegistry): string {
-  const filePath = fileUrlToPath(fileUrl);
-
-  const cached = registry.byPath.get(filePath);
-  if (cached) return cached; // O(1) instead of scanning usedNames
-
-  const ext = path.extname(filePath);
-  const base = path.basename(filePath, ext).replace(/[^a-zA-Z0-9_\-]/g, '_') || 'media';
-
-  let key = `${base}${ext}`;
-  if (registry.usedNames.has(key)) {
-    let counter = 1;
-    while (registry.usedNames.has(`${base}_${counter}${ext}`)) counter++;
-    key = `${base}_${counter}${ext}`;
-  }
-
-  registry.usedNames.set(key, filePath);
-  const mediaPath = `media/${key}`;
-  registry.byPath.set(filePath, mediaPath);
-  return mediaPath;
-}
-
-const isZip = (buf: Buffer) => buf[0] === 0x50 && buf[1] === 0x4b; // "PK"
-
-/**
- * Extracts a .gpres ZIP: reads presentation.json, unpacks media to a fresh
- * temp dir, and rewrites media/* refs to local-resource:// URLs in one pass.
- */
-async function extractGpresZip(buffer: Buffer): Promise<{ data: any; tempDir: string; mediaCount: number }> {
-  await cleanupTempDir();
-  const zip = new AdmZip(buffer);
-  const jsonEntry = zip.getEntry('presentation.json');
-  if (!jsonEntry) throw new Error('Corrupt .gpres file: missing presentation.json');
-
-  const data = JSON.parse(zip.readAsText(jsonEntry));
-  const tempDir = path.join(os.tmpdir(), `presenter-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
-  zip.extractAllTo(tempDir, true);
-  currentTempDir = tempDir;
-
-  const mediaMap = new Map<string, string>();
-  walkStrings(data, (val, parent, key) => {
-    if (!val.startsWith('media/')) return;
-    let mapped = mediaMap.get(val);
-    if (!mapped) {
-      mapped = pathToLocalResourceUrl(path.join(tempDir, val));
-      mediaMap.set(val, mapped);
-    }
-    parent[key] = mapped;
-  });
-
-  return { data, tempDir, mediaCount: mediaMap.size };
-}
-
-/**
- * Builds a .gpres ZIP in memory: finds embeddable media URLs, embeds files
- * in parallel, then rewrites the tree to the embedded media/* paths.
- */
-async function buildGpresZip(data: any): Promise<{ zip: AdmZip; embeddedCount: number }> {
-  const urls = new Set<string>();
-  walkStrings(data, (val) => { if (isEmbeddableUrl(val)) urls.add(val); });
-
-  const registry = createMediaNameRegistry();
-  const zip = new AdmZip();
-  const urlToMedia = new Map<string, string>();
-
-  await Promise.all([...urls].map(async (url) => {
-    const sourcePath = normalizeLocalSourcePath(url);
-    try {
-      await fs.access(sourcePath);
-      const mediaPath = toMediaFileName(url, registry);
-      const mediaName = mediaPath.slice(mediaPath.indexOf('/') + 1);
-      zip.addLocalFile(sourcePath, 'media', mediaName);
-      urlToMedia.set(url, mediaPath);
-    } catch (err) {
-      console.warn(`[gpres] Skipping unreachable media: ${url} (${(err as Error)?.message ?? err})`);
-    }
-  }));
-
-  walkStrings(data, (val, parent, key) => {
-    const mapped = urlToMedia.get(val);
-    if (mapped) parent[key] = mapped;
-  });
-
-  zip.addFile('presentation.json', Buffer.from(JSON.stringify(data, null, 2), 'utf-8'));
-  return { zip, embeddedCount: urlToMedia.size };
+  try {
+    const tmp = os.tmpdir();
+    const entries = await fs.readdir(tmp);
+    await Promise.all(entries
+      .filter((e) => e.startsWith('presenter-'))
+      .map((e) => fs.rm(path.join(tmp, e), { recursive: true, force: true })));
+  } catch { /* nothing to clean */ }
 }
 
 // IPC: file operations
 
+// Electron ≥ 43 breaking change: dialogs without defaultPath now always open
+// in the Downloads folder and the OS no longer remembers the last-used
+// directory. Track it here so the previous UX ("open where I last was") is
+// preserved across all file dialogs.
+let lastDialogDir = app.getPath('documents');
+function rememberDir(fromPath: string | undefined | null): void {
+  if (!fromPath) return;
+  try {
+    const dir = path.dirname(fromPath);
+    if (dir && dir !== fromPath) lastDialogDir = dir;
+  } catch { /* ignore */ }
+}
+
 ipcMain.handle('save-file', async (_, content: string) => {
   const { filePath, canceled } = await dialog.showSaveDialog({
+    defaultPath: lastDialogDir,
     filters: [{ name: 'Worship Presentation Assistant Files', extensions: ['gpres'] }],
   });
   if (canceled || !filePath) return null;
+  rememberDir(filePath);
 
-  const data = JSON.parse(content);
-  const { zip, embeddedCount } = await buildGpresZip(data);
-  zip.writeZip(filePath);
+  // Phase 7: zip build (deflate CPU) runs in the heavy UtilityProcess.
+  const { embeddedCount, zipBuffer } = await heavyClient.buildGpres(content, mediaLibrary.dir);
+  await fs.writeFile(filePath, zipBuffer);
 
   console.info(`[save-file] Saved ${filePath} (${embeddedCount} media files embedded)`);
   return filePath;
@@ -865,17 +696,20 @@ ipcMain.handle('save-file', async (_, content: string) => {
 
 ipcMain.handle('open-file', async () => {
   const { filePaths, canceled } = await dialog.showOpenDialog({
+    defaultPath: lastDialogDir,
     filters: [{ name: 'Worship Presentation Assistant Files', extensions: ['gpres'] }],
     properties: ['openFile'],
   });
   if (canceled || !filePaths?.length) return null;
 
   const filePath = filePaths[0];
+  rememberDir(filePath);
   const raw = await fs.readFile(filePath);
 
   if (isZip(raw)) {
-    const { data, tempDir, mediaCount } = await extractGpresZip(raw);
-    console.info(`[open-file] ${filePath}: ${mediaCount} media paths, tempDir=${tempDir}`);
+    // Phase 7: unzip + media externalization run in the heavy UtilityProcess.
+    const { data, mediaCount } = await heavyClient.extractGpres(raw, mediaLibrary.dir);
+    console.info(`[open-file] ${filePath}: ${mediaCount} media refs externalized`);
     return { path: filePath, content: JSON.stringify(data, null, 2) };
   }
 
@@ -922,40 +756,18 @@ ipcMain.handle(
 
 // IPC: preset CRUD
 
-ipcMain.handle('load-presets', () => readPresets());
+ipcMain.handle('load-presets', (_, retentionMs?: number) => presetStore.readPresets(retentionMs));
 
 ipcMain.handle('save-preset', async (_, preset: { name: string; presentation: unknown; retentionMs?: number }) => {
-  const retentionMs = typeof preset.retentionMs === 'number' ? preset.retentionMs : DEFAULT_LIVE_SAVE_RETENTION_MS;
-  const list = prunePresetStore(await readPresets(), Date.now(), retentionMs);
-  const idx = list.findIndex(p => p.name === preset.name);
-  const entry = { name: preset.name, presentation: preset.presentation, createdAt: Date.now() };
-
-  if (isLiveSavePresetName(preset.name)) {
-    const filtered = list.filter((item) => !isLiveSavePresetName(item.name) || getLiveSaveBaseKey(item.name) !== getLiveSaveBaseKey(preset.name));
-    if (retentionMs > 0) filtered.push(entry);
-    await writePresets(filtered);
-    return filtered;
-  }
-
-  idx >= 0 ? (list[idx] = entry) : list.push(entry);
-  await writePresets(list);
-  return list;
+  return presetStore.savePreset(preset);
 });
 
-ipcMain.handle('delete-preset', async (_, name: string) => {
-  const filtered = (await readPresets()).filter(p => p.name !== name);
-  await writePresets(filtered);
-  return filtered;
+ipcMain.handle('delete-preset', async (_, name: string, retentionMs?: number) => {
+  return presetStore.deletePreset(name, retentionMs);
 });
 
-ipcMain.handle('rename-preset', async (_, oldName: string, newName: string) => {
-  const list = await readPresets();
-  const idx  = list.findIndex(p => p.name === oldName);
-  if (idx >= 0) {
-    list[idx] = { ...list[idx], name: newName };
-    await writePresets(list);
-  }
-  return list;
+ipcMain.handle('rename-preset', async (_, oldName: string, newName: string, retentionMs?: number) => {
+  return presetStore.renamePreset(oldName, newName, retentionMs);
 });
 
 // IPC: projector
@@ -984,6 +796,26 @@ ipcMain.handle('quit-app', () => { app.quit(); return true; });
 ipcMain.handle('update-all-slide-previews', (_, previews: string[]) => {
   allSlidePreviews = Array.isArray(previews) ? previews : [];
   broadcast({ type: 'allPreviews', data: allSlidePreviews });
+  return true;
+});
+
+// Phase 3: renderer sends only the thumbnails that actually changed as
+// {index, url} pairs. Main patches its snapshot array in place and forwards
+// the tiny delta, so a single-slide edit no longer rebroadcasts the whole
+// list (~23 KB instead of ~117 MB at 5000 slides).
+ipcMain.handle('update-slide-previews-delta', (_, updates: { i: number; url: string }[]) => {
+  if (!Array.isArray(updates) || updates.length === 0) return false;
+  const applied: { i: number; url: string }[] = [];
+  for (const u of updates) {
+    if (!u || typeof u.i !== 'number' || typeof u.url !== 'string') continue;
+    // '' is a falsy placeholder, equivalent to the null entries the full-list
+    // path can carry (remote renders it as an empty slot).
+    while (allSlidePreviews.length <= u.i) allSlidePreviews.push('');
+    if (allSlidePreviews[u.i] === u.url) continue; // already current, skip
+    allSlidePreviews[u.i] = u.url;
+    applied.push(u);
+  }
+  if (applied.length > 0) broadcast({ type: 'previewsDelta', data: applied });
   return true;
 });
 
@@ -1067,12 +899,14 @@ ipcMain.handle('import-bible-xml', async (_, filePath?: string) => {
   }
   if (!selected) {
     const { filePaths } = await dialog.showOpenDialog({
+      defaultPath: lastDialogDir,
       filters: [{ name: 'Zefania XML Bible', extensions: ['xml'] }],
       properties: ['openFile'],
     });
     selected = filePaths?.[0];
   }
   if (!selected) return null;
+  rememberDir(selected);
   return { content: await fs.readFile(selected, 'utf-8'), path: selected };
 });
 
@@ -1128,7 +962,8 @@ ipcMain.handle('select-media-file', async (_, type: 'image' | 'video') => {
   const filters = type === 'image'
     ? [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp'] }]
     : [{ name: 'Videos', extensions: ['mp4', 'webm', 'ogg', 'mov'] }];
-  const { filePaths } = await dialog.showOpenDialog({ filters, properties: ['openFile'] });
+  const { filePaths } = await dialog.showOpenDialog({ defaultPath: lastDialogDir, filters, properties: ['openFile'] });
+  rememberDir(filePaths?.[0]);
   return filePaths?.[0] ?? null;
 });
 
@@ -1136,21 +971,25 @@ ipcMain.handle('select-media-files-all', async () => {
   const filters = [
     { name: 'Media', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'mp4', 'webm', 'mov', 'mkv', 'avi'] },
   ];
-  const { filePaths } = await dialog.showOpenDialog({ filters, properties: ['openFile', 'multiSelections'] });
+  const { filePaths } = await dialog.showOpenDialog({ defaultPath: lastDialogDir, filters, properties: ['openFile', 'multiSelections'] });
+  if (filePaths?.length) rememberDir(filePaths[0]);
   return filePaths?.length ? filePaths : null;
 });
 
 ipcMain.handle('select-media-folder', async () => {
-  const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
+  const result = await dialog.showOpenDialog({ defaultPath: lastDialogDir, properties: ['openDirectory', 'createDirectory'] });
   if (result.canceled || result.filePaths.length === 0) return null;
+  lastDialogDir = result.filePaths[0]; // the selection IS a directory
   return result.filePaths[0];
 });
 
 ipcMain.handle('select-audio-file', async () => {
   const { filePaths } = await dialog.showOpenDialog({
+    defaultPath: lastDialogDir,
     filters: [{ name: 'Audio Files', extensions: ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma'] }],
     properties: ['openFile'],
   });
+  rememberDir(filePaths?.[0]);
   return filePaths?.[0] ?? null;
 });
 
@@ -1169,15 +1008,18 @@ ipcMain.handle('read-media-folder', async (_event, folderPath: string, options?:
 
 ipcMain.handle('select-pptx-file', async () => {
   const { filePaths } = await dialog.showOpenDialog({
+    defaultPath: lastDialogDir,
     filters: [{ name: 'PowerPoint Presentations', extensions: ['pptx', 'pptm'] }],
     properties: ['openFile'],
   });
+  rememberDir(filePaths?.[0]);
   return filePaths?.[0] ?? null;
 });
 
 ipcMain.handle('import-pptx', async (event, filePath: string) => {
-  const pptxService = getPptxService();
-  return pptxService.importPptx(filePath, (current, total) => {
+  // Phase 7: conversion (resvg warm-up + per-slide CPU) runs in the heavy
+  // UtilityProcess; the main event loop stays responsive throughout.
+  return heavyClient.importPptx(filePath, mediaLibrary.dir, (current, total) => {
     event.sender.send('pptx-import-progress', { current, total });
   });
 });
@@ -1200,8 +1042,10 @@ ipcMain.handle('export-pptx', async (event, content: string) => {
     filters: [{ name: 'PowerPoint Presentations', extensions: ['pptx'] }],
   });
   if (canceled || !filePath) return { success: false, canceled: true };
+  rememberDir(filePath);
 
-  return exportPresentationToPptx(data, filePath, (current, total) => {
+  // Phase 7: PptxGenJS rendering runs in the heavy UtilityProcess.
+  return heavyClient.exportPptx(content, filePath, mediaLibrary.dir, (current, total) => {
     event.sender.send('pptx-export-progress', { current, total });
   });
 });
@@ -1213,8 +1057,9 @@ ipcMain.handle('import-hymn-archive', async (_, dirPath?: string) => {
     catch { selected = undefined; }
   }
   if (!selected) {
-    const { filePaths } = await dialog.showOpenDialog({ properties: ['openDirectory'] });
+    const { filePaths } = await dialog.showOpenDialog({ defaultPath: lastDialogDir, properties: ['openDirectory'] });
     selected = filePaths?.[0];
+    if (selected) lastDialogDir = selected;
   }
   if (!selected) return null;
 
@@ -1314,8 +1159,9 @@ ipcMain.handle('drive-download', async (_, fileId: string) => {
     const buffer = await driveService.downloadFile(fileId);
 
     if (isZip(buffer)) {
-      const { data, tempDir, mediaCount } = await extractGpresZip(buffer);
-      console.log(`[drive-download] ${mediaCount} media paths, tempDir=${tempDir}`);
+      // Phase 7: unzip + media externalization run in the heavy UtilityProcess.
+      const { data, mediaCount } = await heavyClient.extractGpres(buffer, mediaLibrary.dir);
+      console.log(`[drive-download] ${mediaCount} media refs externalized`);
       return { ok: true, data: JSON.stringify(data, null, 2) };
     }
 
@@ -1344,8 +1190,9 @@ ipcMain.handle('drive-save-presentation', async (_, content: string, customName?
     const trimmed = (customName ?? '').trim();
     if (trimmed) data.name = trimmed;
 
-    const { zip, embeddedCount } = await buildGpresZip(data);
-    const zipBuffer = Buffer.from(zip.toBuffer());
+    // Phase 7: zip build (deflate CPU) runs in the heavy UtilityProcess; the
+    // renamed presentation (customName) must reach the worker, so re-serialize.
+    const { embeddedCount, zipBuffer } = await heavyClient.buildGpres(JSON.stringify(data), mediaLibrary.dir);
 
     // Strip characters invalid in filenames / Drive names.
     const baseName = String(data.name || 'presentation').replace(/[\\/:*?"<>|]/g, '_').trim() || 'presentation';
