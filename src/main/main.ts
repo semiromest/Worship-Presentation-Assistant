@@ -13,6 +13,7 @@ import AdmZip from 'adm-zip';
 import { WebSocketServer, WebSocket as WsSocket } from 'ws';
 import { REMOTE_HTML_NEW } from './remote-html';
 import { getPptxService } from './pptxService';
+import { exportPresentationToPptx } from './pptxExportService';
 import { driveService } from './driveService';
 import { initUpdater } from './updater';
 
@@ -1075,6 +1076,54 @@ ipcMain.handle('import-bible-xml', async (_, filePath?: string) => {
   return { content: await fs.readFile(selected, 'utf-8'), path: selected };
 });
 
+// IPC: downloaded (API) Bibles — persisted as JSON under userData so they
+// survive app restarts exactly like locally imported XML files do.
+
+function getBiblesDir(): string {
+  return path.join(app.getPath('userData'), 'bibles');
+}
+
+ipcMain.handle('save-bible-data', async (_, id: string, data: unknown) => {
+  try {
+    const dir = getBiblesDir();
+    await fs.mkdir(dir, { recursive: true });
+    const safeName = String(id).replace(/[^a-zA-Z0-9_.\-]/g, '_').replace(/\.\./g, '_') || 'bible';
+    const filePath = path.join(dir, `${safeName}.json`);
+    await fs.writeFile(filePath, JSON.stringify(data), 'utf-8');
+    return filePath;
+  } catch (error) {
+    console.error('[save-bible-data] failed:', error);
+    return null;
+  }
+});
+
+ipcMain.handle('read-bible-data', async (_, filePath: string) => {
+  try {
+    const resolved = path.resolve(filePath);
+    const root = path.resolve(getBiblesDir()) + path.sep;
+    if (!resolved.startsWith(root)) {
+      console.warn('[read-bible-data] Forbidden path:', resolved);
+      return null;
+    }
+    return { content: await fs.readFile(resolved, 'utf-8') };
+  } catch (error) {
+    console.error('[read-bible-data] failed:', error);
+    return null;
+  }
+});
+
+ipcMain.handle('delete-bible-data', async (_, filePath: string) => {
+  try {
+    const resolved = path.resolve(filePath);
+    const root = path.resolve(getBiblesDir()) + path.sep;
+    if (!resolved.startsWith(root)) return null;
+    await fs.unlink(resolved);
+    return true;
+  } catch {
+    return null;
+  }
+});
+
 ipcMain.handle('select-media-file', async (_, type: 'image' | 'video') => {
   const filters = type === 'image'
     ? [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp'] }]
@@ -1130,6 +1179,30 @@ ipcMain.handle('import-pptx', async (event, filePath: string) => {
   const pptxService = getPptxService();
   return pptxService.importPptx(filePath, (current, total) => {
     event.sender.send('pptx-import-progress', { current, total });
+  });
+});
+
+ipcMain.handle('export-pptx', async (event, content: string) => {
+  let data: any;
+  try {
+    data = JSON.parse(content);
+  } catch {
+    return { success: false, error: 'Invalid presentation data' };
+  }
+
+  const baseName = String(data?.name || 'presentation')
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .trim() || 'presentation';
+
+  const { filePath, canceled } = await dialog.showSaveDialog({
+    title: 'Export PowerPoint',
+    defaultPath: `${baseName}.pptx`,
+    filters: [{ name: 'PowerPoint Presentations', extensions: ['pptx'] }],
+  });
+  if (canceled || !filePath) return { success: false, canceled: true };
+
+  return exportPresentationToPptx(data, filePath, (current, total) => {
+    event.sender.send('pptx-export-progress', { current, total });
   });
 });
 

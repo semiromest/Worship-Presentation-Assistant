@@ -1,8 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { randomUUID } from 'node:crypto';
-import { app } from 'electron';
 import { convertPptxToPng, type SlideImage } from 'pptx-glimpse';
 
 // Constants
@@ -18,7 +16,12 @@ export type ImageFormat = 'png';
 
 export interface PptxSlideResult {
   slideNumber: number;
-  imagePath: string;
+  /**
+   * Base64 data URI (`data:image/png;base64,...`) of the rendered slide.
+   * Self-contained on purpose: it survives local save, autosave/presets and
+   * reopening, unlike an ephemeral temp-file path.
+   */
+  imageData: string;
   width: number;
   height: number;
   format: ImageFormat;
@@ -75,27 +78,6 @@ async function runWithWorkerPool<T, R>(
 // Service
 
 export class PptxService {
-  private readonly sessionId: string;
-  private readonly tempDir: string;
-  private isInitialized: boolean = false;
-
-  constructor() {
-    this.sessionId = randomUUID();
-    this.tempDir = path.join(app.getPath('temp'), 'pptx-imports', this.sessionId);
-
-    app.on('will-quit', (e) => {
-      e.preventDefault();
-      fs.rm(this.tempDir, { recursive: true, force: true }).catch(() => {}).finally(() => app.quit());
-    });
-  }
-
-  private async ensureInitialized(): Promise<void> {
-    if (!this.isInitialized) {
-      await fs.mkdir(this.tempDir, { recursive: true });
-      this.isInitialized = true;
-    }
-  }
-
   private validateExtension(filePath: string): void {
     const ext = path.extname(filePath).toLowerCase();
     if (!VALID_EXTS.has(ext)) {
@@ -103,15 +85,11 @@ export class PptxService {
     }
   }
 
-  private async processSlide(
+  private processSlide(
     slide: SlideImage,
-    baseName: string,
     onSlideDone?: () => void
-  ): Promise<PptxSlideResult> {
-    const fileName = `${baseName}-s${slide.slideNumber}-${this.sessionId}.png`;
-    const imagePath = path.join(this.tempDir, fileName);
-
-    await fs.writeFile(imagePath, slide.png);
+  ): PptxSlideResult {
+    const imageData = `data:image/png;base64,${slide.png.toString('base64')}`;
 
     delete (slide as Partial<SlideImage>).png;
 
@@ -119,18 +97,18 @@ export class PptxService {
 
     return {
       slideNumber: slide.slideNumber,
-      imagePath,
+      imageData,
       width: 0,
       height: 0,
       format: 'png',
     };
   }
 
-  private async convertWithTimeout(buffer: Buffer): Promise<SlideImage[]> {
+  private convertWithTimeout(buffer: Buffer): Promise<SlideImage[]> {
     let timerId: NodeJS.Timeout | undefined;
-    
+
     try {
-      return await Promise.race([
+      return Promise.race([
         convertPptxToPng(buffer, { width: SLIDE_WIDTH, logLevel: 'off' }),
         new Promise<never>((_, reject) => {
           timerId = setTimeout(
@@ -151,7 +129,6 @@ export class PptxService {
     const presentationName = path.basename(filePath, path.extname(filePath));
 
     try {
-      await this.ensureInitialized();
       this.validateExtension(filePath);
 
       let buffer: Buffer;
@@ -174,7 +151,7 @@ export class PptxService {
       const settled = await runWithWorkerPool(
         slideImages,
         CONCURRENCY,
-        (slide) => this.processSlide(slide, presentationName, reportProgress)
+        (slide) => Promise.resolve(this.processSlide(slide, reportProgress))
       );
 
       // Pre-allocated array (avoids push cost)
@@ -211,31 +188,6 @@ export class PptxService {
       const message = error instanceof Error ? error.message : String(error);
       console.error('[PptxService] importPptx failed:', message);
       return { success: false, error: message, presentationName };
-    }
-  }
-
-  async cleanup(): Promise<void> {
-    try {
-      await fs.rm(this.tempDir, { recursive: true, force: true });
-      this.isInitialized = false;
-    } catch (error) {
-      console.error('[PptxService] cleanup failed:', error);
-    }
-  }
-
-  async deleteSlideFile(imagePath: string): Promise<void> {
-    const resolved = path.resolve(imagePath);
-    const sessionDir = path.resolve(this.tempDir) + path.sep;
-
-    if (!resolved.startsWith(sessionDir)) {
-      console.warn('[PptxService] Path traversal attempt blocked.');
-      return;
-    }
-
-    try {
-      await fs.unlink(resolved);
-    } catch {
-      // ignored - file may already have been deleted
     }
   }
 }

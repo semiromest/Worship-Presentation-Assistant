@@ -14,11 +14,22 @@ declare global {
       updateProjector: (data: any) => Promise<boolean>;
       getProjectorStatus: () => Promise<boolean>;
       importBibleXml: (filePath?: string) => Promise<any>;
+      saveBibleData: (id: string, data: unknown) => Promise<string | null>;
+      readBibleData: (filePath: string) => Promise<{ content: string } | null>;
+      deleteBibleData: (filePath: string) => Promise<boolean | null>;
       selectMediaFile: (type: 'image' | 'video') => Promise<string>;
       selectMediaFilesAll?: () => Promise<string[] | null>;
       importHymnArchive: (dirPath?: string) => Promise<any>;
       selectPptxFile: () => Promise<string | null>;
       importPptx: (filePath: string) => Promise<any>;
+      exportPptx: (content: string) => Promise<{
+        success: boolean;
+        filePath?: string;
+        slideCount?: number;
+        warnings?: string[];
+        error?: string;
+        canceled?: boolean;
+      }>;
       getRemoteUrl: () => Promise<string>;
       getRemoteDebug: () => Promise<any>;
       updateRemoteStatus: (status: any) => Promise<void>;
@@ -43,6 +54,7 @@ declare global {
       onProjectorUpdate: (callback: (data: any) => void) => () => void;
       onProjectorClosed: (callback: () => void) => () => void;
       onPptxImportProgress: (callback: (data: { current: number; total: number }) => void) => () => void;
+      onPptxExportProgress: (callback: (data: { current: number; total: number }) => void) => () => void;
       selectMediaFiles?: (type: MediaKind) => Promise<string[] | string | null>;
       selectMediaFolder?: () => Promise<string | null>;
       readMediaFolder?: (

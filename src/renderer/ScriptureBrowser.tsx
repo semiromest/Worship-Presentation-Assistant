@@ -224,6 +224,25 @@ function clearLastBibleSource(): void {
   localStorage.removeItem(LAST_BIBLE_KEY);
 }
 
+/**
+ * Persists an API-downloaded Bible to disk (userData/bibles) and marks it as
+ * the stored path — the same mechanism as locally imported XML files, so the
+ * Bible survives app restarts even if the IndexedDB cache is unavailable.
+ * Returns the file path on success, or null (caller keeps lastBibleSource).
+ */
+async function persistDownloadedBibleToDisk(id: string, data: BibleData): Promise<string | null> {
+  try {
+    const filePath = await window.electronAPI?.saveBibleData?.(id, data);
+    if (filePath) {
+      BibleCache.setStoredPath(filePath);
+      clearLastBibleSource();
+    }
+    return filePath ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Chunking Algorithm (Optimized) ─────────────────────────────────────────
 
 function splitVersesIntoChunks(lines: string[]): string[] {
@@ -665,7 +684,9 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       setShowOnlineBibleDialog(false);
 
       await BibleCache.set(`online:${bibleInfo.filename}`, parsed);
-      saveLastBibleSource({ type: 'online', id: bibleInfo.filename, format: parsed.format });
+      // Disk persistence first (survives restarts); IndexedDB source as fallback.
+      const stored = await persistDownloadedBibleToDisk(bibleInfo.filename, parsed);
+      if (!stored) saveLastBibleSource({ type: 'online', id: bibleInfo.filename, format: parsed.format });
       setParseError(null);
     } catch (error) {
       console.error('Failed to download and parse Bible:', error);
@@ -705,7 +726,9 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       setShowOnlineBibleDialog(false);
 
       await BibleCache.set(`helloao:${translation.id}`, parsed);
-      saveLastBibleSource({ type: 'helloao', id: translation.id, format: parsed.format });
+      // Disk persistence first (survives restarts); IndexedDB source as fallback.
+      const stored = await persistDownloadedBibleToDisk(translation.id, parsed);
+      if (!stored) saveLastBibleSource({ type: 'helloao', id: translation.id, format: parsed.format });
       setParseError(null);
     } catch (error) {
       console.error('Failed to download HelloAO Bible:', error);
@@ -747,7 +770,9 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       setShowOnlineBibleDialog(false);
 
       await BibleCache.set(`fetchbible:${resource.id}`, parsed);
-      saveLastBibleSource({ type: 'fetchbible', id: resource.id, format: parsed.format });
+      // Disk persistence first (survives restarts); IndexedDB source as fallback.
+      const stored = await persistDownloadedBibleToDisk(resource.id, parsed);
+      if (!stored) saveLastBibleSource({ type: 'fetchbible', id: resource.id, format: parsed.format });
       setFetchBibleProgress(null);
       setParseError(null);
     } catch (error) {
@@ -758,13 +783,33 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
     }
   }, []);
 
-  // Load stored Bible on mount (survives tab switches)
+  // Load stored Bible on mount (survives tab switches + app restarts)
   useEffect(() => {
     const restoreBible = async () => {
       const storedPath = BibleCache.getStoredPath();
       if (storedPath) {
-        handleImportXML(storedPath);
-        return;
+        // API-downloaded Bibles are persisted as app-managed JSON files in
+        // userData/bibles; read them straight from disk (restart-proof).
+        if (storedPath.toLowerCase().endsWith('.json')) {
+          const result = await window.electronAPI?.readBibleData?.(storedPath);
+          if (result) {
+            try {
+              const data = JSON.parse(result.content) as BibleData;
+              if (data && Array.isArray(data.books)) {
+                setBible(data);
+                setBibleSource('online');
+                return;
+              }
+            } catch {
+              /* corrupt file — fall through to the IndexedDB source below */
+            }
+          }
+          BibleCache.removeStoredPath();
+          // fall through to the IndexedDB last-source fallback
+        } else {
+          handleImportXML(storedPath);
+          return;
+        }
       }
 
       const last = getLastBibleSource();
@@ -945,9 +990,13 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
     const confirmed = await confirmDialog(t('common.scriptureConfirmClear'));
     if (!confirmed) return;
 
+    const storedPath = BibleCache.getStoredPath();
     BibleCache.clear();
     clearLastBibleSource();
     BibleCache.removeStoredPath();
+    if (storedPath?.toLowerCase().endsWith('.json')) {
+      await window.electronAPI?.deleteBibleData?.(storedPath);
+    }
     setBible(null);
     setSelectedBook(null);
     setSelectedChapter(null);
@@ -961,6 +1010,11 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
   const persistBibleToCache = useCallback(async (data: BibleData) => {
     const storedPath = BibleCache.getStoredPath();
     if (storedPath) {
+      if (storedPath.toLowerCase().endsWith('.json')) {
+        // App-managed API Bible: update the disk file too.
+        const id = storedPath.split(/[\\/]/).pop()?.replace(/\.json$/, '') ?? 'bible';
+        await window.electronAPI?.saveBibleData?.(id, data);
+      }
       await BibleCache.set(storedPath, data);
       return;
     }

@@ -20,6 +20,7 @@ import {
   ChevronDown,
   DatabaseBackup,
   ShieldCheck,
+  FileDown,
 } from 'lucide-react';
 import { AnimatedPreview } from './AnimatedPreview';
 import { cn } from './utils';
@@ -331,6 +332,17 @@ export default function PresentationsTab({
   const [importDuration, setImportDuration] = useState<number | null>(null);
   const importStartTimeRef = useRef<number>(0);
 
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState({ current: 0, total: 0 });
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportResult, setExportResult] = useState<{
+    filePath: string;
+    slideCount: number;
+    warnings: string[];
+  } | null>(null);
+  const [exportDuration, setExportDuration] = useState<number | null>(null);
+  const exportStartTimeRef = useRef<number>(0);
+
   const [isEditingName, setIsEditingName] = useState(false);
   const [draftName, setDraftName] = useState('');
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -358,6 +370,22 @@ export default function PresentationsTab({
       if (now - lastEmit >= THROTTLE_MS) {
         lastEmit = now;
         setImportProgress({ current: data.current, total: data.total });
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!window.electronAPI?.onPptxExportProgress) return;
+
+    let lastEmit = 0;
+    const THROTTLE_MS = 100;
+    const unsubscribe = window.electronAPI.onPptxExportProgress((data) => {
+      const now = Date.now();
+      if (now - lastEmit >= THROTTLE_MS) {
+        lastEmit = now;
+        setExportProgress({ current: data.current, total: data.total });
       }
     });
 
@@ -443,6 +471,53 @@ export default function PresentationsTab({
 
   const clearSearch = useCallback(() => setSearchQuery(''), []);
 
+  const handleExportPptx = useCallback(async () => {
+    try {
+      setExportError(null);
+      setExportResult(null);
+      setExportDuration(null);
+      setIsExporting(true);
+      setExportProgress({ current: 0, total: 0 });
+
+      exportStartTimeRef.current = performance.now();
+
+      const content = JSON.stringify(presentation, null, 2);
+      const result = await window.electronAPI?.exportPptx?.(content);
+
+      if (!result || result.canceled) {
+        setIsExporting(false);
+        setExportProgress({ current: 0, total: 0 });
+        return;
+      }
+
+      if (!result.success || !result.filePath) {
+        throw new Error(result.error || t('common.exportFailedGeneric'));
+      }
+
+      setExportResult({
+        filePath: result.filePath,
+        slideCount: result.slideCount ?? 0,
+        warnings: result.warnings ?? [],
+      });
+
+      const duration = performance.now() - exportStartTimeRef.current;
+      setExportDuration(Math.round(duration));
+
+      setIsExporting(false);
+      setExportProgress({ current: 0, total: 0 });
+    } catch (error) {
+      console.error('PPTX export error:', error);
+      setExportError(error instanceof Error ? error.message : t('common.unknownError'));
+      setIsExporting(false);
+      setExportProgress({ current: 0, total: 0 });
+
+      if (exportStartTimeRef.current > 0) {
+        const duration = performance.now() - exportStartTimeRef.current;
+        setExportDuration(Math.round(duration));
+      }
+    }
+  }, [presentation, t]);
+
   const handleImportPptx = useCallback(async () => {
     try {
       setImportError(null);
@@ -503,6 +578,26 @@ export default function PresentationsTab({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 justify-end shrink-0">
+            <button
+              type="button"
+              onClick={handleExportPptx}
+              disabled={isExporting}
+              className={`${BTN_SECONDARY} disabled:opacity-50 disabled:hover:bg-white/[0.03]`}
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                  {exportProgress.total > 0
+                    ? `${exportProgress.current}/${exportProgress.total}`
+                    : t('common.exporting')}
+                </>
+              ) : (
+                <>
+                  <FileDown className="w-4 h-4" aria-hidden="true" />
+                  {t('common.exportPptx')}
+                </>
+              )}
+            </button>
             {onImportSlides && (
               <button
                 type="button"
@@ -687,6 +782,74 @@ export default function PresentationsTab({
                     onClick={() => {
                       setImportError(null);
                       setImportDuration(null);
+                    }}
+                    className="text-red-400 hover:text-red-300 shrink-0"
+                    aria-label={t('common.clearSearch')}
+                  >
+                    <X className="w-4 h-4" aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {(exportDuration !== null || exportError) && (
+            <div className="px-6 pb-3 space-y-2">
+              {exportDuration !== null && !exportError && exportResult && (
+                <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3 flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center shrink-0">
+                    <FileDown className="w-4 h-4 text-emerald-400" aria-hidden="true" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-emerald-300 font-medium">{t('common.exportComplete')}</p>
+                    <p className="text-xs text-emerald-200/70 mt-0.5 break-all">
+                      {t('common.exportSlidesCount', {
+                        count: exportResult.slideCount,
+                        duration: formatDuration(exportDuration),
+                      })}
+                    </p>
+                    <p className="text-xs text-emerald-200/60 mt-0.5 break-all">{exportResult.filePath}</p>
+                    {exportResult.warnings.length > 0 && (
+                      <ul className="mt-2 space-y-1">
+                        {exportResult.warnings.map((warn, idx) => (
+                          <li key={idx} className="text-[11px] text-amber-300/80 list-disc ml-4">
+                            {warn}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExportResult(null);
+                      setExportDuration(null);
+                    }}
+                    className="text-emerald-400 hover:text-emerald-300 shrink-0"
+                    aria-label={t('common.clearSearch')}
+                  >
+                    <X className="w-4 h-4" aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+
+              {exportError && (
+                <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-3 flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" aria-hidden="true" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-red-300 font-medium">{t('common.exportError')}</p>
+                    <p className="text-xs text-red-200/70 mt-1">{exportError}</p>
+                    {exportDuration !== null && (
+                      <p className="text-xs text-red-200/50 mt-1">
+                        {t('common.importFailedAfter', { duration: formatDuration(exportDuration) })}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExportError(null);
+                      setExportDuration(null);
                     }}
                     className="text-red-400 hover:text-red-300 shrink-0"
                     aria-label={t('common.clearSearch')}

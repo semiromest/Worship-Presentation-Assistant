@@ -1,6 +1,6 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Video, Monitor, ListOrdered, Play, Pause, X } from 'lucide-react';
+import { Video, Monitor, ListOrdered, Play, Pause, Square } from 'lucide-react';
 import type { Slide, SlideItem, TextStyle } from './types';
 import { cn } from './utils';
 
@@ -214,27 +214,21 @@ const VideoPreview = memo(({ thumbnailUrl, objectFit, mediaUrl }: {
           muted
           className={cn('w-full h-full', objectFit === 'cover' ? 'object-cover' : 'object-contain')}
         />
+        {/* Stop button is its own control: clicks elsewhere on the slide still select it. */}
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); setPlaying(false); }}
-          className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center hover:bg-black/80 transition-colors z-10"
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-black/70 ring-1 ring-white/25 flex items-center justify-center shadow-lg hover:bg-black/85 transition-colors"
           aria-label={t('common.stopVideo')}
         >
-          <X className="w-3.5 h-3.5 text-white" />
+          <Square className="w-4 h-4 text-white" fill="currentColor" aria-hidden="true" />
         </button>
       </div>
     );
   }
 
   return (
-    <div
-      className="relative w-full h-full group cursor-pointer"
-      onClick={(e) => { e.stopPropagation(); if (mediaUrl) setPlaying(true); }}
-      role="button"
-      tabIndex={0}
-      aria-label={t('common.playVideo')}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (mediaUrl) setPlaying(true); } }}
-    >
+    <div className="relative w-full h-full">
       {thumbnailUrl ? (
         <img
           src={thumbnailUrl}
@@ -248,11 +242,15 @@ const VideoPreview = memo(({ thumbnailUrl, objectFit, mediaUrl }: {
           <span className="text-[10px] text-white/50">{t('common.slideVideo')}</span>
         </div>
       )}
-      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity bg-black/20">
-        <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
-          <Play className="w-5 h-5 text-black ml-0.5" />
-        </div>
-      </div>
+      {/* Play button is its own control: clicks elsewhere on the slide still select it. */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); if (mediaUrl) setPlaying(true); }}
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/85 hover:bg-white flex items-center justify-center shadow-lg transition-colors"
+        aria-label={t('common.playVideo')}
+      >
+        <Play className="w-5 h-5 text-black ml-0.5" aria-hidden="true" />
+      </button>
     </div>
   );
 });

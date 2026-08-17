@@ -490,7 +490,8 @@ export async function generateSlideThumbnail(slide: Slide): Promise<string | nul
 // ─── PPTX Import Helpers ──────────────────────────────────────────────────
 export interface PptxSlideResult {
   slideNumber: number;
-  imagePath: string;
+  /** Base64 data URI of the rendered slide (self-contained, survives saves). */
+  imageData: string;
   width: number;
   height: number;
   format: 'png';
@@ -516,8 +517,10 @@ export function convertPptxToSlides(
       id: makeId(),
       type: 'image',
       content: `Slayt ${pptx.slideNumber}`,
-      mediaUrl: pptx.imagePath,
-      thumbnailUrl: pptx.imagePath,
+      // Data URI (not a temp-file path): stays intact through local save,
+      // autosave/presets, Drive and reopening.
+      mediaUrl: pptx.imageData,
+      thumbnailUrl: pptx.imageData,
       styles: {
         fontSize: 48,
         backgroundColor: '#000000',

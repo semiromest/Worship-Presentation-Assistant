@@ -12,11 +12,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateProjector: (data: any) => ipcRenderer.invoke('update-projector', data),
   getProjectorStatus: () => ipcRenderer.invoke('get-projector-status'),
   importBibleXml: (filePath?: string) => ipcRenderer.invoke('import-bible-xml', filePath),
+  saveBibleData: (id: string, data: unknown) => ipcRenderer.invoke('save-bible-data', id, data),
+  readBibleData: (filePath: string) => ipcRenderer.invoke('read-bible-data', filePath),
+  deleteBibleData: (filePath: string) => ipcRenderer.invoke('delete-bible-data', filePath),
   selectMediaFile: (type: 'image' | 'video') => ipcRenderer.invoke('select-media-file', type),
   selectMediaFilesAll: () => ipcRenderer.invoke('select-media-files-all'),
   importHymnArchive: (dirPath?: string) => ipcRenderer.invoke('import-hymn-archive', dirPath),
   selectPptxFile: () => ipcRenderer.invoke('select-pptx-file'),
   importPptx: (filePath: string) => ipcRenderer.invoke('import-pptx', filePath),
+  exportPptx: (content: string) => ipcRenderer.invoke('export-pptx', content),
   getRemoteUrl: () => ipcRenderer.invoke('get-remote-url'),
   getRemoteDebug: () => ipcRenderer.invoke('get-remote-debug'),
   updateRemoteStatus: (status: any) => ipcRenderer.invoke('update-remote-status', status),
@@ -71,6 +75,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const subscription = (_event: any, data: { current: number; total: number }) => callback(data);
     ipcRenderer.on('pptx-import-progress', subscription);
     return () => ipcRenderer.removeListener('pptx-import-progress', subscription);
+  },
+
+  onPptxExportProgress: (callback: (data: { current: number; total: number }) => void) => {
+    const subscription = (_event: any, data: { current: number; total: number }) => callback(data);
+    ipcRenderer.on('pptx-export-progress', subscription);
+    return () => ipcRenderer.removeListener('pptx-export-progress', subscription);
   },
 
   // Google Drive
