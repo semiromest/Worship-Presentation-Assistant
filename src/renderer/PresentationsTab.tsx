@@ -26,6 +26,8 @@ import { AnimatedPreview } from './AnimatedPreview';
 import { cn } from './utils';
 import { convertPptxToSlides, type PptxImportResult } from './utils';
 import type { Presentation, Preset, Slide } from './types';
+import type { PlayingSFX } from 'uisfx';
+import { playSfx, stopSfx } from './sfx';
 import { confirmDialog } from './dialogs';
 import { useStore } from './state/useStore';
 import { isLiveSavePreset, getLiveSaveRetention } from './hooks/useLiveSave';
@@ -331,6 +333,7 @@ export default function PresentationsTab({
   const [importError, setImportError] = useState<string | null>(null);
   const [importDuration, setImportDuration] = useState<number | null>(null);
   const importStartTimeRef = useRef<number>(0);
+  const importLoopRef = useRef<PlayingSFX | null>(null);
 
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState({ current: 0, total: 0 });
@@ -342,6 +345,7 @@ export default function PresentationsTab({
   } | null>(null);
   const [exportDuration, setExportDuration] = useState<number | null>(null);
   const exportStartTimeRef = useRef<number>(0);
+  const exportLoopRef = useRef<PlayingSFX | null>(null);
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [draftName, setDraftName] = useState('');
@@ -392,6 +396,14 @@ export default function PresentationsTab({
     return () => unsubscribe();
   }, []);
 
+  // Stop any running import/export sound loops if this tab unmounts mid-task.
+  useEffect(() => {
+    return () => {
+      stopSfx(importLoopRef.current);
+      stopSfx(exportLoopRef.current);
+    };
+  }, []);
+
   const liveSavePresets = useMemo(
     () => [...presets].filter((p) => isLiveSavePreset(p.name)).sort((a, b) => b.createdAt - a.createdAt),
     [presets]
@@ -439,6 +451,7 @@ export default function PresentationsTab({
           onPresetsChange(updated);
           onSelectedPresetNameChange(name);
           setPresentationName(name);
+          playSfx('complete');
           if (onNewPresentation && (await confirmDialog(t('warnings.confirmNewAfterSave')))) {
             onNewPresentation();
           }
@@ -455,6 +468,7 @@ export default function PresentationsTab({
       if (Array.isArray(updated)) {
         onPresetsChange(updated);
         onSelectedPresetNameChange(name === selectedPresetName ? null : selectedPresetName);
+        playSfx('delete');
       }
     },
     [selectedPresetName, onPresetsChange, onSelectedPresetNameChange, t]
@@ -476,6 +490,7 @@ export default function PresentationsTab({
   const clearSearch = useCallback(() => setSearchQuery(''), []);
 
   const handleExportPptx = useCallback(async () => {
+    exportLoopRef.current = playSfx('processing');
     try {
       setExportError(null);
       setExportResult(null);
@@ -489,6 +504,8 @@ export default function PresentationsTab({
       const result = await window.electronAPI?.exportPptx?.(content);
 
       if (!result || result.canceled) {
+        stopSfx(exportLoopRef.current);
+        exportLoopRef.current = null;
         setIsExporting(false);
         setExportProgress({ current: 0, total: 0 });
         return;
@@ -497,6 +514,9 @@ export default function PresentationsTab({
       if (!result.success || !result.filePath) {
         throw new Error(result.error || t('common.exportFailedGeneric'));
       }
+
+      stopSfx(exportLoopRef.current);
+      exportLoopRef.current = null;
 
       setExportResult({
         filePath: result.filePath,
@@ -509,8 +529,11 @@ export default function PresentationsTab({
 
       setIsExporting(false);
       setExportProgress({ current: 0, total: 0 });
+      playSfx('complete');
     } catch (error) {
       console.error('PPTX export error:', error);
+      stopSfx(exportLoopRef.current);
+      exportLoopRef.current = null;
       setExportError(error instanceof Error ? error.message : t('common.unknownError'));
       setIsExporting(false);
       setExportProgress({ current: 0, total: 0 });
@@ -519,10 +542,12 @@ export default function PresentationsTab({
         const duration = performance.now() - exportStartTimeRef.current;
         setExportDuration(Math.round(duration));
       }
+      playSfx('error');
     }
   }, [presentation, t]);
 
   const handleImportPptx = useCallback(async () => {
+    importLoopRef.current = playSfx('processing');
     try {
       setImportError(null);
       setImportDuration(null);
@@ -533,6 +558,8 @@ export default function PresentationsTab({
 
       const filePath = await window.electronAPI?.selectPptxFile?.();
       if (!filePath) {
+        stopSfx(importLoopRef.current);
+        importLoopRef.current = null;
         setIsImporting(false);
         return;
       }
@@ -542,6 +569,9 @@ export default function PresentationsTab({
       if (!result.success || !result.slides) {
         throw new Error(result.error || t('common.importFailedGeneric'));
       }
+
+      stopSfx(importLoopRef.current);
+      importLoopRef.current = null;
 
       const slides = convertPptxToSlides(result);
 
@@ -554,8 +584,11 @@ export default function PresentationsTab({
 
       setIsImporting(false);
       setImportProgress({ current: 0, total: 0 });
+      playSfx('complete');
     } catch (error) {
       console.error('PPTX import error:', error);
+      stopSfx(importLoopRef.current);
+      importLoopRef.current = null;
       setImportError(error instanceof Error ? error.message : t('common.unknownError'));
       setIsImporting(false);
       setImportProgress({ current: 0, total: 0 });
@@ -564,6 +597,7 @@ export default function PresentationsTab({
         const duration = performance.now() - importStartTimeRef.current;
         setImportDuration(Math.round(duration));
       }
+      playSfx('error');
     }
   }, [onImportSlides, t]);
 

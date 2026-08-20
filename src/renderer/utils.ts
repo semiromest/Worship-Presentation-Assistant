@@ -285,6 +285,25 @@ function renderScreenSlide(
   return true;
 }
 
+function renderCaptionsSlide(
+  ctx: CanvasRenderingContext2D,
+  slide: Slide,
+  W: number,
+  H: number,
+): boolean {
+  ctx.fillStyle = slide.styles?.backgroundColor ?? '#000000';
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(147,197,253,0.18)';
+  ctx.font = 'bold 16px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🎤 Canlı Çeviri', W / 2, H / 2 - 8);
+  ctx.font = '12px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.fillText('Soniox gerçek zamanlı çeviri', W / 2, H / 2 + 18);
+  return true;
+}
+
 async function renderLoopSlide(
   ctx: CanvasRenderingContext2D,
   slide: Slide,
@@ -453,6 +472,8 @@ async function generateSlideThumbnailInner(slide: Slide): Promise<string | null>
       rendered = renderScreenSlide(ctx, slide, W, H);
     } else if (slide.type === 'loop') {
       rendered = await renderLoopSlide(ctx, slide, W, H);
+    } else if (slide.type === 'captions') {
+      rendered = renderCaptionsSlide(ctx, slide, W, H);
     } else if (slide.items?.length) {
       rendered = await renderItemsSlide(ctx, slide, W, H);
     }

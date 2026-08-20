@@ -23,6 +23,7 @@ import {
 import type { DriveFile } from '../types';
 import { useStore } from '../state/useStore';
 import { confirmDialog } from '../dialogs';
+import { playSfx } from '../sfx';
 
 function formatDate(iso: string): string {
   try {
@@ -141,6 +142,7 @@ const [loading, setLoading] = useState(false);
       setDriveFiles(Array.isArray(files) ? files : []);
     } catch {
       setError(t('drive.error'));
+      playSfx('error');
     } finally {
       setLoading(false);
       setDriveFilesLoaded(true);
@@ -167,12 +169,15 @@ const [loading, setLoading] = useState(false);
       if (status.signedIn) {
         setDriveSignedIn(true, status.email);
         showSuccess(t('drive.connected'));
+        playSfx('connect');
         refreshFiles();
       } else {
         setError(t('drive.error'));
+        playSfx('error');
       }
     } catch {
       setError(t('drive.error'));
+      playSfx('error');
     } finally {
       setDriveSigningIn(false);
     }
@@ -185,6 +190,7 @@ const [loading, setLoading] = useState(false);
     setDriveSignedIn(false);
     setDriveFiles([]);
     setDriveFilesLoaded(false);
+    playSfx('disconnect');
   };
 
   const handleUpload = async () => {
@@ -204,14 +210,17 @@ const [loading, setLoading] = useState(false);
       const result = await window.electronAPI.driveSavePresentation(content, finalName);
       if ('ok' in result && result.ok) {
         showSuccess(t('drive.uploadSuccess'));
+        playSfx('complete');
         refreshFiles();
         fileListRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
         const err = 'error' in result ? result.error : undefined;
         setError(err ?? t('drive.error'));
+        playSfx('error');
       }
     } catch (e) {
       setError(String(e));
+      playSfx('error');
     } finally {
       setUploading(false);
     }
@@ -226,13 +235,16 @@ const [loading, setLoading] = useState(false);
       if ('ok' in result && result.ok && result.data) {
         const parsed = JSON.parse(result.data);
         showSuccess(t('drive.downloadSuccess'));
+        playSfx('complete');
         window.dispatchEvent(new CustomEvent('drive-open-presentation', { detail: parsed }));
       } else {
         const err = 'error' in result ? result.error : undefined;
         setError(err ?? t('drive.error'));
+        playSfx('error');
       }
     } catch (e) {
       setError(String(e));
+      playSfx('error');
     } finally {
       setDownloading(null);
     }
@@ -252,13 +264,16 @@ const [loading, setLoading] = useState(false);
       const result = await window.electronAPI.driveDeleteFile(file.id);
       if ('ok' in result && result.ok) {
         showSuccess(`"${file.name}" silindi`);
+        playSfx('delete');
         refreshFiles();
       } else {
         const err = 'error' in result ? result.error : undefined;
         setError(err ?? t('drive.error'));
+        playSfx('error');
       }
     } catch (e) {
       setError(String(e));
+      playSfx('error');
     } finally {
       setDeleting(null);
     }

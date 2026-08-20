@@ -30,8 +30,10 @@ export const DEFAULT__TRANSITION: { type: TransitionType; duration: number } = {
 export const SLIDE_REFERENCE_WIDTH  = 1920;
 export const SLIDE_REFERENCE_HEIGHT = 1080;
 
-export const IS_PROJECTOR_MODE =
-  new URLSearchParams(window.location.search).get('mode') === 'projector';
+const URL_PARAMS = new URLSearchParams(window.location.search);
+
+export const IS_PROJECTOR_MODE = URL_PARAMS.get('mode') === 'projector';
+export const PROJECTOR_DISPLAY_ID = URL_PARAMS.get('displayId');
 
 // ─── Transition CSS Injection ─────────────────────────────────────────────────
 

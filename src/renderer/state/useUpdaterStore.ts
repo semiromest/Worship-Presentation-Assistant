@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { playSfx } from '../sfx';
 
 export type UpdaterStatus = 'idle' | 'checking' | 'uptodate' | 'available' | 'downloading' | 'downloaded' | 'error';
 
@@ -73,6 +74,18 @@ export function initUpdaterSync(): void {
 
   api().onUpdaterEvent((event) => {
     useUpdaterStore.setState((s) => updaterReducer(s, event));
+    // UI sound feedback for the meaningful update states (silent when off).
+    switch (event.type) {
+      case 'update-available':
+        playSfx('notification');
+        break;
+      case 'update-downloaded':
+        playSfx('complete');
+        break;
+      case 'error':
+        playSfx('error');
+        break;
+    }
   });
 
   api()

@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ChevronLeft, ChevronRight, Eye, EyeOff, Play, VolumeX, Volume2, Timer, Type,
   Edit3, ChevronUp, ChevronDown, Trash2, Monitor, Repeat, Image as ImageIcon, Video, MousePointer2,
-  PanelRightClose, Plus, Settings2
+  PanelRightClose, Plus, Settings2, Captions
 } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { cn, toFileUrl } from '../utils';
@@ -15,6 +15,7 @@ import ImageSlideEditor from './ImageSlideEditor';
 import { DEFAULT__TRANSITION, TRANSITION_OPTIONS, DURATION_OPTIONS } from '../constants';
 import type { Slide, TransitionType, LoopItem } from '../types';
 import type { CountdownSlideData } from '../countdownUtils';
+import { playSfx } from '../sfx';
 
 interface RightPanelProps {
   addSlide: () => void;
@@ -185,7 +186,11 @@ export default function RightPanel({
 
           <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={() => setIsBlackout((p) => !p)}
+              onClick={() => {
+                const next = !useStore.getState().isBlackout;
+                playSfx(next ? 'lock' : 'unlock');
+                setIsBlackout(next);
+              }}
               title={isBlackout ? t('common.openBroadcast') : t('common.blackScreen')}
               aria-label={isBlackout ? t('common.openBroadcast') : t('common.blackScreen')}
               aria-pressed={isBlackout}
@@ -203,7 +208,10 @@ export default function RightPanel({
             <button
               onClick={() => {
                 const idx = getSlideIndex(presentation.slides, selectedSlideId);
-                if (idx >= 0) setLiveIndex(idx);
+                if (idx >= 0) {
+                  setLiveIndex(idx);
+                  playSfx('start');
+                }
               }}
               title={t('common.sendSelectedToLive')}
               aria-label={t('common.sendSelectedToLive')}
@@ -226,7 +234,11 @@ export default function RightPanel({
           <div className="px-4 py-2 border-b border-white/10 bg-[#161616]">
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setIsMediaMuted((p) => !p)}
+                onClick={() => {
+                  const next = !useStore.getState().isMediaMuted;
+                  playSfx(next ? 'toggle-on' : 'toggle-off');
+                  setIsMediaMuted(next);
+                }}
                 className={cn(
                   'p-1.5 rounded-lg border transition-colors',
                   isMediaMuted
@@ -269,7 +281,7 @@ export default function RightPanel({
             </div>
             {selectedSlide && (
               <div className="flex items-center gap-1.5">
-                {selectedSlide && !['countdown', 'screen', 'loop'].includes(selectedSlide.type) && (
+                {selectedSlide && !['countdown', 'screen', 'loop', 'captions'].includes(selectedSlide.type) && (
                   <button
                     onClick={() => setIsEditorOpen(true)}
                     className="p-1.5 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-500/20 transition-colors"
@@ -351,6 +363,13 @@ export default function RightPanel({
                 updateSlideProperty={updateSlideProperty}
                 t={t}
               />
+            ) : selectedSlide?.type === 'captions' ? (
+              <CaptionsSlideEditor
+                slide={selectedSlide}
+                updateSlideStyles={updateSlideStyles}
+                updateSlideProperty={updateSlideProperty}
+                t={t}
+              />
             ) : selectedSlide?.type === 'image' && !selectedSlide.items?.length ? (
               <ImageSlideEditor
                 selectedSlide={selectedSlide}
@@ -375,6 +394,162 @@ export default function RightPanel({
       </div>
       </div>
     </>
+  );
+}
+
+/* ── Captions (live STT/translation) Slide Editor ────────────── */
+
+const CAPTIONS_LAYOUTS = [
+  { value: 'centered' as const, labelKey: 'common.captionsLayoutCentered' },
+  { value: 'lowerThird' as const, labelKey: 'common.captionsLayoutLowerThird' },
+  { value: 'top' as const, labelKey: 'common.captionsLayoutTop' },
+];
+
+function CaptionsSlideEditor({
+  slide,
+  updateSlideStyles,
+  updateSlideProperty,
+  t,
+}: {
+  slide: Slide;
+  updateSlideStyles: (styles: Partial<Slide['styles']>) => void;
+  updateSlideProperty: (slideId: string, props: Record<string, unknown>) => void;
+  t: (key: string) => string;
+}) {
+  const cfg = slide.captions ?? { showOriginal: true, showTranslation: true };
+  const styles = (slide.styles ?? {}) as Record<string, any>;
+
+  const toggle = (key: 'showOriginal' | 'showTranslation') => {
+    updateSlideProperty(slide.id, {
+      captions: { ...cfg, [key]: !cfg[key] },
+    });
+  };
+
+  const layout = cfg.layout ?? 'centered';
+  const setLayout = (value: 'centered' | 'lowerThird' | 'top') => {
+    updateSlideProperty(slide.id, {
+      captions: { ...cfg, layout: value },
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Captions className="w-4 h-4 text-blue-400" />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+            {t('common.captionsEditor')}
+          </span>
+        </div>
+
+        <label className="flex items-center gap-2.5">
+          <input
+            type="checkbox"
+            checked={cfg.showTranslation !== false}
+            onChange={() => toggle('showTranslation')}
+            className="rounded border-white/20 accent-blue-500"
+          />
+          <span className="text-xs text-white/75">{t('common.captionsShowTranslation')}</span>
+        </label>
+
+        <label className="flex items-center gap-2.5">
+          <input
+            type="checkbox"
+            checked={cfg.showOriginal !== false}
+            onChange={() => toggle('showOriginal')}
+            className="rounded border-white/20 accent-blue-500"
+          />
+          <span className="text-xs text-white/75">{t('common.captionsShowOriginal')}</span>
+        </label>
+
+        <div className="space-y-1.5 pt-1">
+          <span className="text-[10px] uppercase tracking-wide text-white/40">
+            {t('common.captionsLayout')}
+          </span>
+          <div className="grid grid-cols-3 gap-1.5">
+            {CAPTIONS_LAYOUTS.map(({ value, labelKey }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setLayout(value)}
+                aria-pressed={layout === value}
+                className={cn(
+                  'rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none',
+                  layout === value
+                    ? 'bg-blue-600/20 border-blue-500/40 text-blue-300'
+                    : 'bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10'
+                )}
+              >
+                {t(labelKey)}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+        <div className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+          {t('common.editorSlideSettings')}
+        </div>
+
+        <label className="block space-y-1">
+          <span className="text-[10px] uppercase tracking-wide text-white/40">
+            {t('common.editorBgColor')}
+          </span>
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={styles.backgroundColor ?? '#000000'}
+              onChange={(e) => updateSlideStyles({ backgroundColor: e.target.value })}
+              className="h-8 w-8 shrink-0 cursor-pointer rounded-lg border border-white/10 bg-transparent"
+            />
+            <input
+              type="text"
+              value={styles.backgroundColor ?? ''}
+              onChange={(e) => updateSlideStyles({ backgroundColor: e.target.value })}
+              className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none focus:border-blue-500 transition-colors"
+            />
+          </div>
+        </label>
+
+        <label className="block space-y-1">
+          <span className="text-[10px] uppercase tracking-wide text-white/40">
+            {t('common.editorTextColor')}
+          </span>
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={styles.textColor ?? '#ffffff'}
+              onChange={(e) => updateSlideStyles({ textColor: e.target.value })}
+              className="h-8 w-8 shrink-0 cursor-pointer rounded-lg border border-white/10 bg-transparent"
+            />
+            <input
+              type="text"
+              value={styles.textColor ?? ''}
+              onChange={(e) => updateSlideStyles({ textColor: e.target.value })}
+              className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none focus:border-blue-500 transition-colors"
+            />
+          </div>
+        </label>
+
+        <label className="block space-y-1">
+          <span className="text-[10px] uppercase tracking-wide text-white/40">
+            {t('common.editorDefaultFontSize')}
+          </span>
+          <input
+            type="number"
+            min={16}
+            max={240}
+            value={styles.fontSize ?? 48}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              if (!Number.isNaN(v)) updateSlideStyles({ fontSize: Math.min(240, Math.max(16, v)) });
+            }}
+            className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none focus:border-blue-500 transition-colors"
+          />
+        </label>
+      </div>
+    </div>
   );
 }
 

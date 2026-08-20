@@ -9,6 +9,7 @@ import { findPresetByRef } from '../presetUtils';
 import { isLiveSavePreset, getLiveSaveRetention } from './useLiveSave';
 import { parseCountdownContent, serializeCountdownContent, CountdownSlideData } from '../countdownUtils';
 import { splitHymnLyrics } from '../hymnSplit';
+import { playSfx } from '../sfx';
 
 export const createSlide = (type: Slide['type'], overrides: Partial<Slide> = {}): Slide => ({
   id: makeSlideId(),
@@ -65,6 +66,7 @@ export function useSlideOperations() {
       },
     });
     setSelectedSlideId(newSlide.id);
+    playSfx('select');
   }, [presentation, t, dispatchUndo, setSelectedSlideId]);
 
   const removeSlide = useCallback((id: string) => {
@@ -77,6 +79,7 @@ export function useSlideOperations() {
       type: 'SET',
       payload: { ...presentation, slides },
     });
+    playSfx('delete');
   }, [presentation, selectedSlideId, dispatchUndo, setSelectedSlideId]);
 
   const moveSelectedSlide = useCallback((direction: -1 | 1) => {
@@ -103,6 +106,7 @@ export function useSlideOperations() {
       type: 'SET',
       payload: { ...presentation, slides },
     });
+    playSfx('reorder');
   }, [presentation, selectedSlideId, isProjectorWindowOpen, dispatchUndo, setLiveIndex]);
 
   const reorderSlides = useCallback((fromIndex: number, toIndex: number) => {
@@ -120,6 +124,7 @@ export function useSlideOperations() {
       type: 'SET',
       payload: { ...presentation, slides },
     });
+    playSfx('reorder');
   }, [presentation, selectedSlideId, isProjectorWindowOpen, dispatchUndo, setSelectedSlideId, setLiveIndex]);
 
   const updateSlideContent = useCallback((content: string) => {
@@ -286,6 +291,7 @@ export function useSlideOperations() {
           name: path.split('\\').pop()?.replace('.gpres', '') ?? presentation.name,
         },
       });
+      playSfx('complete');
     }
   }, [presentation, dispatchUndo]);
 
@@ -312,7 +318,7 @@ export function useSlideOperations() {
     const slides: Slide[] = Array.isArray(data.slides)
       ? data.slides.map((s: any, i: number) => ({
           id: typeof s.id === 'string' ? s.id : `${i + 1}`,
-          type: ['image', 'video', 'text', 'screen', 'countdown', 'loop'].includes(s.type) ? s.type : 'text',
+          type: ['image', 'video', 'text', 'screen', 'countdown', 'loop', 'captions'].includes(s.type) ? s.type : 'text',
           content: typeof s.content === 'string' ? s.content : '',
           mediaUrl: typeof s.mediaUrl === 'string' ? s.mediaUrl : undefined,
           thumbnailUrl: typeof s.thumbnailUrl === 'string' ? s.thumbnailUrl : undefined,
@@ -332,6 +338,7 @@ export function useSlideOperations() {
                 parts: typeof s.group.parts === 'number' ? s.group.parts : 1,
               }
             : undefined,
+          captions: s.captions && typeof s.captions === 'object' ? { ...s.captions } : undefined,
           styles: { ...DEFAULT_STYLES, ...(s.styles ?? {}) },
         }))
       : [createSlide('text', { content: t('common.newSlideContent') })];
@@ -353,6 +360,7 @@ export function useSlideOperations() {
     }
     // Reset live position on open so it never points to a stale/out-of-range index.
     setLiveIndex(0);
+    playSfx('open');
   }, [t, dispatchUndo, setSelectedSlideId, setSlideZoom, setLiveIndex]);
 
   const applyPreset = useCallback((preset: Preset) => {
@@ -378,6 +386,7 @@ export function useSlideOperations() {
     setLiveIndex(savedLiveIndex);
     setSelectedPresetName(preset.name);
     setActiveTab('slides');
+    playSfx('open');
   }, [dispatchUndo, setPresentationName, setSelectedSlideId, setSlideZoom, setLiveIndex, setSelectedPresetName, setActiveTab]);
 
   const openSavedPresentationByName = useCallback(async (presentationName: string) => {
@@ -438,6 +447,7 @@ export function useSlideOperations() {
     });
     setSelectedSlideId(newSlides[0].id);
     setActiveTab('slides');
+    playSfx('success');
   }, [dispatchUndo, setSelectedSlideId, setLiveIndex, setActiveTab]);
 
   const handleSendToLive = useCallback((content: string | string[], options?: { groupTitle?: string; goLive?: boolean }) => {
@@ -592,6 +602,36 @@ export function useSlideOperations() {
     appendSlides([newSlide]);
   }, [appendSlides]);
 
+  const handleAddCaptionsSlide = useCallback((goLive?: boolean) => {
+    const newSlide = createSlide('captions', {
+      content: '',
+      captions: { showOriginal: true, showTranslation: true },
+      styles: {
+        ...DEFAULT_STYLES,
+        fontSize: 72,
+        backgroundColor: '#000000',
+        textColor: '#ffffff',
+      },
+    });
+    appendSlides([newSlide], goLive);
+  }, [appendSlides]);
+
+  /** Turns a finished STT utterance (original + translation) into a text slide. */
+  const handleSttUtteranceToSlide = useCallback((original: string, translation: string) => {
+    const content = [original, translation].filter(Boolean).join('\n\n');
+    if (!content.trim()) return;
+    const newSlide = createSlide('text', {
+      content,
+      styles: {
+        ...DEFAULT_STYLES,
+        fontSize: 48,
+        backgroundColor: '#000000',
+        textColor: '#ffffff',
+      },
+    });
+    appendSlides([newSlide]);
+  }, [appendSlides]);
+
   const handleAddLoopToPresentation = useCallback((items: LoopItem[], defaultDuration: number) => {
     const newSlide = createSlide('loop', {
       content: '',
@@ -645,6 +685,7 @@ export function useSlideOperations() {
     setSelectedSlideId(id);
     setLastSelectedIndex(index);
     setLiveIndex(index);
+    playSfx('start');
   }, [isProjectorWindowOpen, setSelectedSlideIds, setSelectedSlideId, setLastSelectedIndex, setLiveIndex]);
 
   const deleteSelectedSlides = useCallback(async () => {
@@ -668,6 +709,8 @@ export function useSlideOperations() {
     if (selectedSlideIds.has(selectedSlideId)) {
       setSelectedSlideId(slides[0].id);
     }
+
+    playSfx('delete');
   }, [presentation, selectedSlideIds, selectedSlideId, t, dispatchUndo, setSelectedSlideIds, setSelectedSlideId, setLastSelectedIndex]);
 
   const duplicateSelectedSlides = useCallback(() => {
@@ -755,6 +798,7 @@ export function useSlideOperations() {
       type: 'SET',
       payload: { ...presentation, slides },
     });
+    playSfx('reorder');
   }, [presentation, selectedSlideIds, dispatchUndo]);
 
   const replaceSlideMedia = useCallback(async () => {
@@ -857,6 +901,8 @@ export function useSlideOperations() {
     handleHymnAdd,
     handleAddCountdownToPresentation,
     handleAddLoopToPresentation,
+    handleAddCaptionsSlide,
+    handleSttUtteranceToSlide,
     handleSlideClick,
     handleSlideDoubleClick,
     deleteSelectedSlides,

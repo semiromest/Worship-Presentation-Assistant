@@ -5,6 +5,16 @@ import { undoReducer, UndoState, UndoAction, applyProjectorPatch, ProjectorPatch
 import { DEFAULT_STYLES, DEFAULT__TRANSITION } from '../constants';
 import { makeSlideId } from '../utils';
 import i18n from '../i18n';
+import { isSfxEnabled, setSfxEnabled } from '../sfx';
+import {
+  chooseDefaultOutputDisplay,
+  clampSlideIndex,
+  createOutputAssignment,
+  type DisplayInfo,
+  type DisplayMode,
+  type OutputAssignment,
+  type ProjectorOutputStatus,
+} from '../../shared/displays';
 
 const createInitialPresentation = (): Presentation => ({
   id: crypto.randomUUID(),
@@ -46,6 +56,21 @@ interface AppState {
   // Projector State
   liveIndex: number;
   setLiveIndex: (idx: number | ((prev: number) => number)) => void;
+  /** Connected displays; hidden from the UI when there is only one display. */
+  displays: DisplayInfo[];
+  setDisplays: (displays: DisplayInfo[]) => void;
+  /** Per-output relationship between a display and its shown slide. */
+  outputAssignments: Record<string, OutputAssignment>;
+  setOutputOpen: (displayId: string, open: boolean) => void;
+  setOutputMode: (displayId: string, mode: DisplayMode) => void;
+  setOutputSlide: (displayId: string, index: number) => void;
+  setOutputBlackout: (displayId: string, blackout: boolean | ((prev: boolean) => boolean)) => void;
+  setProjectorOutputStatus: (outputs: ProjectorOutputStatus[]) => void;
+  /** One-shot: next slide change was auto-tracked → skip the transition. */
+  instantTransition: boolean;
+  setInstantTransition: (instant: boolean) => void;
+  /** Navigate + select + instant transition in a single store update. */
+  autoTrackToSlide: (target: number) => void;
   isProjectorWindowOpen: boolean;
   setIsProjectorWindowOpen: (open: boolean) => void;
   projectorReady: boolean;
@@ -64,6 +89,10 @@ interface AppState {
   setLiveSaveRetentionMs: (ms: number) => void;
   liveSaveLastSaved: number | null;
   setLiveSaveLastSaved: (ts: number | null) => void;
+
+  // UI sound effects (uisfx, minimal pack) — off by default
+  uiSfxEnabled: boolean;
+  setUiSfxEnabled: (enabled: boolean) => void;
 
   // UI State
   activeTab: 'presentations' | 'slides' | 'bible' | 'media' | 'hymns' | 'countdown' | 'screen' | 'loop' | 'calendar' | 'autosaves' | 'settings';
@@ -86,6 +115,18 @@ interface AppState {
   setRemoteQr: (qr: string | null) => void;
   remoteDebug: any;
   setRemoteDebug: (debug: any) => void;
+
+  // Phone captions/translation share state
+  shareActive: boolean;
+  setShareActive: (active: boolean) => void;
+  shareUrl: string;
+  setShareUrl: (url: string) => void;
+  shareQr: string | null;
+  setShareQr: (qr: string | null) => void;
+  shareClientCount: number;
+  setShareClientCount: (count: number) => void;
+  shareNetworkChanged: boolean;
+  setShareNetworkChanged: (changed: boolean) => void;
 
   // Media Settings
   mediaVolume: number;
@@ -118,6 +159,10 @@ interface AppState {
   // Right panel toggle
   isRightPanelOpen: boolean;
   setIsRightPanelOpen: (open: boolean) => void;
+
+  // Live captions (STT) panel toggle
+  isSttPanelOpen: boolean;
+  setIsSttPanelOpen: (open: boolean) => void;
 
   // Search & Modals
   searchQuery: string;
@@ -202,6 +247,113 @@ export const useStore = create<AppState>((set) => ({
       liveIndex: typeof idx === 'function' ? idx(state.liveIndex) : idx,
     })),
 
+  displays: [],
+  setDisplays: (displays) =>
+    set((state) => {
+      const outputAssignments = { ...state.outputAssignments };
+      for (const display of displays) {
+        if (!outputAssignments[display.id]) {
+          outputAssignments[display.id] = createOutputAssignment(state.liveIndex);
+        }
+      }
+      return { displays, outputAssignments };
+    }),
+
+  outputAssignments: {},
+  setOutputOpen: (displayId, open) =>
+    set((state) => {
+      const defaultId = chooseDefaultOutputDisplay(state.displays)?.id;
+      const current = state.outputAssignments[displayId] ?? createOutputAssignment(state.liveIndex);
+      const resetBlackout = defaultId === displayId && !open;
+      return {
+        outputAssignments: {
+          ...state.outputAssignments,
+          [displayId]: {
+            ...current,
+            isOpen: open,
+            ...(resetBlackout ? { isBlackout: false } : {}),
+          },
+        },
+        ...(resetBlackout ? { isBlackout: false } : {}),
+      };
+    }),
+  setOutputMode: (displayId, mode) =>
+    set((state) => ({
+      outputAssignments: {
+        ...state.outputAssignments,
+        [displayId]: {
+          ...(state.outputAssignments[displayId] ?? createOutputAssignment(state.liveIndex)),
+          mode,
+          ...(mode === 'manual'
+            ? { slideIndex: clampSlideIndex(state.liveIndex, state.presentation.slides.length) }
+            : {}),
+        },
+      },
+    })),
+  setOutputSlide: (displayId, index) =>
+    set((state) => ({
+      outputAssignments: {
+        ...state.outputAssignments,
+        [displayId]: {
+          ...(state.outputAssignments[displayId] ?? createOutputAssignment(state.liveIndex)),
+          mode: 'manual',
+          slideIndex: Math.max(0, Math.floor(index)),
+        },
+      },
+    })),
+  setOutputBlackout: (displayId, blackout) =>
+    set((state) => {
+      const current = state.outputAssignments[displayId] ?? createOutputAssignment(state.liveIndex);
+      const defaultId = chooseDefaultOutputDisplay(state.displays)?.id;
+      const currentBlackout = defaultId === displayId ? state.isBlackout : current.isBlackout;
+      const nextBlackout = typeof blackout === 'function' ? blackout(currentBlackout) : blackout;
+      return {
+        outputAssignments: {
+          ...state.outputAssignments,
+          [displayId]: { ...current, isBlackout: nextBlackout },
+        },
+        ...(defaultId === displayId ? { isBlackout: nextBlackout } : {}),
+      };
+    }),
+  setProjectorOutputStatus: (outputs) =>
+    set((state) => {
+      const outputAssignments = { ...state.outputAssignments };
+      for (const output of outputs) {
+        const current = outputAssignments[output.displayId] ?? createOutputAssignment(state.liveIndex);
+        outputAssignments[output.displayId] = { ...current, isOpen: output.isOpen };
+      }
+      const defaultId = chooseDefaultOutputDisplay(state.displays)?.id;
+      const defaultStatus = outputs.find((output) => output.displayId === defaultId);
+      return {
+        outputAssignments,
+        ...(defaultStatus
+          ? { isProjectorWindowOpen: defaultStatus.isOpen }
+          : outputs.length === 0
+            ? { isProjectorWindowOpen: false }
+            : {}),
+      };
+    }),
+
+  instantTransition: false,
+  setInstantTransition: (instantTransition) =>
+    set({ instantTransition }),
+
+  autoTrackToSlide: (target) =>
+    set((state) => {
+      const slide = state.presentation.slides[target];
+      return {
+        instantTransition: true,
+        liveIndex: target,
+        ...(slide
+          ? {
+              selectedSlideId: slide.id,
+              selectedSlideIds: new Set([slide.id]),
+            }
+          : {}),
+        lastSelectedIndex: target,
+      };
+    }),
+
   isProjectorWindowOpen: false,
   setIsProjectorWindowOpen: (open) => set({ isProjectorWindowOpen: open }),
 
@@ -246,6 +398,12 @@ export const useStore = create<AppState>((set) => ({
   liveSaveLastSaved: null,
   setLiveSaveLastSaved: (ts) => set({ liveSaveLastSaved: ts }),
 
+  uiSfxEnabled: isSfxEnabled(),
+  setUiSfxEnabled: (enabled) => {
+    setSfxEnabled(enabled);
+    set({ uiSfxEnabled: enabled });
+  },
+
   activeTab: 'presentations',
   setActiveTab: (tab) => set({ activeTab: tab }),
 
@@ -261,6 +419,9 @@ export const useStore = create<AppState>((set) => ({
   isRightPanelOpen: true,
   setIsRightPanelOpen: (open) => set({ isRightPanelOpen: open }),
 
+  isSttPanelOpen: false,
+  setIsSttPanelOpen: (open) => set({ isSttPanelOpen: open }),
+
   selectedPresetName: null,
   setSelectedPresetName: (name) => set({ selectedPresetName: name }),
 
@@ -272,6 +433,21 @@ export const useStore = create<AppState>((set) => ({
 
   remoteDebug: null,
   setRemoteDebug: (debug) => set({ remoteDebug: debug }),
+
+  shareActive: false,
+  setShareActive: (shareActive) => set({ shareActive }),
+
+  shareUrl: '',
+  setShareUrl: (shareUrl) => set({ shareUrl }),
+
+  shareQr: null,
+  setShareQr: (shareQr) => set({ shareQr }),
+
+  shareClientCount: 0,
+  setShareClientCount: (shareClientCount) => set({ shareClientCount }),
+
+  shareNetworkChanged: false,
+  setShareNetworkChanged: (shareNetworkChanged) => set({ shareNetworkChanged }),
 
   mediaVolume: 1,
   setMediaVolume: (vol) => set({ mediaVolume: vol }),

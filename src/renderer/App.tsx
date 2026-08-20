@@ -18,6 +18,7 @@ import { AnimatedPreview } from './AnimatedPreview';
 
 import { IS_PROJECTOR_MODE, DEFAULT__TRANSITION } from './constants';
 import { cn } from './utils';
+import { initSfx } from './sfx';
 
 // State & Hooks
 import { useStore } from './state/useStore';
@@ -26,6 +27,9 @@ import { useKeyboardNavigation } from './hooks/useKeyboardNavigation';
 import { useProjectorSync } from './hooks/useProjectorSync';
 import { useLiveSave, getLiveSaveRetention } from './hooks/useLiveSave';
 import { useSlideOperations } from './hooks/useSlideOperations';
+import { useStt } from './hooks/useStt';
+import { useSttSlideTracker } from './hooks/useSttSlideTracker';
+import { useShare } from './hooks/useShare';
 import { initUpdaterSync } from './state/useUpdaterStore';
 
 // Components
@@ -35,15 +39,26 @@ import RightPanel from './components/RightPanel';
 import CheatsheetModal from './components/CheatsheetModal';
 import UpdatesModal from './components/UpdatesModal';
 import RemoteControlModal from './components/RemoteControlModal';
+import SttPanel from './components/SttPanel';
 import Toast from './components/Toast';
 
 export default function App() {
   const { t, i18n } = useTranslation();
 
   // Custom Hooks
-  const { openLive, closeLive } = useRemoteControl();
+  const { openLive, closeLive, openOutput, closeOutput } = useRemoteControl();
   useProjectorSync();
   useLiveSave();
+  // Real-time captions/translation — runs in BOTH windows so the projector
+  // screen renders the same live text. The hook owns mic capture + session
+  // start/stop; the panel below is just the control UI.
+  const { start: sttStart, stop: sttStop } = useStt();
+  // Slide tracker: follows the speaker by matching the live transcript against
+  // the deck's text slides. No-ops in the projector window.
+  useSttSlideTracker();
+  // Phone captions/translation share — a pure subscriber of the STT store that
+  // pushes normalized snapshots to the main process for LAN broadcast.
+  const { startShare, stopShare } = useShare();
 
   // Field-level selectors: subscribing to the whole store re-rendered App on
   // every state change (toast, search, liveIndex, …). Each selector returns a
@@ -51,6 +66,8 @@ export default function App() {
   const presentation = useStore((s) => s.presentation);
   const selectedSlideId = useStore((s) => s.selectedSlideId);
   const liveIndex = useStore((s) => s.liveIndex);
+  const instantTransition = useStore((s) => s.instantTransition);
+  const setInstantTransition = useStore((s) => s.setInstantTransition);
   const projectorReady = useStore((s) => s.projectorReady);
   const isBlackout = useStore((s) => s.isBlackout);
   const mediaVolume = useStore((s) => s.mediaVolume);
@@ -70,6 +87,8 @@ export default function App() {
   const dispatchUndo = useStore((s) => s.dispatchUndo);
   const isRightPanelOpen = useStore((s) => s.isRightPanelOpen);
   const setIsRightPanelOpen = useStore((s) => s.setIsRightPanelOpen);
+  const isSttPanelOpen = useStore((s) => s.isSttPanelOpen);
+  const setIsSttPanelOpen = useStore((s) => s.setIsSttPanelOpen);
 
   const {
     addSlide,
@@ -98,6 +117,8 @@ export default function App() {
     handleScreenAdd,
     handleHymnAdd,
     handleAddCountdownToPresentation,
+    handleAddCaptionsSlide,
+    handleSttUtteranceToSlide,
     handleAddLoopToPresentation,
     handleSlideClick,
     handleSlideDoubleClick,
@@ -115,8 +136,13 @@ export default function App() {
     onDuplicateSlides: duplicateSelectedSlides,
   });
 
-  const transitionType = presentation.transition?.type ?? DEFAULT__TRANSITION.type;
-  const transitionDuration = presentation.transition?.duration ?? DEFAULT__TRANSITION.duration;
+  const configuredTransitionType = presentation.transition?.type ?? DEFAULT__TRANSITION.type;
+  const configuredTransitionDuration = presentation.transition?.duration ?? DEFAULT__TRANSITION.duration;
+  // Auto-tracked slide changes switch instantly (no fade/zoom) so the speaker
+  // is followed with minimal delay; manual navigation keeps the configured
+  // transition.
+  const transitionType = instantTransition ? 'none' : configuredTransitionType;
+  const transitionDuration = instantTransition ? 0 : configuredTransitionDuration;
   const liveSlide = presentation.slides[liveIndex] ?? presentation.slides[0];
   const selectedSlide = presentation.slides.find((s) => s.id === selectedSlideId);
 
@@ -145,6 +171,15 @@ export default function App() {
     document.documentElement.lang = i18n.language?.split('-')[0] ?? 'tr';
   }, [i18n.language]);
 
+  // ─── Auto-track "instant switch" is one-shot ─────────────────────────────
+  // The flag is consumed by this render (transitionType becomes 'none') and
+  // then cleared so the next manual navigation uses the configured effect.
+  useEffect(() => {
+    if (!instantTransition) return;
+    const id = setTimeout(() => setInstantTransition(false), 0);
+    return () => clearTimeout(id);
+  }, [instantTransition, setInstantTransition]);
+
   useEffect(() => {
     let alive = true;
 
@@ -162,6 +197,14 @@ export default function App() {
 
   // ─── Updater sync (preload events → store) ────────────────────────────────
   useEffect(() => { initUpdaterSync(); }, []);
+
+  // ─── UI sound effects (uisfx) ─────────────────────────────────────────────
+  // Only the control window plays sounds; the fullscreen projector window
+  // stays silent. No AudioContext is created until the first interaction.
+  useEffect(() => {
+    if (IS_PROJECTOR_MODE) return;
+    initSfx();
+  }, []);
 
   // ─── Effect: Dropdown Click-Outside ───────────────────────────────────────
   useEffect(() => {
@@ -268,6 +311,8 @@ export default function App() {
           duplicateSelectedSlides={duplicateSelectedSlides}
           openLive={openLive}
           closeLive={closeLive}
+          openOutput={openOutput}
+          closeOutput={closeOutput}
         />
 
         <main id="main-content" className="flex-1 overflow-hidden">
@@ -303,6 +348,23 @@ export default function App() {
                   handleSlideDoubleClick={handleSlideDoubleClick}
                 />
               </div>
+
+              {isSttPanelOpen && (
+                <div className="w-[340px] max-w-[85vw] flex-shrink-0 border-l border-white/10">
+                  <SttPanel
+                    onAddCaptionsSlide={() => handleAddCaptionsSlide(true)}
+                    onAddUtteranceSlide={handleSttUtteranceToSlide}
+                    onOpenSettings={() => {
+                      setIsSttPanelOpen(false);
+                      setActiveTab('settings');
+                    }}
+                    onStart={sttStart}
+                    onStop={sttStop}
+                    onStartShare={startShare}
+                    onStopShare={stopShare}
+                  />
+                </div>
+              )}
 
               {isRightPanelOpen ? (
                 <RightPanel

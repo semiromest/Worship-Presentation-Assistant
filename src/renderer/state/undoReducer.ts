@@ -85,8 +85,13 @@ function slideHasChanged(a: Slide, b: Slide): boolean {
   if (!shallowEqual(a.items ?? [], b.items ?? [])) return true;
   if (!shallowEqual(a.loopItems ?? [], b.loopItems ?? [])) return true;
   if (!shallowEqual(a.loopTransition, b.loopTransition)) return true;
+  if (!shallowEqual(a.captions, b.captions)) return true;
+  if (!shallowEqual(a.parts ?? [], b.parts ?? [])) return true;
+  if (a.partsMode !== b.partsMode) return true;
+  if (a.activePart !== b.activePart) return true;
   if (a.gridEnabled !== b.gridEnabled) return true;
   if (a.gridSize !== b.gridSize) return true;
+  if (a.gridColor !== b.gridColor) return true;
   if (a.snapEnabled !== b.snapEnabled) return true;
   return false;
 }

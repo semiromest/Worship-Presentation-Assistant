@@ -1,9 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import {
-  Undo2, Redo2, ChevronUp, ChevronDown, Copy, Trash2, HelpCircle, Monitor, Play, Smartphone, PanelRightClose, PanelRightOpen
+  Undo2, Redo2, ChevronUp, ChevronDown, Copy, Trash2, HelpCircle, Monitor, Play, Smartphone, PanelRightClose, PanelRightOpen, Captions
 } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { cn } from '../utils';
+import DisplayOutputsPopover from './DisplayOutputsPopover';
 import { useState, useRef, useCallback } from 'react';
 
 interface ToolbarProps {
@@ -12,9 +13,19 @@ interface ToolbarProps {
   duplicateSelectedSlides: () => void;
   openLive: () => Promise<void>;
   closeLive: () => Promise<void>;
+  openOutput: (displayId: string) => Promise<void>;
+  closeOutput: (displayId: string) => Promise<void>;
 }
 
-export default function Toolbar({ moveSelectedSlides, deleteSelectedSlides, duplicateSelectedSlides, openLive, closeLive }: ToolbarProps) {
+export default function Toolbar({
+  moveSelectedSlides,
+  deleteSelectedSlides,
+  duplicateSelectedSlides,
+  openLive,
+  closeLive,
+  openOutput,
+  closeOutput,
+}: ToolbarProps) {
   const { t } = useTranslation();
 
   const presentation = useStore((s) => s.presentation);
@@ -27,6 +38,10 @@ export default function Toolbar({ moveSelectedSlides, deleteSelectedSlides, dupl
   const isRightPanelOpen = useStore((s) => s.isRightPanelOpen);
   const setIsRightPanelOpen = useStore((s) => s.setIsRightPanelOpen);
   const setIsRemoteOpen = useStore((s) => s.setIsRemoteOpen);
+  const isSttPanelOpen = useStore((s) => s.isSttPanelOpen);
+  const setIsSttPanelOpen = useStore((s) => s.setIsSttPanelOpen);
+  const activeTab = useStore((s) => s.activeTab);
+  const setActiveTab = useStore((s) => s.setActiveTab);
 
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState('');
@@ -88,10 +103,31 @@ export default function Toolbar({ moveSelectedSlides, deleteSelectedSlides, dupl
             </svg>
             </button>
           )}
-      </div>
-
-      <div className="flex items-center gap-2">
+      </div>        <div className="flex items-center gap-2">
         <div className="w-px h-6 bg-white/10 mx-1" />
+
+        {/* Live Captions (STT) Panel */}
+        <button
+          onClick={() => {
+            const next = !isSttPanelOpen;
+            setIsSttPanelOpen(next);
+            if (next && activeTab !== 'slides') setActiveTab('slides');
+          }}
+          aria-pressed={isSttPanelOpen}
+          title={t('common.sttPanelTitle')}
+          aria-label={t('common.sttPanelTitle')}
+          className={cn(
+            'p-2.5 rounded-md border transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]',
+            isSttPanelOpen
+              ? 'bg-blue-600/20 hover:bg-blue-600/30 border-blue-500/40 text-blue-300'
+              : 'bg-white/5 hover:bg-white/10 border-white/10 text-white/60 hover:text-white'
+          )}
+        >
+          <Captions className="w-4 h-4" aria-hidden="true" />
+        </button>
+
+        {/* Multi-display output selector — hidden automatically on one-display machines. */}
+        <DisplayOutputsPopover openOutput={openOutput} closeOutput={closeOutput} />
 
         {/* Remote Panel */}
         <div className="relative shrink-0">

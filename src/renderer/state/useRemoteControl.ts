@@ -1,7 +1,12 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import QRCode from 'qrcode';
 import { useStore } from './useStore';
-import { IS_PROJECTOR_MODE } from '../constants';
+import { useSttStore } from './useSttStore';
+import { IS_PROJECTOR_MODE, PROJECTOR_DISPLAY_ID } from '../constants';
+import { chooseDefaultOutputDisplay, effectiveOutputSlideIndex } from '../../shared/displays';
+import { playSfx } from '../sfx';
+import { confirmDialog } from '../dialogs';
 
 const REMOTE_ACTIONS = {
   next: 'next',
@@ -16,8 +21,10 @@ const REMOTE_ACTIONS = {
 } as const;
 
 export function useRemoteControl() {
+  const { t } = useTranslation();
   const {
     setLiveIndex,
+    setInstantTransition,
     setSelectedSlideId,
     setIsBlackout,
     setIsProjectorWindowOpen,
@@ -28,44 +35,97 @@ export function useRemoteControl() {
     setRemoteUrl,
     setRemoteQr,
     setRemoteDebug,
+    setDisplays,
+    setOutputOpen,
+    setProjectorOutputStatus,
   } = useStore();
+
+  const buildInitialData = (displayId?: string) => {
+    const state = useStore.getState();
+    const defaultDisplayId = chooseDefaultOutputDisplay(state.displays)?.id;
+    const targetId = displayId ?? defaultDisplayId;
+    const assignment = targetId ? state.outputAssignments[targetId] : undefined;
+    const outputIndex = effectiveOutputSlideIndex(
+      assignment,
+      state.liveIndex,
+      state.presentation.slides.length,
+    );
+    const isDefaultOutput = targetId !== undefined && targetId === defaultDisplayId;
+
+    return {
+      // The first snapshot uses fullPresentation (projector applies it as a
+      // history-clearing RESET). Subsequent syncs are {patch} deltas.
+      fullPresentation: state.presentation,
+      liveIndex: targetId ? outputIndex : state.liveIndex,
+      isBlackout: isDefaultOutput ? state.isBlackout : (assignment?.isBlackout ?? false),
+      volume: state.mediaVolume,
+      muted: state.isMediaMuted,
+    };
+  };
 
   const openLive = async () => {
     const state = useStore.getState();
     if (state.isProjectorWindowOpen) return;
+
     const idx = state.presentation.slides.findIndex(s => s.id === state.selectedSlideId);
     const initialIndex = idx >= 0 ? idx : 0;
-
     setProjectorReady(false);
     setLiveIndex(initialIndex);
 
-    const initialData = {
-      // Phase 4: the first snapshot uses fullPresentation (projector applies
-      // it as a history-clearing RESET). Subsequent syncs are {patch} deltas
-      // sent by useProjectorSync once the projector signals ready.
-      fullPresentation: state.presentation,
-      liveIndex: initialIndex,
-      isBlackout: state.isBlackout,
-      volume: state.mediaVolume,
-      muted: state.isMediaMuted,
-    };
-
-    const isOpen = await window.electronAPI?.toggleProjector?.(initialData);
-    setIsProjectorWindowOpen(isOpen);
-
-    // No manual retry here: main flushes pendingProjectorPayload on
-    // 'projector-ready' and acks the control window, which triggers
-    // useProjectorSync to (re)establish the base with a full snapshot.
+    const isOpen = await window.electronAPI?.toggleProjector?.(buildInitialData());
+    setIsProjectorWindowOpen(!!isOpen);
+    if (isOpen) playSfx('start');
   };
 
   const closeLive = async () => {
     const state = useStore.getState();
     if (!state.isProjectorWindowOpen) return;
     const isOpen = await window.electronAPI?.toggleProjector?.();
-    setIsProjectorWindowOpen(isOpen);
+    setIsProjectorWindowOpen(!!isOpen);
+    if (!isOpen) playSfx('stop');
+  };
+
+  const openOutput = async (displayId: string) => {
+    const isOpen = await window.electronAPI?.openProjector?.(displayId, buildInitialData(displayId));
+    setOutputOpen(displayId, !!isOpen);
+    const defaultId = chooseDefaultOutputDisplay(useStore.getState().displays)?.id;
+    if (displayId === defaultId) {
+      setProjectorReady(false);
+      setIsProjectorWindowOpen(!!isOpen);
+    }
+    if (isOpen) playSfx('start');
+  };
+
+  const closeOutput = async (displayId: string) => {
+    const closed = await window.electronAPI?.closeProjector?.(displayId);
+    setOutputOpen(displayId, false);
+    const defaultId = chooseDefaultOutputDisplay(useStore.getState().displays)?.id;
+    if (displayId === defaultId) setIsProjectorWindowOpen(false);
+    if (closed) playSfx('stop');
+  };
+
+  // When the broadcast ends while live captions are still running, remind the
+  // user to stop them so a forgotten session doesn't keep consuming tokens.
+  // This runs on 'projector-closed', which covers BOTH the stop button/remote
+  // close (toggleProjector → window close) and a direct window close, without
+  // double-prompting.
+  const promptStopCaptions = async () => {
+    if (useSttStore.getState().status === 'idle') return;
+    const outputs = await window.electronAPI?.getProjectorOutputs?.();
+    if (Array.isArray(outputs) && outputs.length > 0) return;
+    const shouldStop = await confirmDialog(t('common.sttBroadcastEndCaptionsPrompt'), {
+      title: t('common.sttPanelTitle'),
+      confirmLabel: t('common.close'),
+      cancelLabel: t('common.sttKeepCaptions'),
+    });
+    if (shouldStop) {
+      await window.electronAPI?.sttStop?.();
+    }
   };
 
   useEffect(() => {
+    let knownDisplayIds: Set<string> | null = null;
+
     // Note: presets are hydrated once by App.tsx — do NOT reload them here
     // (was a duplicate loadPresets IPC call on every mount).
 
@@ -112,7 +172,11 @@ export function useRemoteControl() {
           break;
         }
         case REMOTE_ACTIONS.blackout:
-          if (projOpen) setIsBlackout(p => !p);
+          if (projOpen) {
+            const next = !useStore.getState().isBlackout;
+            playSfx(next ? 'lock' : 'unlock');
+            setIsBlackout(next);
+          }
           break;
         case REMOTE_ACTIONS.openProjector:
           if (!projOpen) openLive();
@@ -175,6 +239,8 @@ export function useRemoteControl() {
     // Projector mode listeners
     let removeProjectorUpdate: (() => void) | undefined;
     let removeProjectorClosed: (() => void) | undefined;
+    let removeDisplayListener: (() => void) | undefined;
+    let removeOutputStatusListener: (() => void) | undefined;
 
     if (IS_PROJECTOR_MODE) {
       setProjectorReady(true);
@@ -206,18 +272,50 @@ export function useRemoteControl() {
       if (data.muted !== undefined) {
         setIsMediaMuted(data.muted);
       }
+
+      if (typeof data.instantTransition === 'boolean') {
+        setInstantTransition(data.instantTransition);
+      }
     }
   });
 
   // Notify main process that listeners are ready
-  window.electronAPI?.notifyProjectorReady?.();
+  window.electronAPI?.notifyProjectorReady?.(PROJECTOR_DISPLAY_ID ?? undefined);
 
 } else {
-  removeProjectorClosed = window.electronAPI?.onProjectorClosed?.(() => {
-    setIsProjectorWindowOpen(false);
-    // BUG FIX: Reset blackout when projector window closes so it
-    // doesn't start in blackout state on the next openLive() call.
-    setIsBlackout(false);
+  removeDisplayListener = window.electronAPI?.onDisplaysChanged?.((displays) => {
+    const nextDisplays = Array.isArray(displays) ? displays : [];
+    if (knownDisplayIds) {
+      const removed = [...knownDisplayIds].some((id) => !nextDisplays.some((display) => display.id === id));
+      if (removed) useStore.getState().setToastMessage('displayDisconnected');
+    }
+    knownDisplayIds = new Set(nextDisplays.map((display) => display.id));
+    setDisplays(nextDisplays);
+  });
+  removeOutputStatusListener = window.electronAPI?.onProjectorOutputStatus?.((outputs) => {
+    setProjectorOutputStatus(Array.isArray(outputs) ? outputs : []);
+  });
+
+  void window.electronAPI?.getDisplays?.().then((displays) => {
+    if (Array.isArray(displays)) {
+      knownDisplayIds = new Set(displays.map((display) => display.id));
+      setDisplays(displays);
+    }
+  });
+  void window.electronAPI?.getProjectorOutputs?.().then((outputs) => {
+    if (Array.isArray(outputs)) setProjectorOutputStatus(outputs);
+  });
+
+  removeProjectorClosed = window.electronAPI?.onProjectorClosed?.((data) => {
+    const displayId = data?.displayId;
+    if (displayId) setOutputOpen(displayId, false);
+    const defaultId = chooseDefaultOutputDisplay(useStore.getState().displays)?.id;
+    if (!displayId || displayId === defaultId) {
+      setIsProjectorWindowOpen(false);
+      // Reset the legacy/default blackout state so the next default open is safe.
+      setIsBlackout(false);
+    }
+    void promptStopCaptions();
   });
   removeProjectorUpdate = window.electronAPI?.onProjectorUpdate?.((data: any) => {
     if (data?.isProjectorOpen !== undefined) {
@@ -231,9 +329,11 @@ return () => {
   if (typeof removeListener === 'function') removeListener();
   if (typeof removeProjectorUpdate === 'function') removeProjectorUpdate();
   if (typeof removeProjectorClosed === 'function') removeProjectorClosed();
+  if (typeof removeDisplayListener === 'function') removeDisplayListener();
+  if (typeof removeOutputStatusListener === 'function') removeOutputStatusListener();
 };
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
 
-return { openLive, closeLive };
+return { openLive, closeLive, openOutput, closeOutput };
 }

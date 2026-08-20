@@ -3,7 +3,7 @@
  * remote (phone) control server, and .gpres file I/O.
  */
 
-import { app, BrowserWindow, Menu, ipcMain, dialog, screen, desktopCapturer, nativeImage, shell, protocol, net } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, dialog, screen, desktopCapturer, nativeImage, shell, protocol, net, session, systemPreferences } from 'electron';
 import path       from 'node:path';
 import fs         from 'node:fs/promises';
 import http       from 'node:http';
@@ -17,6 +17,26 @@ import { createPresetStore } from './presetStore';
 import { localResourceUrlToPath, isZip, mediaRefToName } from '../shared/mediaTree';
 import { getMediaLibrary } from './mediaLibrary';
 import { heavyClient } from './heavyWorkerClient';
+import { registerSttIpc, cleanupStt } from './sonioxService';
+import {
+  startShare,
+  stopShare,
+  isShareActive,
+  publishShare,
+  refreshShareHost,
+  getShareStatus,
+  handleShareHttp,
+  handleShareConnection,
+  setClientCountListener,
+  disposeShare,
+} from './shareService';
+import type { ShareSnapshot } from '../shared/share';
+import {
+  chooseDefaultOutputDisplay,
+  compareDisplays,
+  type DisplayInfo,
+  type ProjectorOutputStatus,
+} from '../shared/displays';
 
 // Paths
 
@@ -34,9 +54,123 @@ initPerfMonitor();
 
 // Window references
 
-let win:          BrowserWindow | null = null;
-let projectorWin: BrowserWindow | null = null;
-let pendingProjectorPayload: any = null;
+let win: BrowserWindow | null = null;
+
+type ProjectorEntry = {
+  displayId: string;
+  window: BrowserWindow;
+  pendingPayload: any;
+  ready: boolean;
+};
+
+/** One reusable projector renderer per output display. */
+const projectorWindows = new Map<string, ProjectorEntry>();
+
+function getDisplayInfos(): DisplayInfo[] {
+  if (!app.isReady()) return [];
+
+  const primaryId = String(screen.getPrimaryDisplay().id);
+  const raw = screen.getAllDisplays().map((display) => ({
+    display,
+    isPrimary: String(display.id) === primaryId,
+  }));
+
+  raw.sort((a, b) => {
+    const left: DisplayInfo = {
+      id: String(a.display.id),
+      label: '',
+      isPrimary: a.isPrimary,
+      bounds: a.display.bounds,
+      workArea: a.display.workArea,
+      scaleFactor: a.display.scaleFactor,
+    };
+    const right: DisplayInfo = {
+      id: String(b.display.id),
+      label: '',
+      isPrimary: b.isPrimary,
+      bounds: b.display.bounds,
+      workArea: b.display.workArea,
+      scaleFactor: b.display.scaleFactor,
+    };
+    return compareDisplays(left, right);
+  });
+
+  let secondaryIndex = 0;
+  return raw.map(({ display, isPrimary }) => ({
+    id: String(display.id),
+    label: isPrimary ? 'Primary' : `Screen ${++secondaryIndex}`,
+    isPrimary,
+    bounds: display.bounds,
+    workArea: display.workArea,
+    scaleFactor: display.scaleFactor,
+  }));
+}
+
+function getRawDisplay(displayId?: string): Electron.Display | undefined {
+  const displays = screen.getAllDisplays();
+  if (displayId) {
+    return displays.find((display) => String(display.id) === displayId);
+  }
+
+  const infos = getDisplayInfos();
+  const selected = chooseDefaultOutputDisplay(infos);
+  return displays.find((display) => String(display.id) === selected?.id) ?? displays[0];
+}
+
+function getDefaultDisplayId(): string | undefined {
+  return chooseDefaultOutputDisplay(getDisplayInfos())?.id;
+}
+
+function getProjectorOutputStatus(): ProjectorOutputStatus[] {
+  return [...projectorWindows.values()].map((entry) => ({
+    displayId: entry.displayId,
+    isOpen: !entry.window.isDestroyed(),
+    isReady: entry.ready,
+  }));
+}
+
+function sendProjectorOutputStatus(): void {
+  win?.webContents.send('projector-output-status', getProjectorOutputStatus());
+}
+
+function sendDisplaySnapshot(): void {
+  win?.webContents.send('displays-changed', getDisplayInfos());
+  sendProjectorOutputStatus();
+}
+
+function projectorBounds(display: Electron.Display): Electron.Rectangle {
+  const isMac = process.platform === 'darwin';
+  const { x, y, width, height } = display.bounds;
+  return {
+    x,
+    y,
+    width: isMac ? Math.min(Math.max(width * 0.92, 1280), width) : width,
+    height: isMac ? Math.min(Math.max(height * 0.92, 720), height) : height,
+  };
+}
+
+function refreshProjectorWindows(): void {
+  for (const [displayId, entry] of projectorWindows) {
+    const display = getRawDisplay(displayId);
+    if (!display) {
+      if (!entry.window.isDestroyed()) entry.window.close();
+      continue;
+    }
+
+    try {
+      if (!entry.window.isDestroyed()) entry.window.setBounds(projectorBounds(display));
+    } catch {
+      // The display can disappear between getAllDisplays() and setBounds().
+    }
+  }
+  sendDisplaySnapshot();
+}
+
+function attachDisplayWatch(): void {
+  screen.on('display-added', () => refreshProjectorWindows());
+  screen.on('display-removed', () => refreshProjectorWindows());
+  screen.on('display-metrics-changed', () => refreshProjectorWindows());
+}
 
 // Remote server state
 
@@ -133,7 +267,7 @@ function scheduleSlideCapture(delayMs = 300): void {
     if (now - lastCaptureTime < CAPTURE_MIN_INTERVAL) return;
     lastCaptureTime = now;
 
-    const target = projectorWin ?? win;
+    const target = [...projectorWindows.values()].find((entry) => !entry.window.isDestroyed())?.window ?? win;
     if (!target || target.isDestroyed()) return;
     try {
       const img = await target.webContents.capturePage();
@@ -366,25 +500,27 @@ function createWindow(): void {
 
   win.webContents.once('did-finish-load', refreshRendererLanguage);
 
-  win.on('closed', () => { projectorWin?.close(); win = null; });
+  win.on('closed', () => {
+    for (const entry of projectorWindows.values()) {
+      if (!entry.window.isDestroyed()) entry.window.close();
+    }
+    win = null;
+  });
 }
 
-function createProjectorWindow(initialData?: any): void {
-  const ext = screen.getAllDisplays().find(d => d.bounds.x !== 0 || d.bounds.y !== 0);
-  const displayBounds = ext?.bounds || screen.getPrimaryDisplay().bounds;
-  const isMac = process.platform === 'darwin';
+function createProjectorWindow(requestedDisplayId?: string, initialData?: any): boolean {
+  const display = getRawDisplay(requestedDisplayId);
+  if (!display) return false;
 
-  // Windows: keep current behaviour unchanged.
-  // macOS: start as a normal window on the secondary display so it does not cover the screen,
-  // but keep native fullscreen enabled so the user can still switch to a true full-screen view.
-  const startWidth = isMac ? Math.min(Math.max(displayBounds.width * 0.92, 1280), displayBounds.width) : displayBounds.width;
-  const startHeight = isMac ? Math.min(Math.max(displayBounds.height * 0.92, 720), displayBounds.height) : displayBounds.height;
+  const displayId = String(display.id);
+  if (projectorWindows.has(displayId)) return true;
 
-  projectorWin = new BrowserWindow({
-    x: displayBounds.x,
-    y: displayBounds.y,
-    width: startWidth,
-    height: startHeight,
+  const bounds = projectorBounds(display);
+  const projectorWindow = new BrowserWindow({
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
     fullscreen: false,
     fullscreenable: true,
     frame: true,
@@ -403,37 +539,39 @@ function createProjectorWindow(initialData?: any): void {
     },
   });
 
-  // BrowserWindow's native fullscreen can still be triggered by the user on macOS.
-  // We intentionally do not force fullscreen here, so the app starts in a normal-sized window.
+  const entry: ProjectorEntry = {
+    displayId,
+    window: projectorWindow,
+    pendingPayload: initialData ?? null,
+    ready: false,
+  };
+  projectorWindows.set(displayId, entry);
+  remoteStatus.isProjectorOpen = true;
+  broadcast({ type: 'status', data: remoteStatus });
 
-  // Buffer the payload until load finishes, then reveal the window.
-  projectorWin.webContents.once('did-finish-load', () => {
-    if (initialData) pendingProjectorPayload = initialData;
-    if (projectorWin && !projectorWin.isDestroyed()) {
-      if (isMac) {
-        projectorWin.show();
-        projectorWin.focus();
-      } else {
-        projectorWin.show();
-        projectorWin.focus();
-      }
+  // BrowserWindow's native fullscreen can still be triggered by the user on macOS.
+  // We intentionally do not force fullscreen here, preserving the existing behavior.
+  projectorWindow.webContents.once('did-finish-load', () => {
+    if (!projectorWindow.isDestroyed()) {
+      projectorWindow.show();
+      projectorWindow.focus();
     }
   });
 
+  const query = `mode=projector&displayId=${encodeURIComponent(displayId)}`;
   process.env.VITE_DEV_SERVER_URL
-    ? projectorWin.loadURL(`${process.env.VITE_DEV_SERVER_URL}?mode=projector`)
-    : projectorWin.loadFile(path.join(DIST, 'index.html'), { query: { mode: 'projector' } });
+    ? projectorWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL}?${query}`)
+    : projectorWindow.loadFile(path.join(DIST, 'index.html'), { query: { mode: 'projector', displayId } });
 
-  // Keyboard bridge: the projector window is fullscreen on a second display, so
-  // it frequently holds focus. Forward navigation keys to the control window's
-  // existing 'remote-action' channel (next/prev/goto/blackout handled in the
-  // renderer) so keyboard slide control keeps working while it is focused.
+  // Keyboard bridge: the projector window frequently holds focus. Keep the
+  // existing global navigation behavior so the normal single-screen workflow
+  // remains unchanged.
   const PROJECTOR_NAV_NEXT = new Set(['ArrowRight', 'ArrowDown', ' ', 'PageDown', 'j', 'J']);
   const PROJECTOR_NAV_PREV = new Set(['ArrowLeft', 'ArrowUp', 'PageUp', 'k', 'K']);
 
-  projectorWin.webContents.on('before-input-event', (event, input) => {
+  projectorWindow.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown' || input.isAutoRepeat) return;
-    if (input.control || input.alt || input.meta) return; // only plain keys
+    if (input.control || input.alt || input.meta) return;
     const sendRemote = (action: string, value?: unknown) => {
       if (win && !win.isDestroyed()) win.webContents.send('remote-action', { action, value });
     };
@@ -447,40 +585,47 @@ function createProjectorWindow(initialData?: any): void {
     } else if (key === 'Home') {
       sendRemote('goto', 0); handled = true;
     } else if (key === 'End') {
-      sendRemote('goto', 2 ** 31 - 1); handled = true; // renderer clamps to lastIndex
+      sendRemote('goto', 2 ** 31 - 1); handled = true;
     } else if (key === 'b' || key === 'B') {
       sendRemote('blackout'); handled = true;
     } else if (key === 'Escape') {
       handled = true;
-      if (projectorWin && !projectorWin.isDestroyed()) projectorWin.close();
+      if (!projectorWindow.isDestroyed()) projectorWindow.close();
     }
     if (handled) event.preventDefault();
   });
 
-  projectorWin.on('closed', () => {
-    projectorWin = null;
-    pendingProjectorPayload = null;
-    win?.webContents.send('projector-closed');
-    remoteStatus.isProjectorOpen = false;
+  projectorWindow.on('closed', () => {
+    if (projectorWindows.get(displayId)?.window === projectorWindow) {
+      projectorWindows.delete(displayId);
+    }
+    win?.webContents.send('projector-closed', { displayId });
+    remoteStatus.isProjectorOpen = projectorWindows.size > 0;
     broadcast({ type: 'status', data: remoteStatus });
-    scheduleSlideCapture(120);                   // capture shortly after closing
+    sendProjectorOutputStatus();
+    scheduleSlideCapture(120);
   });
+
+  sendProjectorOutputStatus();
+  return true;
 }
 
 ipcMain.on('projector-ready', (event) => {
-  if (!projectorWin || projectorWin.isDestroyed()) return;
-  if (event.sender.id !== projectorWin.webContents.id) return;
+  const entry = [...projectorWindows.values()].find((candidate) => candidate.window.webContents.id === event.sender.id);
+  if (!entry || entry.window.isDestroyed()) return;
 
-  if (pendingProjectorPayload) {
-    projectorWin.webContents.send('projector-update', pendingProjectorPayload);
-    pendingProjectorPayload = null;
+  entry.ready = true;
+  if (entry.pendingPayload) {
+    entry.window.webContents.send('projector-update', entry.pendingPayload);
+    entry.pendingPayload = null;
   }
 
-  // Phase 4 handshake: tell the control window the projector is listening so
-  // it can (re)establish the delta base with a fresh full snapshot. This also
-  // covers projector reloads — after a reload the renderer's base is lost, and
-  // the ack forces a full re-sync instead of deltas against a stale base.
-  if (win && !win.isDestroyed()) win.webContents.send('projector-ready-ack');
+  // Acknowledge the exact output so the control renderer can establish a
+  // fresh full-snapshot base after every output open/reload.
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('projector-ready-ack', { displayId: entry.displayId });
+  }
+  sendProjectorOutputStatus();
 });
 
 // HTTP + WebSocket remote control server
@@ -488,6 +633,11 @@ ipcMain.on('projector-ready', (event) => {
 function createRemoteServer(): void {
   remoteServer = http.createServer(async (req, res) => {
     const { pathname } = new URL(req.url ?? '/', 'http://localhost');
+
+    // Phone captions/translation share (token-guarded, only while active)
+    if (pathname === '/share') {
+      if (handleShareHttp(req, res)) return;
+    }
 
     // Remote control web UI
     if (pathname === '/' || pathname === '/remote') {
@@ -533,7 +683,11 @@ function createRemoteServer(): void {
 
   wss = new WebSocketServer({ server: remoteServer, maxPayload: 1024 * 512 }); // 512KB cap (DoS guard)
 
-  wss.on('connection', (client: WsSocket) => {
+  wss.on('connection', (client: WsSocket, req: http.IncomingMessage) => {
+    // Phone captions clients connect to /share?token=… and are handled (and
+    // authenticated) entirely by the share service.
+    if (handleShareConnection(client, req)) return;
+
     wsClients.add(client);
     broadcastClientCount();
 
@@ -579,6 +733,26 @@ function createRemoteServer(): void {
   });
 }
 
+// Phone captions share: network re-resolution while a broadcast is live.
+// The LAN IP can change (Wi-Fi reconnect, cable swap); when it does we rebuild
+// the share URL and tell the renderer so it can regenerate the QR code.
+let shareNetworkTimer: ReturnType<typeof setInterval> | null = null;
+
+function startShareNetworkWatch(): void {
+  if (shareNetworkTimer) return;
+  shareNetworkTimer = setInterval(() => {
+    if (!isShareActive()) return;
+    const addr = remoteServer?.address();
+    const port = addr && typeof addr === 'object' ? addr.port : 0;
+    cachedLocalIP = null; // force a fresh scan
+    const ip = getLocalIPv4();
+    const changed = refreshShareHost(ip, port);
+    if (changed) {
+      win?.webContents.send('share:network-changed', { url: getShareStatus().url });
+    }
+  }, 10000);
+}
+
 // App lifecycle
 
 protocol.registerSchemesAsPrivileged([
@@ -596,7 +770,41 @@ const MIME_BY_EXT: Record<string, string> = {
   '.mkv': 'video/x-matroska',
 };
 
+// Microphone / media permission handling.
+//
+// The renderer asks for the microphone via navigator.mediaDevices.getUserMedia
+// and for screen capture via getUserMedia({ chromeMediaSource: 'desktop' })
+// (the ScreenCaptureRenderer path). Without an explicit handler here,
+// Chromium's default varies by platform — on macOS apps are denied by default.
+// We grant the 'media' permission (microphone + the existing screen-capture
+// flow; the app never uses the camera) and, on macOS, additionally request the
+// OS consent via systemPreferences.askForMediaAccess so the mic actually opens.
+function setupMediaPermissionHandlers(): void {
+  const ses = session.defaultSession;
+
+  ses.setPermissionRequestHandler((_webContents, permission, callback) => {
+    // 'media' covers both getUserMedia microphone requests and the app's own
+    // screen-capture stream. Everything else (camera, geolocation,
+    // notifications, …) stays denied.
+    callback(permission === 'media');
+  });
+
+  ses.setPermissionCheckHandler((_webContents, permission) => {
+    return permission === 'media';
+  });
+
+  // macOS: getUserMedia inside Electron will not open the mic until the app
+  // has OS-level consent. Ask for it up-front so the first Start is seamless.
+  if (process.platform === 'darwin') {
+    const status = systemPreferences.getMediaAccessStatus('microphone');
+    if (status !== 'granted' && status !== 'denied') {
+      systemPreferences.askForMediaAccess('microphone').catch(() => {});
+    }
+  }
+}
+
 app.whenReady().then(() => {
+  setupMediaPermissionHandlers();
   protocol.handle('local-resource', async (request) => {
     let filePath: string;
     const mediaName = mediaRefToName(request.url);
@@ -637,7 +845,10 @@ app.whenReady().then(() => {
   });
   createWindow();
   if (win) initUpdater(win);
+  attachDisplayWatch();
   createRemoteServer();
+  setClientCountListener((count) => win?.webContents.send('share:client-count', count));
+  registerSttIpc();
 });
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
@@ -645,9 +856,16 @@ app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) creat
 
 app.on('will-quit', () => {
   cleanupTempDir();
+  if (shareNetworkTimer) clearInterval(shareNetworkTimer);
+  disposeShare();
   wss?.close();
   remoteServer?.close();
+  cleanupStt();
   if (captureTimer) clearTimeout(captureTimer);
+  for (const entry of projectorWindows.values()) {
+    if (!entry.window.isDestroyed()) entry.window.close();
+  }
+  projectorWindows.clear();
 });
 
 // .gpres (ZIP) helpers
@@ -770,27 +988,110 @@ ipcMain.handle('rename-preset', async (_, oldName: string, newName: string, rete
   return presetStore.renamePreset(oldName, newName, retentionMs);
 });
 
-// IPC: projector
+// IPC: displays and projector outputs
 
-ipcMain.handle('toggle-projector', (_, initialData?: any) => {
-  if (projectorWin) { projectorWin.close(); return false; }
-  createProjectorWindow(initialData);
+ipcMain.handle('get-displays', () => getDisplayInfos());
+ipcMain.handle('get-projector-outputs', () => getProjectorOutputStatus());
+
+ipcMain.handle('toggle-projector', (_, initialData?: any, requestedDisplayId?: string) => {
+  const display = getRawDisplay(requestedDisplayId);
+  if (!display) return false;
+  const displayId = String(display.id);
+  const current = projectorWindows.get(displayId);
+  if (current) {
+    if (!current.window.isDestroyed()) current.window.close();
+    return false;
+  }
+  const opened = createProjectorWindow(displayId, initialData);
+  return opened;
+});
+
+ipcMain.handle('open-projector', (_, displayId: string, initialData?: any) => {
+  const display = getRawDisplay(displayId);
+  if (!display) return false;
+  const normalizedId = String(display.id);
+  if (projectorWindows.has(normalizedId)) return true;
+  return createProjectorWindow(normalizedId, initialData);
+});
+
+ipcMain.handle('close-projector', (_, displayId: string) => {
+  const entry = projectorWindows.get(String(displayId));
+  if (!entry) return false;
+  if (!entry.window.isDestroyed()) entry.window.close();
   return true;
 });
 
 ipcMain.handle('update-projector', (_, data: unknown) => {
-  if (!projectorWin) return false;
-  projectorWin.webContents.send('projector-update', data);
-  return true;
+  if (!data || typeof data !== 'object') return false;
+  const payload = data as Record<string, any>;
+  const outputs = payload.outputs && typeof payload.outputs === 'object' ? payload.outputs as Record<string, any> : null;
+
+  for (const entry of projectorWindows.values()) {
+    if (entry.window.isDestroyed()) continue;
+
+    const output = outputs?.[entry.displayId];
+    const frame = {
+      ...payload,
+      ...(outputs ? { outputs: undefined } : {}),
+      ...(output && typeof output === 'object'
+        ? {
+            liveIndex: output.slideIndex,
+            isBlackout: !!output.isBlackout,
+            outputMode: output.mode,
+            outputDisplayId: entry.displayId,
+          }
+        : { outputDisplayId: entry.displayId }),
+    };
+    delete frame.outputs;
+
+    if (!entry.ready) {
+      // Keep the initial full snapshot when a newly opened output receives a
+      // navigation-only update before its renderer sends `projector-ready`.
+      entry.pendingPayload = entry.pendingPayload?.fullPresentation
+        ? { ...entry.pendingPayload, ...frame, fullPresentation: entry.pendingPayload.fullPresentation }
+        : frame;
+      continue;
+    }
+    entry.window.webContents.send('projector-update', frame);
+  }
+  return projectorWindows.size > 0;
 });
 
-ipcMain.handle('get-projector-status', () => !!projectorWin);
+// Kept for the existing single-output toolbar/status flow. It reflects the
+// default secondary display, with a safe fallback to any open output.
+ipcMain.handle('get-projector-status', () => {
+  const defaultId = getDefaultDisplayId();
+  return defaultId ? projectorWindows.has(defaultId) : projectorWindows.size > 0;
+});
 ipcMain.handle('cleanup-temp-dir', () => { cleanupTempDir(); return true; });
 
 // IPC: remote control
 
 ipcMain.handle('get-remote-url', () => remoteServerUrl);
 ipcMain.handle('get-remote-debug', () => ({ remoteServerUrl, debug: remoteDebugInfo }));
+
+// ─── Phone captions/translation share IPC ──────────────────────────────────
+ipcMain.handle('share:start', () => {
+  const addr = remoteServer?.address();
+  const port = addr && typeof addr === 'object' ? addr.port : 0;
+  if (!port) return { ok: false, error: 'server-not-ready' };
+  const result = startShare(getLocalIPv4(), port);
+  if (!result) return { ok: false, error: 'already-active' };
+  startShareNetworkWatch();
+  return { ok: true, url: result.url };
+});
+
+ipcMain.handle('share:stop', () => {
+  stopShare();
+  return { ok: true };
+});
+
+ipcMain.on('share:publish', (_event, snapshot: ShareSnapshot) => {
+  publishShare(snapshot);
+});
+
+ipcMain.handle('share:get-status', () => getShareStatus());
+
 ipcMain.handle('quit-app', () => { app.quit(); return true; });
 
 ipcMain.handle('update-all-slide-previews', (_, previews: string[]) => {

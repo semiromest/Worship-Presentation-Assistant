@@ -1,9 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Globe, Zap, Settings2, Save, Trash2, DatabaseBackup } from 'lucide-react';
+import { Globe, Zap, Settings2, Save, Trash2, DatabaseBackup, Volume2, Mic, KeyRound, Languages, Check, Loader2 } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { useUpdaterStore } from '../state/useUpdaterStore';
 import { WatermarkSettingsPanel } from './WatermarkSettingsPanel';
+import { useSttStore, refreshSttStatus } from '../state/useSttStore';
+import { AUTO_STT_LANGUAGE, STT_LANGUAGES } from '../../shared/stt';
 import { cn } from '../utils';
 import { DEFAULT_LIVE_SAVE_RETENTION_MS, isLiveSavePreset, LIVE_SAVE_RETENTION_OPTIONS, getLiveSaveRetention } from '../hooks/useLiveSave';
 
@@ -19,7 +21,52 @@ export default function SettingsTab() {
   const setLiveSaveRetentionMs = useStore((s) => s.setLiveSaveRetentionMs);
   const presets = useStore((s) => s.presets);
   const setPresets = useStore((s) => s.setPresets);
+  const uiSfxEnabled = useStore((s) => s.uiSfxEnabled);
+  const setUiSfxEnabled = useStore((s) => s.setUiSfxEnabled);
   const updaterStatus = useUpdaterStore((s) => s.status);
+
+  // Soniox real-time captions
+  const sttHasKey = useSttStore((s) => s.hasKey);
+  const sttKeyHint = useSttStore((s) => s.keyHint);
+  const sttSpokenLanguage = useSttStore((s) => s.sttLanguage);
+  const sttSetSpokenLanguage = useSttStore((s) => s.setSttLanguage);
+  const sttTargetLanguage = useSttStore((s) => s.targetLanguage);
+  const sttSetTargetLanguage = useSttStore((s) => s.setTargetLanguage);
+  const [apiKeyDraft, setApiKeyDraft] = useState('');
+  const [apiKeyState, setApiKeyState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [keyError, setKeyError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void refreshSttStatus();
+  }, []);
+
+  const saveApiKey = async () => {
+    const key = apiKeyDraft.trim();
+    if (!key) {
+      setKeyError(t('settings.sonioxKeyEmpty'));
+      return;
+    }
+    setApiKeyState('saving');
+    setKeyError(null);
+    try {
+      const res = await window.electronAPI?.sttSetApiKey?.(key);
+      if (!res?.ok) {
+        setKeyError(t('settings.sonioxKeySaveFailed'));
+      } else {
+        setApiKeyDraft('');
+        setApiKeyState('saved');
+        await refreshSttStatus();
+        setTimeout(() => setApiKeyState('idle'), 2200);
+      }
+    } catch {
+      setKeyError(t('settings.sonioxKeySaveFailed'));
+      setApiKeyState('idle');
+    }
+  };
+
+  // Language defaults persist inside the store setters (localStorage).
+  const changeSpokenLanguage = (code: string) => sttSetSpokenLanguage(code);
+  const changeTargetLanguage = (code: string) => sttSetTargetLanguage(code);
 
   const languages = Object.keys(i18n.options.resources ?? {});
   const liveSavePresets = useMemo(
@@ -99,6 +146,164 @@ export default function SettingsTab() {
                 )}
               />
             </button>
+          </div>
+        </section>
+
+        {/* Sound Effects */}
+        <section className="rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.soundEffects')}>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 min-w-0">
+              <Volume2 className={cn('w-4 h-4 shrink-0', uiSfxEnabled ? 'text-emerald-300' : 'text-white/35')} aria-hidden="true" />
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold">{t('settings.soundEffects')}</h3>
+                <p className="text-[11px] text-white/45">{t('settings.soundEffectsDesc')}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setUiSfxEnabled(!uiSfxEnabled)}
+              aria-pressed={uiSfxEnabled}
+              aria-label={t('settings.soundEffects')}
+              className={cn(
+                'relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.96]',
+                uiSfxEnabled ? 'bg-emerald-500' : 'bg-white/15'
+              )}
+            >
+              <span
+                className={cn(
+                  'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
+                  uiSfxEnabled ? 'translate-x-6' : 'translate-x-1'
+                )}
+              />
+            </button>
+          </div>
+        </section>
+
+        {/* Soniox Real-time Captions & Translation */}
+        <section className="rounded-xl border border-white/10 bg-surface-raised p-4 space-y-4" aria-label={t('settings.soniox')}>
+          <div className="flex items-center gap-2">
+            <Mic className="w-4 h-4 text-blue-400 shrink-0" aria-hidden="true" />
+            <div>
+              <h3 className="text-sm font-semibold">{t('settings.soniox')}</h3>
+              <p className="text-[11px] text-white/45">{t('settings.sonioxDesc')}</p>
+            </div>
+          </div>
+
+          {/* API key status */}
+          <div
+            className={cn(
+              'flex items-center gap-2 rounded-lg border px-3 py-2 text-xs',
+              sttHasKey
+                ? 'border-emerald-500/25 bg-emerald-500/5 text-emerald-200'
+                : 'border-amber-500/25 bg-amber-500/5 text-amber-100/90'
+            )}
+          >
+            {sttHasKey ? (
+              <>
+                <Check className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                <span>{t('settings.sonioxKeyConfigured')}</span>
+              </>
+            ) : (
+              <>
+                <KeyRound className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                <span>{t('settings.sonioxKeyMissing')}</span>
+              </>
+            )}
+            {sttKeyHint && (
+              <span className="ml-auto font-mono text-[10px] text-white/40" title={sttKeyHint}>
+                {sttKeyHint}
+              </span>
+            )}
+          </div>
+
+          {/* API key input (password, write-only) */}
+          <div className="space-y-1.5">
+            <label htmlFor="soniox-api-key" className="block text-[11px] text-white/55">
+              {t('settings.sonioxApiKey')}
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="soniox-api-key"
+                type="password"
+                autoComplete="off"
+                spellCheck={false}
+                value={apiKeyDraft}
+                onChange={(e) => setApiKeyDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void saveApiKey();
+                }}
+                placeholder={sttHasKey ? '••••••••••••••••' : t('settings.sonioxApiKeyPlaceholder')}
+                className="flex-1 min-w-0 rounded-lg border border-white/10 bg-surface-overlay px-3 py-2 text-sm outline-none focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/40 transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => void saveApiKey()}
+                disabled={apiKeyState === 'saving'}
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 px-4 py-2 text-sm font-semibold transition-colors"
+              >
+                {apiKeyState === 'saving' ? (
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                ) : apiKeyState === 'saved' ? (
+                  <Check className="w-4 h-4" aria-hidden="true" />
+                ) : (
+                  <KeyRound className="w-4 h-4" aria-hidden="true" />
+                )}
+                {apiKeyState === 'saved' ? t('common.saved') : t('common.save')}
+              </button>
+            </div>
+            <p className="text-[10px] text-white/40">{t('settings.sonioxApiKeyHint')}</p>
+            {keyError && <p className="text-[11px] text-red-400">{keyError}</p>}
+          </div>
+
+          {/* Default spoken language (STT recognition) */}
+          <div className="space-y-1.5">
+            <label htmlFor="soniox-stt-language" className="block text-[11px] text-white/55">
+              {t('settings.sonioxSttLanguage')}
+            </label>
+            <div className="flex items-center gap-2">
+              <Mic className="w-4 h-4 text-white/35 shrink-0" aria-hidden="true" />
+              <select
+                id="soniox-stt-language"
+                value={sttSpokenLanguage}
+                onChange={(e) => changeSpokenLanguage(e.target.value)}
+                aria-label={t('settings.sonioxSttLanguage')}
+                className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/40 transition-colors"
+              >
+                <option value={AUTO_STT_LANGUAGE} className="bg-surface-overlay">
+                  {t('settings.sonioxSttAuto')}
+                </option>
+                {STT_LANGUAGES.map((lang) => (
+                  <option key={lang.code} value={lang.code} className="bg-surface-overlay">
+                    {lang.name} ({lang.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="text-[10px] text-white/40">{t('settings.sonioxSttLanguageHint')}</p>
+          </div>
+
+          {/* Translation target language */}
+          <div className="space-y-1.5">
+            <label htmlFor="translation-target-language" className="block text-[11px] text-white/55">
+              {t('settings.sonioxTargetLanguage')}
+            </label>
+            <div className="flex items-center gap-2">
+              <Languages className="w-4 h-4 text-white/35 shrink-0" aria-hidden="true" />
+              <select
+                id="soniox-target-language"
+                value={sttTargetLanguage}
+                onChange={(e) => changeTargetLanguage(e.target.value)}
+                aria-label={t('settings.sonioxTargetLanguage')}
+                className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/40 transition-colors disabled:opacity-50"
+              >
+                {STT_LANGUAGES.map((lang) => (
+                  <option key={lang.code} value={lang.code} className="bg-surface-overlay">
+                    {lang.name} ({lang.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="text-[10px] text-white/40">{t('settings.sonioxTargetLanguageHint')}</p>
           </div>
         </section>
 

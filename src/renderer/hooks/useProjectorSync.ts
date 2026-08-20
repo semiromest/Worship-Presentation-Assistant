@@ -4,6 +4,7 @@ import { IS_PROJECTOR_MODE, DEFAULT__TRANSITION } from '../constants';
 import { generateSlideThumbnail, useThrottle } from '../utils';
 import { computePatch, isPatchEmpty, type ProjectorPatch } from '../state/undoReducer';
 import type { Presentation, Slide, TransitionType } from '../types';
+import { chooseDefaultOutputDisplay, effectiveOutputSlideIndex } from '../../shared/displays';
 
 /**
  * Top-level style equality (mirrors undoReducer.shallowEqual). Replaces
@@ -40,17 +41,59 @@ export function useProjectorSync() {
   const {
     presentation,
     liveIndex,
+    instantTransition,
     isBlackout,
     isProjectorWindowOpen,
     projectorReady,
     mediaVolume,
     isMediaMuted,
+    displays,
+    outputAssignments,
   } = useStore();
 
   const transitionType = presentation.transition?.type ?? DEFAULT__TRANSITION.type;
   const transitionDuration = presentation.transition?.duration ?? DEFAULT__TRANSITION.duration;
 
   const throttledPresentation = useThrottle(presentation, 300);
+
+  const hasOpenOutputs = useMemo(
+    () => isProjectorWindowOpen || Object.values(outputAssignments).some((assignment) => assignment.isOpen),
+    [isProjectorWindowOpen, outputAssignments],
+  );
+
+  const outputFrames = useMemo(() => {
+    const defaultDisplayId = chooseDefaultOutputDisplay(displays)?.id;
+    const ids = new Set(
+      Object.entries(outputAssignments)
+        .filter(([, assignment]) => assignment.isOpen)
+        .map(([displayId]) => displayId),
+    );
+    if (isProjectorWindowOpen && defaultDisplayId) ids.add(defaultDisplayId);
+
+    const frames: Record<string, {
+      mode: 'follow' | 'manual';
+      slideIndex: number;
+      isBlackout: boolean;
+    }> = {};
+    for (const displayId of ids) {
+      const assignment = outputAssignments[displayId];
+      frames[displayId] = {
+        mode: assignment?.mode ?? 'follow',
+        slideIndex: effectiveOutputSlideIndex(assignment, liveIndex, presentation.slides.length),
+        isBlackout: displayId === defaultDisplayId
+          ? isBlackout
+          : !!assignment?.isBlackout,
+      };
+    }
+    return frames;
+  }, [
+    displays,
+    outputAssignments,
+    liveIndex,
+    presentation.slides.length,
+    isProjectorWindowOpen,
+    isBlackout,
+  ]);
 
   // ── Phase 4: delta sync ────────────────────────────────────────────────
   // The projector applies patches on top of the base it last received, so the
@@ -78,13 +121,15 @@ export function useProjectorSync() {
   }, [isProjectorWindowOpen]);
 
   useEffect(() => {
-    if (IS_PROJECTOR_MODE || !isProjectorWindowOpen || !projectorReady) return;
+    if (IS_PROJECTOR_MODE || !hasOpenOutputs || !projectorReady) return;
 
     const nav = {
       liveIndex,
       isBlackout,
       volume: mediaVolume,
       muted: isMediaMuted,
+      instantTransition,
+      outputs: outputFrames,
     };
 
     const base = lastSentPresentationRef.current;
@@ -126,12 +171,15 @@ export function useProjectorSync() {
   }, [
     throttledPresentation,
     liveIndex,
+    instantTransition,
     isBlackout,
     isProjectorWindowOpen,
+    hasOpenOutputs,
     projectorReady,
     projectorEpoch,
     mediaVolume,
     isMediaMuted,
+    outputFrames,
   ]);
 
   const thumbnailCache = useRef<Map<string, { url: string }>>(new Map());

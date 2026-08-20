@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { PerfBuffer, estimatePayloadBytes, defaultPerfEnabled } from '../shared/perf';
+import type { SttConfig } from '../shared/stt';
 
 // ─── Phase 0 perf instrumentation ───────────────────────────────────────────
 // Times every invoke round-trip from the renderer's point of view and
@@ -54,7 +55,11 @@ contextBridge.exposeInMainWorld('electronAPI', wrapApi({
   savePreset: (preset: { name: string; presentation: any; retentionMs?: number }) => ipcRenderer.invoke('save-preset', preset),
   deletePreset: (name: string, retentionMs?: number) => ipcRenderer.invoke('delete-preset', name, retentionMs),
   renamePreset: (oldName: string, newName: string, retentionMs?: number) => ipcRenderer.invoke('rename-preset', oldName, newName, retentionMs),
-  toggleProjector: (initialData?: any) => ipcRenderer.invoke('toggle-projector', initialData),
+  getDisplays: () => ipcRenderer.invoke('get-displays'),
+  getProjectorOutputs: () => ipcRenderer.invoke('get-projector-outputs'),
+  toggleProjector: (initialData?: any, displayId?: string) => ipcRenderer.invoke('toggle-projector', initialData, displayId),
+  openProjector: (displayId: string, initialData?: any) => ipcRenderer.invoke('open-projector', displayId, initialData),
+  closeProjector: (displayId: string) => ipcRenderer.invoke('close-projector', displayId),
   updateProjector: (data: any) => ipcRenderer.invoke('update-projector', data),
   getProjectorStatus: () => ipcRenderer.invoke('get-projector-status'),
   importBibleXml: (filePath?: string) => ipcRenderer.invoke('import-bible-xml', filePath),
@@ -96,7 +101,7 @@ contextBridge.exposeInMainWorld('electronAPI', wrapApi({
   getScreenSources: () => ipcRenderer.invoke('get-screen-sources'),
   captureScreenSource: (sourceId: string) => ipcRenderer.invoke('capture-screen-source', sourceId),
   selectAudioFile: () => ipcRenderer.invoke('select-audio-file'),
-  notifyProjectorReady: () => ipcRenderer.send('projector-ready'),
+  notifyProjectorReady: (displayId?: string) => ipcRenderer.send('projector-ready', displayId),
   cleanupTempDir: () => ipcRenderer.invoke('cleanup-temp-dir'),
   // ──────────────────────────────────────────────
 
@@ -112,16 +117,28 @@ contextBridge.exposeInMainWorld('electronAPI', wrapApi({
     return () => ipcRenderer.removeListener('projector-update', subscription);
   },
 
-  onProjectorClosed: (callback: () => void) => {
-    const subscription = () => callback();
+  onProjectorClosed: (callback: (data?: { displayId?: string }) => void) => {
+    const subscription = (_event: any, data?: { displayId?: string }) => callback(data);
     ipcRenderer.on('projector-closed', subscription);
     return () => ipcRenderer.removeListener('projector-closed', subscription);
   },
 
-  onProjectorReady: (callback: () => void) => {
-    const subscription = () => callback();
+  onProjectorReady: (callback: (data?: { displayId?: string }) => void) => {
+    const subscription = (_event: any, data?: { displayId?: string }) => callback(data);
     ipcRenderer.on('projector-ready-ack', subscription);
     return () => ipcRenderer.removeListener('projector-ready-ack', subscription);
+  },
+
+  onDisplaysChanged: (callback: (displays: any[]) => void) => {
+    const subscription = (_event: any, displays: any[]) => callback(displays);
+    ipcRenderer.on('displays-changed', subscription);
+    return () => ipcRenderer.removeListener('displays-changed', subscription);
+  },
+
+  onProjectorOutputStatus: (callback: (outputs: any[]) => void) => {
+    const subscription = (_event: any, outputs: any[]) => callback(outputs);
+    ipcRenderer.on('projector-output-status', subscription);
+    return () => ipcRenderer.removeListener('projector-output-status', subscription);
   },
 
   onPptxImportProgress: (callback: (data: { current: number; total: number }) => void) => {
@@ -158,5 +175,38 @@ contextBridge.exposeInMainWorld('electronAPI', wrapApi({
     const subscription = (_event: any, data: { type: string; payload?: any }) => callback(data);
     ipcRenderer.on('updater-event', subscription);
     return () => ipcRenderer.removeListener('updater-event', subscription);
+  },
+
+  // Soniox real-time STT + translation
+
+  sttGetStatus: () => ipcRenderer.invoke('stt:get-status'),
+  sttSetApiKey: (key: string) => ipcRenderer.invoke('stt:set-api-key', key),
+  sttStart: (config: SttConfig) => ipcRenderer.invoke('stt:start', config),
+  sttSendAudio: (chunk: ArrayBuffer | Uint8Array) => ipcRenderer.send('stt:audio', chunk),
+  sttStop: () => ipcRenderer.invoke('stt:stop'),
+
+  onSttEvent: (callback: (event: any) => void) => {
+    const subscription = (_event: any, data: any) => callback(data);
+    ipcRenderer.on('stt:event', subscription);
+    return () => ipcRenderer.removeListener('stt:event', subscription);
+  },
+
+  // Phone captions/translation share (LAN broadcast to phone browsers)
+
+  shareStart: () => ipcRenderer.invoke('share:start'),
+  shareStop: () => ipcRenderer.invoke('share:stop'),
+  sharePublish: (snapshot: any) => ipcRenderer.send('share:publish', snapshot),
+  shareGetStatus: () => ipcRenderer.invoke('share:get-status'),
+
+  onShareClientCount: (callback: (count: number) => void) => {
+    const subscription = (_event: any, data: number) => callback(data);
+    ipcRenderer.on('share:client-count', subscription);
+    return () => ipcRenderer.removeListener('share:client-count', subscription);
+  },
+
+  onShareNetworkChanged: (callback: (data: { url: string }) => void) => {
+    const subscription = (_event: any, data: { url: string }) => callback(data);
+    ipcRenderer.on('share:network-changed', subscription);
+    return () => ipcRenderer.removeListener('share:network-changed', subscription);
   },
 }));

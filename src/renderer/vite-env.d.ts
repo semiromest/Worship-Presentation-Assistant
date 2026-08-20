@@ -1,5 +1,8 @@
 /// <reference types="vite/client" />
 
+import type { SttConfig, SttStatus } from '../shared/stt';
+import type { DisplayInfo, ProjectorOutputStatus } from '../shared/displays';
+
 declare global {
   interface Window {
     electronAPI: {
@@ -10,7 +13,11 @@ declare global {
       savePreset: (preset: { name: string; presentation: any; retentionMs?: number }) => Promise<any[]>;
       deletePreset: (name: string, retentionMs?: number) => Promise<any[]>;
       renamePreset: (oldName: string, newName: string, retentionMs?: number) => Promise<any[]>;
-      toggleProjector: (initialData?: any) => Promise<boolean>;
+      getDisplays: () => Promise<DisplayInfo[]>;
+      getProjectorOutputs: () => Promise<ProjectorOutputStatus[]>;
+      toggleProjector: (initialData?: any, displayId?: string) => Promise<boolean>;
+      openProjector: (displayId: string, initialData?: any) => Promise<boolean>;
+      closeProjector: (displayId: string) => Promise<boolean>;
       updateProjector: (data: any) => Promise<boolean>;
       getProjectorStatus: () => Promise<boolean>;
       importBibleXml: (filePath?: string) => Promise<any>;
@@ -50,11 +57,13 @@ declare global {
         detail?: string;
         okLabel?: string;
       }) => Promise<void>;
-      notifyProjectorReady: () => void;
+      notifyProjectorReady: (displayId?: string) => void;
       onRemoteAction: (callback: (data: any) => void) => () => void;
       onProjectorUpdate: (callback: (data: any) => void) => () => void;
-      onProjectorClosed: (callback: () => void) => () => void;
-      onProjectorReady: (callback: () => void) => () => void;
+      onProjectorClosed: (callback: (data?: { displayId?: string }) => void) => () => void;
+      onProjectorReady: (callback: (data?: { displayId?: string }) => void) => () => void;
+      onDisplaysChanged: (callback: (displays: DisplayInfo[]) => void) => () => void;
+      onProjectorOutputStatus: (callback: (outputs: ProjectorOutputStatus[]) => void) => () => void;
       onPptxImportProgress: (callback: (data: { current: number; total: number }) => void) => () => void;
       onPptxExportProgress: (callback: (data: { current: number; total: number }) => void) => () => void;
       selectMediaFiles?: (type: MediaKind) => Promise<string[] | string | null>;
@@ -81,6 +90,22 @@ declare global {
       downloadUpdate: () => Promise<{ ok: boolean; error?: string }>;
       installUpdate: () => Promise<boolean>;
       onUpdaterEvent: (callback: (event: { type: string; payload?: any }) => void) => () => void;
+
+      // Soniox real-time STT + translation
+      sttGetStatus: () => Promise<SttStatus>;
+      sttSetApiKey: (key: string) => Promise<{ ok: boolean; code?: string; message?: string }>;
+      sttStart: (config: SttConfig) => Promise<{ ok: boolean; code?: string; message?: string }>;
+      sttSendAudio: (chunk: ArrayBuffer | Uint8Array) => void;
+      sttStop: () => Promise<{ ok: boolean }>;
+      onSttEvent: (callback: (event: any) => void) => () => void;
+
+      // Phone captions/translation share (LAN broadcast to phone browsers)
+      shareStart: () => Promise<{ ok: boolean; url?: string; error?: string }>;
+      shareStop: () => Promise<{ ok: boolean }>;
+      sharePublish: (snapshot: any) => void;
+      shareGetStatus: () => Promise<{ active: boolean; url: string; clientCount: number }>;
+      onShareClientCount: (callback: (count: number) => void) => () => void;
+      onShareNetworkChanged: (callback: (data: { url: string }) => void) => () => void;
     };
   }
 }

@@ -119,8 +119,15 @@ export interface SlideItem {
 
 export interface Slide {
   id: string;
-  type: 'text' | 'image' | 'video' | 'countdown' | 'screen' | 'loop';
+  type: 'text' | 'image' | 'video' | 'countdown' | 'screen' | 'loop' | 'captions';
   content: string;
+  /** Live captions slide options (see CaptionsRenderer). */
+  captions?: {
+    showOriginal?: boolean;
+    showTranslation?: boolean;
+    /** Display layout: centered (default), lower-third band, or top band. */
+    layout?: 'centered' | 'lowerThird' | 'top';
+  };
   loopTransition?: { type: TransitionType; duration: number };
   partsMode?: boolean;
   parts?: string[];

@@ -4,6 +4,7 @@ import { cn } from './utils';
 import { SLIDE_REFERENCE_WIDTH, ANIM_MAP } from './constants';
 import CountdownRenderer from './CountdownRenderer';
 import ScreenCaptureRenderer from './ScreenCaptureRenderer';
+import CaptionsRenderer from './components/CaptionsRenderer';
 import { useTranslation } from 'react-i18next';
 import { WatermarkOverlay } from './components/WatermarkOverlay';
 import { useWatermarkStore } from './state/useWatermarkStore';
@@ -386,6 +387,15 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
       return (
         <div className="relative" style={{ width: `${width}px`, height: `${height}px` }}>
           <LoopRenderer slide={slide} width={width} height={height} isActive={isActive} />
+          <WatermarkOverlay slide={slide!} config={wmConfig} />
+        </div>
+      );
+    }
+
+    if (slide.type === 'captions') {
+      return (
+        <div className="relative" style={{ width: `${width}px`, height: `${height}px` }}>
+          <CaptionsRenderer slide={slide} width={width} height={height} scale={scale} />
           <WatermarkOverlay slide={slide!} config={wmConfig} />
         </div>
       );

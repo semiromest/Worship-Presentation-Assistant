@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useStore } from '../state/useStore';
+import { playSfx } from '../sfx';
 
 const NAV_KEYS = {
   NEXT: new Set(['ArrowRight', 'ArrowDown', ' ', 'PageDown', 'j', 'J']),
@@ -132,7 +133,9 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
         onDeleteSlides?.();
       } else if ((e.key === 'm' || e.key === 'M') && !state.isCheatsheetOpen) {
         e.preventDefault();
-        setIsMediaMuted((p) => !p);
+        const nextMuted = !useStore.getState().isMediaMuted;
+        playSfx(nextMuted ? 'toggle-on' : 'toggle-off');
+        setIsMediaMuted(nextMuted);
       } else if (NAV_KEYS.NEXT.has(e.key)) {
         e.preventDefault();
         navigate(Math.min(selectedIdx + 1, lastIndex));
@@ -149,12 +152,16 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
         e.preventDefault();
         // Enter = "Send to Live": moves the selected slide live (staged when broadcast is off, projected when on).
         setLiveIndex(selectedIdx);
+        playSfx('start');
       } else if (e.key === 'Escape' && state.isProjectorWindowOpen) {
         e.preventDefault();
         window.electronAPI?.toggleProjector?.();
+        playSfx('stop');
       } else if ((e.key === 'b' || e.key === 'B') && state.isProjectorWindowOpen) {
         e.preventDefault();
-        setIsBlackout(p => !p);
+        const nextBlackout = !useStore.getState().isBlackout;
+        playSfx(nextBlackout ? 'lock' : 'unlock');
+        setIsBlackout(nextBlackout);
       } else if (e.key === 'Escape') {
         if (state.isCheatsheetOpen) return;
         if (state.isEditorOpen) {

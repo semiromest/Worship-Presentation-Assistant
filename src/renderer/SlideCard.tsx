@@ -464,6 +464,18 @@ const SlideContent = memo(({ slide, isHovered = false }: { slide: Slide; isHover
       );
     }
 
+    case 'captions':
+      return (
+        <div
+          className="w-full h-full flex items-center justify-center bg-black relative overflow-hidden"
+          style={{ backgroundColor: slide.styles?.backgroundColor ?? '#000000' }}
+        >
+          <span className="text-[10px] text-white/60 font-medium">
+            {t('common.captionsSlide')}
+          </span>
+        </div>
+      );
+
     default:
       return <TextSlidePreview slide={slide} isHovered={isHovered} />;
   }
