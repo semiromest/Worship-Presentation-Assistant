@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -51,11 +52,11 @@ jobs:
       - name: Build Vite
         run: npx vite build
 
-      - name: Package and publish to GitHub Release
-        run: npx electron-builder --publish always
+      - name: Package Electron artifacts
+        run: npx electron-builder --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
       - name: Upload Electron artifacts
         uses: actions/upload-artifact@v4
@@ -88,6 +89,9 @@ jobs:
             release-artifacts/**/*.dmg
             release-artifacts/**/*.zip
             release-artifacts/**/*.AppImage
-            release-artifacts/**/*.yml
+            release-artifacts/**/latest.yml
+            release-artifacts/**/latest-mac.yml
+            release-artifacts/**/latest-linux.yml
+            release-artifacts/**/*.blockmap
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
