@@ -17,6 +17,8 @@ interface SlideCardProps {
   onDrop?: () => void;
   isDragging?: boolean;
   zoom?: number;
+  /** Rendered card width in px — used for responsive text sizing. */
+  cardWidth?: number;
 }
 
 // Badge component for top-left indicators
@@ -320,7 +322,7 @@ const BackgroundVideoPlayer = memo(({ src }: { src: string }) => {
 
 BackgroundVideoPlayer.displayName = 'BackgroundVideoPlayer';
 
-const TextSlidePreview = memo(({ slide, isHovered = false }: { slide: Slide; isHovered?: boolean }) => {
+const TextSlidePreview = memo(({ slide, isHovered = false, cardWidth = 320 }: { slide: Slide; isHovered?: boolean; cardWidth?: number }) => {
   const displayContent = slide.partsMode && slide.parts?.length
     ? slide.parts[slide.activePart ?? 0]
     : slide.content;
@@ -338,6 +340,11 @@ const TextSlidePreview = memo(({ slide, isHovered = false }: { slide: Slide; isH
         .map(s => `${s.color} ${s.position}%`)
         .join(', ')})`
     : undefined;
+
+  // Font size scales with card width — at the reference card width (320px
+  // at zoom=1 in a ~1200px container) the baseline is 16px, proportional
+  // elsewhere. Clamped so text is never illegible or absurdly large.
+  const fontSize = Math.round(Math.max(7, Math.min(42, cardWidth / 20)));
 
   return (
     <div
@@ -362,7 +369,7 @@ const TextSlidePreview = memo(({ slide, isHovered = false }: { slide: Slide; isH
         className="font-bold whitespace-pre-wrap text-white/90 leading-snug line-clamp-6 relative z-10"
         style={{
           color: slide.styles?.textColor ?? '#ffffff',
-          fontSize: '16px',
+          fontSize: `${fontSize}px`,
           fontFamily: slide.styles?.fontFamily || 'inherit',
         }}
       >
@@ -375,7 +382,7 @@ const TextSlidePreview = memo(({ slide, isHovered = false }: { slide: Slide; isH
 TextSlidePreview.displayName = 'TextSlidePreview';
 
 // Slide content renderer
-const SlideContent = memo(({ slide, isHovered = false }: { slide: Slide; isHovered?: boolean }) => {
+const SlideContent = memo(({ slide, isHovered = false, cardWidth }: { slide: Slide; isHovered?: boolean; cardWidth?: number }) => {
   const { t } = useTranslation();
   const hasItems = slide.items && slide.items.length > 0;
 
@@ -477,7 +484,7 @@ const SlideContent = memo(({ slide, isHovered = false }: { slide: Slide; isHover
       );
 
     default:
-      return <TextSlidePreview slide={slide} isHovered={isHovered} />;
+      return <TextSlidePreview slide={slide} isHovered={isHovered} cardWidth={cardWidth} />;
   }
 });
 
@@ -556,6 +563,7 @@ export const SlideCard = memo(({
   onDrop,
   isDragging,
   zoom = 1,
+  cardWidth,
 }: SlideCardProps) => {
   const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
@@ -627,14 +635,14 @@ export const SlideCard = memo(({
       data-slide-id={slide.id}
       role="button"
       className={cn(cardClassName, 'cursor-grab active:cursor-grabbing')}
-      style={{ ...(groupColor ? { borderLeftWidth: 4, borderLeftColor: groupColor } : {}), zoom }}
+      style={{ ...(groupColor ? { borderLeftWidth: 4, borderLeftColor: groupColor } : {}) }}
       aria-pressed={isSelected}
       aria-label={slideLabel}
     >
       <SlideBadges slide={slide} index={index} isSelected={isSelected} isLive={isLive} />
 
       <div className="aspect-video bg-black flex items-center justify-center overflow-hidden">
-        <SlideContent slide={slide} isHovered={isHovered} />
+        <SlideContent slide={slide} isHovered={isHovered} cardWidth={cardWidth} />
       </div>
     </div>
   );

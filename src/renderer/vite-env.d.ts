@@ -39,6 +39,17 @@ declare global {
       }>;
       getRemoteUrl: () => Promise<string>;
       getRemoteDebug: () => Promise<any>;
+      getRemoteDiagnostics: () => Promise<{
+        ok: boolean;
+        serverRunning: boolean;
+        serverUrl: string | null;
+        port: number | null;
+        selectedAddress: string;
+        interfaces: Array<{ name: string; address: string; score: number }>;
+        selfConnectTest: { tried: boolean; success: boolean; error?: string };
+        firewallWarning: boolean;
+        checks: Array<{ label: string; pass: boolean; detail: string }>;
+      }>;
       updateRemoteStatus: (status: any) => Promise<void>;
       quitApp: () => Promise<boolean>;
       updateAllSlidePreviews: (previews: (string | null)[]) => Promise<void>;
@@ -106,6 +117,14 @@ declare global {
       shareGetStatus: () => Promise<{ active: boolean; url: string; clientCount: number }>;
       onShareClientCount: (callback: (count: number) => void) => () => void;
       onShareNetworkChanged: (callback: (data: { url: string }) => void) => () => void;
+
+      // Live-screen phone broadcast (view the live screen fullscreen on a phone)
+      screenShareStart: () => Promise<{ ok: boolean; url?: string; error?: string }>;
+      screenShareStop: () => Promise<{ ok: boolean }>;
+      screenShareFrame: (frame: string) => void;
+      screenShareGetStatus: () => Promise<{ active: boolean; url: string; clientCount: number }>;
+      onScreenShareClientCount: (callback: (count: number) => void) => () => void;
+      onScreenShareNetworkChanged: (callback: (data: { url: string }) => void) => () => void;
     };
   }
 }

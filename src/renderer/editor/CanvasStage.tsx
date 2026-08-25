@@ -130,10 +130,6 @@ export function CanvasStage({
       if (!panningRef.current) return;
       const start = panStart.current;
       panRef.current = { x: start.startX + (e.clientX - start.x), y: start.startY + (e.clientY - start.y) };
-      if (canvasRef.current) {
-        const s = (containerWidth / SLIDE_REFERENCE_WIDTH) * zoom;
-        canvasRef.current.style.transform = `scale(${s}) translate(${panRef.current.x / s}px, ${panRef.current.y / s}px)`;
-      }
     };
     const handleUp = () => {
       panningRef.current = false;
@@ -147,7 +143,7 @@ export function CanvasStage({
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', handleUp);
     };
-  }, [isPanning, panX, panY, zoom, containerWidth]);
+  }, [isPanning, panX, panY]);
 
   const itemsRef = useRef(items);
   itemsRef.current = items;
@@ -340,7 +336,9 @@ export function CanvasStage({
           style={{
             width: SLIDE_REFERENCE_WIDTH,
             height: SLIDE_REFERENCE_HEIGHT,
-            transform: `scale(${scale}) translate(${panX / scale}px, ${panY / scale}px)`,
+            transform: isPanning
+              ? `scale(${scale}) translate(${panRef.current.x / scale}px, ${panRef.current.y / scale}px)`
+              : `scale(${scale}) translate(${panX / scale}px, ${panY / scale}px)`,
             transformOrigin: 'top left',
           }}
         >

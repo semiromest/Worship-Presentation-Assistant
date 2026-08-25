@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import {
-  Undo2, Redo2, ChevronUp, ChevronDown, Copy, Trash2, HelpCircle, Monitor, Play, Smartphone, PanelRightClose, PanelRightOpen, Captions
+  Undo2, Redo2, ChevronUp, ChevronDown, Copy, Trash2, HelpCircle, Monitor, Play, Smartphone, Tv, PanelRightClose, PanelRightOpen, Captions
 } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { cn } from '../utils';
@@ -38,6 +38,8 @@ export default function Toolbar({
   const isRightPanelOpen = useStore((s) => s.isRightPanelOpen);
   const setIsRightPanelOpen = useStore((s) => s.setIsRightPanelOpen);
   const setIsRemoteOpen = useStore((s) => s.setIsRemoteOpen);
+  const setIsLiveShareOpen = useStore((s) => s.setIsLiveShareOpen);
+  const screenShareActive = useStore((s) => s.screenShareActive);
   const isSttPanelOpen = useStore((s) => s.isSttPanelOpen);
   const setIsSttPanelOpen = useStore((s) => s.setIsSttPanelOpen);
   const activeTab = useStore((s) => s.activeTab);
@@ -128,6 +130,29 @@ export default function Toolbar({
 
         {/* Multi-display output selector — hidden automatically on one-display machines. */}
         <DisplayOutputsPopover openOutput={openOutput} closeOutput={closeOutput} />
+
+        {/* Phone viewers (live-slide broadcast) */}
+        <div className="relative shrink-0">
+          <button
+            onClick={() => setIsLiveShareOpen(true)}
+            aria-haspopup="dialog"
+            aria-pressed={screenShareActive}
+            className={`flex items-center justify-center w-[150px] py-1.5 rounded-md transition-colors text-sm font-medium focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.97] ${
+              screenShareActive
+                ? 'bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300'
+                : 'bg-white/5 hover:bg-white/10 text-white'
+            }`}
+          >
+            <Tv className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <span className="truncate">{t('common.liveShareButton')}</span>
+            {screenShareActive && (
+              <span
+                className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-pulse"
+                aria-hidden="true"
+              />
+            )}
+          </button>
+        </div>
 
         {/* Remote Panel */}
         <div className="relative shrink-0">

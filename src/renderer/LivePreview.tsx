@@ -42,7 +42,7 @@ function VideoPlayer({ mediaUrl, objectFit, volume = 1, muted = false }: { media
 
 // ─── Loop Renderer ──────────────────────────────────────────────────────────
 
-function LoopRenderer({ slide, width, height, isActive = true }: { slide: Slide; width: number; height: number; isActive?: boolean }) {
+function LoopRenderer({ slide, width, height, isActive = true, volume = 1, muted = false }: { slide: Slide; width: number; height: number; isActive?: boolean; volume?: number; muted?: boolean }) {
   const { t } = useTranslation();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [outgoing, setOutgoing] = useState<{ item: LoopItem; idx: number } | null>(null);
@@ -98,7 +98,7 @@ function LoopRenderer({ slide, width, height, isActive = true }: { slide: Slide;
               alt=""
             />
           ) : (
-            <LoopVideoPlayer mediaUrl={outgoing.item.mediaUrl} isActive={false} />
+            <LoopVideoPlayer mediaUrl={outgoing.item.mediaUrl} isActive={false} volume={volume} muted={muted} />
           )}
         </div>
       )}
@@ -112,15 +112,24 @@ function LoopRenderer({ slide, width, height, isActive = true }: { slide: Slide;
             alt=""
           />
         ) : (
-          <LoopVideoPlayer mediaUrl={currentItem.mediaUrl} isActive={isActive} />
+          <LoopVideoPlayer mediaUrl={currentItem.mediaUrl} isActive={isActive} volume={volume} muted={muted} />
         )}
       </div>
     </div>
   );
 }
 
-function LoopVideoPlayer({ mediaUrl, isActive = true }: { mediaUrl: string; isActive?: boolean }) {
+function LoopVideoPlayer({ mediaUrl, isActive = true, volume = 1, muted = false }: { mediaUrl: string; isActive?: boolean; volume?: number; muted?: boolean }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Apply volume/muted (global media controls) — previously loop videos
+  // always played at full volume and ignored the M key and volume slider.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.volume = volume;
+    video.muted = muted;
+  }, [volume, muted]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -138,6 +147,7 @@ function LoopVideoPlayer({ mediaUrl, isActive = true }: { mediaUrl: string; isAc
       ref={videoRef}
       src={mediaUrl}
       autoPlay
+      muted={muted}
       className="w-full h-full object-contain"
     />
   );
@@ -386,7 +396,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
     if (slide.type === 'loop') {
       return (
         <div className="relative" style={{ width: `${width}px`, height: `${height}px` }}>
-          <LoopRenderer slide={slide} width={width} height={height} isActive={isActive} />
+          <LoopRenderer slide={slide} width={width} height={height} isActive={isActive} volume={volume} muted={muted} />
           <WatermarkOverlay slide={slide!} config={wmConfig} />
         </div>
       );

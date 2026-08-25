@@ -57,6 +57,9 @@ export const CanvasItem = memo(function CanvasItem({
     rect: DOMRect;
   } | null>(null);
   const dragActive = useRef(false);
+  // Store zoom in a ref so drag/resize listeners don't re-attach on zoom change.
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
 
   const snap = useCallback(
     (value: number, grid: number): number => {
@@ -145,7 +148,8 @@ export const CanvasItem = memo(function CanvasItem({
       const start = dragStart.current;
       if (!start) return;
 
-      const dxPct = ((e.clientX - start.pointerX) / start.rect.width) * 100 * zoom;
+      const currentZoom = zoomRef.current;
+      const dxPct = ((e.clientX - start.pointerX) / start.rect.width) * 100 * currentZoom;
       const dyPct = ((e.clientY - start.pointerY) / start.rect.height) * 100 * zoom;
 
       if (dragging) {
@@ -245,7 +249,6 @@ export const CanvasItem = memo(function CanvasItem({
     snap,
     snapEnabled,
     gridSize,
-    zoom,
   ]);
 
   const handleKeyDown = useCallback(

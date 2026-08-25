@@ -74,6 +74,7 @@ contextBridge.exposeInMainWorld('electronAPI', wrapApi({
   exportPptx: (content: string) => ipcRenderer.invoke('export-pptx', content),
   getRemoteUrl: () => ipcRenderer.invoke('get-remote-url'),
   getRemoteDebug: () => ipcRenderer.invoke('get-remote-debug'),
+  getRemoteDiagnostics: () => ipcRenderer.invoke('get-remote-diagnostics'),
   updateRemoteStatus: (status: any) => ipcRenderer.invoke('update-remote-status', status),
   quitApp: () => ipcRenderer.invoke('quit-app'),
   updateAllSlidePreviews: (previews: any) => ipcRenderer.invoke('update-all-slide-previews', previews),
@@ -208,5 +209,24 @@ contextBridge.exposeInMainWorld('electronAPI', wrapApi({
     const subscription = (_event: any, data: { url: string }) => callback(data);
     ipcRenderer.on('share:network-changed', subscription);
     return () => ipcRenderer.removeListener('share:network-changed', subscription);
+  },
+
+  // Live-screen phone broadcast (view the live screen fullscreen on a phone)
+
+  screenShareStart: () => ipcRenderer.invoke('screen-share:start'),
+  screenShareStop: () => ipcRenderer.invoke('screen-share:stop'),
+  screenShareFrame: (frame: string) => ipcRenderer.send('screen-share:frame', frame),
+  screenShareGetStatus: () => ipcRenderer.invoke('screen-share:get-status'),
+
+  onScreenShareClientCount: (callback: (count: number) => void) => {
+    const subscription = (_event: any, data: number) => callback(data);
+    ipcRenderer.on('screen-share:client-count', subscription);
+    return () => ipcRenderer.removeListener('screen-share:client-count', subscription);
+  },
+
+  onScreenShareNetworkChanged: (callback: (data: { url: string }) => void) => {
+    const subscription = (_event: any, data: { url: string }) => callback(data);
+    ipcRenderer.on('screen-share:network-changed', subscription);
+    return () => ipcRenderer.removeListener('screen-share:network-changed', subscription);
   },
 }));

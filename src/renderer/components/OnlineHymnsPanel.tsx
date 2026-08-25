@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Download, Search, Cloud, Loader2, Globe, X } from 'lucide-react';
-import { cn, useDebounce } from '../utils';
+import { cn, normalizeSearchText, sourceTextMatches, useDebounce } from '../utils';
 import {
   listSongs,
   getSong,
@@ -105,9 +105,12 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
 
   const filteredSongs = useMemo(() => {
     if (!debouncedSearch) return songs;
-    const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const query = normalize(debouncedSearch);
-    return songs.filter(s => normalize(s.title).includes(query));
+    const query = normalizeSearchText(debouncedSearch);
+    return songs.filter(
+      s =>
+        normalizeSearchText(s.title).includes(query) ||
+        (s.source_title ? sourceTextMatches(s.source_title, query) : false),
+    );
   }, [songs, debouncedSearch]);
 
   // Load first page from cache or API (Issue 4 + 5)

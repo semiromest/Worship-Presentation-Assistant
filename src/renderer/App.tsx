@@ -25,6 +25,8 @@ import { useStore } from './state/useStore';
 import { useRemoteControl } from './state/useRemoteControl';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation';
 import { useProjectorSync } from './hooks/useProjectorSync';
+import { useLiveScreenShare } from './hooks/useLiveScreenShare';
+import { useScreenShare } from './hooks/useScreenShare';
 import { useLiveSave, getLiveSaveRetention } from './hooks/useLiveSave';
 import { useSlideOperations } from './hooks/useSlideOperations';
 import { useStt } from './hooks/useStt';
@@ -39,6 +41,7 @@ import RightPanel from './components/RightPanel';
 import CheatsheetModal from './components/CheatsheetModal';
 import UpdatesModal from './components/UpdatesModal';
 import RemoteControlModal from './components/RemoteControlModal';
+import LiveShareModal from './components/LiveShareModal';
 import SttPanel from './components/SttPanel';
 import Toast from './components/Toast';
 
@@ -59,6 +62,11 @@ export default function App() {
   // Phone captions/translation share — a pure subscriber of the STT store that
   // pushes normalized snapshots to the main process for LAN broadcast.
   const { startShare, stopShare } = useShare();
+  // Live-screen phone viewers: while a broadcast is active, streams JPEG frames
+  // of the CURRENT LIVE SLIDE (the one “Canlı Yayın” sends to the projector) to
+  // connected phones. No-ops in the projector window.
+  useLiveScreenShare();
+  const { startShare: startScreenShare, stopShare: stopScreenShare } = useScreenShare();
 
   // Field-level selectors: subscribing to the whole store re-rendered App on
   // every state change (toast, search, liveIndex, …). Each selector returns a
@@ -115,6 +123,7 @@ export default function App() {
     handleMediaAdd,
     handleAddAllMedia,
     handleScreenAdd,
+    handleQrSlideAdd,
     handleHymnAdd,
     handleAddCountdownToPresentation,
     handleAddCaptionsSlide,
@@ -472,6 +481,13 @@ export default function App() {
 
       {/* Remote Control Modal */}
       <RemoteControlModal />
+
+      {/* Phone viewers (live-slide broadcast) */}
+      <LiveShareModal
+        onStartShare={startScreenShare}
+        onStopShare={stopScreenShare}
+        onAddQrSlide={handleQrSlideAdd}
+      />
 
       {/* Undo/Redo Toast */}
       <Toast />

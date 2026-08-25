@@ -530,6 +530,71 @@ export function useSlideOperations() {
     appendSlides([newSlide]);
   }, [appendSlides]);
 
+  // Adds a QR slide (phone live-screen broadcast) so people can scan it from
+  // the projected screen. QR is embedded as an image item; URL + hint below.
+  const handleQrSlideAdd = useCallback((qrDataUrl: string, url: string) => {
+    const qrSlide = createSlide('text', {
+      content: url,
+      styles: {
+        ...DEFAULT_STYLES,
+        fontSize: 0,
+        backgroundColor: '#0b1220',
+        textColor: '#ffffff',
+      },
+      items: [
+        {
+          id: makeSlideId(),
+          type: 'image',
+          mediaUrl: qrDataUrl,
+          x: 30,
+          y: 4,
+          width: 40,
+          height: 62,
+          zIndex: 1,
+          styles: {},
+          imageStyles: { objectFit: 'contain' },
+        },
+        {
+          id: makeSlideId(),
+          type: 'text',
+          content: url,
+          x: 0,
+          y: 70,
+          width: 100,
+          height: 12,
+          zIndex: 2,
+          styles: {},
+          textStyles: {
+            fontSize: 26,
+            fontWeight: 'bold',
+            textAlign: 'center',
+            textColor: '#ffffff',
+            textDecoration: 'none',
+          },
+        },
+        {
+          id: makeSlideId(),
+          type: 'text',
+          content: t('common.screenShareQrSlideHint'),
+          x: 0,
+          y: 84,
+          width: 100,
+          height: 10,
+          zIndex: 3,
+          styles: {},
+          textStyles: {
+            fontSize: 17,
+            textAlign: 'center',
+            textColor: '#9fb4d4',
+            textDecoration: 'none',
+          },
+        },
+      ],
+    });
+
+    appendSlides([qrSlide]);
+  }, [appendSlides, t]);
+
   const handleHymnAdd = useCallback((hymn: { title: string; lyrics: string }, partsMode?: boolean, goLive?: boolean) => {
     const split = splitHymnLyrics(hymn.lyrics);
     if (split.parts.length === 0) return;
@@ -898,6 +963,7 @@ export function useSlideOperations() {
     handleMediaAdd,
     handleAddAllMedia,
     handleScreenAdd,
+    handleQrSlideAdd,
     handleHymnAdd,
     handleAddCountdownToPresentation,
     handleAddLoopToPresentation,

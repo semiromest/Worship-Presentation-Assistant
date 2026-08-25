@@ -31,3 +31,10 @@ export interface ShareStatus {
   url: string;
   clientCount: number;
 }
+
+/** Live-screen phone broadcast status (see screenShareService). */
+export interface ScreenShareStatus {
+  active: boolean;
+  url: string;
+  clientCount: number;
+}

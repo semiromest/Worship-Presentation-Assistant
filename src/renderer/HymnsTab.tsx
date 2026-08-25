@@ -5,7 +5,7 @@ import { Skeleton } from './components/Skeleton';
 import OnlineHymnsPanel from './components/OnlineHymnsPanel';
 import SetLinkImportDialog from './components/SetLinkImportDialog';
 import { mergeImportedHymns } from './hymnImport';
-import { cn, useDebounce } from './utils';
+import { cn, normalizeSearchText, sourceTextMatches, useDebounce } from './utils';
 import { confirmDialog } from './dialogs';
 import Dialog from './components/Dialog';
 import ProgressBar from './components/ProgressBar';
@@ -275,11 +275,11 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
 
   const filteredHymns = useMemo(() => {
     if (!debouncedSearch) return hymns;
-    const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const q = normalize(debouncedSearch);
+    const q = normalizeSearchText(debouncedSearch);
     return hymns.filter(h => {
-      if (normalize(h.title).includes(q)) return true;
-      if (searchInLyrics && normalize(h.lyrics).includes(q)) return true;
+      if (normalizeSearchText(h.title).includes(q)) return true;
+      if (searchInLyrics && normalizeSearchText(h.lyrics).includes(q)) return true;
+      if (h.source && sourceTextMatches(h.source, q)) return true;
       return false;
     });
   }, [hymns, debouncedSearch, searchInLyrics]);

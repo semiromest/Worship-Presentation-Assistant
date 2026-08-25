@@ -116,6 +116,10 @@ interface AppState {
   remoteDebug: any;
   setRemoteDebug: (debug: any) => void;
 
+  // Live-screen phone viewers modal
+  isLiveShareOpen: boolean;
+  setIsLiveShareOpen: (open: boolean) => void;
+
   // Phone captions/translation share state
   shareActive: boolean;
   setShareActive: (active: boolean) => void;
@@ -127,6 +131,18 @@ interface AppState {
   setShareClientCount: (count: number) => void;
   shareNetworkChanged: boolean;
   setShareNetworkChanged: (changed: boolean) => void;
+
+  // Live-screen phone broadcast state (Canlı Ekran tab)
+  screenShareActive: boolean;
+  setScreenShareActive: (active: boolean) => void;
+  screenShareUrl: string;
+  setScreenShareUrl: (url: string) => void;
+  screenShareQr: string | null;
+  setScreenShareQr: (qr: string | null) => void;
+  screenShareClientCount: number;
+  setScreenShareClientCount: (count: number) => void;
+  screenShareNetworkChanged: boolean;
+  setScreenShareNetworkChanged: (changed: boolean) => void;
 
   // Media Settings
   mediaVolume: number;
@@ -250,11 +266,12 @@ export const useStore = create<AppState>((set) => ({
   displays: [],
   setDisplays: (displays) =>
     set((state) => {
-      const outputAssignments = { ...state.outputAssignments };
+      // Rebuild from scratch — prune stale entries for disconnected
+      // displays that would otherwise accumulate indefinitely.
+      const outputAssignments: Record<string, OutputAssignment> = {};
       for (const display of displays) {
-        if (!outputAssignments[display.id]) {
-          outputAssignments[display.id] = createOutputAssignment(state.liveIndex);
-        }
+        outputAssignments[display.id] = state.outputAssignments[display.id]
+          ?? createOutputAssignment(state.liveIndex);
       }
       return { displays, outputAssignments };
     }),
@@ -449,6 +466,21 @@ export const useStore = create<AppState>((set) => ({
   shareNetworkChanged: false,
   setShareNetworkChanged: (shareNetworkChanged) => set({ shareNetworkChanged }),
 
+  screenShareActive: false,
+  setScreenShareActive: (screenShareActive) => set({ screenShareActive }),
+
+  screenShareUrl: '',
+  setScreenShareUrl: (screenShareUrl) => set({ screenShareUrl }),
+
+  screenShareQr: null,
+  setScreenShareQr: (screenShareQr) => set({ screenShareQr }),
+
+  screenShareClientCount: 0,
+  setScreenShareClientCount: (screenShareClientCount) => set({ screenShareClientCount }),
+
+  screenShareNetworkChanged: false,
+  setScreenShareNetworkChanged: (screenShareNetworkChanged) => set({ screenShareNetworkChanged }),
+
   mediaVolume: 1,
   setMediaVolume: (vol) => set({ mediaVolume: vol }),
 
@@ -503,6 +535,9 @@ export const useStore = create<AppState>((set) => ({
 
   isRemoteOpen: false,
   setIsRemoteOpen: (open) => set({ isRemoteOpen: open }),
+
+  isLiveShareOpen: false,
+  setIsLiveShareOpen: (open) => set({ isLiveShareOpen: open }),
 
   setPresentationName: (name) => set((state) => {
     const action: UndoAction = { type: 'SET', payload: { ...state.presentation, name } };

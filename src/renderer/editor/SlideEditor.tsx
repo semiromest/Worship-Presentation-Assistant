@@ -24,10 +24,13 @@ import {
   LayoutTemplate,
   Group,
   Ungroup,
+  Undo2,
+  Redo2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Slide, SlideItem, TextStyle, ImageStyle } from '../types';
 import { cn } from '../utils';
+import { confirmDialog } from '../dialogs';
 import Dialog from '../components/Dialog';
 import {
   normalizeSlideStyles,
@@ -98,7 +101,8 @@ const PanelShell = memo(function PanelShell({
 
 export default function SlideEditor({ slide, onSave, onClose }: SlideEditorProps) {
   const { t } = useTranslation();
-  const [items, setItems] = useState<SlideItem[]>(() => convertSlideToItems(slide));
+  const initialItems = useMemo(() => convertSlideToItems(slide), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [items, setItems] = useState<SlideItem[]>(initialItems);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [tool, setTool] = useState<Tool>('select');
   const [slideStyles, setSlideStyles] = useState<Record<string, unknown>>(() =>
@@ -112,6 +116,77 @@ export default function SlideEditor({ slide, onSave, onClose }: SlideEditorProps
   const [gridSize, setGridSize] = useState(slide.gridSize ?? 10);
   const [gridColor, setGridColor] = useState(slide.gridColor ?? 'rgba(255,255,255,0.06)');
   const [snapEnabled, setSnapEnabled] = useState(slide.snapEnabled ?? false);
+
+  // ── Undo/redo history ──
+  const INITIAL_SNAPSHOT = useMemo(() => ({
+    items: initialItems,
+    slideStyles: normalizeSlideStyles(slide.styles as Record<string, unknown>),
+  }), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [undoStack, setUndoStack] = useState<Array<typeof INITIAL_SNAPSHOT>>([]);
+  const [redoStack, setRedoStack] = useState<Array<typeof INITIAL_SNAPSHOT>>([]);
+
+  const pushUndo = useCallback((currentItems: SlideItem[], currentStyles: Record<string, unknown>) => {
+    setUndoStack(prev => {
+      const next = [...prev, { items: currentItems, slideStyles: { ...currentStyles } }];
+      return next.length > 50 ? next.slice(next.length - 50) : next;
+    });
+  }, []);
+
+  // Dirty tracking: items or styles changed since opening
+  const isDirtyRef = useRef(false);
+
+  // Wrapped setItems: pushes undo, marks dirty, then applies the update.
+  const commitItems = useCallback(
+    (nextItems: SlideItem[] | ((prev: SlideItem[]) => SlideItem[])) => {
+      setItems(prev => {
+        const resolved = typeof nextItems === 'function' ? nextItems(prev) : nextItems;
+        if (resolved === prev) return prev;
+        pushUndo(prev, slideStyles);
+        setRedoStack([]);
+        isDirtyRef.current = true;
+        return resolved;
+      });
+    },
+    [pushUndo, slideStyles],
+  );
+
+  const commitStyles = useCallback(
+    (nextStyles: Record<string, unknown> | ((prev: Record<string, unknown>) => Record<string, unknown>)) => {
+      setSlideStyles(prev => {
+        const resolved = typeof nextStyles === 'function' ? nextStyles(prev) : nextStyles;
+        if (resolved === prev) return prev;
+        pushUndo(items, prev);
+        setRedoStack([]);
+        isDirtyRef.current = true;
+        return resolved;
+      });
+    },
+    [pushUndo, items],
+  );
+
+  const handleUndo = useCallback(() => {
+    setUndoStack(prev => {
+      if (prev.length === 0) return prev;
+      const snapshot = prev[prev.length - 1];
+      const currentSnapshot = { items, slideStyles: { ...slideStyles } };
+      setRedoStack(r => [...r, currentSnapshot]);
+      setItems(snapshot.items);
+      setSlideStyles(snapshot.slideStyles);
+      return prev.slice(0, -1);
+    });
+  }, [items, slideStyles]);
+
+  const handleRedo = useCallback(() => {
+    setRedoStack(prev => {
+      if (prev.length === 0) return prev;
+      const snapshot = prev[prev.length - 1];
+      const currentSnapshot = { items, slideStyles: { ...slideStyles } };
+      setUndoStack(u => [...u, currentSnapshot]);
+      setItems(snapshot.items);
+      setSlideStyles(snapshot.slideStyles);
+      return prev.slice(0, -1);
+    });
+  }, [items, slideStyles]);
 
   const canvasRef = useRef<HTMLDivElement | null>(null);
 
@@ -140,20 +215,20 @@ export default function SlideEditor({ slide, onSave, onClose }: SlideEditorProps
 
   const updateSlideStyles = useCallback(
     (updates: Record<string, unknown>) =>
-      setSlideStyles(prev => normalizeSlideStyles({ ...prev, ...updates })),
-    [],
+      commitStyles(prev => normalizeSlideStyles({ ...prev, ...updates })),
+    [commitStyles],
   );
 
   const updateItem = useCallback(
     (id: string, updates: Partial<SlideItem>) => {
-      setItems(prev => updateItemAt(prev, id, updates));
+      commitItems(prev => updateItemAt(prev, id, updates));
     },
-    [],
+    [commitItems],
   );
 
   const updateItemsBatch = useCallback(
-    (updatedItems: SlideItem[]) => setItems(updatedItems),
-    [],
+    (updatedItems: SlideItem[]) => commitItems(updatedItems),
+    [commitItems],
   );
 
   const handleDrag = useCallback(
@@ -167,10 +242,10 @@ export default function SlideEditor({ slide, onSave, onClose }: SlideEditorProps
 
   const handleDragEnd = useCallback(
     (id: string) => {
-      // Normalize after drag completes
-      setItems(prev => normalizeItems(prev));
+      // Normalize after drag completes — push undo at drag end, not per-frame.
+      commitItems(prev => normalizeItems(prev));
     },
-    [],
+    [commitItems],
   );
 
   const handleResize = useCallback(
@@ -223,7 +298,7 @@ export default function SlideEditor({ slide, onSave, onClose }: SlideEditorProps
 
   const addItem = useCallback(
     (type: 'text' | 'image') => {
-      setItems(prev => {
+      commitItems(prev => {
         const newItem = createItem(type, prev, type === 'text' ? t('common.editorNewText') : undefined);
         const next = normalizeItems([...prev, newItem]);
         const created = next[next.length - 1];
@@ -232,30 +307,30 @@ export default function SlideEditor({ slide, onSave, onClose }: SlideEditorProps
         return next;
       });
     },
-    [],
+    [commitItems, t],
   );
 
   const deleteSelected = useCallback(() => {
     if (selectedIds.size === 0) return;
-    setItems(prev => deleteItems(prev, selectedIds));
+    commitItems(prev => deleteItems(prev, selectedIds));
     setSelectedIds(new Set());
-  }, [selectedIds]);
+  }, [selectedIds, commitItems]);
 
   const deleteItem = useCallback(
     (id: string) => {
-      setItems(prev => deleteItemAt(prev, id));
+      commitItems(prev => deleteItemAt(prev, id));
       setSelectedIds(prev => {
         const next = new Set(prev);
         next.delete(id);
         return next;
       });
     },
-    [],
+    [commitItems],
   );
 
   const duplicateSelected = useCallback(() => {
     if (selectedIds.size === 0) return;
-    setItems(prev => {
+    commitItems(prev => {
       const next = duplicateItems(prev, selectedIds);
       const newIds = new Set(
         next.filter(
@@ -265,38 +340,38 @@ export default function SlideEditor({ slide, onSave, onClose }: SlideEditorProps
       setSelectedIds(newIds);
       return next;
     });
-  }, [selectedIds]);
+  }, [selectedIds, commitItems]);
 
   const duplicateItemById = useCallback((id: string) => {
-    setItems(prev => {
+    commitItems(prev => {
       const next = duplicateItem(prev, id);
       const created = next[next.length - 1];
       setSelectedIds(new Set([created.id]));
       return next;
     });
-  }, []);
+  }, [commitItems]);
 
   const moveItem = useCallback(
     (id: string, direction: 'up' | 'down') =>
-      setItems(prev => swapLayer(prev, id, direction)),
-    [],
+      commitItems(prev => swapLayer(prev, id, direction)),
+    [commitItems],
   );
 
   const toggleItemVisibility = useCallback(
-    (id: string) => setItems(prev => toggleVisibility(prev, id)),
-    [],
+    (id: string) => commitItems(prev => toggleVisibility(prev, id)),
+    [commitItems],
   );
 
   const toggleItemLock = useCallback(
-    (id: string) => setItems(prev => toggleLock(prev, id)),
-    [],
+    (id: string) => commitItems(prev => toggleLock(prev, id)),
+    [commitItems],
   );
 
   // ── Group/Ungroup ──
 
   const handleGroup = useCallback(() => {
     if (selectedIds.size < 2) return;
-    setItems(prev => {
+    commitItems(prev => {
       const next = createGroup(prev, selectedIds);
       const groupId = next.find(
         n => !prev.some(p => p.id === n.id),
@@ -304,14 +379,14 @@ export default function SlideEditor({ slide, onSave, onClose }: SlideEditorProps
       if (groupId) setSelectedIds(new Set([groupId]));
       return next;
     });
-  }, [selectedIds]);
+  }, [selectedIds, commitItems]);
 
   const handleUngroup = useCallback(() => {
     const groupItems = items.filter(
       i => selectedIds.has(i.id) && i.type === 'group',
     );
     if (groupItems.length === 0) return;
-    setItems(prev => {
+    commitItems(prev => {
       let result = prev;
       for (const g of groupItems) {
         result = ungroupGroup(result, g.id);
@@ -319,7 +394,7 @@ export default function SlideEditor({ slide, onSave, onClose }: SlideEditorProps
       return result;
     });
     setSelectedIds(new Set());
-  }, [items, selectedIds]);
+  }, [items, selectedIds, commitItems]);
 
   // ── Copy/Paste ──
 
@@ -330,7 +405,7 @@ export default function SlideEditor({ slide, onSave, onClose }: SlideEditorProps
 
   const handlePaste = useCallback(() => {
     if (clipboard.length === 0) return;
-    setItems(prev => {
+    commitItems(prev => {
       const newItems = clipboard.map(source =>
         normalizeItem({
           ...source,
@@ -344,7 +419,7 @@ export default function SlideEditor({ slide, onSave, onClose }: SlideEditorProps
       setSelectedIds(new Set(newItems.map(i => i.id)));
       return result;
     });
-  }, [clipboard]);
+  }, [clipboard, commitItems]);
 
   // ── Select all ──
 
@@ -358,15 +433,32 @@ export default function SlideEditor({ slide, onSave, onClose }: SlideEditorProps
     (templateId: string) => {
       const templateItems = applyTemplate(templateId);
       if (templateItems.length === 0) return;
-      setItems(prev => {
+      commitItems(prev => {
         const result = normalizeItems([...prev, ...templateItems]);
         setSelectedIds(new Set(templateItems.map(i => i.id)));
         return result;
       });
       setShowTemplates(false);
     },
-    [],
+    [commitItems],
   );
+
+  // ── Close with unsaved-changes guard ──
+
+  const handleClose = useCallback(async () => {
+    if (isDirtyRef.current) {
+      const discard = await confirmDialog(
+        t('common.editorUnsavedChanges'),
+        {
+          title: t('common.editorUnsavedTitle'),
+          confirmLabel: t('common.editorDiscard'),
+          cancelLabel: t('common.cancel'),
+        },
+      );
+      if (!discard) return;
+    }
+    onClose();
+  }, [onClose, t]);
 
   // ── Save ──
 
@@ -410,10 +502,9 @@ export default function SlideEditor({ slide, onSave, onClose }: SlideEditorProps
       }
     }
 
-    setTimeout(() => {
-      onSave(savedSlide);
-      onClose();
-    }, 10);
+    isDirtyRef.current = false;
+    onSave(savedSlide);
+    onClose();
   }, [items, onClose, onSave, slide, slideStyles, gridEnabled, gridSize, gridColor, snapEnabled]);
 
   useKeyboardShortcuts({
@@ -426,6 +517,8 @@ export default function SlideEditor({ slide, onSave, onClose }: SlideEditorProps
     onUngroup: handleUngroup,
     onCopy: handleCopy,
     onPaste: handlePaste,
+    onUndo: handleUndo,
+    onRedo: handleRedo,
   });
 
   // ── Derived state ──
@@ -445,7 +538,7 @@ export default function SlideEditor({ slide, onSave, onClose }: SlideEditorProps
   return (
     <Dialog
       open
-      onClose={onClose}
+      onClose={handleClose}
       labelledBy="slide-editor-title"
       overlayClassName="fixed inset-0 z-50 flex bg-black/90"
       className="flex h-full w-full max-w-none flex-col overflow-hidden bg-surface-base rounded-none border-0"
@@ -459,6 +552,7 @@ export default function SlideEditor({ slide, onSave, onClose }: SlideEditorProps
               <div className="text-xs text-white/40">
                 {t('common.editorHeaderInfo', { count: items.length })}
                 {selectedIds.size > 1 && ` · ${selectedIds.size} ${t('common.selected')}`}
+                {isDirtyRef.current && ` · ${t('common.editorUnsaved')}`}
               </div>
             </div>
           </div>
@@ -508,9 +602,31 @@ export default function SlideEditor({ slide, onSave, onClose }: SlideEditorProps
               )}
             </div>
 
+          <button
+              type="button"
+              onClick={() => handleUndo()}
+              disabled={undoStack.length === 0}
+              title={t('common.undo')}
+              aria-label={t('common.undo')}
+              className="rounded-xl p-2 text-white/60 transition hover:bg-white/5 hover:text-white disabled:opacity-30 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+            >
+              <Undo2 className="h-5 w-5" aria-hidden="true" />
+            </button>
+
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => handleRedo()}
+              disabled={redoStack.length === 0}
+              title={t('common.redo')}
+              aria-label={t('common.redo')}
+              className="rounded-xl p-2 text-white/60 transition hover:bg-white/5 hover:text-white disabled:opacity-30 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+            >
+              <Redo2 className="h-5 w-5" aria-hidden="true" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleClose}
               aria-label={t('common.close')}
               className="rounded-xl p-2 text-white/60 transition hover:bg-white/5 hover:text-white focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
             >
@@ -825,7 +941,7 @@ export default function SlideEditor({ slide, onSave, onClose }: SlideEditorProps
                             content: e.target.value,
                           })
                         }
-                        className="min-h-[7rem] max-h-32 w-full resize-y rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none transition focus:border-blue-500"
+                        className="min-h-[7rem] max-h-60 w-full resize-y rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none transition focus:border-blue-500"
                       />
                     </label>
                   ) : (
@@ -833,13 +949,7 @@ export default function SlideEditor({ slide, onSave, onClose }: SlideEditorProps
                       <button
                         type="button"
                         onClick={async () => {
-                          const file = await (window as unknown as {
-                            electronAPI?: {
-                              selectMediaFile?: (
-                                type: string,
-                              ) => Promise<string | null>;
-                            };
-                          }).electronAPI?.selectMediaFile?.('image');
+                          const file = await window.electronAPI?.selectMediaFile?.('image');
                           if (!file) return;
                           updateItem(primarySelected.id, {
                             mediaUrl: `file://${file.replace(/\\/g, '/')}`,
@@ -959,7 +1069,7 @@ export default function SlideEditor({ slide, onSave, onClose }: SlideEditorProps
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80 transition hover:bg-white/10"
             >
               {t('common.cancel')}

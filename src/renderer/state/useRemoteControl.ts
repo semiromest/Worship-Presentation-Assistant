@@ -125,6 +125,7 @@ export function useRemoteControl() {
 
   useEffect(() => {
     let knownDisplayIds: Set<string> | null = null;
+    let initialDisplayFetchDone = false;
 
     // Note: presets are hydrated once by App.tsx — do NOT reload them here
     // (was a duplicate loadPresets IPC call on every mount).
@@ -285,6 +286,7 @@ export function useRemoteControl() {
 } else {
   removeDisplayListener = window.electronAPI?.onDisplaysChanged?.((displays) => {
     const nextDisplays = Array.isArray(displays) ? displays : [];
+    initialDisplayFetchDone = true;
     if (knownDisplayIds) {
       const removed = [...knownDisplayIds].some((id) => !nextDisplays.some((display) => display.id === id));
       if (removed) useStore.getState().setToastMessage('displayDisconnected');
@@ -297,7 +299,12 @@ export function useRemoteControl() {
   });
 
   void window.electronAPI?.getDisplays?.().then((displays) => {
+    // Avoid overwriting a more recent displays-changed event with the
+    // initial mount fetch — the event handler runs first on display
+    // hotplug and the async promise resolving later would regress.
+    if (initialDisplayFetchDone) return;
     if (Array.isArray(displays)) {
+      initialDisplayFetchDone = true;
       knownDisplayIds = new Set(displays.map((display) => display.id));
       setDisplays(displays);
     }

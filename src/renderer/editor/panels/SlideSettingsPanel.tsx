@@ -165,11 +165,7 @@ export const SlideSettingsPanel = memo(function SlideSettingsPanel({
           <button
             type="button"
             onClick={async () => {
-              const file = await (window as unknown as {
-                electronAPI?: {
-                  selectMediaFile?: (type: string) => Promise<string | null>;
-                };
-              }).electronAPI?.selectMediaFile?.('image');
+              const file = await window.electronAPI?.selectMediaFile?.('image');
               if (!file) return;
               onChange({ backgroundImage: `file://${file.replace(/\\/g, '/')}` });
             }}

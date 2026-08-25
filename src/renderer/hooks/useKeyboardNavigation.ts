@@ -49,12 +49,16 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
       const el = document.activeElement as HTMLElement | null;
       const tag = el?.tagName?.toLowerCase();
 
+      // When the SlideEditor is open, its own undo/redo handles these keys.
+      const editorOpen = useStore.getState().isEditorOpen;
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        if (editorOpen) return;
         e.preventDefault();
         dispatchUndo({ type: 'UNDO' });
         return;
       }
       if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        if (editorOpen) return;
         e.preventDefault();
         dispatchUndo({ type: 'REDO' });
         return;

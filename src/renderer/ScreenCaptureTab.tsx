@@ -122,19 +122,26 @@ function useMediaStream() {
     }
   }, [cleanup]);
 
-  const captureFrame = useCallback((): string | null => {
+  const captureFrame = useCallback((maxWidth = 0, quality = 0.92): string | null => {
     const video = videoRef.current;
     if (!video || video.readyState < 2) return null;
 
+    let w = video.videoWidth;
+    let h = video.videoHeight;
+    if (maxWidth > 0 && w > maxWidth) {
+      h = Math.round((h * maxWidth) / w);
+      w = maxWidth;
+    }
+
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = w;
+    canvas.height = h;
     
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return null;
     
-    ctx.drawImage(video, 0, 0);
-    return canvas.toDataURL('image/jpeg', 0.92);
+    ctx.drawImage(video, 0, 0, w, h);
+    return canvas.toDataURL('image/jpeg', quality);
   }, []);
 
   // Cleanup on unmount

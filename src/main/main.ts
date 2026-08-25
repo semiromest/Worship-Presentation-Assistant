@@ -30,7 +30,19 @@ import {
   setClientCountListener,
   disposeShare,
 } from './shareService';
-import type { ShareSnapshot } from '../shared/share';
+import {
+  startScreenShare,
+  stopScreenShare,
+  isScreenShareActive,
+  publishScreenFrame,
+  refreshScreenShareHost,
+  getScreenShareStatus,
+  handleScreenShareHttp,
+  handleScreenShareConnection,
+  setScreenShareClientCountListener,
+  disposeScreenShare,
+} from './screenShareService';
+import type { ShareSnapshot, ScreenShareStatus } from '../shared/share';
 import {
   chooseDefaultOutputDisplay,
   compareDisplays,
@@ -156,12 +168,7 @@ function refreshProjectorWindows(): void {
       if (!entry.window.isDestroyed()) entry.window.close();
       continue;
     }
-
-    try {
-      if (!entry.window.isDestroyed()) entry.window.setBounds(projectorBounds(display));
-    } catch {
-      // The display can disappear between getAllDisplays() and setBounds().
-    }
+    // Fullscreen windows auto-position on their display — no reposition needed.
   }
   sendDisplaySnapshot();
 }
@@ -519,14 +526,7 @@ function createProjectorWindow(requestedDisplayId?: string, initialData?: any): 
   const projectorWindow = new BrowserWindow({
     x: bounds.x,
     y: bounds.y,
-    width: bounds.width,
-    height: bounds.height,
-    fullscreen: false,
-    fullscreenable: true,
-    frame: true,
-    resizable: true,
-    movable: true,
-    titleBarStyle: 'default',
+    fullscreen: true,
     autoHideMenuBar: true,
     show: false,
     backgroundColor: '#000000',
@@ -549,8 +549,8 @@ function createProjectorWindow(requestedDisplayId?: string, initialData?: any): 
   remoteStatus.isProjectorOpen = true;
   broadcast({ type: 'status', data: remoteStatus });
 
-  // BrowserWindow's native fullscreen can still be triggered by the user on macOS.
-  // We intentionally do not force fullscreen here, preserving the existing behavior.
+  // Projector windows open in true fullscreen: no window chrome, no taskbar,
+  // the full display area is available for the slide content.
   projectorWindow.webContents.once('did-finish-load', () => {
     if (!projectorWindow.isDestroyed()) {
       projectorWindow.show();
@@ -639,6 +639,11 @@ function createRemoteServer(): void {
       if (handleShareHttp(req, res)) return;
     }
 
+    // Phone live-screen share (token-guarded, only while active)
+    if (pathname === '/screen') {
+      if (handleScreenShareHttp(req, res)) return;
+    }
+
     // Remote control web UI
     if (pathname === '/' || pathname === '/remote') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -687,6 +692,9 @@ function createRemoteServer(): void {
     // Phone captions clients connect to /share?token=… and are handled (and
     // authenticated) entirely by the share service.
     if (handleShareConnection(client, req)) return;
+
+    // Phone live-screen clients connect to /screen?token=… (view-only frames).
+    if (handleScreenShareConnection(client, req)) return;
 
     wsClients.add(client);
     broadcastClientCount();
@@ -741,14 +749,23 @@ let shareNetworkTimer: ReturnType<typeof setInterval> | null = null;
 function startShareNetworkWatch(): void {
   if (shareNetworkTimer) return;
   shareNetworkTimer = setInterval(() => {
-    if (!isShareActive()) return;
     const addr = remoteServer?.address();
     const port = addr && typeof addr === 'object' ? addr.port : 0;
     cachedLocalIP = null; // force a fresh scan
     const ip = getLocalIPv4();
-    const changed = refreshShareHost(ip, port);
-    if (changed) {
-      win?.webContents.send('share:network-changed', { url: getShareStatus().url });
+
+    if (isShareActive()) {
+      const shareChanged = refreshShareHost(ip, port);
+      if (shareChanged) {
+        win?.webContents.send('share:network-changed', { url: getShareStatus().url });
+      }
+    }
+
+    if (isScreenShareActive()) {
+      const screenChanged = refreshScreenShareHost(ip, port);
+      if (screenChanged) {
+        win?.webContents.send('screen-share:network-changed', { url: getScreenShareStatus().url });
+      }
     }
   }, 10000);
 }
@@ -848,6 +865,7 @@ app.whenReady().then(() => {
   attachDisplayWatch();
   createRemoteServer();
   setClientCountListener((count) => win?.webContents.send('share:client-count', count));
+  setScreenShareClientCountListener((count) => win?.webContents.send('screen-share:client-count', count));
   registerSttIpc();
 });
 
@@ -858,6 +876,7 @@ app.on('will-quit', () => {
   cleanupTempDir();
   if (shareNetworkTimer) clearInterval(shareNetworkTimer);
   disposeShare();
+  disposeScreenShare();
   wss?.close();
   remoteServer?.close();
   cleanupStt();
@@ -1070,6 +1089,123 @@ ipcMain.handle('cleanup-temp-dir', () => { cleanupTempDir(); return true; });
 ipcMain.handle('get-remote-url', () => remoteServerUrl);
 ipcMain.handle('get-remote-debug', () => ({ remoteServerUrl, debug: remoteDebugInfo }));
 
+ipcMain.handle('get-remote-diagnostics', async () => {
+  const result: {
+    ok: boolean;
+    serverRunning: boolean;
+    serverUrl: string | null;
+    port: number | null;
+    selectedAddress: string;
+    interfaces: Array<{ name: string; address: string; score: number }>;
+    selfConnectTest: { tried: boolean; success: boolean; error?: string };
+    firewallWarning: boolean;
+    checks: Array<{ label: string; pass: boolean; detail: string }>;
+  } = {
+    ok: false,
+    serverRunning: false,
+    serverUrl: null,
+    port: null,
+    selectedAddress: '',
+    interfaces: [],
+    selfConnectTest: { tried: false, success: false },
+    firewallWarning: false,
+    checks: [],
+  };
+
+  // 1. Check if the HTTP server is listening
+  const addr = remoteServer?.address();
+  const listening = !!(addr && typeof addr === 'object');
+  result.serverRunning = listening;
+  result.port = listening ? (addr as any).port : null;
+
+  // 2. Get address info
+  const ip = getLocalIPv4();
+  result.selectedAddress = ip;
+  result.serverUrl = remoteServerUrl;
+
+  // 3. List interfaces
+  const candidates = listLocalIPv4Candidates();
+  result.interfaces = candidates.slice(0, 6).map((c) => ({
+    name: c.name,
+    address: c.address,
+    score: c.score,
+  }));
+
+  // 4. Self-connect test
+  if (listening) {
+    const testUrl = `http://${ip}:${addr.port}/api/status`;
+    try {
+      const testResult = await new Promise<{ ok: boolean; error?: string }>((resolve) => {
+        const req = http.get(testUrl, { timeout: 3000 }, (res) => {
+          let body = '';
+          res.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+          res.on('end', () => {
+            try { JSON.parse(body); resolve({ ok: true }); }
+            catch { resolve({ ok: false, error: 'invalid-json' }); }
+          });
+        });
+        req.on('error', (err: NodeJS.ErrnoException) => {
+          resolve({ ok: false, error: err.code ?? err.message });
+        });
+        req.on('timeout', () => {
+          req.destroy();
+          resolve({ ok: false, error: 'timeout' });
+        });
+      });
+      result.selfConnectTest = { tried: true, success: testResult.ok, ...(testResult.error ? { error: testResult.error } : {}) };
+    } catch {
+      result.selfConnectTest = { tried: true, success: false, error: 'unexpected-error' };
+    }
+  }
+
+  // 5. Build checks
+  result.checks.push({
+    label: 'serverListening',
+    pass: listening,
+    detail: listening
+      ? `Listening on port ${result.port ?? '?'}`
+      : 'Server could not start — try restarting the app',
+  });
+
+  const hasGoodInterface = candidates.some((c) => c.score > -50);
+  result.checks.push({
+    label: 'networkInterface',
+    pass: hasGoodInterface,
+    detail: hasGoodInterface
+      ? `Active interface: ${ip}`
+      : 'No suitable network interface found — check your Wi-Fi or Ethernet connection',
+  });
+
+  const isPrivateIP = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(ip);
+  result.checks.push({
+    label: 'privateSubnet',
+    pass: isPrivateIP,
+    detail: isPrivateIP
+      ? `IP is on a local network (${ip})`
+      : `IP (${ip}) does not appear to be on a local network — phone must be on the same network`,
+  });
+
+  result.checks.push({
+    label: 'selfConnect',
+    pass: result.selfConnectTest.success,
+    detail: result.selfConnectTest.success
+      ? 'App can connect to itself — server is working'
+      : result.selfConnectTest.error === 'timeout'
+        ? 'Self-connect timed out — firewall or antivirus may be blocking'
+        : result.selfConnectTest.error === 'ECONNREFUSED'
+          ? 'Connection refused — firewall may be blocking the port'
+          : `Self-test failed (${result.selfConnectTest.error || 'unknown error'}) — check your firewall`,
+  });
+
+  // Firewall warning: self-connect fails but server is listening
+  result.firewallWarning = !!(listening && !result.selfConnectTest.success);
+
+  // Overall ok: server running AND self-test passed (means firewall isn't blocking)
+  result.ok = !!(listening && result.selfConnectTest.success && hasGoodInterface && isPrivateIP);
+
+  return result;
+});
+
 // ─── Phone captions/translation share IPC ──────────────────────────────────
 ipcMain.handle('share:start', () => {
   const addr = remoteServer?.address();
@@ -1091,6 +1227,29 @@ ipcMain.on('share:publish', (_event, snapshot: ShareSnapshot) => {
 });
 
 ipcMain.handle('share:get-status', () => getShareStatus());
+
+// ─── Live-screen phone broadcast IPC ────────────────────────────────────────
+ipcMain.handle('screen-share:start', () => {
+  const addr = remoteServer?.address();
+  const port = addr && typeof addr === 'object' ? addr.port : 0;
+  if (!port) return { ok: false, error: 'server-not-ready' };
+  const result = startScreenShare(getLocalIPv4(), port);
+  if (!result) return { ok: false, error: 'already-active' };
+  startShareNetworkWatch();
+  return { ok: true, url: result.url };
+});
+
+ipcMain.handle('screen-share:stop', () => {
+  stopScreenShare();
+  return { ok: true };
+});
+
+ipcMain.on('screen-share:frame', (_event, frame: string) => {
+  if (typeof frame !== 'string' || !frame) return;
+  publishScreenFrame(frame);
+});
+
+ipcMain.handle('screen-share:get-status', (): ScreenShareStatus => getScreenShareStatus());
 
 ipcMain.handle('quit-app', () => { app.quit(); return true; });
 

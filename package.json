@@ -1,6 +1,6 @@
 {
   "name": "worship-presentation-assistant",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "main": "dist-electron/main.js",
   "description": "Worship Presentation Assistant - Simple Worship Presentation App",
   "author": "IPCA",
@@ -16,6 +16,7 @@
     "test:presets": "tsx --test src/main/presetStore.test.ts",
     "test:media": "tsx --test src/main/mediaLibrary.test.ts",
     "test:matcher": "tsx --test src/renderer/stt/slideMatcher.test.ts",
+    "test:zoom": "tsx --test src/renderer/__tests__/slideGridZoom.test.ts",
     "smoke:worker": "electron perf/worker-smoke.cjs"
   },
   "dependencies": {

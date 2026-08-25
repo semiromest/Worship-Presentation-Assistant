@@ -200,9 +200,18 @@ export default function SlideGrid({
     );
   }, [presentation.slides, searchQuery]);
 
+  // Track previous selectedSlideId so we only scroll+focus on actual selection
+  // changes, not on every zoom/layout/content update (which would steal focus
+  // from the textarea or cause jarring scroll jumps during editing).
+  const prevSelectedIdRef = useRef<string | null>(null);
+
   // On selection change, scroll the selected card into view (keyboard users);
   // virtualized off-screen cards may not exist in the DOM, so compute from row geometry.
   useEffect(() => {
+    const idChanged = prevSelectedIdRef.current !== selectedSlideId;
+    prevSelectedIdRef.current = selectedSlideId;
+    if (!idChanged) return; // ← içerik düzenleme sırasında focus'u çalma
+
     const el = containerRef.current;
     if (!el || !selectedSlideId) return;
 

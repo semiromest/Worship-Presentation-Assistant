@@ -3,6 +3,7 @@ import { twMerge } from 'tailwind-merge';
 import { useEffect, useState, useRef } from 'react';
 import type { Slide, WatermarkConfig, Position } from './types';
 import { useWatermarkStore } from './state/useWatermarkStore';
+import { parseCountdownContent, getCountdownRemaining } from './countdownUtils';
 import { rendererPerf } from './perf';
 
 // Precompiled regexes (compiled once, not per call)
@@ -102,6 +103,31 @@ function drawImageSafe(
   }
 }
 
+// ─── Search normalization ─────────────────────────────────────────────────
+// Lowercases, strips diacritics (İ→i, ü→u, …) and removes punctuation so a
+// search like "isa egemensin" also matches a title like "İsa, Egemensin".
+export function normalizeSearchText(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+// ─── Source-number matching ───────────────────────────────────────────────
+// Matches hymn source codes like "TY527, RT38". Tolerant of case, diacritics,
+// punctuation and stray whitespace, so "ty 527" also hits "TY527" (and "RT6"
+// hits "RT6").
+export function sourceTextMatches(source: string, query: string): boolean {
+  const src = normalizeSearchText(source);
+  const q = normalizeSearchText(query);
+  if (!src || !q) return false;
+  if (src.includes(q)) return true;
+  // Allow whitespace differences for compact codes, e.g. "ty 527" vs "TY527".
+  return src.replace(/\s+/g, '').includes(q.replace(/\s+/g, ''));
+}
+
 // ─── React Hooks ──────────────────────────────────────────────────────────
 export function useDebounce<T>(value: T, delay = 200): T {
   const [debounced, setDebounced] = useState(value);
@@ -158,51 +184,101 @@ async function renderTextSlide(
 ): Promise<boolean> {
   if (slide.items?.length) return false; // item-based text slides handled in another branch
 
+  // ── Faithful replica of the LIVE projector text rendering (LivePreview) ──
+  // Live reference canvas is 1920×1080; every value is scaled from it exactly
+  // like the on-screen renderer, so phone broadcasts match the projector.
+  const outScale = ctx.getTransform().a; // output px per base px (1 or 4)
+
+  // Background (color / image) — same as the live container.
+  ctx.fillStyle = slide.styles?.backgroundColor || '#000000';
+  ctx.fillRect(0, 0, W, H);
   if (slide.styles?.backgroundImage) {
     const bgImg = await loadImage(slide.styles.backgroundImage, { applyCors: true });
     if (bgImg) drawImageSafe(ctx, bgImg, 'cover', W, H);
   }
 
-  const ff =
-    slide.styles?.fontFamily && slide.styles.fontFamily !== 'inherit'
-      ? slide.styles.fontFamily.split(',')[0].trim()
-      : 'sans-serif';
-
-  ctx.fillStyle = slide.styles?.textColor || '#ffffff';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-
+  const styles = (slide.styles ?? {}) as Record<string, any>;
   const displayContent =
     slide.partsMode && slide.parts?.length
       ? (slide.parts[slide.activePart ?? 0] ?? slide.content)
       : slide.content;
+  if (!displayContent) return true;
 
-  const FIXED_FS = 11;
-  const MAX_LINES = 3;
-  const PADDING_H = 20;
-  const usableW = W - PADDING_H * 2;
-  const LH = FIXED_FS * 1.45;
+  const ff =
+    styles.fontFamily && styles.fontFamily !== 'inherit'
+      ? styles.fontFamily.split(',')[0].trim()
+      : 'sans-serif';
+  const baseScale = W / 1920;
+  const fontSize = Math.max(8 / outScale, (styles.fontSize || 48) * baseScale);
+  const fontWeight = styles.fontWeight || 'bold';
+  const fontStyle = styles.fontStyle || 'normal';
+  const textAlign = styles.textAlign || 'center';
+  const verticalAlign = styles.verticalAlign || 'center';
+  const lineHeight = (styles.lineHeight ?? 1.3) * fontSize;
+  const padding = 20 * baseScale;
+  const textTransform = styles.textTransform || 'none';
 
-  const allLines = (displayContent || '')
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
-  if (allLines.length === 0) return true;
+  let text = displayContent;
+  if (textTransform === 'uppercase') text = text.toUpperCase();
+  else if (textTransform === 'lowercase') text = text.toLowerCase();
 
-  const hasMore = allLines.length > MAX_LINES;
-  const visLines = allLines.slice(0, MAX_LINES);
-  if (hasMore) {
-    const last = visLines[visLines.length - 1];
-    visLines[visLines.length - 1] = last.replace(/\s+\S+$/, '') + '\u2026';
+  ctx.font = `${fontStyle === 'italic' ? 'italic ' : ''}${fontWeight} ${fontSize}px ${ff}`;
+  // Hymn/scripture slides use textColor: '' (inherits the app's light text on
+  // the live screen) — an empty string is an invalid canvas fillStyle and is
+  // silently ignored, leaving the previous (black) fill → invisible text.
+  ctx.fillStyle = styles.textColor || '#ffffff';
+  ctx.textBaseline = 'top';
+
+  const maxWidth = W - padding * 2;
+  const lines = wrapCanvasText(ctx, text, maxWidth);
+  if (lines.length === 0) return true;
+
+  const totalH = lines.length * lineHeight;
+  let startY: number;
+  if (verticalAlign === 'top') startY = padding;
+  else if (verticalAlign === 'bottom') startY = H - padding - totalH;
+  else startY = (H - totalH) / 2;
+
+  if (textAlign === 'left') ctx.textAlign = 'left';
+  else if (textAlign === 'right') ctx.textAlign = 'right';
+  else ctx.textAlign = 'center';
+  const x =
+    textAlign === 'center' ? W / 2
+    : textAlign === 'right' ? W - padding
+    : padding;
+
+  // Half-leading so each line sits like a CSS line box (baseline 'top').
+  const leading = (lineHeight - fontSize) / 2;
+  for (let i = 0; i < lines.length; i++) {
+    const y = startY + i * lineHeight + leading;
+    if (y + lineHeight < 0 || y > H) continue; // off-canvas, skip
+    ctx.fillText(lines[i], x, y);
   }
-
-  const totalH = visLines.length * LH;
-  const startY = H / 2 - totalH / 2 + LH / 2;
-  ctx.font = `bold ${FIXED_FS}px ${ff}`;
-  visLines.forEach((line, i) => {
-    ctx.fillText(line, W / 2, startY + i * LH, usableW);
-  });
   return true;
+}
+
+/** Word-wrap text onto lines (white-space: pre-wrap equivalent). */
+function wrapCanvasText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const lines: string[] = [];
+  for (const paragraph of text.split('\n')) {
+    if (paragraph.trim().length === 0) {
+      lines.push('');
+      continue;
+    }
+    const words = paragraph.split(/\s+/).filter(Boolean);
+    let current = '';
+    for (const word of words) {
+      const candidate = current ? `${current} ${word}` : word;
+      if (current && ctx.measureText(candidate).width > maxWidth) {
+        lines.push(current);
+        current = word;
+      } else {
+        current = candidate;
+      }
+    }
+    if (current) lines.push(current);
+  }
+  return lines;
 }
 
 async function renderImageSlide(
@@ -251,11 +327,14 @@ function renderCountdownSlide(
   H: number,
 ): boolean {
   try {
-    const data = JSON.parse(slide.content);
-    const mm = String(data.minutes || 0).padStart(2, '0');
-    const ss = String(data.seconds || 0).padStart(2, '0');
+    // Live remaining time (counts down from startTime), so phone broadcasts
+    // and thumbnails show the current value instead of the frozen initial one.
+    const data = parseCountdownContent(slide.content);
+    const left = Math.max(0, Math.round(getCountdownRemaining(data)));
+    const mm = String(Math.floor(left / 60)).padStart(2, '0');
+    const ss = String(left % 60).padStart(2, '0');
     const fs = Math.max(8, Math.min(40, (slide.styles?.fontSize ?? 120) * 0.32));
-    ctx.fillStyle = slide.styles?.textColor ?? '#ffffff';
+    ctx.fillStyle = slide.styles?.textColor || '#ffffff';
     ctx.font = `bold ${fs}px monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -339,20 +418,102 @@ async function renderItemsSlide(
 ): Promise<boolean> {
   if (!slide.items?.length) return false;
 
-  ctx.fillStyle = slide.styles?.backgroundColor ?? '#000000';
+  const outScale = ctx.getTransform().a;
+  const baseScale = W / 1920; // live reference is 1920×1080
+
+  ctx.fillStyle = slide.styles?.backgroundColor || '#000000';
   ctx.fillRect(0, 0, W, H);
 
   let drewAny = false;
-  for (const item of slide.items) {
-    if (item.type !== 'image' || !item.mediaUrl) continue;
-    const img = await loadImage(item.mediaUrl, { useFileUrl: true, applyCors: true });
-    if (!img) continue;
+  const sorted = [...slide.items].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+  for (const item of sorted) {
     const x = (item.x / 100) * W;
     const y = (item.y / 100) * H;
     const iw = (item.width / 100) * W;
     const ih = (item.height / 100) * H;
-    ctx.drawImage(img, x, y, iw, ih);
-    drewAny = true;
+
+    ctx.save();
+    if (item.rotation) {
+      ctx.translate(x + iw / 2, y + ih / 2);
+      ctx.rotate((item.rotation * Math.PI) / 180);
+      ctx.translate(-(x + iw / 2), -(y + ih / 2));
+    }
+
+    // Border (live renderer: solid border, optional radius).
+    if (item.borderWidth && item.borderWidth > 0) {
+      ctx.beginPath();
+      const r = (item.borderRadius ?? 0) * baseScale;
+      if (r > 0) {
+        ctx.roundRect(x, y, iw, ih, r);
+      } else {
+        ctx.rect(x, y, iw, ih);
+      }
+      ctx.strokeStyle = item.borderColor || '#ffffff';
+      ctx.lineWidth = item.borderWidth * baseScale;
+      ctx.stroke();
+    }
+
+    if (item.type === 'image' && item.mediaUrl) {
+      const img = await loadImage(item.mediaUrl, { useFileUrl: true, applyCors: true });
+      if (img) {
+        const fit = item.imageStyles?.objectFit === 'cover' ? 'cover' : 'contain';
+        ctx.beginPath();
+        ctx.rect(x, y, iw, ih);
+        ctx.clip();
+        ctx.translate(x, y);
+        drawImageSafe(ctx, img, fit, iw, ih);
+        drewAny = true;
+      }
+    } else if (item.type === 'text' && item.content) {
+      // Text item — mirror the live renderer (centered, wrapping, styled).
+      const ts = (item.textStyles ?? {}) as Record<string, any>;
+      const fontSize = Math.max(4 / outScale, (ts.fontSize || 32) * baseScale);
+      const lineHeight = (ts.lineHeight ?? 1.25) * fontSize;
+      const padding = 8 * baseScale;
+      const align = ts.textAlign || 'center';
+      const ff = ts.fontFamily ? ts.fontFamily.split(',')[0].trim() : 'sans-serif';
+
+      let text = item.content;
+      if (ts.textTransform === 'uppercase') text = text.toUpperCase();
+      else if (ts.textTransform === 'lowercase') text = text.toLowerCase();
+
+      ctx.font = `${ts.fontStyle === 'italic' ? 'italic ' : ''}${ts.fontWeight || 'normal'} ${fontSize}px ${ff}`;
+      // Empty textColor (hymn/scripture default) inherits light text live.
+      ctx.fillStyle = ts.textColor || '#ffffff';
+      ctx.textBaseline = 'top';
+      if (align === 'left') ctx.textAlign = 'left';
+      else if (align === 'right') ctx.textAlign = 'right';
+      else ctx.textAlign = 'center';
+
+      const maxWidth = iw - padding * 2;
+      const lines = wrapCanvasText(ctx, text, maxWidth);
+      if (lines.length > 0) {
+        const totalH = lines.length * lineHeight;
+        const startY = y + (ih - totalH) / 2;
+        const tx = align === 'center' ? x + iw / 2 : align === 'right' ? x + iw - padding : x + padding;
+        const leading = (lineHeight - fontSize) / 2;
+
+        if (ts.textShadow) {
+          ctx.shadowColor = ts.textShadow.color || '#000000';
+          ctx.shadowOffsetX = (ts.textShadow.offsetX || 0) * baseScale;
+          ctx.shadowOffsetY = (ts.textShadow.offsetY || 0) * baseScale;
+          ctx.shadowBlur = (ts.textShadow.blur || 0) * baseScale;
+        }
+
+        for (let i = 0; i < lines.length; i++) {
+          const ly = startY + i * lineHeight + leading;
+          if (ly + lineHeight < y || ly > y + ih) continue;
+          if (ts.textStroke) {
+            ctx.strokeStyle = ts.textStroke.color;
+            ctx.lineWidth = (ts.textStroke.width || 0) * baseScale;
+            ctx.strokeText(lines[i], tx, ly);
+          }
+          ctx.fillText(lines[i], tx, ly);
+        }
+        drewAny = true;
+      }
+    }
+    ctx.restore();
   }
 
   if (!drewAny) {
@@ -443,50 +604,64 @@ async function drawWatermarkOnCanvas(
   }
 }
 
-async function generateSlideThumbnailInner(slide: Slide): Promise<string | null> {
-  const W = THUMB_W;
-  const H = THUMB_H;
+async function generateSlideThumbnailInner(
+  slide: Slide,
+  opts?: { scale?: number; quality?: number },
+): Promise<string | null> {
+  // High-resolution output for phone broadcasts: draw everything in the base
+  // 320×180 coordinate space and let ctx.scale upscale uniformly, so every
+  // font/position stays proportionally correct at any size.
+  const scale = Math.max(1, Math.round(opts?.scale ?? 1));
+  const BASE_W = THUMB_W;
+  const BASE_H = THUMB_H;
+  const W = BASE_W * scale;
+  const H = BASE_H * scale;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
+  if (scale > 1) ctx.scale(scale, scale);
 
   try {
     // Default background (text/image-empty slides)
     ctx.fillStyle = slide.styles?.backgroundColor || '#000000';
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(0, 0, BASE_W, BASE_H);
 
     let rendered = false;
 
-    // Dispatch by type / structure
-    if (slide.type === 'text') {
-      rendered = await renderTextSlide(ctx, slide, W, H);
+    // Dispatch by type / structure (all draw in base 320×180 coords).
+    // Item-based text slides (e.g. the QR slide: image + URL text) must route
+    // to renderItemsSlide — renderTextSlide declines them by design.
+    if (slide.type === 'text' && slide.items?.length) {
+      rendered = await renderItemsSlide(ctx, slide, BASE_W, BASE_H);
+    } else if (slide.type === 'text') {
+      rendered = await renderTextSlide(ctx, slide, BASE_W, BASE_H);
     } else if (slide.type === 'image') {
-      rendered = await renderImageSlide(ctx, slide, W, H);
+      rendered = await renderImageSlide(ctx, slide, BASE_W, BASE_H);
     } else if (slide.type === 'video') {
-      rendered = await renderVideoSlide(ctx, slide, W, H);
+      rendered = await renderVideoSlide(ctx, slide, BASE_W, BASE_H);
     } else if (slide.type === 'countdown') {
-      rendered = renderCountdownSlide(ctx, slide, W, H);
+      rendered = renderCountdownSlide(ctx, slide, BASE_W, BASE_H);
     } else if (slide.type === 'screen') {
-      rendered = renderScreenSlide(ctx, slide, W, H);
+      rendered = renderScreenSlide(ctx, slide, BASE_W, BASE_H);
     } else if (slide.type === 'loop') {
-      rendered = await renderLoopSlide(ctx, slide, W, H);
+      rendered = await renderLoopSlide(ctx, slide, BASE_W, BASE_H);
     } else if (slide.type === 'captions') {
-      rendered = renderCaptionsSlide(ctx, slide, W, H);
+      rendered = renderCaptionsSlide(ctx, slide, BASE_W, BASE_H);
     } else if (slide.items?.length) {
-      rendered = await renderItemsSlide(ctx, slide, W, H);
+      rendered = await renderItemsSlide(ctx, slide, BASE_W, BASE_H);
     }
 
     if (!rendered) {
       ctx.fillStyle = PLACEHOLDER_BG;
-      ctx.fillRect(0, 0, W, H);
+      ctx.fillRect(0, 0, BASE_W, BASE_H);
       fillFallbackText(ctx, slide.content?.slice(0, 60) || slide.type);
     }
   } catch {
     // Render pipeline failed — fallback placeholder
     ctx.fillStyle = PLACEHOLDER_BG;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(0, 0, BASE_W, BASE_H);
     fillFallbackText(ctx, slide.content?.slice(0, 40) || slide.type || 'Slayt', 'rgba(255,255,255,0.25)', 'bold 12px sans-serif');
   }
 
@@ -494,7 +669,7 @@ async function generateSlideThumbnailInner(slide: Slide): Promise<string | null>
     if (typeof useWatermarkStore === 'function') {
       const wmConfig: WatermarkConfig = useWatermarkStore.getState().config;
       if (shouldRenderWatermark(slide, wmConfig)) {
-        await drawWatermarkOnCanvas(ctx, wmConfig, W, H);
+        await drawWatermarkOnCanvas(ctx, wmConfig, BASE_W, BASE_H);
       }
     }
   } catch (err) {
@@ -502,7 +677,7 @@ async function generateSlideThumbnailInner(slide: Slide): Promise<string | null>
   }
 
   try {
-    return canvas.toDataURL('image/jpeg', 0.65);
+    return canvas.toDataURL('image/jpeg', opts?.quality ?? 0.65);
   } catch (err) {
     console.error('generateSlideThumbnail: toDataURL failed (canvas tainted?):', err);
     return null;
@@ -510,10 +685,13 @@ async function generateSlideThumbnailInner(slide: Slide): Promise<string | null>
 }
 
 /** Phase 0: times thumbnail generation (dev-only, zero overhead in prod). */
-export async function generateSlideThumbnail(slide: Slide): Promise<string | null> {
-  if (!rendererPerf.enabled) return generateSlideThumbnailInner(slide);
+export async function generateSlideThumbnail(
+  slide: Slide,
+  opts?: { scale?: number; quality?: number },
+): Promise<string | null> {
+  if (!rendererPerf.enabled) return generateSlideThumbnailInner(slide, opts);
   const t0 = performance.now();
-  const result = await generateSlideThumbnailInner(slide);
+  const result = await generateSlideThumbnailInner(slide, opts);
   rendererPerf.push({
     kind: 'thumbnail',
     label: slide.type,

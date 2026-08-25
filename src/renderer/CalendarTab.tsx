@@ -296,14 +296,14 @@ export default function CalendarTab({
       <div className="h-full flex flex-col">
         {/* HEADER */}
         <div className="border-b border-white/[0.08] bg-[#26262b]/95 backdrop-blur-xl">
-          <div className="px-6 py-4 flex items-center justify-between">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-3">
             {/* LEFT */}
-            <div className="flex items-center gap-4">
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500/20 to-violet-500/20 border border-white/10 flex items-center justify-center shadow-lg shadow-blue-500/10">
-                <CalendarDays className="w-5 h-5 text-blue-400" />
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-gradient-to-br from-blue-500/20 to-violet-500/20 border border-white/10 flex items-center justify-center shadow-lg shadow-blue-500/10">
+                <CalendarDays className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
               </div>
 
-              <div>
+              <div className="hidden sm:block">
                 <h2 className="text-lg font-semibold tracking-tight">
                   {t('common.calendarTitle')}
                 </h2>
@@ -315,17 +315,17 @@ export default function CalendarTab({
             </div>
 
             {/* CENTER */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 order-3 sm:order-none w-full sm:w-auto justify-center">
               <button
                 onClick={goToPreviousMonth}
                 aria-label={t('common.calendarPrevMonth')}
-                className="w-10 h-10 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] transition-all flex items-center justify-center"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] transition-all flex items-center justify-center"
               >
-                <ChevronLeft className="w-5 h-5" aria-hidden="true" />
+                <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
               </button>
 
-              <div className="min-w-[220px] text-center">
-                <h2 className="text-xl font-semibold tracking-tight">
+              <div className="min-w-[160px] sm:min-w-[220px] text-center">
+                <h2 className="text-base sm:text-xl font-semibold tracking-tight">
                   {monthNames[month]} {year}
                 </h2>
               </div>
@@ -333,51 +333,54 @@ export default function CalendarTab({
               <button
                 onClick={goToNextMonth}
                 aria-label={t('common.calendarNextMonth')}
-                className="w-10 h-10 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] transition-all flex items-center justify-center"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] transition-all flex items-center justify-center"
               >
-                <ChevronRight className="w-5 h-5" aria-hidden="true" />
+                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
               </button>
             </div>
 
             {/* RIGHT */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <button
                 onClick={goToToday}
-                className="h-10 px-4 rounded-xl border border-blue-500/20 bg-blue-500/10 hover:bg-blue-500/20 transition-all text-sm text-blue-300 font-medium"
+                className="h-9 sm:h-10 px-3 sm:px-4 rounded-xl border border-blue-500/20 bg-blue-500/10 hover:bg-blue-500/20 transition-all text-xs sm:text-sm text-blue-300 font-medium"
               >
                 {t('common.calendarToday')}
               </button>
 
               <button
                 onClick={openModal}
-                className="h-10 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 hover:opacity-90 transition-all flex items-center gap-2 text-sm font-medium shadow-lg shadow-blue-500/20"
+                className="h-9 sm:h-10 px-3 sm:px-4 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 hover:opacity-90 transition-all flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium shadow-lg shadow-blue-500/20"
               >
-                <Plus className="w-4 h-4" />
-                {t('common.calendarAddEvent')}
+                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">{t('common.calendarAddEvent')}</span>
+                <span className="sm:hidden">{t('common.calendarAddEventShort')}</span>
               </button>
             </div>
           </div>
         </div>
 
         {/* BODY */}
-        <div className="flex-1 overflow-hidden flex">
+        <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
           {/* CALENDAR */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="p-5">
+          <div className="flex-1 overflow-y-auto lg:min-w-0">
+            <div className="p-3 sm:p-5">
               {/* WEEK DAYS */}
-              <div className="grid grid-cols-7 gap-2 mb-2">
+              <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-1 sm:mb-2">
                 {dayNames.map(day => (
                   <div
                     key={day}
-                    className="h-10 flex items-center justify-center text-xs uppercase tracking-wider text-white/35 font-semibold"
+                    className="h-8 sm:h-10 flex items-center justify-center text-[10px] sm:text-xs uppercase tracking-wider text-white/35 font-semibold"
                   >
-                    {day}
+                    {/* Show short form on mobile */}
+                    <span className="hidden sm:inline">{day}</span>
+                    <span className="sm:hidden">{day.charAt(0)}</span>
                   </div>
                 ))}
               </div>
 
               {/* DAYS */}
-              <div className="grid grid-cols-7 gap-2">
+              <div className="grid grid-cols-7 gap-1 sm:gap-2">
                 {calendarDays.map((date, index) => {
                   const dateStr = formatDate(date);
 
@@ -395,7 +398,7 @@ export default function CalendarTab({
                       key={index}
                       onClick={() => setSelectedDate(dateStr)}
                       className={cn(
-                        'group relative min-h-[120px] rounded-2xl border p-3 text-left transition-all duration-200 overflow-hidden',
+                        'group relative min-h-[80px] sm:min-h-[120px] rounded-xl sm:rounded-2xl border p-2 sm:p-3 text-left transition-all duration-200 overflow-hidden',
                         isCurrentMonth
                           ? 'bg-white/[0.05] border-white/[0.08]'
                           : 'bg-white/[0.03] border-white/[0.05] opacity-40',
@@ -413,7 +416,7 @@ export default function CalendarTab({
                       <div className="relative z-10 flex items-center justify-between">
                         <span
                           className={cn(
-                            'text-sm font-semibold',
+                            'text-xs sm:text-sm font-semibold',
                             isToday ? 'text-blue-300' : 'text-white/80'
                           )}
                         >
@@ -421,34 +424,34 @@ export default function CalendarTab({
                         </span>
 
                         {dayEvents.length > 0 && (
-                          <div className="min-w-6 h-6 px-1 rounded-full bg-blue-500/20 border border-blue-500/20 text-[11px] flex items-center justify-center text-blue-300 font-medium">
+                          <div className="min-w-5 sm:min-w-6 h-5 sm:h-6 px-1 rounded-full bg-blue-500/20 border border-blue-500/20 text-[10px] sm:text-[11px] flex items-center justify-center text-blue-300 font-medium">
                             {dayEvents.length}
                           </div>
                         )}
                       </div>
 
                       {/* EVENTS */}
-                      <div className="relative z-10 mt-3 space-y-1.5">
+                      <div className="relative z-10 mt-2 sm:mt-3 space-y-1 sm:space-y-1.5">
                         {dayEvents.slice(0, 3).map(event => (
                           <div
                             key={event.id}
-                            className="flex items-center gap-2 rounded-lg bg-black/[0.08] border border-white/5 px-2 py-1.5"
+                            className="flex items-center gap-1.5 sm:gap-2 rounded-lg bg-black/[0.08] border border-white/5 px-1.5 sm:px-2 py-1 sm:py-1.5"
                           >
                             <div
                               className={cn(
-                                'w-2 h-2 rounded-full shrink-0',
+                                'w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full shrink-0',
                                 event.color
                               )}
                             />
 
-                            <span className="text-[11px] text-white/80 truncate">
+                            <span className="text-[10px] sm:text-[11px] text-white/80 truncate">
                               {event.title}
                             </span>
                           </div>
                         ))}
 
                         {dayEvents.length > 3 && (
-                          <div className="text-[11px] text-white/35 px-1">
+                          <div className="text-[10px] sm:text-[11px] text-white/35 px-1">
                             {t('common.calendarMoreEvents', { count: dayEvents.length - 3 })}
                           </div>
                         )}
@@ -461,7 +464,7 @@ export default function CalendarTab({
           </div>
 
           {/* SIDEBAR */}
-          <div className="w-[380px] border-l border-white/[0.08] bg-[#1e2128] overflow-y-auto">
+          <div className="lg:w-[380px] w-full border-t lg:border-t-0 lg:border-l border-white/[0.08] bg-[#1e2128] overflow-y-auto lg:max-h-full max-h-[320px] sm:max-h-[400px]">
             <div className="p-5">
               {/* DATE HEADER */}
               <div className="rounded-3xl bg-gradient-to-br from-blue-500/10 to-violet-500/10 border border-white/5 p-5">
@@ -610,9 +613,9 @@ export default function CalendarTab({
           open={isModalOpen}
           onClose={closeModal}
           labelledBy="calendar-event-title"
-          className="w-full max-w-md rounded-[32px] border border-white/10 bg-surface-raised shadow-2xl shadow-black/40 overflow-hidden"
+          className="w-[calc(100%-32px)] sm:w-full max-w-md rounded-[24px] sm:rounded-[32px] border border-white/10 bg-surface-raised shadow-2xl shadow-black/40 overflow-hidden"
         >
-              <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between">
+              <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-white/5 flex items-center justify-between">
                 <div>
                   <h3 id="calendar-event-title" className="text-lg font-semibold">
                     {editingEvent
@@ -635,7 +638,7 @@ export default function CalendarTab({
               </div>
 
               {/* BODY */}
-              <div className="p-6 space-y-5">
+              <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
                 <div>
                   <label htmlFor="cal-event-title" className="block text-xs uppercase tracking-wider text-white/35 mb-2">
                     {t('common.calendarTitleLabel')}
@@ -760,7 +763,7 @@ export default function CalendarTab({
               </div>
 
               {/* FOOTER */}
-              <div className="px-6 py-5 border-t border-white/5 flex gap-3">
+              <div className="px-4 sm:px-6 py-4 sm:py-5 border-t border-white/5 flex gap-2 sm:gap-3">
                 <button
                   onClick={closeModal}
                   className="flex-1 h-12 rounded-2xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] transition-all font-medium"
