@@ -13,6 +13,7 @@ import SharePanel from './SharePanel';
 interface SttPanelProps {
   onAddCaptionsSlide: () => void;
   onAddUtteranceSlide: (original: string, translation: string) => void;
+  onAddQrSlide?: (qrDataUrl: string, url: string) => void;
   onOpenSettings: () => void;
   onStart: () => Promise<void>;
   onStop: () => Promise<void>;
@@ -32,7 +33,7 @@ interface SttPanelProps {
  * the next session start (Soniox fixes them at session creation), so they are
  * locked while a session is active.
  */
-export default function SttPanel({ onAddCaptionsSlide, onAddUtteranceSlide, onOpenSettings, onStart, onStop, onStartShare, onStopShare }: SttPanelProps) {
+export default function SttPanel({ onAddCaptionsSlide, onAddUtteranceSlide, onOpenSettings, onStart, onStop, onStartShare, onStopShare, onAddQrSlide }: SttPanelProps) {
   const { t } = useTranslation();
 
   const status = useSttStore((s) => s.status);
@@ -389,7 +390,7 @@ export default function SttPanel({ onAddCaptionsSlide, onAddUtteranceSlide, onOp
         </div>
 
         {/* Phone captions/translation share */}
-        <SharePanel onStartShare={onStartShare} onStopShare={onStopShare} />
+        <SharePanel onStartShare={onStartShare} onStopShare={onStopShare} onAddQrSlide={onAddQrSlide} />
 
         {/* Auto slide tracking */}
         <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">

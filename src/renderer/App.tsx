@@ -379,6 +379,7 @@ export default function App() {
                     onStop={sttStop}
                     onStartShare={startShare}
                     onStopShare={stopShare}
+                    onAddQrSlide={handleQrSlideAdd}
                   />
                 </div>
               )}

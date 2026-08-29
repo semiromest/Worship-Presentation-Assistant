@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Smartphone, Radio, WifiOff, X } from 'lucide-react';
+import { Smartphone, Radio, WifiOff, X, Plus } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { cn } from '../utils';
 
 interface SharePanelProps {
   onStartShare: () => Promise<void>;
   onStopShare: () => Promise<void>;
+  onAddQrSlide?: (qrDataUrl: string, url: string) => void;
 }
 
 /**
@@ -16,7 +17,7 @@ interface SharePanelProps {
  * independent of the STT session: it can be on before/after STT starts and
  * keeps showing "waiting" on phones when no speech is being captured.
  */
-export default function SharePanel({ onStartShare, onStopShare }: SharePanelProps) {
+export default function SharePanel({ onStartShare, onStopShare, onAddQrSlide }: SharePanelProps) {
   const { t } = useTranslation();
   const shareActive = useStore((s) => s.shareActive);
   const shareUrl = useStore((s) => s.shareUrl);
@@ -26,6 +27,11 @@ export default function SharePanel({ onStartShare, onStopShare }: SharePanelProp
   const setShareNetworkChanged = useStore((s) => s.setShareNetworkChanged);
 
   const [busy, setBusy] = useState(false);
+
+  const handleAddQrSlide = () => {
+    if (!shareQr || !shareUrl || !onAddQrSlide) return;
+    onAddQrSlide(shareQr, shareUrl);
+  };
 
   const toggle = async () => {
     if (busy) return;
@@ -115,15 +121,27 @@ export default function SharePanel({ onStartShare, onStopShare }: SharePanelProp
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onStopShare}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleAddQrSlide}
+              disabled={!shareQr}
+              title={t('common.screenShareAddSlide')}
+              aria-label={t('common.screenShareAddSlide')}
+              className="shrink-0 p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 hover:text-white/90 transition-colors disabled:opacity-40"
+            >
+              <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={onStopShare}
             disabled={busy}
             className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 text-white px-4 py-2 text-xs font-bold transition-colors disabled:opacity-40"
           >
             <Smartphone className="w-3.5 h-3.5" aria-hidden="true" />
             {t('common.sttShareStop')}
-          </button>
+            </button>
+          </div>
         </>
       )}
 
