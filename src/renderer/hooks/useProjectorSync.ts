@@ -4,7 +4,7 @@ import { IS_PROJECTOR_MODE, DEFAULT__TRANSITION } from '../constants';
 import { generateSlideThumbnail, useThrottle } from '../utils';
 import { computePatch, isPatchEmpty, type ProjectorPatch } from '../state/undoReducer';
 import type { Presentation, Slide, TransitionType } from '../types';
-import { chooseDefaultOutputDisplay, effectiveOutputSlideIndex } from '../../shared/displays';
+import { chooseDefaultOutputDisplay, effectiveOutputSlideIndex, type DisplayMode } from '../../shared/displays';
 
 /**
  * Top-level style equality (mirrors undoReducer.shallowEqual). Replaces
@@ -71,7 +71,7 @@ export function useProjectorSync() {
     if (isProjectorWindowOpen && defaultDisplayId) ids.add(defaultDisplayId);
 
     const frames: Record<string, {
-      mode: 'follow' | 'manual';
+      mode: DisplayMode;
       slideIndex: number;
       isBlackout: boolean;
     }> = {};

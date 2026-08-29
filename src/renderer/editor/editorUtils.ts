@@ -13,6 +13,7 @@ export const MAX_ITEM_HEIGHT = 100;
 export const DEFAULT_TEXT_STYLE: TextStyle = {
   fontSize: 48,
   textColor: '#ffffff',
+  textHighlight: 'transparent',
   textAlign: 'center',
   verticalAlign: 'center',
   fontWeight: 'bold',
@@ -312,6 +313,7 @@ export function convertSlideToItems(slide: Slide): SlideItem[] {
         textStyles: {
           fontSize: (slideStyles?.fontSize as number) ?? 48,
           textColor: (slideStyles?.textColor as string) ?? '#ffffff',
+          textHighlight: (slideStyles?.textHighlight as string) ?? 'transparent',
           textAlign: (slideStyles?.textAlign as TextStyle['textAlign']) ?? 'center',
           fontWeight: (slideStyles?.fontWeight as TextStyle['fontWeight']) ?? 'bold',
           fontStyle: (slideStyles?.fontStyle as TextStyle['fontStyle']) ?? 'normal',

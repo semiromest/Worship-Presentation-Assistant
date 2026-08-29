@@ -36,6 +36,7 @@ export const TextStyleEditor = memo(function TextStyleEditor({
   const shadow = styles.textShadow ?? {};
   const [showColorPalette, setShowColorPalette] = useState(false);
   const [showBgPalette, setShowBgPalette] = useState(false);
+  const [showHighlightPalette, setShowHighlightPalette] = useState(false);
 
   const update = useCallback((patch: Partial<TextStyle>) => {
     if (patch.fontFamily) loadGoogleFont(patch.fontFamily);
@@ -169,6 +170,52 @@ export const TextStyleEditor = memo(function TextStyleEditor({
           )}
         </label>
       </div>
+
+      {/* Text highlight */}
+      <label className="block space-y-1">
+        <span className="block text-[10px] uppercase tracking-wide text-white/40">
+          {t('common.editorTextHighlight')}
+        </span>
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={styles.textHighlight && styles.textHighlight !== 'transparent' ? styles.textHighlight : '#ffff00'}
+            onChange={e => update({ textHighlight: e.target.value })}
+            className="h-8 w-8 shrink-0 cursor-pointer rounded-lg border border-white/10 bg-transparent"
+          />
+          <input
+            type="text"
+            value={styles.textHighlight ?? 'transparent'}
+            onChange={e => update({ textHighlight: e.target.value })}
+            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs outline-none transition focus:border-blue-500"
+            aria-label={t('common.editorTextHighlight')}
+          />
+          <button
+            type="button"
+            onClick={() => setShowHighlightPalette(!showHighlightPalette)}
+            className="h-8 w-8 shrink-0 rounded-lg border border-white/10 bg-black/20 flex items-center justify-center text-white/60 hover:bg-black/35"
+            title={t('common.editorColorPalette')}
+            aria-label={t('common.editorColorPalette')}
+          >
+            <span className="text-xs">🎨</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => update({ textHighlight: 'transparent' })}
+            className="h-8 shrink-0 rounded-lg border border-white/10 bg-black/20 px-2 text-xs text-white/60 hover:bg-black/35"
+          >
+            {t('common.editorClear')}
+          </button>
+        </div>
+        {showHighlightPalette && (
+          <div className="mt-1 p-2 rounded-lg border border-white/10 bg-[#1e1e1e]">
+            <ColorPalette
+              onSelect={color => { update({ textHighlight: color }); setShowHighlightPalette(false); }}
+              currentColor={styles.textHighlight}
+            />
+          </div>
+        )}
+      </label>
 
       {/* Alignment */}
       <div className="grid grid-cols-3 gap-2">

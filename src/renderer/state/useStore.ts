@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { Presentation, Preset, MediaItem, LoopItem, DriveFile } from '../types';
 import { undoReducer, UndoState, UndoAction, applyProjectorPatch, ProjectorPatch } from './undoReducer';
 // UndoAction is used in setPresentationName to keep rename in undo history
-import { DEFAULT_STYLES, DEFAULT__TRANSITION } from '../constants';
+import { DEFAULT_STYLES, DEFAULT__TRANSITION, PROJECTOR_OUTPUT_MODE } from '../constants';
 import { makeSlideId } from '../utils';
 import i18n from '../i18n';
 import { isSfxEnabled, setSfxEnabled } from '../sfx';
@@ -75,6 +75,9 @@ interface AppState {
   setIsProjectorWindowOpen: (open: boolean) => void;
   projectorReady: boolean;
   setProjectorReady: (ready: boolean) => void;
+  /** Projector/stage window only: how this output renders ('follow' | 'manual' → projector, 'stage' → stage display). */
+  outputMode: DisplayMode | null;
+  setOutputWindowMode: (mode: DisplayMode | null) => void;
   isBlackout: boolean;
   setIsBlackout: (blackout: boolean | ((prev: boolean) => boolean)) => void;
 
@@ -143,6 +146,16 @@ interface AppState {
   setScreenShareClientCount: (count: number) => void;
   screenShareNetworkChanged: boolean;
   setScreenShareNetworkChanged: (changed: boolean) => void;
+
+  // Background music
+  backgroundMusicFolder: string;
+  backgroundMusicFiles: string[];
+  backgroundMusicCurrent: string | null;
+  backgroundMusicPlaying: boolean;
+  setBackgroundMusicFolder: (folder: string) => void;
+  setBackgroundMusicFiles: (files: string[]) => void;
+  setBackgroundMusicCurrent: (file: string | null) => void;
+  setBackgroundMusicPlaying: (playing: boolean) => void;
 
   // Media Settings
   mediaVolume: number;
@@ -377,6 +390,11 @@ export const useStore = create<AppState>((set) => ({
   projectorReady: false,
   setProjectorReady: (ready) => set({ projectorReady: ready }),
 
+  // Initialized from the window URL so a stage display paints as a stage
+  // display from the first frame; normal projector windows stay null.
+  outputMode: PROJECTOR_OUTPUT_MODE === 'stage' ? 'stage' : null,
+  setOutputWindowMode: (outputMode) => set({ outputMode }),
+
   isBlackout: false,
   setIsBlackout: (blackout) =>
     set((state) => ({
@@ -480,6 +498,15 @@ export const useStore = create<AppState>((set) => ({
 
   screenShareNetworkChanged: false,
   setScreenShareNetworkChanged: (screenShareNetworkChanged) => set({ screenShareNetworkChanged }),
+
+  backgroundMusicFolder: (() => { try { return localStorage.getItem('backgroundMusicFolder') ?? ''; } catch { return ''; } })(),
+  backgroundMusicFiles: [],
+  backgroundMusicCurrent: null,
+  backgroundMusicPlaying: false,
+  setBackgroundMusicFolder: (folder) => { try { localStorage.setItem('backgroundMusicFolder', folder); } catch {} set({ backgroundMusicFolder: folder }); },
+  setBackgroundMusicFiles: (backgroundMusicFiles) => set({ backgroundMusicFiles }),
+  setBackgroundMusicCurrent: (backgroundMusicCurrent) => set({ backgroundMusicCurrent }),
+  setBackgroundMusicPlaying: (backgroundMusicPlaying) => set({ backgroundMusicPlaying }),
 
   mediaVolume: 1,
   setMediaVolume: (vol) => set({ mediaVolume: vol }),

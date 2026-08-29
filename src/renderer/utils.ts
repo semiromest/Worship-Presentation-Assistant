@@ -252,6 +252,15 @@ async function renderTextSlide(
   for (let i = 0; i < lines.length; i++) {
     const y = startY + i * lineHeight + leading;
     if (y + lineHeight < 0 || y > H) continue; // off-canvas, skip
+    if (styles.textHighlight && styles.textHighlight !== 'transparent') {
+      const metrics = ctx.measureText(lines[i]);
+      const highlightX = textAlign === 'center' ? x - metrics.width / 2 : textAlign === 'right' ? x - metrics.width : x;
+      ctx.save();
+      ctx.fillStyle = styles.textHighlight;
+      ctx.fillRect(highlightX, y - leading, metrics.width, lineHeight);
+      ctx.restore();
+      ctx.fillStyle = styles.textColor || '#ffffff';
+    }
     ctx.fillText(lines[i], x, y);
   }
   return true;
@@ -502,6 +511,16 @@ async function renderItemsSlide(
 
         for (let i = 0; i < lines.length; i++) {
           const ly = startY + i * lineHeight + leading;
+          if (ts.textHighlight && ts.textHighlight !== 'transparent') {
+            ctx.save();
+            ctx.fillStyle = ts.textHighlight;
+            const metrics = ctx.measureText(lines[i]);
+            const highlightHeight = lineHeight;
+            const highlightX = align === 'center' ? tx - metrics.width / 2 : align === 'right' ? tx - metrics.width : tx;
+            ctx.fillRect(highlightX, ly - leading, metrics.width, highlightHeight);
+            ctx.restore();
+            ctx.fillStyle = ts.textColor || '#ffffff';
+          }
           if (ly + lineHeight < y || ly > y + ih) continue;
           if (ts.textStroke) {
             ctx.strokeStyle = ts.textStroke.color;

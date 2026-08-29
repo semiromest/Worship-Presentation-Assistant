@@ -19,6 +19,8 @@ export interface TextStyle {
   textTransform?: 'none' | 'uppercase' | 'lowercase';
   fontSize?: number;
   textColor?: string;
+  /** Background paint behind each individual text glyph/line. */
+  textHighlight?: string;
   backgroundColor?: string;
   objectFit?: 'cover' | 'contain';
   textAlign?: 'left' | 'center' | 'right' | 'justify';
@@ -146,6 +148,8 @@ export interface Slide {
     textTransform?: 'none' | 'uppercase' | 'lowercase';
     backgroundColor: string;
     textColor: string;
+    /** Background paint behind the text glyphs, separate from the slide background. */
+    textHighlight?: string;
     textAlign?: string;
     verticalAlign?: string;
     fontWeight?: string;

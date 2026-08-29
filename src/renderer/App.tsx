@@ -14,6 +14,7 @@ import PresentationsTab from './PresentationsTab';
 import HymnsTab from './HymnsTab';
 import SlideEditor from './SlideEditor';
 import SettingsTab from './components/SettingsTab';
+import StageDisplay from './components/StageDisplay';
 import { AnimatedPreview } from './AnimatedPreview';
 
 import { IS_PROJECTOR_MODE, DEFAULT__TRANSITION } from './constants';
@@ -97,6 +98,7 @@ export default function App() {
   const setIsRightPanelOpen = useStore((s) => s.setIsRightPanelOpen);
   const isSttPanelOpen = useStore((s) => s.isSttPanelOpen);
   const setIsSttPanelOpen = useStore((s) => s.setIsSttPanelOpen);
+  const outputMode = useStore((s) => s.outputMode);
 
   const {
     addSlide,
@@ -255,6 +257,12 @@ export default function App() {
 
     if (isBlackout) {
       return <div className="fixed inset-0 bg-black z-50" />;
+    }
+
+    // Stage display (confidence monitor): shows current + next slide text,
+    // a live clock and elapsed time — instead of the styled projector view.
+    if (outputMode === 'stage') {
+      return <StageDisplay />;
     }
 
     return (

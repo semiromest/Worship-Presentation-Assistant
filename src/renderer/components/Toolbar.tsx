@@ -5,6 +5,7 @@ import {
 import { useStore } from '../state/useStore';
 import { cn } from '../utils';
 import DisplayOutputsPopover from './DisplayOutputsPopover';
+import BackgroundMusicPopover from './BackgroundMusicPopover';
 import { useState, useRef, useCallback } from 'react';
 
 interface ToolbarProps {
@@ -239,7 +240,7 @@ export default function Toolbar({
           <HelpCircle className="w-4 h-4" aria-hidden="true" />
         </button>
 
-        {/* Background Music section removed */}
+        <BackgroundMusicPopover />
 
         <div className="w-px h-6 bg-white/10 mx-1" />
 

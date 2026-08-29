@@ -102,7 +102,9 @@ const TextItem = memo(({ item }: { item: SlideItem }) => {
       style={{
         color: styles.textColor ?? '#ffffff',
         fontSize: `${Math.max(2, (styles.fontSize ?? 32) * CARD_SCALE)}px`,
-        backgroundColor: styles.backgroundColor ?? 'transparent',
+        backgroundColor: styles.textHighlight && styles.textHighlight !== 'transparent'
+          ? styles.textHighlight
+          : (styles.backgroundColor ?? 'transparent'),
         lineHeight: styles.lineHeight ?? 1.2,
         textAlign: styles.textAlign ?? 'center',
         fontWeight: styles.fontWeight ?? 'normal',

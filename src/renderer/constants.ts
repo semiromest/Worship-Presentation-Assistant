@@ -7,6 +7,7 @@ export const DEFAULT_STYLES = {
   textTransform: 'none',
   backgroundColor: '#000000',
   textColor: '#ffffff',
+  textHighlight: 'transparent',
   textAlign: 'center',
   verticalAlign: 'center',
   fontWeight: 'bold',
@@ -34,6 +35,8 @@ const URL_PARAMS = new URLSearchParams(window.location.search);
 
 export const IS_PROJECTOR_MODE = URL_PARAMS.get('mode') === 'projector';
 export const PROJECTOR_DISPLAY_ID = URL_PARAMS.get('displayId');
+/** Initial render mode of this projector window ('stage' → StageDisplay). */
+export const PROJECTOR_OUTPUT_MODE = URL_PARAMS.get('outputMode');
 
 // ─── Transition CSS Injection ─────────────────────────────────────────────────
 

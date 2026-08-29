@@ -118,6 +118,10 @@ declare global {
       onShareClientCount: (callback: (count: number) => void) => () => void;
       onShareNetworkChanged: (callback: (data: { url: string }) => void) => () => void;
 
+      selectAudioFolder: () => Promise<string | null>;
+      readAudioFolder: (folderPath: string, recursive?: boolean) => Promise<{ paths: string[]; missing: boolean } | null>;
+      selectAudioFile: () => Promise<string | null>;
+
       // Live-screen phone broadcast (view the live screen fullscreen on a phone)
       screenShareStart: () => Promise<{ ok: boolean; url?: string; error?: string }>;
       screenShareStop: () => Promise<{ ok: boolean }>;

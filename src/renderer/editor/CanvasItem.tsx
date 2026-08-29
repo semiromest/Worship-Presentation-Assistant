@@ -26,6 +26,10 @@ interface CanvasItemProps {
 }
 
 const HANDLE_SIZE = 10;
+
+function stylesTextHighlight(value?: string): React.CSSProperties['backgroundColor'] {
+  return value && value !== 'transparent' ? value : undefined;
+}
 const ROTATION_HANDLE_OFFSET = 30;
 
 export const CanvasItem = memo(function CanvasItem({
@@ -450,10 +454,10 @@ export const CanvasItem = memo(function CanvasItem({
                   textAlign: child.textStyles?.textAlign || 'center',
                   padding: '4px',
                 }}
-              >
-                <span
+              >                  <span
                   style={{
                     color: child.textStyles?.textColor ?? '#ffffff',
+                    backgroundColor: stylesTextHighlight(child.textStyles?.textHighlight),
                     fontSize: `${Math.max(4, child.textStyles?.fontSize || 32)}px`,
                     fontFamily: child.textStyles?.fontFamily,
                     fontWeight: child.textStyles?.fontWeight,
@@ -510,7 +514,7 @@ export const CanvasItem = memo(function CanvasItem({
             ? `${textStyles.letterSpacing}px`
             : undefined,
           lineHeight: textStyles.lineHeight || 1.25,
-          backgroundColor: textStyles.backgroundColor,
+          backgroundColor: stylesTextHighlight(textStyles.textHighlight) ?? textStyles.backgroundColor,
           textDecoration: textStyles.textDecoration || undefined,
           textShadow: textStyles.textShadow
             ? `${textStyles.textShadow.color || '#000'} ${textStyles.textShadow.offsetX || 0}px ${textStyles.textShadow.offsetY || 0}px ${textStyles.textShadow.blur || 0}px`

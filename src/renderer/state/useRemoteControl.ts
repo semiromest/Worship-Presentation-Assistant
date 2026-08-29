@@ -29,6 +29,7 @@ export function useRemoteControl() {
     setIsBlackout,
     setIsProjectorWindowOpen,
     setProjectorReady,
+    setOutputWindowMode,
     setMediaVolume,
     setIsMediaMuted,
     dispatchUndo,
@@ -58,6 +59,9 @@ export function useRemoteControl() {
       fullPresentation: state.presentation,
       liveIndex: targetId ? outputIndex : state.liveIndex,
       isBlackout: isDefaultOutput ? state.isBlackout : (assignment?.isBlackout ?? false),
+      // The output's mode decides how the window renders: 'stage' shows the
+      // stage (confidence) display, anything else shows the projector view.
+      outputMode: assignment?.mode ?? 'follow',
       volume: state.mediaVolume,
       muted: state.isMediaMuted,
     };
@@ -276,6 +280,10 @@ export function useRemoteControl() {
 
       if (typeof data.instantTransition === 'boolean') {
         setInstantTransition(data.instantTransition);
+      }
+
+      if (typeof data.outputMode === 'string') {
+        setOutputWindowMode(data.outputMode as any);
       }
     }
   });

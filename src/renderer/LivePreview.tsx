@@ -294,7 +294,9 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
                       fontStyle:       item.textStyles?.fontStyle || 'normal',
                       letterSpacing:   item.textStyles?.letterSpacing ? `${item.textStyles.letterSpacing * scale}px` : undefined,
                       lineHeight:      item.textStyles?.lineHeight || 1.25,
-                      backgroundColor: item.textStyles?.backgroundColor ?? 'transparent',
+                      backgroundColor: item.textStyles?.textHighlight && item.textStyles.textHighlight !== 'transparent'
+                        ? item.textStyles.textHighlight
+                        : (item.textStyles?.backgroundColor ?? 'transparent'),
                       textDecoration:  item.textStyles?.textDecoration || undefined,
                       textShadow:      item.textStyles?.textShadow
                         ? `${item.textStyles.textShadow.color || '#000'} ${(item.textStyles.textShadow.offsetX || 0) * scale}px ${(item.textStyles.textShadow.offsetY || 0) * scale}px ${(item.textStyles.textShadow.blur || 0) * scale}px`
@@ -450,6 +452,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
             textTransform: (styles as any).textTransform || 'none',
             fontSize: `${Math.max(8, fontSize * scale)}px`, 
             color: styles.textColor ?? '#fff',
+            backgroundColor: styles.textHighlight && styles.textHighlight !== 'transparent' ? styles.textHighlight : undefined,
             fontWeight: fontWeight as any,
             fontStyle: (styles as any).fontStyle || 'normal',
             fontFamily: (styles as any).fontFamily || 'inherit',

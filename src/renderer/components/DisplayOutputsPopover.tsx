@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Eye, EyeOff, Monitor, Radio, Settings2 } from 'lucide-react';
+import { Eye, EyeOff, Monitor, Radio, Settings2, Tv } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../state/useStore';
 import { chooseDefaultOutputDisplay, type DisplayMode } from '../../shared/displays';
@@ -121,6 +121,7 @@ export default function DisplayOutputsPopover({ openOutput, closeOutput }: Displ
                         >
                           <option value="follow">{t('common.displayFollowLive')}</option>
                           <option value="manual">{t('common.displayManual')}</option>
+                          <option value="stage">{t('common.displayStage')}</option>
                         </select>
                       </label>
 
@@ -153,6 +154,11 @@ export default function DisplayOutputsPopover({ openOutput, closeOutput }: Displ
                             ))}
                           </select>
                         </label>
+                      ) : assignment.mode === 'stage' ? (
+                        <span className="col-span-2 inline-flex items-center gap-1 text-[10px] text-purple-300/80">
+                          <Tv className="w-3 h-3 shrink-0" aria-hidden="true" />
+                          {t('common.displayStageHint')}
+                        </span>
                       ) : (
                         <span className="col-span-2 inline-flex items-center gap-1 text-[10px] text-emerald-300/80">
                           <Radio className="w-3 h-3" aria-hidden="true" />

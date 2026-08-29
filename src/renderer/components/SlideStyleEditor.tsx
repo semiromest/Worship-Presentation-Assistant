@@ -178,6 +178,37 @@ export default function SlideStyleEditor({
         </div>
       </div>
 
+      {/* Text highlight */}
+      <div className="space-y-1.5">
+        <span className="block text-[10px] text-white/50 uppercase font-bold tracking-tight">
+          {t('common.editorTextHighlight')}
+        </span>
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={selectedSlide.styles?.textHighlight && selectedSlide.styles.textHighlight !== 'transparent' ? selectedSlide.styles.textHighlight : '#ffff00'}
+            onChange={(e) => updateSlideStyles({ textHighlight: e.target.value })}
+            className="h-[30px] w-10 cursor-pointer rounded-lg border border-white/10 bg-transparent"
+            aria-label={t('common.editorTextHighlight')}
+          />
+          <input
+            type="text"
+            value={selectedSlide.styles?.textHighlight ?? 'transparent'}
+            onChange={(e) => updateSlideStyles({ textHighlight: e.target.value })}
+            className="min-w-0 flex-1 bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-xs focus-visible:border-blue-500/60 focus-visible:outline-none"
+            aria-label={t('common.editorTextHighlight')}
+          />
+          <button
+            type="button"
+            onClick={() => updateSlideStyles({ textHighlight: 'transparent' })}
+            className="h-[30px] px-2 rounded-lg border border-white/10 bg-white/5 text-[10px] text-white/60 hover:bg-white/10"
+          >
+            {t('common.editorClear')}
+          </button>
+        </div>
+        <p className="text-[9px] text-white/25">{t('common.editorTextHighlightHint')}</p>
+      </div>
+
       {/* Font Family */}
       <div className="space-y-1.5">
         <label htmlFor="slide-font-family" className="block text-[10px] text-white/50 uppercase font-bold tracking-tight">

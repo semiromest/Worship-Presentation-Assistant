@@ -101,6 +101,8 @@ contextBridge.exposeInMainWorld('electronAPI', wrapApi({
   }) => ipcRenderer.invoke('read-media-folder', folderPath, options),
   getScreenSources: () => ipcRenderer.invoke('get-screen-sources'),
   captureScreenSource: (sourceId: string) => ipcRenderer.invoke('capture-screen-source', sourceId),
+  selectAudioFolder: () => ipcRenderer.invoke('select-audio-folder'),
+  readAudioFolder: (folderPath: string, recursive = true) => ipcRenderer.invoke('read-audio-folder', folderPath, recursive),
   selectAudioFile: () => ipcRenderer.invoke('select-audio-file'),
   notifyProjectorReady: (displayId?: string) => ipcRenderer.send('projector-ready', displayId),
   cleanupTempDir: () => ipcRenderer.invoke('cleanup-temp-dir'),

@@ -57,6 +57,7 @@ const ICON_PATH    = path.join(__dirname, '../build', 'ico.png');
 const VITE_PUBLIC  = app.isPackaged ? DIST : path.join(DIST, '../public');
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tif', '.tiff', '.avif', '.svg']);
 const VIDEO_EXTS = new Set(['.mp4', '.webm', '.mov', '.mkv', '.avi', '.m4v', '.wmv', '.flv', '.mpeg', '.mpg']);
+const AUDIO_EXTS = new Set(['.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a', '.wma']);
 
 process.env.DIST        = DIST;
 process.env.VITE_PUBLIC = VITE_PUBLIC;
@@ -398,6 +399,9 @@ async function walkFiles(
 
 const walkXmlFiles = (dir: string) => walkFiles(dir, (name) => name.toLowerCase().endsWith('.xml'));
 
+const walkAudioFiles = (dir: string, recursive = true): Promise<string[]> =>
+  walkFiles(dir, (_name, ext) => AUDIO_EXTS.has(ext), recursive);
+
 const walkMediaFiles = (dir: string, opts: ScanFolderOptions = {}): Promise<string[]> => {
   const { recursive = true, includeImages = true, includeVideos = true } = opts;
   return walkFiles(
@@ -523,10 +527,21 @@ function createProjectorWindow(requestedDisplayId?: string, initialData?: any): 
   if (projectorWindows.has(displayId)) return true;
 
   const bounds = projectorBounds(display);
+  const isPrimaryTarget = String(display.id) === String(screen.getPrimaryDisplay().id);
   const projectorWindow = new BrowserWindow({
     x: bounds.x,
     y: bounds.y,
-    fullscreen: true,
+    width: bounds.width,
+    height: bounds.height,
+    // True fullscreen only on EXTERNAL (secondary) displays — that is the
+    // projection screen case. When the only available display is the primary
+    // (nothing to broadcast to), keep the old windowed behavior so the control
+    // panel stays reachable. `fullscreenable` keeps F11 as an opt-in toggle.
+    fullscreen: !isPrimaryTarget,
+    fullscreenable: true,
+    frame: true,
+    resizable: true,
+    movable: true,
     autoHideMenuBar: true,
     show: false,
     backgroundColor: '#000000',
@@ -549,8 +564,9 @@ function createProjectorWindow(requestedDisplayId?: string, initialData?: any): 
   remoteStatus.isProjectorOpen = true;
   broadcast({ type: 'status', data: remoteStatus });
 
-  // Projector windows open in true fullscreen: no window chrome, no taskbar,
-  // the full display area is available for the slide content.
+  // Projector windows on external displays open in true fullscreen (no window
+  // chrome, no taskbar — the full display area is used). On the primary display
+  // they open as a normal window so the control panel remains usable.
   projectorWindow.webContents.once('did-finish-load', () => {
     if (!projectorWindow.isDestroyed()) {
       projectorWindow.show();
@@ -558,10 +574,17 @@ function createProjectorWindow(requestedDisplayId?: string, initialData?: any): 
     }
   });
 
-  const query = `mode=projector&displayId=${encodeURIComponent(displayId)}`;
+  // The initial output mode rides the URL so the window renders the right
+  // view from the very first paint (no projector flash in a stage window).
+  // Mid-session mode switches are applied via projector-update → outputMode.
+  const initialOutputMode =
+    initialData && typeof initialData === 'object' && (initialData as any).outputMode === 'stage'
+      ? 'stage'
+      : 'follow';
+  const query = `mode=projector&displayId=${encodeURIComponent(displayId)}&outputMode=${encodeURIComponent(initialOutputMode)}`;
   process.env.VITE_DEV_SERVER_URL
     ? projectorWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL}?${query}`)
-    : projectorWindow.loadFile(path.join(DIST, 'index.html'), { query: { mode: 'projector', displayId } });
+    : projectorWindow.loadFile(path.join(DIST, 'index.html'), { query: { mode: 'projector', displayId, outputMode: initialOutputMode } });
 
   // Keyboard bridge: the projector window frequently holds focus. Keep the
   // existing global navigation behavior so the normal single-screen workflow
@@ -1441,6 +1464,51 @@ ipcMain.handle('select-media-folder', async () => {
   if (result.canceled || result.filePaths.length === 0) return null;
   lastDialogDir = result.filePaths[0]; // the selection IS a directory
   return result.filePaths[0];
+});
+
+/* YouTube music integration removed.
+/* ipcMain.handle('youtube-search', async (_, query: string) => {
+  const cleanQuery = typeof query === 'string' ? query.trim().slice(0, 200) : '';
+  if (!cleanQuery) return { ok: false, results: [], error: 'empty-query' };
+  try {
+    const response = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(cleanQuery)}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'text/html' },
+    });
+    if (!response.ok) throw new Error(`YouTube HTTP ${response.status}`);
+    const html = await response.text();
+    const results: Array<{ id: string; title: string; duration?: string }> = [];
+    const seen = new Set<string>();
+    const re = /"videoId":"([\\w-]{11})"[\\s\\S]{0,2000}?"title":\{"runs":\[\{"text":"((?:[^"\\\\]|\\\\.)*)"/g;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(html)) && results.length < 12) {
+      const id = match[1];
+      if (seen.has(id)) continue;
+      seen.add(id);
+      results.push({ id, title: JSON.parse('"' + match[2] + '"') });
+    }
+    return { ok: true, results };
+  } catch (error) {
+    console.error('[youtube-search] failed:', error);
+    return { ok: false, results: [], error: 'search-failed' };
+  }});
+
+*/
+
+ipcMain.handle('select-audio-folder', async () => {
+  const result = await dialog.showOpenDialog({ defaultPath: lastDialogDir, properties: ['openDirectory', 'createDirectory'] });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  lastDialogDir = result.filePaths[0];
+  return result.filePaths[0];
+});
+
+ipcMain.handle('read-audio-folder', async (_, folderPath: string, recursive = true) => {
+  try {
+    await fs.stat(folderPath);
+    return { paths: await walkAudioFiles(folderPath, recursive), missing: false };
+  } catch (error) {
+    console.error('read-audio-folder error:', error);
+    return { paths: [], missing: true };
+  }
 });
 
 ipcMain.handle('select-audio-file', async () => {

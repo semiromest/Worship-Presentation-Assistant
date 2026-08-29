@@ -1,4 +1,4 @@
-export type DisplayMode = 'follow' | 'manual';
+export type DisplayMode = 'follow' | 'manual' | 'stage';
 
 export interface DisplayRect {
   x: number;
