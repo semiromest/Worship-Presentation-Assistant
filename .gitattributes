@@ -56,3 +56,5 @@
 *.deb    binary
 *.rpm    binary
 *.AppImage binary
+resources/cloudflared/* filter=lfs diff=lfs merge=lfs -text
+resources/cloudflared/*.exe filter=lfs diff=lfs merge=lfs -text
