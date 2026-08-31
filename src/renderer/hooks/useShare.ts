@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
 import { useStore } from '../state/useStore';
-import { useSttStore } from '../state/useSttStore';
 import type { ShareSnapshot } from '../../shared/share';
 import { IS_PROJECTOR_MODE } from '../constants';
+import { useSttStore } from '../state/useSttStore';
 
 /** Bound the history pushed to phones (they only need the recent tail). */
 const HISTORY_LIMIT = 15;
@@ -44,6 +44,7 @@ export function useShare(): { startShare: () => Promise<void>; stopShare: () => 
   const setShareQr = useStore((s) => s.setShareQr);
   const setShareClientCount = useStore((s) => s.setShareClientCount);
   const setShareNetworkChanged = useStore((s) => s.setShareNetworkChanged);
+  const setToastMessage = useStore((s) => s.setToastMessage);
 
   // Mirrors shareActive for the STT subscription without re-subscribing on toggle.
   const activeRef = useRef(useStore.getState().shareActive);
@@ -102,18 +103,28 @@ export function useShare(): { startShare: () => Promise<void>; stopShare: () => 
   }, [setShareActive, setShareUrl, setShareQr, setShareClientCount, setShareNetworkChanged]);
 
   const startShare = useCallback(async () => {
-    const res = await window.electronAPI?.shareStart?.();
-    if (!res?.ok || !res.url) return;
-    setShareActive(true);
-    setShareUrl(res.url);
-    setShareClientCount(0);
-    setShareNetworkChanged(false);
-    QRCode.toDataURL(res.url)
-      .then(setShareQr)
-      .catch(() => setShareQr(null));
-    // Publish the current state immediately (the subscription only fires on change).
-    window.electronAPI?.sharePublish?.(buildSnapshot(useSttStore.getState()));
-  }, [setShareActive, setShareUrl, setShareQr, setShareClientCount, setShareNetworkChanged]);
+    try {
+      const res = await window.electronAPI?.shareStart?.();
+      if (!res?.ok || !res.url) {
+        setToastMessage(res?.error ? `Telefon yayını başlatılamadı: ${res.error}` : 'Telefon yayını başlatılamadı.');
+        return;
+      }
+      setShareActive(true);
+      setShareUrl(res.url);
+      setShareClientCount(0);
+      setShareNetworkChanged(false);
+      if ((res as { localOnly?: boolean }).localOnly) {
+        setToastMessage('Telefon yayını yalnızca aynı yerel ağdaki cihazlara açıktır.');
+      }
+      QRCode.toDataURL(res.url)
+        .then(setShareQr)
+        .catch(() => setShareQr(null));
+      // Publish the current state immediately (the subscription only fires on change).
+      window.electronAPI?.sharePublish?.(buildSnapshot(useSttStore.getState()));
+    } catch (error) {
+      setToastMessage(`Telefon yayını başlatılamadı: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }, [setShareActive, setShareUrl, setShareQr, setShareClientCount, setShareNetworkChanged, setToastMessage]);
 
   const stopShare = useCallback(async () => {
     await window.electronAPI?.shareStop?.();

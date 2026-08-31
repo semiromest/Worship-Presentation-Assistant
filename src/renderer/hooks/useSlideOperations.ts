@@ -595,7 +595,7 @@ export function useSlideOperations() {
     appendSlides([qrSlide]);
   }, [appendSlides, t]);
 
-  const handleHymnAdd = useCallback((hymn: { title: string; lyrics: string }, partsMode?: boolean, goLive?: boolean) => {
+  const handleHymnAdd = useCallback((hymn: { title: string; lyrics: string; author?: string; showAuthorOnSlides?: boolean }, partsMode?: boolean, goLive?: boolean) => {
     const split = splitHymnLyrics(hymn.lyrics);
     if (split.parts.length === 0) return;
 
@@ -608,6 +608,7 @@ export function useSlideOperations() {
           group: {
             id: groupId,
             title: hymn.title,
+            author: hymn.showAuthorOnSlides ? hymn.author : undefined,
             part: idx + 1,
             parts: split.parts.length,
             color: hymnColor,
@@ -632,6 +633,7 @@ export function useSlideOperations() {
         group: {
           id: groupId,
           title: hymn.title,
+          author: hymn.showAuthorOnSlides ? hymn.author : undefined,
           part: 1,
           parts: split.parts.length,
           color: hymnColor,

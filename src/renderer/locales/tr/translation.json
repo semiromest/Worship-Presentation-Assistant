@@ -219,6 +219,9 @@
     "hymnsPartsModeOn": "Parça Modu Açık - İlahi tek slayta bölünür",
     "hymnsPartsModeOff": "Parça Modu Kapalı - İlahi ayrı slaytlara bölünür",
     "hymnsPartsMode": "Parça Modu",
+    "hymnsAuthorOnSlides": "Yazarı göster",
+    "hymnsAuthorOnSlidesOn": "Slaytlarda yazar gösteriliyor",
+    "hymnsAuthorOnSlidesOff": "Slaytlarda yazar gizli",
     "hymnsOnline": "Online İlahiler",
     "onlineHymnsTitle": "Online İlahiler",
     "onlineHymnsSearch": "İlahi ara...",
@@ -680,7 +683,7 @@
     "screenShareStart": "Telefon Yayınını Başlat",
     "screenShareStop": "Telefon Yayınını Durdur",
     "screenShareQrAlt": "Canlı yayın izleme QR kodu — telefonunuzla tarayın",
-    "screenShareHint": "Telefonlar aynı Wi-Fi ağından canlı slaytı tam ekran izleyebilir.",
+    "screenShareHint": "İnternet üzerinden de izlenebilir; bağlantı kurulamazsa aynı Wi-Fi ile deneyin.",
     "screenShareAddSlide": "QR'ı Slayt Olarak Ekle",
     "screenShareQrSlideHint": "Telefonunuzla tarayıp canlı yayını izleyin",
     "liveShareButton": "İzleyiciler"

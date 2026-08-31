@@ -12,6 +12,7 @@ import { WebSocketServer, WebSocket as WsSocket } from 'ws';
 import { REMOTE_HTML_NEW } from './remote-html';
 import { driveService } from './driveService';
 import { initUpdater } from './updater';
+import { startPublicTunnel, stopPublicTunnel, getPublicTunnelStatus, disposePublicTunnel, setPublicTunnelStatusListener } from './cloudflareTunnelService';
 import { initPerfMonitor, mainPerf, recordWs } from './perfMonitor';
 import { createPresetStore } from './presetStore';
 import { localResourceUrlToPath, isZip, mediaRefToName } from '../shared/mediaTree';
@@ -887,6 +888,7 @@ app.whenReady().then(() => {
   if (win) initUpdater(win);
   attachDisplayWatch();
   createRemoteServer();
+  setPublicTunnelStatusListener((next) => win?.webContents.send('public-tunnel:status', next));
   setClientCountListener((count) => win?.webContents.send('share:client-count', count));
   setScreenShareClientCountListener((count) => win?.webContents.send('screen-share:client-count', count));
   registerSttIpc();
@@ -900,6 +902,7 @@ app.on('will-quit', () => {
   if (shareNetworkTimer) clearInterval(shareNetworkTimer);
   disposeShare();
   disposeScreenShare();
+  disposePublicTunnel();
   wss?.close();
   remoteServer?.close();
   cleanupStt();
@@ -1110,6 +1113,15 @@ ipcMain.handle('cleanup-temp-dir', () => { cleanupTempDir(); return true; });
 // IPC: remote control
 
 ipcMain.handle('get-remote-url', () => remoteServerUrl);
+
+ipcMain.handle('public-tunnel:start', async () => {
+  const addr = remoteServer?.address();
+  const port = addr && typeof addr === 'object' ? addr.port : 0;
+  if (!port) return { active: false, url: '', state: 'error', error: 'server-not-ready' };
+  return startPublicTunnel(port);
+});
+ipcMain.handle('public-tunnel:stop', () => stopPublicTunnel());
+ipcMain.handle('public-tunnel:status', () => getPublicTunnelStatus());
 ipcMain.handle('get-remote-debug', () => ({ remoteServerUrl, debug: remoteDebugInfo }));
 
 ipcMain.handle('get-remote-diagnostics', async () => {
@@ -1230,18 +1242,35 @@ ipcMain.handle('get-remote-diagnostics', async () => {
 });
 
 // ─── Phone captions/translation share IPC ──────────────────────────────────
-ipcMain.handle('share:start', () => {
-  const addr = remoteServer?.address();
-  const port = addr && typeof addr === 'object' ? addr.port : 0;
-  if (!port) return { ok: false, error: 'server-not-ready' };
-  const result = startShare(getLocalIPv4(), port);
-  if (!result) return { ok: false, error: 'already-active' };
-  startShareNetworkWatch();
-  return { ok: true, url: result.url };
+ipcMain.handle('share:start', async (_, subdomain?: string) => {
+  try {
+    const addr = remoteServer?.address();
+    const port = addr && typeof addr === 'object' ? addr.port : 0;
+    if (!port) return { ok: false, error: 'server-not-ready' };
+    const result = startShare(getLocalIPv4(), port);
+    if (!result) return { ok: false, error: 'already-active' };
+    startShareNetworkWatch();
+      if (process.platform === 'darwin') {
+      return { ok: true, url: result.url, localOnly: true };
+    }
+    const tunnel = await startPublicTunnel(port);
+    if (!tunnel.active || !tunnel.url) {
+      stopShare();
+      return { ok: false, error: tunnel.error ?? 'cloudflare-tunnel-start-failed' };
+    }
+    const token = new URL(result.url).searchParams.get('token');
+    return { ok: true, url: `${tunnel.url}/share?token=${encodeURIComponent(token ?? '')}`, localOnly: false };
+  } catch (error) {
+    stopShare();
+    console.error('[share:start] failed:', error);
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
 });
 
-ipcMain.handle('share:stop', () => {
+
+ipcMain.handle('share:stop', async () => {
   stopShare();
+  if (process.platform !== 'darwin') await stopPublicTunnel();
   return { ok: true };
 });
 
@@ -1249,7 +1278,14 @@ ipcMain.on('share:publish', (_event, snapshot: ShareSnapshot) => {
   publishShare(snapshot);
 });
 
-ipcMain.handle('share:get-status', () => getShareStatus());
+ipcMain.handle('share:get-status', () => {
+  const status = getShareStatus();
+  if (process.platform === 'darwin') return status;
+  const tunnel = getPublicTunnelStatus();
+  if (!status.active || !tunnel.active || !tunnel.url) return status;
+  const token = new URL(status.url).searchParams.get('token');
+  return { ...status, url: `${tunnel.url}/share?token=${encodeURIComponent(token ?? '')}` };
+});
 
 // ─── Live-screen phone broadcast IPC ────────────────────────────────────────
 ipcMain.handle('screen-share:start', () => {

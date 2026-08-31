@@ -38,6 +38,10 @@ declare global {
         canceled?: boolean;
       }>;
       getRemoteUrl: () => Promise<string>;
+      publicTunnelStart: () => Promise<{ active: boolean; url: string; state: string; error?: string }>;
+      publicTunnelStop: () => Promise<{ active: boolean; url: string; state: string; error?: string }>;
+      publicTunnelStatus: () => Promise<{ active: boolean; url: string; state: string; error?: string }>;
+      onPublicTunnelStatus: (callback: (status: { active: boolean; url: string; state: string; error?: string }) => void) => () => void;
       getRemoteDebug: () => Promise<any>;
       getRemoteDiagnostics: () => Promise<{
         ok: boolean;
@@ -111,7 +115,7 @@ declare global {
       onSttEvent: (callback: (event: any) => void) => () => void;
 
       // Phone captions/translation share (LAN broadcast to phone browsers)
-      shareStart: () => Promise<{ ok: boolean; url?: string; error?: string }>;
+      shareStart: (subdomain?: string) => Promise<{ ok: boolean; url?: string; error?: string; localOnly?: boolean }>;
       shareStop: () => Promise<{ ok: boolean }>;
       sharePublish: (snapshot: any) => void;
       shareGetStatus: () => Promise<{ active: boolean; url: string; clientCount: number }>;

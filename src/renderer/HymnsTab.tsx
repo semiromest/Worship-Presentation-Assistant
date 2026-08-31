@@ -20,6 +20,8 @@ export interface Hymn {
   key?: string;
   /** Source book reference (e.g. "TY527, RT38"), when known. */
   source?: string;
+  /** Per-addition display preference for the hymn author. */
+  showAuthorOnSlides?: boolean;
 }
 
 interface HymnsTabProps {
@@ -270,6 +272,14 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
     }
   });
   const [showOnlinePanel, setShowOnlinePanel] = useState(false);
+  const [showAuthorOnSlides, setShowAuthorOnSlides] = useState(() => {
+    try {
+      const value = localStorage.getItem('hymnsShowAuthorOnSlides');
+      return value === null ? true : value === '1';
+    } catch {
+      return true;
+    }
+  });
   const [showSetLinkDialog, setShowSetLinkDialog] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -465,6 +475,28 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
             >
               <ListOrdered className="w-4 h-4" aria-hidden="true" />
               {t('common.hymnsPartsMode')}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowAuthorOnSlides(prev => {
+                  const next = !prev;
+                  try { localStorage.setItem('hymnsShowAuthorOnSlides', next ? '1' : '0'); } catch {}
+                  return next;
+                });
+              }}
+              aria-pressed={showAuthorOnSlides}
+              className={cn(
+                'inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors',
+                showAuthorOnSlides
+                  ? 'bg-amber-600/20 border-amber-500/40 text-amber-300'
+                  : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
+              )}
+              title={showAuthorOnSlides ? t('common.hymnsAuthorOnSlidesOn') : t('common.hymnsAuthorOnSlidesOff')}
+            >
+              <Music className="w-4 h-4" aria-hidden="true" />
+              {t('common.hymnsAuthorOnSlides')}
             </button>
 
             <button
@@ -668,8 +700,8 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
                 key={hymn.id}
                 hymn={hymn}
                 top={(start + i) * ITEM_H}
-                onSelect={(h) => { onAddHymnToPresentation(h, partsModeEnabled); }}
-                onDoubleClick={(h) => { onAddHymnToPresentation(h, partsModeEnabled, true); }}
+                onSelect={(h) => { onAddHymnToPresentation({ ...h, showAuthorOnSlides }, partsModeEnabled); }}
+                onDoubleClick={(h) => { onAddHymnToPresentation({ ...h, showAuthorOnSlides }, partsModeEnabled, true); }}
                 onEdit={openEditModal}
                 onRemove={removeHymn}
               />

@@ -1,6 +1,6 @@
 {
   "name": "worship-presentation-assistant",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "main": "dist-electron/main.js",
   "description": "Worship Presentation Assistant - Simple Worship Presentation App",
   "author": "IPCA",
@@ -71,7 +71,7 @@
     "vite-plugin-electron-renderer": "^0.14.5"
   },
   "build": {
-    "compression": "maximum",
+    "compression": "normal",
     "electronLanguages": [
       "de",
       "en-US",
@@ -91,6 +91,15 @@
     "directories": {
       "output": "release/${version}"
     },
+    "extraResources": [
+      {
+        "from": "resources/cloudflared",
+        "to": "cloudflared",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
@@ -140,19 +149,6 @@
         }
       ],
       "artifactName": "Worship-Presentation-Assistant-${version}-${arch}-mac.${ext}"
-    },
-    "linux": {
-      "icon": "build/icon.png",
-      "category": "Office;Presentation",
-      "target": [
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "artifactName": "Worship-Presentation-Assistant-${version}-Linux.${ext}"
     }
   },
   "repository": {

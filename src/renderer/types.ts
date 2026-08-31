@@ -138,7 +138,7 @@ export interface Slide {
   thumbnailUrl?: string;
   items?: SlideItem[];
   loopItems?: LoopItem[];
-  group?: { id: string; title: string; part: number; parts: number; color?: string };
+  group?: { id: string; title: string; part: number; parts: number; color?: string; author?: string };
   gridEnabled?: boolean;
   gridSize?: number;
   gridColor?: string;

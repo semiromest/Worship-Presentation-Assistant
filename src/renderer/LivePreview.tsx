@@ -417,6 +417,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
     const displayContent = slide.partsMode && slide.parts?.length
       ? slide.parts[slide.activePart ?? 0]
       : slide.content;
+    const hymnAuthor = slide.group?.author?.trim();
     const fontSize = styles.fontSize || 48;
     const fontWeight = (styles as any).fontWeight || 'bold';
     const textAlign = (styles as any).textAlign || 'center';
@@ -463,6 +464,26 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
         >
           {displayContent}
         </p>
+        {hymnAuthor && (() => {
+          const watermarkAtBottomCenter = wmConfig.enabled && wmConfig.logoDataUrl && wmConfig.position === 'bottom-center';
+          const watermarkAtBottomLeft = wmConfig.enabled && wmConfig.logoDataUrl && wmConfig.position === 'bottom-left';
+          const watermarkAtBottomRight = wmConfig.enabled && wmConfig.logoDataUrl && wmConfig.position === 'bottom-right';
+          const authorBottom = watermarkAtBottomCenter ? 13 : 3;
+          const authorPadding = `${20 * scale}px ${watermarkAtBottomLeft || watermarkAtBottomRight ? 28 * scale : 20 * scale}px`;
+          return (
+          <span
+            className="absolute left-0 right-0 z-10 text-center opacity-70"
+            style={{
+              bottom: `${authorBottom * scale}px`,
+              fontSize: `${Math.max(8, fontSize * scale * 0.28)}px`,
+              color: styles.textColor || '#fff',
+              padding: authorPadding,
+            }}
+          >
+            {hymnAuthor}
+          </span>
+          );
+        })()}
         <WatermarkOverlay slide={slide!} config={wmConfig} />
       </div>
     );

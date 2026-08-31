@@ -73,6 +73,14 @@ contextBridge.exposeInMainWorld('electronAPI', wrapApi({
   importPptx: (filePath: string) => ipcRenderer.invoke('import-pptx', filePath),
   exportPptx: (content: string) => ipcRenderer.invoke('export-pptx', content),
   getRemoteUrl: () => ipcRenderer.invoke('get-remote-url'),
+  publicTunnelStart: () => ipcRenderer.invoke('public-tunnel:start'),
+  publicTunnelStop: () => ipcRenderer.invoke('public-tunnel:stop'),
+  publicTunnelStatus: () => ipcRenderer.invoke('public-tunnel:status'),
+  onPublicTunnelStatus: (callback: (status: any) => void) => {
+    const subscription = (_event: any, data: any) => callback(data);
+    ipcRenderer.on('public-tunnel:status', subscription);
+    return () => ipcRenderer.removeListener('public-tunnel:status', subscription);
+  },
   getRemoteDebug: () => ipcRenderer.invoke('get-remote-debug'),
   getRemoteDiagnostics: () => ipcRenderer.invoke('get-remote-diagnostics'),
   updateRemoteStatus: (status: any) => ipcRenderer.invoke('update-remote-status', status),
@@ -196,7 +204,7 @@ contextBridge.exposeInMainWorld('electronAPI', wrapApi({
 
   // Phone captions/translation share (LAN broadcast to phone browsers)
 
-  shareStart: () => ipcRenderer.invoke('share:start'),
+  shareStart: (subdomain?: string) => ipcRenderer.invoke('share:start', subdomain),
   shareStop: () => ipcRenderer.invoke('share:stop'),
   sharePublish: (snapshot: any) => ipcRenderer.send('share:publish', snapshot),
   shareGetStatus: () => ipcRenderer.invoke('share:get-status'),
