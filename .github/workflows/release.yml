@@ -18,13 +18,17 @@ jobs:
         os:
           - windows-latest
           - macos-latest
-          - ubuntu-latest
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Fetch Git LFS objects
+        run: git lfs pull
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -88,10 +92,8 @@ jobs:
             release-artifacts/**/*.exe
             release-artifacts/**/*.dmg
             release-artifacts/**/*.zip
-            release-artifacts/**/*.AppImage
             release-artifacts/**/latest.yml
             release-artifacts/**/latest-mac.yml
-            release-artifacts/**/latest-linux.yml
             release-artifacts/**/*.blockmap
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
