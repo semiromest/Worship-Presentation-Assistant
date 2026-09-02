@@ -188,3 +188,20 @@ h1, h2, h3, h4, h5, h6,
   min-width: 22px;
   line-height: 1.4;
 }
+
+/* ─── Media Card (CSS-only hover) ─────────────────────────── */
+/* GPU-composited hover — no React re-renders, no JS state */
+.media-card {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  transition: border-color 0.15s ease, background 0.15s ease;
+  will-change: auto;
+}
+.media-card:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+}
+.media-card:has(.bg-amber-500) {
+  /* selected state — no hover transition needed */
+  transition: none;
+}

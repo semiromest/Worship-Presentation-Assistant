@@ -199,7 +199,7 @@ export function useStt() {
             break;
           }
 
-          useSttStore.getState().applyResult(event.tokens);
+          useSttStore.getState().applyResult(event.tokens, event.targetLanguage);
 
           // Keep the grace window open while translation is still streaming,
           // so we don't seal mid-translation.
@@ -347,12 +347,13 @@ export function useStt() {
 
       // 3) Tell the main process to open the Soniox session with the current
       //    language/translation configuration (read fresh from the store).
-      const { sttLanguage, targetLanguage, translationEnabled } = useSttStore.getState();
+      const { sttLanguage, targetLanguage, targetLanguages, translationEnabled } = useSttStore.getState();
       let result: { ok: boolean; code?: string; message?: string } | undefined;
       try {
         result = await window.electronAPI?.sttStart?.({
           sttLanguage,
           targetLanguage,
+          targetLanguages,
           translationEnabled,
         });
       } catch (err) {

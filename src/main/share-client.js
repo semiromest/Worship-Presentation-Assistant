@@ -11,6 +11,17 @@
   var dotEl = document.getElementById('dot');
   var endedEl = document.getElementById('ended');
   var endedTextEl = document.getElementById('endedText');
+  var languagePicker = document.getElementById('language-picker');
+  var originalToggle = document.getElementById('show-original');
+  var selectedLanguage = '__all__';
+  var pickerSignature = '';
+  var preferenceKey = 'freebuff-share-show-original';
+  var showOriginal = true;
+  try {
+    var storedPreference = localStorage.getItem(preferenceKey);
+    if (storedPreference !== null) showOriginal = storedPreference !== 'false';
+  } catch { /* private browsing/storage disabled */ }
+  if (originalToggle) originalToggle.checked = showOriginal;
 
   var lang = (navigator.language || 'en').toLowerCase();
   var L = lang.indexOf('tr') === 0 ? {
@@ -93,27 +104,40 @@
 
   function render() {
     feed.textContent = '';
+    var selected = selectedLanguage;
     var s = snapshot;
     var translationEnabled = s ? s.translationEnabled : true;
+    var displayOriginal = translationEnabled && showOriginal;
 
     if (s && Array.isArray(s.history)) {
       for (var i = 0; i < s.history.length; i++) {
         var h = s.history[i];
-        if (translationEnabled && h.translation) {
+        var historyTranslations = h.translations || {};
+        var historyTargetKeys = Object.keys(historyTranslations);
+        if (translationEnabled && historyTargetKeys.length > 0) {
+          historyTargetKeys.forEach(function (key) {
+            if ((selected === '__all__' || selected === key) && historyTranslations[key]) feed.appendChild(line('tr', key.toUpperCase(), historyTranslations[key]));
+          });
+        } else if (translationEnabled && h.translation && selected !== '__original__') {
           feed.appendChild(line('tr', L.translation, h.translation));
         }
-        if (h.original) {
-          feed.appendChild(line('orig', translationEnabled && h.translation ? L.original : null, h.original));
+        if (displayOriginal && h.original) {
+          feed.appendChild(line('orig', L.original, h.original));
         }
       }
     }
 
     var liveOriginal = s ? (s.original || '').trim() : '';
     var liveTranslation = s ? (s.translation || '').trim() : '';
+    // `last*` belongs to the most recently finalized utterance, which is already
+    // in history. Do not render it again as a separate live block.
     var useLast = !liveOriginal && !liveTranslation;
-    if (useLast && s) {
-      liveOriginal = (s.lastOriginal || '').trim();
-      liveTranslation = (s.lastTranslation || '').trim();
+    if (useLast) {
+      if (s && (s.sessionStatus === 'connected' || s.sessionStatus === 'connecting')) {
+        feed.appendChild(el('div', 'placeholder', L.waitingSpeech));
+      }
+      if (autoScroll) feed.scrollTop = feed.scrollHeight;
+      return;
     }
 
     var hasLive = liveOriginal || liveTranslation;
@@ -121,11 +145,17 @@
 
     if (hasLive) {
       var live = el('div', 'live');
-      if (translationEnabled && liveTranslation) {
+      var liveTranslations = s.translations || s.lastTranslations || {};
+      var liveTargetKeys = Object.keys(liveTranslations);
+      if (translationEnabled && liveTargetKeys.length > 0) {
+        liveTargetKeys.forEach(function (key) {
+          if ((selected === '__all__' || selected === key) && liveTranslations[key]) live.appendChild(line('tr', key.toUpperCase(), liveTranslations[key]));
+        });
+      } else if (translationEnabled && liveTranslation && selected !== '__original__') {
         live.appendChild(line('tr', L.translation, liveTranslation));
       }
-      if (liveOriginal) {
-        live.appendChild(line('orig', translationEnabled && liveTranslation ? L.original : null, liveOriginal));
+      if (displayOriginal && liveOriginal) {
+        live.appendChild(line('orig', L.original, liveOriginal));
       }
       if (sessionActive && !useLast) live.classList.add('live-active');
       feed.appendChild(live);
@@ -140,10 +170,46 @@
 
   function apply(data) {
     snapshot = data || null;
+    updateLanguagePicker();
     var active = snapshot ? snapshot.sessionStatus === 'connected' || snapshot.sessionStatus === 'connecting' : false;
     if (active) setStatus(L.listening, 'on');
     else setStatus(L.waiting, 'idle');
     render();
+  }
+
+  function updateLanguagePicker() {
+    if (!languagePicker || !snapshot) return;
+    var targets = snapshot.targetLanguages || Object.keys(snapshot.translations || {});
+    var signature = targets.join('|');
+    // Snapshots arrive for every STT token. Rebuilding the native select on
+    // every token interrupts the mobile picker and makes it appear to open and
+    // close repeatedly. Only touch its options when the target list changes.
+    if (signature === pickerSignature) return;
+    pickerSignature = signature;
+    while (languagePicker.options.length > 2) languagePicker.remove(2);
+    targets.forEach(function (key) {
+      var option = document.createElement('option');
+      option.value = key;
+      option.textContent = key.toUpperCase();
+      languagePicker.appendChild(option);
+    });
+    if (!Array.from(languagePicker.options).some(function (option) { return option.value === selectedLanguage; })) selectedLanguage = '__all__';
+    languagePicker.value = selectedLanguage;
+  }
+
+  if (languagePicker) {
+    languagePicker.addEventListener('change', function () {
+      selectedLanguage = languagePicker.value;
+      render();
+    });
+  }
+
+  if (originalToggle) {
+    originalToggle.addEventListener('change', function () {
+      showOriginal = originalToggle.checked;
+      try { localStorage.setItem(preferenceKey, String(showOriginal)); } catch { /* ignore */ }
+      render();
+    });
   }
 
   function connect() {
@@ -156,7 +222,7 @@
 
     try {
       socket = new WebSocket(url);
-    } catch (err) {
+    } catch {
       scheduleReconnect();
       return;
     }
@@ -168,7 +234,7 @@
 
     socket.onmessage = function (ev) {
       var msg;
-      try { msg = JSON.parse(ev.data); } catch (e) { return; }
+      try { msg = JSON.parse(ev.data); } catch { return; }
       if (msg.type === 'hello') {
         apply(msg.data);
       } else if (msg.type === 'snapshot') {
@@ -179,7 +245,7 @@
         feed.textContent = '';
         if (endedTextEl) endedTextEl.textContent = L.ended;
         endedEl.classList.remove('hidden');
-        try { socket.close(); } catch (e) { /* ignore */ }
+        try { socket.close(); } catch { /* ignore */ }
       }
     };
 
@@ -189,7 +255,7 @@
     };
 
     socket.onerror = function () {
-      try { socket.close(); } catch (e) { /* ignore */ }
+      try { socket.close(); } catch { /* ignore */ }
     };
   }
 

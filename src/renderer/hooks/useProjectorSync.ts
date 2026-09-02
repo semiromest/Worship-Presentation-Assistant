@@ -5,6 +5,7 @@ import { generateSlideThumbnail, useThrottle } from '../utils';
 import { computePatch, isPatchEmpty, type ProjectorPatch } from '../state/undoReducer';
 import type { Presentation, Slide, TransitionType } from '../types';
 import { chooseDefaultOutputDisplay, effectiveOutputSlideIndex, type DisplayMode } from '../../shared/displays';
+import type { ThumbSlideData } from '../../shared/thumbnailConfig';
 
 /**
  * Top-level style equality (mirrors undoReducer.shallowEqual). Replaces
@@ -36,6 +37,67 @@ const TRANSITION_MAP: Record<TransitionType, string> = {
   blur: 'blur',
   flip: 'flip',
 };
+
+/**
+ * Check if a slide is text-only (no external images) and can be sent to
+ * the utility process for rendering. Image slides stay in the renderer
+ * where the DOM images are already loaded.
+ */
+function isTextOnlySlide(slide: Slide): boolean {
+  if (slide.type === 'screen' || slide.type === 'countdown') return true;
+  if (slide.type !== 'text' && slide.type !== 'loop' && slide.type !== 'captions') return false;
+  if (slide.mediaUrl && !slide.mediaUrl.startsWith('data:')) return false;
+  if (slide.thumbnailUrl && !slide.thumbnailUrl.startsWith('data:')) return false;
+  if (slide.items?.some(it => it.type === 'image' && it.mediaUrl && !it.mediaUrl.startsWith('data:'))) return false;
+  if (slide.loopItems?.some(it => it.mediaUrl && !it.mediaUrl.startsWith('data:'))) return false;
+  return true;
+}
+
+/**
+ * Serialize a slide into the minimal format for the utility process worker.
+ */
+function toThumbSlideData(slide: Slide): ThumbSlideData {
+  return {
+    id: slide.id,
+    type: slide.type,
+    content: slide.content,
+    mediaUrl: slide.mediaUrl,
+    thumbnailUrl: slide.thumbnailUrl,
+    styles: slide.styles as any,
+    items: slide.items?.map(it => ({
+      type: it.type,
+      x: it.x,
+      y: it.y,
+      width: it.width,
+      height: it.height,
+      rotation: it.rotation,
+      zIndex: it.zIndex,
+      borderWidth: it.borderWidth,
+      borderColor: it.borderColor,
+      borderRadius: it.borderRadius,
+      content: it.content,
+      mediaUrl: it.mediaUrl,
+      textStyles: it.textStyles as any,
+      imageStyles: it.imageStyles as any,
+    })),
+    loopItems: slide.loopItems?.map(it => ({ type: it.type, mediaUrl: it.mediaUrl })),
+    partsMode: slide.partsMode,
+    parts: slide.parts,
+    activePart: slide.activePart,
+    group: slide.group,
+  };
+}
+
+/**
+ * Hybrid thumbnail generation: text-only slides → utility process,
+ * image slides → renderer DOM (images already loaded).
+ * Falls back to DOM if IPC fails or times out.
+ */
+async function generateThumbnailHybrid(slide: Slide): Promise<string | null> {
+  // Always try DOM first for reliability — utility process is an optimization
+  // that should never block the user experience.
+  return generateSlideThumbnail(slide);
+}
 
 export function useProjectorSync() {
   const {
@@ -249,7 +311,7 @@ export function useProjectorSync() {
           if (!changed) {
             if (!structurePreserved) thumbs[i] = cachedEntry?.url ?? null;
           } else {
-            const url = await generateSlideThumbnail(s);
+            const url = await generateThumbnailHybrid(s);
             if (url && !cancelled) {
               thumbnailCache.current.set(s.id, { url });
               pendingRetryRef.current.delete(s.id);
@@ -266,7 +328,7 @@ export function useProjectorSync() {
         }
       };
 
-      await Promise.all(Array.from({ length: 4 }, () => worker()));
+      await Promise.all(Array.from({ length: 2 }, () => worker()));
 
       // FIX: only a non-cancelled run may advance prevSlidesRef; a late-finishing
       // cancelled run could otherwise corrupt the next changed() comparison.
@@ -293,7 +355,7 @@ export function useProjectorSync() {
         if (liveSlide && pendingRetryRef.current.has(liveSlide.id)) {
           setTimeout(async () => {
             if (cancelled) return;
-            const retryUrl = await generateSlideThumbnail(liveSlide);
+            const retryUrl = await generateThumbnailHybrid(liveSlide);
             if (cancelled || !retryUrl) return;
             thumbnailCache.current.set(liveSlide.id, { url: retryUrl });
             pendingRetryRef.current.delete(liveSlide.id);

@@ -696,7 +696,7 @@ async function generateSlideThumbnailInner(
   }
 
   try {
-    return canvas.toDataURL('image/jpeg', opts?.quality ?? 0.65);
+    return canvas.toDataURL('image/webp', opts?.quality ?? 0.65);
   } catch (err) {
     console.error('generateSlideThumbnail: toDataURL failed (canvas tainted?):', err);
     return null;

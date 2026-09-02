@@ -59,6 +59,7 @@ declare global {
       updateAllSlidePreviews: (previews: (string | null)[]) => Promise<void>;
       updateSlidePreviewsDelta: (updates: { i: number; url: string }[]) => Promise<void>;
       sendSlidePreview: (dataUrl: string) => Promise<void>;
+      generateThumbnail: (slide: any) => Promise<string | null>;
       showConfirmDialog: (options: {
         message: string;
         title?: string;

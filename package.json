@@ -22,6 +22,7 @@
   "dependencies": {
     "@googleapis/drive": "^20.2.0",
     "@gracious.tech/fetch-client": "^2.2.0",
+    "@napi-rs/canvas": "^1.0.8",
     "@soniox/node": "^2.3.0",
     "adm-zip": "^0.6.0",
     "bufferutil": "^4.1.0",
@@ -107,7 +108,9 @@
       "!**/*.map",
       "!**/*.ts"
     ],
-    "asarUnpack": [],
+    "asarUnpack": [
+      "node_modules/@napi-rs/**/*"
+    ],
     "win": {
       "icon": "build/ico.png",
       "target": [

@@ -63,6 +63,9 @@ function CaptionsRenderer({ slide, width, height, scale }: CaptionsRendererProps
   const lastOriginal = useSttStore((s) => s.lastOriginal);
   const lastTranslation = useSttStore((s) => s.lastTranslation);
   const targetLanguageName = useSttStore((s) => s.targetLanguageName);
+  const targetLanguages = useSttStore((s) => s.targetLanguages);
+  const currentTranslations = useSttStore((s) => s.currentTranslations);
+  const lastTranslations = useSttStore((s) => s.lastTranslations);
 
   const cfg = slide.captions ?? DEFAULT_CAPTIONS_CONFIG;
   const styles = (slide.styles ?? {}) as CaptionStyles;
@@ -78,10 +81,15 @@ function CaptionsRenderer({ slide, width, height, scale }: CaptionsRendererProps
   const liveOriginal = (currentOriginal + partialOriginal).trim();
   const hasLiveText = liveTranslation.length > 0 || liveOriginal.length > 0;
   const translation = hasLiveText ? liveTranslation : lastTranslation;
+  const translations = targetLanguages.map((code) => ({
+    code,
+    text: ((hasLiveText ? currentTranslations[code] : lastTranslations[code]) ??
+      (code === useSttStore.getState().targetLanguage ? translation : '')).trim(),
+  })).filter((item) => item.text);
   const original = hasLiveText ? liveOriginal : lastOriginal;
   // The primary (large) text is the translation when it is on, otherwise the
   // spoken text itself.
-  const primary = translationOn ? translation : original;
+  const primary = translationOn ? (translations[0]?.text ?? translation) : original;
   const detectedName = detectedLanguage ? languageName(detectedLanguage) : null;
 
   // `||` (not `??`) is deliberate for every style fallback below: these
@@ -145,7 +153,13 @@ function CaptionsRenderer({ slide, width, height, scale }: CaptionsRendererProps
             aria-live lets an operator monitoring this view with a screen
             reader hear updates without needing focus (this component also
             renders in the control-window preview, per the note above). */}
-        {(primary || active) && (
+        {translationOn && translations.length > 1 ? translations.map((item) => (
+          <p key={item.code} className="whitespace-pre-wrap break-words text-center leading-snug w-full font-bold" style={{ color: textColor, fontSize: baseFont, fontFamily }}>
+            {item.text}
+          </p>
+        )) : null}
+
+        {(primary || active) && translations.length <= 1 && (
           <p
             aria-live="polite"
             aria-atomic="true"

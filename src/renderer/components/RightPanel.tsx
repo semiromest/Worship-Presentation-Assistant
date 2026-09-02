@@ -259,7 +259,7 @@ export default function RightPanel({
                 aria-label={t('common.mediaVolume')}
                 className="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
               />
-              <span className="text-[10px] text-white/40 font-mono w-8 text-right">{Math.round(mediaVolume * 100)}%</span>
+              <span className="text-[10px] text-white/50 font-mono w-8 text-right">{Math.round(mediaVolume * 100)}%</span>
             </div>
           </div>
         )}

@@ -9,6 +9,7 @@ export interface ShareHistoryItem {
   id: string;
   original: string;
   translation: string;
+  translations?: Record<string, string>;
 }
 
 /** The complete view a phone needs to render captions + translation. */
@@ -16,12 +17,15 @@ export interface ShareSnapshot {
   sessionStatus: ShareSessionStatus;
   translationEnabled: boolean;
   detectedLanguage: string | null;
+  targetLanguages?: string[];
   /** Live display text (final + provisional, already assembled by the store). */
   original: string;
   translation: string;
+  translations?: Record<string, string>;
   /** Fallback: last finalized utterance kept on screen after sealing. */
   lastOriginal: string;
   lastTranslation: string;
+  lastTranslations?: Record<string, string>;
   /** Bounded finalized history, oldest → newest. */
   history: ShareHistoryItem[];
 }

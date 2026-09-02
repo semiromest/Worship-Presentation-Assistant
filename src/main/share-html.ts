@@ -16,6 +16,7 @@ export const SHARE_HTML = `<!DOCTYPE html>
 html,body { height: 100%; background: #000; color: #d6e8ff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif; overflow: hidden; }
 #wrap { height: 100%; display: flex; flex-direction: column; }
 #bar { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 12px 16px; font-size: 13px; font-weight: 600; color: #9db8d4; border-bottom: 1px solid rgba(255,255,255,.08); background: #0a0f18; }
+#original-toggle { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 12px; color: #9db8d4; }\n#original-toggle input { accent-color: #4b9eff; }\n#language-picker { margin-left: auto; max-width: 48%; background: #121a2a; color: #d6e8ff; border: 1px solid #2e4060; border-radius: 8px; padding: 6px 8px; font: inherit; font-size: 12px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #3a526e; flex: 0 0 auto; }
 .dot.on { background: #00e5a0; box-shadow: 0 0 8px rgba(0,229,160,.7); animation: pulse 1.6s ease-in-out infinite; }
 .dot.wait { background: #ffb030; }
@@ -38,7 +39,7 @@ html,body { height: 100%; background: #000; color: #d6e8ff; font-family: -apple-
 </head>
 <body>
 <div id="wrap">
-  <header id="bar"><span id="dot" class="dot"></span><span id="status">Connecting…</span></header>
+  <header id="bar"><span id="dot" class="dot"></span><span id="status">Connecting…</span><label id="original-toggle"><input id="show-original" type="checkbox" checked> Original</label><select id="language-picker" aria-label="Translation language"><option value="__all__">All languages</option><option value="__original__">Original</option></select></header>
   <main id="feed"></main>
 </div>
 <div id="ended" class="hidden"><span>⚠</span><span id="endedText">Broadcast ended</span></div>

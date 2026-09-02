@@ -108,7 +108,7 @@ export default function SlideStyleEditor({
                   <span className="truncate">{part.replace(/\n/g, ' ').substring(0, 60)}</span>
                 </button>
               ))}
-              <div className="flex items-center justify-center gap-2 pt-1 text-[9px] text-white/20">
+              <div className="flex items-center justify-center gap-2 pt-1 text-[9px] text-white/50">
                 <span>↑ ↓ {t('common.navigateParts')}</span>
               </div>
             </div>
@@ -206,7 +206,7 @@ export default function SlideStyleEditor({
             {t('common.editorClear')}
           </button>
         </div>
-        <p className="text-[9px] text-white/25">{t('common.editorTextHighlightHint')}</p>
+        <p className="text-[9px] text-white/50">{t('common.editorTextHighlightHint')}</p>
       </div>
 
       {/* Font Family */}
@@ -474,10 +474,10 @@ export default function SlideStyleEditor({
         />
         <div className="flex items-center justify-between px-1">
           <div className="flex gap-3">
-            <span className="text-[9px] text-white/20">Alt+Enter: {t('common.split')}</span>
-            <span className="text-[9px] text-white/20">Enter: {t('common.goLive')}</span>
+            <span className="text-[9px] text-white/50">Alt+Enter: {t('common.split')}</span>
+            <span className="text-[9px] text-white/50">Enter: {t('common.goLive')}</span>
           </div>
-          <span className="text-[9px] text-white/20 font-mono">
+          <span className="text-[9px] text-white/50 font-mono">
             {selectedSlide.content.length} {t('common.characters')}
           </span>
         </div>

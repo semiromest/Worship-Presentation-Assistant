@@ -17,6 +17,7 @@ export default defineConfig({
             rollupOptions: {
               external: [
                 'electron',
+                '@napi-rs/canvas',
               ],
               // Phase 7: second entry — the heavy-work UtilityProcess. Input
               // overrides the single lib entry (see vite-plugin-electron docs).
@@ -65,6 +66,9 @@ export default defineConfig({
         manualChunks: {
           vendor: ['react', 'react-dom'],
           lucide: ['lucide-react'],
+          pptx: ['pptxgenjs'],
+          google: ['@googleapis/drive', 'google-auth-library'],
+          i18n: ['i18next', 'react-i18next'],
         },
       },
     },

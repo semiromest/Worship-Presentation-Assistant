@@ -176,7 +176,7 @@ export default function StageDisplay() {
             </div>
           </div>
         ) : (
-          <p className="text-3xl text-white/25 italic">{t('stage.noNext')}</p>
+          <p className="text-3xl text-white/50 italic">{t('stage.noNext')}</p>
         )}
       </footer>
     </div>

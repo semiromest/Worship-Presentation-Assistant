@@ -1339,6 +1339,21 @@ ipcMain.handle('update-slide-previews-delta', (_, updates: { i: number; url: str
 });
 
 /**
+ * Thumbnail generation via UtilityProcess (Phase 7).
+ * Renderer sends slide data → heavy worker renders via @napi-rs/canvas →
+ * returns base64 WebP data URI. Offloads CPU-intensive canvas work from
+ * the renderer main thread.
+ */
+ipcMain.handle('generate-thumbnail', async (_event, slide: any) => {
+  try {
+    return await heavyClient.generateThumbnail(slide);
+  } catch (err) {
+    console.error('[main] generate-thumbnail failed:', err);
+    return null;
+  }
+});
+
+/**
  * Renderer hook on slide change / blackout / etc: broadcasts status to
  * phones, then schedules a throttled preview capture after the transition.
  */

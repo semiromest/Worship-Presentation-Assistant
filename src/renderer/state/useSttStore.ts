@@ -7,6 +7,7 @@ export interface SttUtterance {
   id: string;
   original: string;
   translation: string;
+  translations?: Record<string, string>;
   at: number;
 }
 
@@ -30,7 +31,8 @@ interface SttState {
   /** Spoken-language picker: an ISO code or 'auto' (auto-detect). */
   sttLanguage: string;
   sttLanguageName: string;
-  /** One-way translation target language (ISO code). */
+  /** One-way translation target languages (ISO codes). */
+  targetLanguages: string[];
   targetLanguage: string;
   targetLanguageName: string;
   /** Whether one-way translation is enabled for the (next) session. */
@@ -45,9 +47,11 @@ interface SttState {
   // Live text — current utterance (final tokens since last endpoint)
   currentOriginal: string;
   currentTranslation: string;
+  currentTranslations: Record<string, string>;
   // Live text — provisional (non-final) tokens, replaced on every result
   partialOriginal: string;
   partialTranslation: string;
+  partialTranslations: Record<string, string>;
 
   // Committed utterance history
   utterances: SttUtterance[];
@@ -56,6 +60,7 @@ interface SttState {
   // fields clear so a delayed translation can still be read.
   lastOriginal: string;
   lastTranslation: string;
+  lastTranslations: Record<string, string>;
   lastAt: number;
 
   error: SttErrorInfo | null;
@@ -68,13 +73,14 @@ interface SttState {
   setMicActive: (active: boolean) => void;
   setSttLanguage: (code: string) => void;
   setTargetLanguage: (code: string) => void;
+  setTargetLanguages: (codes: string[]) => void;
   setTranslationEnabled: (enabled: boolean) => void;
   /** Applies the config of the running session (broadcast) — not persisted. */
   applySessionConfig: (config: SttSessionConfig | null) => void;
   setDetectedLanguage: (code: string | null) => void;
   setInputDeviceId: (id: string) => void;
   setInputDevices: (devices: SttInputDevice[]) => void;
-  applyResult: (tokens: SttToken[]) => void;
+  applyResult: (tokens: SttToken[], targetLanguage?: string) => void;
   sealCurrent: () => void;
   appendLateTranslation: (text: string) => void;
   setError: (error: SttErrorInfo | null) => void;
@@ -108,6 +114,7 @@ export const useSttStore = create<SttState>((set) => {
     micActive: false,
     sttLanguage: settings.defaultSttLanguage,
     sttLanguageName: sttLanguageDisplayName(settings.defaultSttLanguage),
+    targetLanguages: settings.defaultTargetLanguages,
     targetLanguage: settings.defaultTargetLanguage,
     targetLanguageName: languageName(settings.defaultTargetLanguage),
     translationEnabled: settings.translationEnabled,
@@ -119,10 +126,13 @@ export const useSttStore = create<SttState>((set) => {
     currentTranslation: '',
     partialOriginal: '',
     partialTranslation: '',
+    currentTranslations: {},
+    partialTranslations: {},
 
     utterances: [],
     lastOriginal: '',
     lastTranslation: '',
+    lastTranslations: {},
     lastAt: 0,
 
     error: null,
@@ -140,6 +150,7 @@ export const useSttStore = create<SttState>((set) => {
           ? {
               sttLanguage: snapshot.config.sttLanguage,
               sttLanguageName: sttLanguageDisplayName(snapshot.config.sttLanguage),
+              targetLanguages: snapshot.config.targetLanguages?.length ? snapshot.config.targetLanguages : [snapshot.config.targetLanguage],
               targetLanguage: snapshot.config.targetLanguage,
               targetLanguageName: languageName(snapshot.config.targetLanguage),
               translationEnabled: snapshot.config.translationEnabled,
@@ -153,17 +164,26 @@ export const useSttStore = create<SttState>((set) => {
     // applied when the next session starts (Soniox fixes them at session
     // creation), which is why they are locked while a session is active.
     setSttLanguage: (sttLanguage) =>
-      set((state) => {
+      set(() => {
         updateSttSettings({ defaultSttLanguage: sttLanguage });
         return { sttLanguage, sttLanguageName: sttLanguageDisplayName(sttLanguage) };
       }),
     setTargetLanguage: (targetLanguage) =>
-      set((state) => {
-        updateSttSettings({ defaultTargetLanguage: targetLanguage });
-        return { targetLanguage, targetLanguageName: languageName(targetLanguage) };
+      set(() => {
+        const targetLanguages = [targetLanguage];
+        updateSttSettings({ defaultTargetLanguage: targetLanguage, defaultTargetLanguages: targetLanguages });
+        return { targetLanguage, targetLanguages, targetLanguageName: languageName(targetLanguage) };
       }),
+    setTargetLanguages: (targetLanguages) =>
+      set(() => {
+        const normalized = [...new Set(targetLanguages)].filter(Boolean);
+        const first = normalized[0] ?? settings.defaultTargetLanguage;
+        updateSttSettings({ defaultTargetLanguages: normalized, defaultTargetLanguage: first });
+        return { targetLanguages: normalized, targetLanguage: first, targetLanguageName: languageName(first) };
+      }),
+
     setTranslationEnabled: (translationEnabled) =>
-      set((state) => {
+      set(() => {
         updateSttSettings({ translationEnabled });
         return { translationEnabled };
       }),
@@ -173,6 +193,7 @@ export const useSttStore = create<SttState>((set) => {
         ? set({
             sttLanguage: config.sttLanguage,
             sttLanguageName: sttLanguageDisplayName(config.sttLanguage),
+            targetLanguages: config.targetLanguages?.length ? config.targetLanguages : [config.targetLanguage],
             targetLanguage: config.targetLanguage,
             targetLanguageName: languageName(config.targetLanguage),
             translationEnabled: config.translationEnabled,
@@ -187,12 +208,14 @@ export const useSttStore = create<SttState>((set) => {
     },
     setInputDevices: (inputDevices) => set({ inputDevices }),
 
-    applyResult: (tokens) =>
+    applyResult: (tokens, eventTargetLanguage) =>
       set((state) => {
         let currentOriginal = state.currentOriginal;
         let currentTranslation = state.currentTranslation;
+        const currentTranslations = { ...state.currentTranslations };
         let partialOriginal = '';
         let partialTranslation = '';
+        const partialTranslations: Record<string, string> = {};
         let detectedLanguage = state.detectedLanguage;
 
         for (const t of tokens) {
@@ -203,8 +226,14 @@ export const useSttStore = create<SttState>((set) => {
           if (spoken) detectedLanguage = spoken;
 
           if (t.translationStatus === 'translation') {
-            if (t.isFinal) currentTranslation += t.text;
-            else partialTranslation += t.text;
+            const target = t.targetLanguage ?? eventTargetLanguage ?? state.targetLanguage;
+            if (t.isFinal) {
+              currentTranslations[target] = (currentTranslations[target] ?? '') + t.text;
+              if (target === state.targetLanguage) currentTranslation += t.text;
+            } else {
+              partialTranslations[target] = (partialTranslations[target] ?? '') + t.text;
+              if (target === state.targetLanguage) partialTranslation += t.text;
+            }
           } else {
             // 'original' or 'none' — spoken text
             if (t.isFinal) currentOriginal += t.text;
@@ -212,7 +241,7 @@ export const useSttStore = create<SttState>((set) => {
           }
         }
 
-        return { currentOriginal, currentTranslation, partialOriginal, partialTranslation, detectedLanguage };
+        return { currentOriginal, currentTranslation, currentTranslations, partialOriginal, partialTranslation, partialTranslations, detectedLanguage };
       }),
 
     // Seal the current utterance into history. Unlike a plain "commit", this
@@ -223,13 +252,16 @@ export const useSttStore = create<SttState>((set) => {
       set((state) => {
         const original = state.currentOriginal.trim();
         const translation = state.currentTranslation.trim();
+        const translations = { ...state.currentTranslations };
         const hasText = original.length > 0 || translation.length > 0;
         if (!hasText) {
           return {
             currentOriginal: '',
             currentTranslation: '',
+            currentTranslations: {},
             partialOriginal: '',
             partialTranslation: '',
+            partialTranslations: {},
           };
         }
         const at = Date.now();
@@ -240,10 +272,11 @@ export const useSttStore = create<SttState>((set) => {
           partialTranslation: '',
           lastOriginal: original,
           lastTranslation: translation,
+          lastTranslations: translations,
           lastAt: at,
           utterances: [
             ...state.utterances.slice(-49),
-            { id: createId(), original, translation, at },
+            { id: createId(), original, translation, translations, at },
           ],
         };
       }),
@@ -254,7 +287,6 @@ export const useSttStore = create<SttState>((set) => {
     appendLateTranslation: (text) =>
       set((state) => {
         if (state.utterances.length === 0) {
-          // Nothing sealed yet — treat it as the current live translation.
           return { currentTranslation: state.currentTranslation + text };
         }
         const last = state.utterances[state.utterances.length - 1];
@@ -276,6 +308,7 @@ export const useSttStore = create<SttState>((set) => {
         utterances: [],
         lastOriginal: '',
         lastTranslation: '',
+        lastTranslations: {},
         lastAt: 0,
         detectedLanguage: null,
         error: null,

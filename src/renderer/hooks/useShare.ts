@@ -13,19 +13,26 @@ type SttState = ReturnType<typeof useSttStore.getState>;
 /** Normalize the STT store into the single snapshot phones consume. */
 function buildSnapshot(s: SttState): ShareSnapshot {
   const original = (s.currentOriginal + s.partialOriginal).trim();
+  const translations = Object.fromEntries(
+    s.targetLanguages.map((code) => [code, ((s.currentTranslations[code] ?? '') + (s.partialTranslations[code] ?? '')).trim()])
+  );
   const translation = (s.currentTranslation + s.partialTranslation).trim();
   return {
     sessionStatus: s.status,
     translationEnabled: s.translationEnabled,
     detectedLanguage: s.detectedLanguage,
+    targetLanguages: s.targetLanguages,
     original,
     translation,
+    translations,
     lastOriginal: s.lastOriginal,
     lastTranslation: s.lastTranslation,
+    lastTranslations: s.lastTranslations,
     history: s.utterances.slice(-HISTORY_LIMIT).map((u) => ({
       id: u.id,
       original: u.original,
       translation: u.translation,
+      translations: u.translations,
     })),
   };
 }

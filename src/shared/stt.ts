@@ -9,6 +9,8 @@ export interface SttToken {
   text: string;
   isFinal: boolean;
   translationStatus: SttTranslationStatus;
+  /** Target language for translated tokens; null for original tokens. */
+  targetLanguage?: string | null;
   /** Detected spoken language (original tokens) or target language (translation tokens). */
   language: string | null;
   /** Source language for translated tokens. */
@@ -31,19 +33,23 @@ export type SttErrorCode =
 /** The language/translation configuration a session was started with. */
 export interface SttSessionConfig {
   sttLanguage: string;
+  /** Selected one-way translation targets. `targetLanguage` is retained for compatibility. */
+  targetLanguages: string[];
   targetLanguage: string;
   translationEnabled: boolean;
 }
 
 export type SttEvent =
   | { type: 'status'; sessionId: string | null; status: SttSessionStatus; config?: SttSessionConfig | null }
-  | { type: 'result'; sessionId: string; tokens: SttToken[] }
+  | { type: 'result'; sessionId: string; targetLanguage?: string; tokens: SttToken[] }
   | { type: 'endpoint'; sessionId: string }
   | { type: 'finished'; sessionId: string }
   | { type: 'error'; code: SttErrorCode; message: string; sessionId: string | null };
 
 export interface SttConfig {
-  /** One-way translation target language (ISO code). */
+  /** One-way translation target languages (ISO codes). */
+  targetLanguages?: string[];
+  /** Legacy single target language (ISO code). */
   targetLanguage: string;
   /** Expected spoken language for recognition (ISO code), or 'auto' to auto-detect. */
   sttLanguage: string;

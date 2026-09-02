@@ -11,6 +11,7 @@ import path from 'node:path';
 import { utilityProcess, type UtilityProcess } from 'electron';
 import type { PptxResult } from './pptxService';
 import type { PptxExportResult } from './pptxExportService';
+import type { ThumbSlideData } from '../shared/thumbnailConfig';
 
 interface PendingRequest {
   resolve: (value: unknown) => void;
@@ -98,5 +99,8 @@ export const heavyClient = {
   },
   extractGpres(buffer: Buffer, mediaDir: string): Promise<{ data: unknown; mediaCount: number }> {
     return call<{ data: unknown; mediaCount: number }>('extract-gpres', { buffer: buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer, mediaDir }, undefined, 60_000);
+  },
+  generateThumbnail(slide: ThumbSlideData): Promise<string | null> {
+    return call<string | null>('generate-thumbnail', { slide }, undefined, 30_000);
   },
 };

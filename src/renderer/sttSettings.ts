@@ -12,7 +12,9 @@ const DEFAULT_TRANSLATION_ENABLED = true;
 export interface SttSettings {
   /** Spoken-language picker: an ISO code or AUTO_STT_LANGUAGE ('auto'). */
   defaultSttLanguage: string;
-  /** One-way translation target language (ISO code). */
+  /** One-way translation target languages (ISO codes). */
+  defaultTargetLanguages: string[];
+  /** Legacy one-way translation target language (ISO code). */
   defaultTargetLanguage: string;
   /** Whether translation is enabled by default for new sessions. */
   translationEnabled: boolean;
@@ -30,10 +32,18 @@ export function getSttSettings(): SttSettings {
           typeof parsed.defaultSttLanguage === 'string' && parsed.defaultSttLanguage
             ? parsed.defaultSttLanguage
             : AUTO_STT_LANGUAGE,
+        defaultTargetLanguages:
+          Array.isArray(parsed.defaultTargetLanguages) && parsed.defaultTargetLanguages.length > 0
+            ? parsed.defaultTargetLanguages.filter((value): value is string => typeof value === 'string' && value.length > 0)
+            : typeof parsed.defaultTargetLanguage === 'string' && parsed.defaultTargetLanguage
+              ? [parsed.defaultTargetLanguage]
+              : [DEFAULT_TARGET_LANGUAGE],
         defaultTargetLanguage:
           typeof parsed.defaultTargetLanguage === 'string' && parsed.defaultTargetLanguage
             ? parsed.defaultTargetLanguage
-            : DEFAULT_TARGET_LANGUAGE,
+            : Array.isArray(parsed.defaultTargetLanguages) && typeof parsed.defaultTargetLanguages[0] === 'string'
+              ? parsed.defaultTargetLanguages[0]
+              : DEFAULT_TARGET_LANGUAGE,
         translationEnabled:
           typeof parsed.translationEnabled === 'boolean'
             ? parsed.translationEnabled
@@ -47,6 +57,7 @@ export function getSttSettings(): SttSettings {
   }
   return {
     defaultSttLanguage: AUTO_STT_LANGUAGE,
+    defaultTargetLanguages: [DEFAULT_TARGET_LANGUAGE],
     defaultTargetLanguage: DEFAULT_TARGET_LANGUAGE,
     translationEnabled: DEFAULT_TRANSLATION_ENABLED,
     defaultInputDeviceId: '',

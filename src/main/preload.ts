@@ -88,6 +88,7 @@ contextBridge.exposeInMainWorld('electronAPI', wrapApi({
   updateAllSlidePreviews: (previews: any) => ipcRenderer.invoke('update-all-slide-previews', previews),
   updateSlidePreviewsDelta: (updates: any) => ipcRenderer.invoke('update-slide-previews-delta', updates),
   sendSlidePreview: (dataUrl: string) => ipcRenderer.invoke('send-slide-preview', dataUrl),
+  generateThumbnail: (slide: any) => ipcRenderer.invoke('generate-thumbnail', slide),
   showConfirmDialog: (options: {
     message: string;
     title?: string;

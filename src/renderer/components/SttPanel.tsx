@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Mic, MicOff, X, Settings2, Languages, Captions, RefreshCw, AlertTriangle, Globe2, LocateFixed, Plus,
@@ -40,10 +40,10 @@ export default function SttPanel({ onAddCaptionsSlide, onAddUtteranceSlide, onOp
   const hasKey = useSttStore((s) => s.hasKey);
   const micActive = useSttStore((s) => s.micActive);
   const sttLanguage = useSttStore((s) => s.sttLanguage);
-  const targetLanguage = useSttStore((s) => s.targetLanguage);
+  const targetLanguages = useSttStore((s) => s.targetLanguages);
   const translationEnabled = useSttStore((s) => s.translationEnabled);
   const setSttLanguage = useSttStore((s) => s.setSttLanguage);
-  const setTargetLanguage = useSttStore((s) => s.setTargetLanguage);
+  const setTargetLanguages = useSttStore((s) => s.setTargetLanguages);
   const setTranslationEnabled = useSttStore((s) => s.setTranslationEnabled);
   const detectedLanguage = useSttStore((s) => s.detectedLanguage);
   const inputDeviceId = useSttStore((s) => s.inputDeviceId);
@@ -66,9 +66,24 @@ export default function SttPanel({ onAddCaptionsSlide, onAddUtteranceSlide, onOp
   const trackerLastResult = useSlideTrackerStore((s) => s.lastResult);
 
   const active = status !== 'idle';
+  const [targetLanguageSearch, setTargetLanguageSearch] = useState('');
   const translation = (currentTranslation + partialTranslation).trim();
   const original = (currentOriginal + partialOriginal).trim();
   const detectedName = detectedLanguage ? languageName(detectedLanguage) : null;
+  const filteredTargetLanguages = useMemo(() => {
+    const query = targetLanguageSearch.trim().toLocaleLowerCase();
+    if (!query) return STT_LANGUAGES;
+    return STT_LANGUAGES.filter((lang) =>
+      `${lang.name} ${lang.code}`.toLocaleLowerCase().includes(query)
+    );
+  }, [targetLanguageSearch]);
+
+  const toggleTargetLanguage = (code: string) => {
+    const next = targetLanguages.includes(code)
+      ? targetLanguages.filter((selected) => selected !== code)
+      : [...targetLanguages, code];
+    setTargetLanguages(next.length ? next : [code]);
+  };
 
   const errorBanner = useMemo(() => {
     if (!error) return null;
@@ -304,6 +319,11 @@ export default function SttPanel({ onAddCaptionsSlide, onAddUtteranceSlide, onOp
           </div>
 
           {/* Spoken language (STT) */}
+          <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-[11px] text-blue-100/80">
+            <strong>{t('common.sttSpokenLanguage')}:</strong> {isAutoSttLanguage(sttLanguage) ? t('common.sttSpokenLanguageAuto') : languageName(sttLanguage)}
+            <span className="mx-1 text-white/30">→</span>
+            <strong>{t('common.sttTargetLanguage')}:</strong> {targetLanguages.map(languageName).join(', ')}
+          </div>
           <label className="block space-y-1">
             <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
               {t('common.sttSpokenLanguage')}
@@ -336,23 +356,61 @@ export default function SttPanel({ onAddCaptionsSlide, onAddUtteranceSlide, onOp
           {translationEnabled && (
             <label className="block space-y-1">
               <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-                {t('common.sttTargetLanguage')}
+                {t('common.sttTargetLanguage')} ({targetLanguages.length})
               </span>
-              <div className="flex items-center gap-2">
-                <Languages className="w-4 h-4 text-white/35 shrink-0" aria-hidden="true" />
-                <select
-                  value={targetLanguage}
-                  onChange={(e) => setTargetLanguage(e.target.value)}
-                  disabled={active}
-                  aria-label={t('common.sttTargetLanguage')}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 outline-none focus-visible:border-blue-500/60 transition-colors disabled:opacity-50"
-                >
-                  {STT_LANGUAGES.map((lang) => (
-                    <option key={lang.code} value={lang.code} className="bg-surface-overlay">
-                      {lang.name} ({lang.code})
-                    </option>
-                  ))}
-                </select>
+              <div className="flex items-start gap-2">
+                <Languages className="w-4 h-4 text-white/35 shrink-0 mt-2" aria-hidden="true" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <input
+                    type="search"
+                    value={targetLanguageSearch}
+                    onChange={(e) => setTargetLanguageSearch(e.target.value)}
+                    disabled={active}
+                    placeholder={t('common.sttTargetLanguageSearch')}
+                    aria-label={t('common.sttTargetLanguageSearch')}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 placeholder:text-white/35 outline-none focus-visible:border-blue-500/60 transition-colors disabled:opacity-50"
+                  />
+                  <div className="grid grid-cols-2 gap-1.5 max-h-40 overflow-y-auto rounded-lg border border-white/10 bg-black/10 p-1.5">
+                    {filteredTargetLanguages.length > 0 ? filteredTargetLanguages.map((lang) => {
+                      const selected = targetLanguages.includes(lang.code);
+                      return (
+                        <button
+                          key={lang.code}
+                          type="button"
+                          onClick={() => toggleTargetLanguage(lang.code)}
+                          disabled={active}
+                          aria-pressed={selected}
+                          className={cn(
+                            'rounded-md px-2 py-1.5 text-left text-[11px] transition-colors disabled:opacity-50',
+                            selected
+                              ? 'bg-emerald-400/20 text-emerald-100 ring-1 ring-emerald-400/40'
+                              : 'bg-white/5 text-white/65 hover:bg-white/10 hover:text-white'
+                          )}
+                        >
+                          {lang.name} <span className="text-white/35">({lang.code})</span>
+                        </button>
+                      );
+                    }) : (
+                      <span className="col-span-2 px-2 py-2 text-[11px] text-white/40">{t('common.sttTargetLanguageNoResults')}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <span className="block text-[10px] text-white/40">{t('common.sttTargetLanguageHint')}</span>
+              <div className="flex flex-wrap gap-1.5">
+                {targetLanguages.map((code) => (
+                  <button
+                    key={code}
+                    type="button"
+                    onClick={() => toggleTargetLanguage(code)}
+                    disabled={active}
+                    title={t('common.sttTargetLanguageRemove')}
+                    aria-label={`${languageName(code)} ${t('common.sttTargetLanguageRemove')}`}
+                    className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] text-emerald-100 hover:bg-red-400/15 hover:border-red-400/40 hover:text-red-100 disabled:opacity-50"
+                  >
+                    {languageName(code)} ×
+                  </button>
+                ))}
               </div>
             </label>
           )}

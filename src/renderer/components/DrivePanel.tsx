@@ -405,7 +405,7 @@ const [loading, setLoading] = useState(false);
                   disabled={uploading}
                   className="w-full h-10 pl-3.5 pr-16 rounded-xl bg-white/5 border border-white/10 text-sm text-white/90 placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400/40 transition-[border-color,box-shadow] disabled:opacity-40"
                 />
-                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-white/25 pointer-events-none select-none">.gpres</span>
+                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-white/50 pointer-events-none select-none">.gpres</span>
               </div>
             </div>
 
@@ -455,7 +455,7 @@ const [loading, setLoading] = useState(false);
                   <HardDrive className="w-3 h-3" aria-hidden="true" />
                   {t('drive.driveFiles')}
                   {driveFiles.length > 0 && (
-                    <span className="text-white/25 font-normal normal-case tracking-normal">
+                    <span className="text-white/50 font-normal normal-case tracking-normal">
                       ({filteredFiles.length})
                     </span>
                   )}
@@ -479,7 +479,7 @@ const [loading, setLoading] = useState(false);
               {driveFiles.length > 0 && (
                 <div className="relative mb-2.5">
                   <Search
-                    className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/25 pointer-events-none"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/50 pointer-events-none"
                     aria-hidden="true"
                   />
                   <input
@@ -488,7 +488,7 @@ const [loading, setLoading] = useState(false);
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Dosya ara..."
                     aria-label="Dosyalarda ara"
-                    className="w-full h-9 pl-9 pr-8 rounded-lg bg-white/5 border border-white/10 text-xs text-white/90 placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400/40 transition-[border-color,box-shadow]"
+                    className="w-full h-9 pl-9 pr-8 rounded-lg bg-white/5 border border-white/10 text-xs text-white/90 placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400/40 transition-[border-color,box-shadow]"
                   />
                   {searchQuery && (
                     <button
