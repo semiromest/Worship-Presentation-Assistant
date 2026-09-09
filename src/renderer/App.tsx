@@ -1,8 +1,16 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Layers, Layout, BookOpen, Image as ImageIcon, Music, Timer, Monitor, Calendar,
-  PanelRightOpen, Settings
+  Layers,
+  Layout,
+  BookOpen,
+  Image as ImageIcon,
+  Music,
+  Timer,
+  Monitor,
+  Calendar,
+  PanelRightOpen,
+  Settings,
 } from 'lucide-react';
 
 import ScriptureBrowser from './ScriptureBrowser';
@@ -33,6 +41,7 @@ import { useSlideOperations } from './hooks/useSlideOperations';
 import { useStt } from './hooks/useStt';
 import { useSttSlideTracker } from './hooks/useSttSlideTracker';
 import { useShare } from './hooks/useShare';
+import { useSttStore } from './state/useSttStore';
 import { initUpdaterSync } from './state/useUpdaterStore';
 
 // Components
@@ -43,7 +52,8 @@ import CheatsheetModal from './components/CheatsheetModal';
 import UpdatesModal from './components/UpdatesModal';
 import RemoteControlModal from './components/RemoteControlModal';
 import LiveShareModal from './components/LiveShareModal';
-import SttPanel from './components/SttPanel';
+import LiveCaptionsConsole from './components/LiveCaptionsConsole';
+import LiveCaptionsSessionBar from './components/LiveCaptionsSessionBar';
 import Toast from './components/Toast';
 
 export default function App() {
@@ -78,6 +88,7 @@ export default function App() {
   const instantTransition = useStore((s) => s.instantTransition);
   const setInstantTransition = useStore((s) => s.setInstantTransition);
   const projectorReady = useStore((s) => s.projectorReady);
+  const isProjectorWindowOpen = useStore((s) => s.isProjectorWindowOpen);
   const isBlackout = useStore((s) => s.isBlackout);
   const mediaVolume = useStore((s) => s.mediaVolume);
   const isMediaMuted = useStore((s) => s.isMediaMuted);
@@ -99,6 +110,9 @@ export default function App() {
   const isSttPanelOpen = useStore((s) => s.isSttPanelOpen);
   const setIsSttPanelOpen = useStore((s) => s.setIsSttPanelOpen);
   const outputMode = useStore((s) => s.outputMode);
+  // Live captions session (mic on / connecting / connected). Read at App level
+  // only for layout decisions; the console and session bar subscribe to text.
+  const sttSessionActive = useSttStore((s) => s.micActive || s.status !== 'idle');
 
   const {
     addSlide,
@@ -142,6 +156,20 @@ export default function App() {
     updateSlideProperty,
   } = useSlideOperations();
 
+  // Puts captions on the screen right now: jumps to the deck's existing
+  // captions slide (respecting whether a broadcast is open) or adds + goes
+  // live with a fresh one when the deck has none.
+  const sendCaptionsLive = useCallback(() => {
+    const idx = presentation.slides.findIndex((s) => s.type === 'captions');
+    if (idx === -1) {
+      handleAddCaptionsSlide(true);
+      return;
+    }
+    const id = presentation.slides[idx].id;
+    if (isProjectorWindowOpen) handleSlideClick(id, idx);
+    else handleSlideDoubleClick(id, idx);
+  }, [presentation, isProjectorWindowOpen, handleAddCaptionsSlide, handleSlideClick, handleSlideDoubleClick]);
+
   useKeyboardNavigation({
     onDeleteSlides: deleteSelectedSlides,
     onDuplicateSlides: duplicateSelectedSlides,
@@ -156,19 +184,31 @@ export default function App() {
   const transitionDuration = instantTransition ? 0 : configuredTransitionDuration;
   const liveSlide = presentation.slides[liveIndex] ?? presentation.slides[0];
   const selectedSlide = presentation.slides.find((s) => s.id === selectedSlideId);
+  const captionsOnAir = liveSlide?.type === 'captions';
+  // Slide used for the WYSIWYG captions monitor: the live captions slide when
+  // one is on air, otherwise the deck's captions slide (styling preview).
+  const captionsPreviewSlide = useMemo(() => {
+    if (captionsOnAir) return liveSlide;
+    for (let i = presentation.slides.length - 1; i >= 0; i--) {
+      const s = presentation.slides[i];
+      if (s.type === 'captions') return s;
+    }
+    return undefined;
+  }, [presentation.slides, liveSlide, captionsOnAir]);
 
   const SIDEBAR_TABS = useMemo(
-    () => [
-      { id: 'presentations', icon: Layers, titleKey: 'nav.presentations' },
-      { id: 'slides', icon: Layout, titleKey: 'nav.slides' },
-      { id: 'bible', icon: BookOpen, titleKey: 'nav.bible' },
-      { id: 'media', icon: ImageIcon, titleKey: 'nav.media' },
-      { id: 'hymns', icon: Music, titleKey: 'nav.hymns' },
-      { id: 'countdown', icon: Timer, titleKey: 'nav.countdown' },
-      { id: 'screen', icon: Monitor, titleKey: 'nav.screen' },
-      { id: 'calendar', icon: Calendar, titleKey: 'nav.calendar' },
-      { id: 'settings', icon: Settings, titleKey: 'nav.settings' },
-    ] as const,
+    () =>
+      [
+        { id: 'presentations', icon: Layers, titleKey: 'nav.presentations' },
+        { id: 'slides', icon: Layout, titleKey: 'nav.slides' },
+        { id: 'bible', icon: BookOpen, titleKey: 'nav.bible' },
+        { id: 'media', icon: ImageIcon, titleKey: 'nav.media' },
+        { id: 'hymns', icon: Music, titleKey: 'nav.hymns' },
+        { id: 'countdown', icon: Timer, titleKey: 'nav.countdown' },
+        { id: 'screen', icon: Monitor, titleKey: 'nav.screen' },
+        { id: 'calendar', icon: Calendar, titleKey: 'nav.calendar' },
+        { id: 'settings', icon: Settings, titleKey: 'nav.settings' },
+      ] as const,
     []
   );
 
@@ -207,7 +247,9 @@ export default function App() {
   }, [setPresets]);
 
   // ─── Updater sync (preload events → store) ────────────────────────────────
-  useEffect(() => { initUpdaterSync(); }, []);
+  useEffect(() => {
+    initUpdaterSync();
+  }, []);
 
   // ─── UI sound effects (uisfx) ─────────────────────────────────────────────
   // Only the control window plays sounds; the fullscreen projector window
@@ -269,7 +311,7 @@ export default function App() {
       <div
         className="fixed inset-0 flex items-center justify-center overflow-hidden bg-black"
         style={{
-          backgroundColor: liveSlide?.type === 'text' ? liveSlide.styles?.backgroundColor ?? '#000' : '#000',
+          backgroundColor: liveSlide?.type === 'text' ? (liveSlide.styles?.backgroundColor ?? '#000') : '#000',
           backgroundImage:
             liveSlide?.type === 'text' && liveSlide.styles?.backgroundImage
               ? `url(${liveSlide.styles.backgroundImage})`
@@ -334,9 +376,7 @@ export default function App() {
 
         <main id="main-content" className="flex-1 overflow-hidden">
           {/* Screen-reader-only page title — provides h1 for every tab view */}
-          <h1 className="sr-only">
-            {t(SIDEBAR_TABS.find(tab => tab.id === activeTab)?.titleKey ?? 'nav.slides')}
-          </h1>
+          <h1 className="sr-only">{t(SIDEBAR_TABS.find((tab) => tab.id === activeTab)?.titleKey ?? 'nav.slides')}</h1>
           {activeTab === 'presentations' && (
             <div className="h-full gp-slide-enter">
               <PresentationsTab
@@ -357,65 +397,47 @@ export default function App() {
           {activeTab === 'slides' && (
             <div className="h-full gp-slide-enter">
               <div className="h-full flex flex-col lg:flex-row">
-              <div className="flex-1 min-w-0 overflow-hidden">
-                <SlideGrid
-                  addSlide={addSlide}
-                  reorderSlides={reorderSlides}
-                  handleSlideClick={handleSlideClick}
-                  handleSlideDoubleClick={handleSlideDoubleClick}
-                />
-              </div>
-
-              {isSttPanelOpen && (
-                <div className="w-[340px] max-w-[85vw] flex-shrink-0 border-l border-white/10">
-                  <SttPanel
-                    onAddCaptionsSlide={() => handleAddCaptionsSlide(true)}
-                    onAddUtteranceSlide={handleSttUtteranceToSlide}
-                    onOpenSettings={() => {
-                      setIsSttPanelOpen(false);
-                      setActiveTab('settings');
-                    }}
-                    onStart={sttStart}
-                    onStop={sttStop}
-                    onStartShare={startShare}
-                    onStopShare={stopShare}
-                    onAddQrSlide={handleQrSlideAdd}
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <SlideGrid
+                    addSlide={addSlide}
+                    reorderSlides={reorderSlides}
+                    handleSlideClick={handleSlideClick}
+                    handleSlideDoubleClick={handleSlideDoubleClick}
                   />
                 </div>
-              )}
 
-              {isRightPanelOpen ? (
-                <RightPanel
-                  addSlide={addSlide}
-                  removeSlide={removeSlide}
-                  moveSelectedSlide={moveSelectedSlide}
-                  updateSlideContent={updateSlideContent}
-                  updateSlideStyles={updateSlideStyles}
-                  patchSelectedCountdown={patchSelectedCountdown}
-                  updateSlideBackgroundImage={updateSlideBackgroundImage}
-                  removeSlideBackgroundImage={removeSlideBackgroundImage}
-                  updateSlideBackgroundVideo={updateSlideBackgroundVideo}
-                  removeSlideBackgroundVideo={removeSlideBackgroundVideo}
-                  applyStyleFieldToAll={applyStyleFieldToAll}
-                  handleKeyDown={handleKeyDown}
-                  updateTransition={updateTransition}
-                  replaceSlideMedia={replaceSlideMedia}
-                  removeSlideMedia={removeSlideMedia}
-                  updateLoopItems={updateLoopItems}
-                  updateSlideProperty={updateSlideProperty}
-                  onClose={() => setIsRightPanelOpen(false)}
-                />
-              ) : (
-                <button
-                  onClick={() => setIsRightPanelOpen(true)}
-                  className="hidden lg:flex items-center justify-center w-6 flex-shrink-0 border-l border-white/10 bg-surface hover:bg-surface-raised transition-colors cursor-pointer group"
-                  title={t('common.panelOpen')}
-                  aria-label={t('common.panelOpen')}
-                >
-                  <PanelRightOpen className="w-4 h-4 text-white/40 group-hover:text-white/70 transition-colors" />
-                </button>
-              )}
-            </div>
+                {isRightPanelOpen ? (
+                  <RightPanel
+                    addSlide={addSlide}
+                    removeSlide={removeSlide}
+                    moveSelectedSlide={moveSelectedSlide}
+                    updateSlideContent={updateSlideContent}
+                    updateSlideStyles={updateSlideStyles}
+                    patchSelectedCountdown={patchSelectedCountdown}
+                    updateSlideBackgroundImage={updateSlideBackgroundImage}
+                    removeSlideBackgroundImage={removeSlideBackgroundImage}
+                    updateSlideBackgroundVideo={updateSlideBackgroundVideo}
+                    removeSlideBackgroundVideo={removeSlideBackgroundVideo}
+                    applyStyleFieldToAll={applyStyleFieldToAll}
+                    handleKeyDown={handleKeyDown}
+                    updateTransition={updateTransition}
+                    replaceSlideMedia={replaceSlideMedia}
+                    removeSlideMedia={removeSlideMedia}
+                    updateLoopItems={updateLoopItems}
+                    updateSlideProperty={updateSlideProperty}
+                    onClose={() => setIsRightPanelOpen(false)}
+                  />
+                ) : (
+                  <button
+                    onClick={() => setIsRightPanelOpen(true)}
+                    className="hidden lg:flex items-center justify-center w-6 flex-shrink-0 border-l border-white/10 bg-surface hover:bg-surface-raised transition-colors cursor-pointer group"
+                    title={t('common.panelOpen')}
+                    aria-label={t('common.panelOpen')}
+                  >
+                    <PanelRightOpen className="w-4 h-4 text-white/40 group-hover:text-white/70 transition-colors" />
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -462,6 +484,31 @@ export default function App() {
             </div>
           )}
         </main>
+
+        {/* Live captions: bottom-docked console / persistent session bar (any tab) */}
+        {isSttPanelOpen ? (
+          <div className="h-[440px] shrink-0 min-h-0 border-t border-white/10">
+            <LiveCaptionsConsole
+              captionsSlide={captionsPreviewSlide}
+              captionsOnAir={captionsOnAir}
+              onSendCaptionsLive={sendCaptionsLive}
+              onAddCaptionsSlide={() => handleAddCaptionsSlide(true)}
+              onAddUtteranceSlide={handleSttUtteranceToSlide}
+              onOpenSettings={() => {
+                setIsSttPanelOpen(false);
+                setActiveTab('settings');
+              }}
+              onStart={sttStart}
+              onStop={sttStop}
+              onStartShare={startShare}
+              onStopShare={stopShare}
+              onAddQrSlide={handleQrSlideAdd}
+              onClose={() => setIsSttPanelOpen(false)}
+            />
+          </div>
+        ) : sttSessionActive ? (
+          <LiveCaptionsSessionBar onStop={sttStop} onExpand={() => setIsSttPanelOpen(true)} />
+        ) : null}
       </div>
 
       {/* Slide Editor Modal */}
@@ -492,11 +539,7 @@ export default function App() {
       <RemoteControlModal />
 
       {/* Phone viewers (live-slide broadcast) */}
-      <LiveShareModal
-        onStartShare={startScreenShare}
-        onStopShare={stopScreenShare}
-        onAddQrSlide={handleQrSlideAdd}
-      />
+      <LiveShareModal onStartShare={startScreenShare} onStopShare={stopScreenShare} onAddQrSlide={handleQrSlideAdd} />
 
       {/* Undo/Redo Toast */}
       <Toast />

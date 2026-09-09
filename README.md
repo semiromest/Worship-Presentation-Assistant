@@ -27,6 +27,8 @@ A modern desktop app for displaying song lyrics, scriptures, media and announcem
   - [Building a Presentation](#building-a-presentation)
   - [Presenting Live](#presenting-live)
   - [Remote Control from Your Phone](#remote-control-from-your-phone)
+  - [Live Captions & Translation](#live-captions--translation)
+  - [Live Screen Sharing](#live-screen-sharing)
   - [Keyboard Shortcuts](#keyboard-shortcuts)
 - [File Formats & Data](#file-formats--data)
 - [PowerPoint & Google Drive](#powerpoint--google-drive)
@@ -56,7 +58,10 @@ A modern desktop app for displaying song lyrics, scriptures, media and announcem
 - 🖥️ **Screen capture** — present a live view of any open window or screen (e.g. a live camera feed or another application).
 - 🗓️ **Calendar** — plan services on a calendar and open the presentations saved for each date.
 - 📱 **Remote control** — control the presentation from any phone on the same network via a QR code: next/previous, black screen and live previews.
+- 🗣️ **Live captions & translation** — transcribe microphone audio in real time, optionally translate it into multiple target languages, and follow slides from spoken text.
+- 📡 **Live sharing** — share the current live slide or live captions with phones through a QR code; optional Cloudflare Tunnel support enables access outside the local network.
 - 🖤 **Live controls** — instant black screen (`B`), mute/unmute media (`M`), and a fullscreen projection window on your second display.
+- 🖥️ **Multiple outputs** — configure each display independently as follow-live, manual, or stage/confidence-monitor output, with per-output blackout controls.
 - 💧 **Watermark** — overlay your church logo on hymn and scripture slides (position, size and opacity are configurable).
 - 💾 **Auto-save** — presentations are continuously backed up with configurable retention (1 day / 7 days / 30 days / forever) so you never lose work.
 - 🔄 **Auto-updates** — the app checks GitHub Releases for new versions and updates itself in place.
@@ -107,19 +112,7 @@ Choose the file matching your chip: **x64** for Intel Macs, **arm64** for Apple 
 
 ### Linux
 
-| File | What it is |
-|------|------------|
-| `Worship-Presentation-Assistant-<version>-Linux.AppImage` | Portable AppImage (x64) |
-
-1. Download the `.AppImage` file from the latest release.
-2. Make it executable and run it:
-
-   ```bash
-   chmod +x Worship-Presentation-Assistant-*.AppImage
-   ./Worship-Presentation-Assistant-*.AppImage
-   ```
-
-3. To integrate it with your desktop launcher, install a tool like [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher) or extract it with `./Worship-Presentation-Assistant-*.AppImage --appimage-extract`.
+Linux packaging is not currently produced by the release workflow. The application source includes Linux-related support, but published installers are currently limited to Windows and macOS.
 
 ### Auto-updates
 
@@ -170,6 +163,22 @@ Turn your phone into a wireless presentation remote:
 
 > The connection is local (HTTP/WebSocket on your LAN only) — no account or internet connection is required.
 
+### Live Captions & Translation
+
+The live captions console uses Soniox to transcribe microphone audio and can translate it into one or more target languages. It can also track the current slide from the spoken words.
+
+1. Add a Soniox API key in **Settings → Live captions**. The key is stored locally in the app's user-data directory and is not displayed after saving.
+2. Open the live captions console, choose the microphone and spoken language, then enable translation and select target languages if needed.
+3. Start the session and send the captions to a presentation slide. Captions can also be shared with phones using the QR code in the sharing panel.
+
+An internet connection, microphone permission and a valid Soniox API key are required. Soniox usage may be subject to its own account limits and pricing.
+
+### Live Screen Sharing
+
+The live sharing panel publishes the slide currently shown on the projection output as a read-only phone view. Scan its QR code or open the displayed URL in a browser on the same network. The panel shows connected clients and can add a QR-code slide to the presentation.
+
+By default, sharing is available only on the local network. Public sharing can optionally use Cloudflare Tunnel. Packaged builds need the platform-appropriate `cloudflared` binary in `resources/cloudflared`; download it only from the [official Cloudflare releases](https://github.com/cloudflare/cloudflared/releases) and verify its checksum. Public tunnels expose the local sharing endpoint to the internet, so enable them only when needed.
+
 ### Keyboard Shortcuts
 
 | Keys | Action |
@@ -197,6 +206,7 @@ Turn your phone into a wireless presentation remote:
 - **`.gpres`** — the native format. A ZIP archive that contains the presentation JSON **plus all embedded images and videos**, so a single file is fully portable and shares cleanly. Legacy plain-JSON presentations are still opened automatically.
 - **`.pptx` / `.pptm`** — PowerPoint files can be imported (converted into slides) and exported from any presentation.
 - **Data locations** — saved presentations live in the app's user-data folder; the media library is stored under `userData/media/` and downloaded/imported Bibles under `userData/bibles/`.
+- **Media storage** — imported media is stored using content-addressed files and referenced from presentations, which avoids duplicating the same bytes in undo history and autosaves.
 
 ---
 
@@ -249,6 +259,9 @@ npm run dev
 # 3. Code quality
 npm run lint     # ESLint
 npm run format   # Prettier
+
+# 4. Optional local preview of the production renderer
+npm run preview
 ```
 
 > Note: the app's Google Drive integration reads credentials from `src/main/driveCredentials.ts`, which is git-ignored. Without it the Drive features simply show as not signed in — everything else works out of the box.
@@ -260,8 +273,12 @@ npm run test:split      # hymn lyric splitter
 npm run test:updater    # updater reducer
 npm run test:presets    # preset store
 npm run test:media      # media library
+npm run test:matcher    # speech-to-slide matcher
+npm run test:zoom       # slide grid zoom behavior
 npm run smoke:worker    # Electron utility-process smoke test
 ```
+
+There is no combined `npm test` script; run the focused commands above as needed.
 
 ### Building & Packaging
 
@@ -275,17 +292,17 @@ This runs, in order:
 2. **Bundle** — `vite build` (renderer to `dist/`, main + preload to `dist-electron/`; stale output is cleaned first so no old bundles leak into the package)
 3. **Package** — `electron-builder` produces installers in `release/<version>/`
 
-The packaging config in `package.json` also keeps the app lean: only the locales the app actually ships (EN, TR, ES, DE, KO) are included, and the installer uses maximum compression.
+The packaging config in `package.json` also keeps the app lean: only the locales the app actually ships (EN, TR, ES, DE, KO) are included, and the installer uses normal compression. Local packaging also expects the platform-appropriate `cloudflared` binary under `resources/cloudflared` for public sharing.
 
 ### Release Process (CI)
 
 Pushing a tag named `v*` triggers the [GitHub Actions workflow](.github/workflows/release.yml), which:
 
-1. Builds the app on `windows-latest`, `macos-latest` and `ubuntu-latest` in parallel.
+1. Builds the app on `windows-latest` and `macos-latest` in parallel.
 2. Generates the Drive credentials from repository secrets (`DRIVE_CLIENT_ID`, `DRIVE_CLIENT_SECRET`).
 3. Runs `vite build` + `electron-builder --publish always`, which uploads the installers to the **GitHub Release** for that tag.
 
-The attached artifacts are: the Windows NSIS installer (`.exe`), macOS DMG and ZIP (x64 + arm64), the Linux AppImage (`.AppImage`), and the update feed (`.yml` + `.blockmap`) used by the in-app auto-updater.
+The attached artifacts are: the Windows NSIS installer (`.exe`), macOS DMG and ZIP (x64 + arm64), and the update feeds (`.yml` + `.blockmap`) used by the in-app auto-updater.
 
 ### Project Structure
 
@@ -297,6 +314,10 @@ src/
 │   ├── presetStore.ts  # Saved presentations (userData/presets)
 │   ├── mediaLibrary.ts # Persistent media library (userData/media)
 │   ├── driveService.ts # Google Drive OAuth + file sync
+│   ├── sonioxService.ts # Live captions and translation
+│   ├── shareService.ts # Local phone sharing and QR sessions
+│   ├── screenShareService.ts # Live slide streaming
+│   ├── cloudflareTunnelService.ts # Optional public sharing tunnel
 │   ├── updater.ts      # Auto-update (electron-updater)
 │   ├── pptxService.ts  # PowerPoint import/export
 │   └── utility/        # heavyWorker — CPU-heavy work off the main thread

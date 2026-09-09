@@ -690,7 +690,18 @@
     "screenShareHint": "İnternet üzerinden de izlenebilir; bağlantı kurulamazsa aynı Wi-Fi ile deneyin.",
     "screenShareAddSlide": "QR'ı Slayt Olarak Ekle",
     "screenShareQrSlideHint": "Telefonunuzla tarayıp canlı yayını izleyin",
-    "liveShareButton": "İzleyiciler"
+    "liveShareButton": "İzleyiciler",
+    "sttToolbarButton": "Altyazı",
+    "sttOpenConsole": "Altyazı konsolunu aç",
+    "sttMonitor": "Çıktı önizlemesi",
+    "sttSessionLive": "Canlı",
+    "sttSessionReady": "Hazır",
+    "sttOnAir": "Projeksiyonda görünüyor",
+    "sttOffAir": "Altyazı slaydı şu anda ekranda değil",
+    "sttSendLive": "Altyazıyı ekranda göster",
+    "sttLanguages": "Dil ve çeviri",
+    "sttAdvanced": "Gelişmiş",
+    "sttAddCaptionsSlideHint": "Canlı metni projektörde göstermek için bu sunuma bir altyazı slaydı ekleyin."
   },
   "warnings": {
     "minSlides": "En az 1 slayt kalmalı!",

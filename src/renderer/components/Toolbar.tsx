@@ -1,8 +1,22 @@
 import { useTranslation } from 'react-i18next';
 import {
-  Undo2, Redo2, ChevronUp, ChevronDown, Copy, Trash2, HelpCircle, Monitor, Play, Smartphone, Tv, PanelRightClose, PanelRightOpen, Captions
+  Undo2,
+  Redo2,
+  ChevronUp,
+  ChevronDown,
+  Copy,
+  Trash2,
+  HelpCircle,
+  Monitor,
+  Play,
+  Smartphone,
+  Tv,
+  PanelRightClose,
+  PanelRightOpen,
+  Captions,
 } from 'lucide-react';
 import { useStore } from '../state/useStore';
+import { useSttStore } from '../state/useSttStore';
 import { cn } from '../utils';
 import DisplayOutputsPopover from './DisplayOutputsPopover';
 import BackgroundMusicPopover from './BackgroundMusicPopover';
@@ -43,8 +57,9 @@ export default function Toolbar({
   const screenShareActive = useStore((s) => s.screenShareActive);
   const isSttPanelOpen = useStore((s) => s.isSttPanelOpen);
   const setIsSttPanelOpen = useStore((s) => s.setIsSttPanelOpen);
-  const activeTab = useStore((s) => s.activeTab);
-  const setActiveTab = useStore((s) => s.setActiveTab);
+  // Running session state drives the button color/pulse so operators always
+  // know captions are live — even when the console is collapsed.
+  const sttLive = useSttStore((s) => s.micActive || s.status !== 'idle');
 
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState('');
@@ -84,9 +99,9 @@ export default function Toolbar({
             ref={inputRef}
             type="text"
             value={draftName}
-            onChange={e => setDraftName(e.target.value)}
+            onChange={(e) => setDraftName(e.target.value)}
             onBlur={commitName}
-            onKeyDown={e => {
+            onKeyDown={(e) => {
               if (e.key === 'Enter') commitName();
               if (e.key === 'Escape') cancelEditing();
             }}
@@ -101,32 +116,44 @@ export default function Toolbar({
             aria-label={t('common.clickToRename')}
           >
             <span className="truncate">{presentation.name}</span>
-            <svg className="w-3.5 h-3.5 text-white/50 group-hover:text-white/70 transition-colors shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              className="w-3.5 h-3.5 text-white/50 group-hover:text-white/70 transition-colors shrink-0"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
             </svg>
-            </button>
-          )}
-      </div>        <div className="flex items-center gap-2">
+          </button>
+        )}
+      </div>{' '}
+      <div className="flex items-center gap-2">
         <div className="w-px h-6 bg-white/10 mx-1" />
 
-        {/* Live Captions (STT) Panel */}
+        {/* Live Captions console (labeled; reflects the running session) */}
         <button
-          onClick={() => {
-            const next = !isSttPanelOpen;
-            setIsSttPanelOpen(next);
-            if (next && activeTab !== 'slides') setActiveTab('slides');
-          }}
+          type="button"
+          onClick={() => setIsSttPanelOpen(!isSttPanelOpen)}
           aria-pressed={isSttPanelOpen}
           title={t('common.sttPanelTitle')}
           aria-label={t('common.sttPanelTitle')}
           className={cn(
-            'p-2.5 rounded-md border transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]',
-            isSttPanelOpen
-              ? 'bg-blue-600/20 hover:bg-blue-600/30 border-blue-500/40 text-blue-300'
-              : 'bg-white/5 hover:bg-white/10 border-white/10 text-white/60 hover:text-white'
+            'flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border font-medium text-sm transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.94]',
+            sttLive
+              ? 'bg-red-600/20 hover:bg-red-600/30 border-red-500/40 text-red-300'
+              : isSttPanelOpen
+                ? 'bg-blue-600/20 hover:bg-blue-600/30 border-blue-500/40 text-blue-300'
+                : 'bg-white/5 hover:bg-white/10 border-white/10 text-white/60 hover:text-white'
           )}
         >
-          <Captions className="w-4 h-4" aria-hidden="true" />
+          <Captions className="w-4 h-4 shrink-0" aria-hidden="true" />
+          <span className="hidden lg:inline truncate">{t('common.sttToolbarButton')}</span>
+          {sttLive && (
+            <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse shrink-0" aria-hidden="true" />
+          )}
         </button>
 
         {/* Multi-display output selector — hidden automatically on one-display machines. */}
@@ -147,10 +174,7 @@ export default function Toolbar({
             <Tv className="w-4 h-4 shrink-0" aria-hidden="true" />
             <span className="truncate">{t('common.liveShareButton')}</span>
             {screenShareActive && (
-              <span
-                className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-pulse"
-                aria-hidden="true"
-              />
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-pulse" aria-hidden="true" />
             )}
           </button>
         </div>
@@ -247,8 +271,8 @@ export default function Toolbar({
         <button
           onClick={startLive}
           aria-label={isProjectorWindowOpen ? t('common.stopBroadcast') : t('common.startBroadcast')}
-            className={cn(
-              'flex items-center justify-center w-[190px] py-1.5 rounded-md transition-colors text-sm font-bold shadow-lg focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1e1e1e] focus-visible:outline-none active:scale-[0.97]',
+          className={cn(
+            'flex items-center justify-center w-[190px] py-1.5 rounded-md transition-colors text-sm font-bold shadow-lg focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1e1e1e] focus-visible:outline-none active:scale-[0.97]',
             isProjectorWindowOpen
               ? 'bg-red-600 hover:bg-red-700 shadow-red-900/20 focus-visible:ring-red-400'
               : 'bg-green-600 hover:bg-green-700 shadow-green-900/20 focus-visible:ring-green-400'

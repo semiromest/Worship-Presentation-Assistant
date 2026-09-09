@@ -108,6 +108,8 @@ contextBridge.exposeInMainWorld('electronAPI', wrapApi({
     includeImages?: boolean;
     includeVideos?: boolean;
   }) => ipcRenderer.invoke('read-media-folder', folderPath, options),
+  getMediaThumbnail: (filePath: string, maxEdge: number) =>
+    ipcRenderer.invoke('media:getThumbnail', filePath, maxEdge),
   getScreenSources: () => ipcRenderer.invoke('get-screen-sources'),
   captureScreenSource: (sourceId: string) => ipcRenderer.invoke('capture-screen-source', sourceId),
   selectAudioFolder: () => ipcRenderer.invoke('select-audio-folder'),

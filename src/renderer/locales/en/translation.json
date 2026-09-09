@@ -690,7 +690,18 @@
     "screenShareHint": "Phones on the same Wi-Fi can watch the live slide fullscreen.",
     "screenShareAddSlide": "Add QR as Slide",
     "screenShareQrSlideHint": "Scan with your phone to watch the live broadcast",
-    "liveShareButton": "Viewers"
+    "liveShareButton": "Viewers",
+    "sttToolbarButton": "Captions",
+    "sttOpenConsole": "Open captions console",
+    "sttMonitor": "Output preview",
+    "sttSessionLive": "Live",
+    "sttSessionReady": "Ready",
+    "sttOnAir": "On the projected screen",
+    "sttOffAir": "The captions slide is not on the screen right now",
+    "sttSendLive": "Show captions on the screen",
+    "sttLanguages": "Language & translation",
+    "sttAdvanced": "Advanced",
+    "sttAddCaptionsSlideHint": "Add a captions slide to this presentation to show the live text on the projected screen."
   },
   "warnings": {
     "minSlides": "At least 1 slide must remain!",

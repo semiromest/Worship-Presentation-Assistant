@@ -1,6 +1,6 @@
 {
   "name": "worship-presentation-assistant",
-  "version": "1.4.7",
+  "version": "1.4.8",
   "main": "dist-electron/main.js",
   "description": "Worship Presentation Assistant - Simple Worship Presentation App",
   "author": "IPCA",
@@ -38,6 +38,7 @@
     "react-colorful": "^5.6.1",
     "react-dom": "^18.2.0",
     "react-i18next": "^17.0.8",
+    "sharp": "^0.35.4",
     "tailwind-merge": "^2.2.2",
     "uisfx": "^0.4.0",
     "utf-8-validate": "^6.0.6",

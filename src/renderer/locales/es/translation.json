@@ -678,7 +678,18 @@
     "screenShareHint": "Los teléfonos en la misma red Wi-Fi pueden ver la diapositiva en vivo a pantalla completa.",
     "screenShareAddSlide": "Añadir QR como diapositiva",
     "screenShareQrSlideHint": "Escanea con tu teléfono para ver la transmisión en vivo",
-    "liveShareButton": "Espectadores"
+    "liveShareButton": "Espectadores",
+    "sttToolbarButton": "Subtítulos",
+    "sttOpenConsole": "Abrir la consola de subtítulos",
+    "sttMonitor": "Vista previa de salida",
+    "sttSessionLive": "En vivo",
+    "sttSessionReady": "Listo",
+    "sttOnAir": "Visible en la pantalla proyectada",
+    "sttOffAir": "La diapositiva de subtítulos no está en pantalla ahora",
+    "sttSendLive": "Mostrar subtítulos en pantalla",
+    "sttLanguages": "Idioma y traducción",
+    "sttAdvanced": "Avanzado",
+    "sttAddCaptionsSlideHint": "Añade una diapositiva de subtítulos a esta presentación para mostrar el texto en vivo en el proyector."
   },
   "warnings": {
     "minSlides": "¡Debe quedar al menos 1 diapositiva!",

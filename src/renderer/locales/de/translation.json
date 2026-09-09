@@ -678,7 +678,18 @@
     "screenShareHint": "Handys im selben WLAN können die Live-Folie in Vollbild sehen.",
     "screenShareAddSlide": "QR als Folie hinzufügen",
     "screenShareQrSlideHint": "Mit dem Handy scannen, um die Live-Übertragung zu sehen",
-    "liveShareButton": "Zuschauer"
+    "liveShareButton": "Zuschauer",
+    "sttToolbarButton": "Untertitel",
+    "sttOpenConsole": "Untertitel-Konsole öffnen",
+    "sttMonitor": "Ausgabevorschau",
+    "sttSessionLive": "Live",
+    "sttSessionReady": "Bereit",
+    "sttOnAir": "Auf dem Projektor sichtbar",
+    "sttOffAir": "Die Untertitel-Folie ist gerade nicht auf dem Bildschirm",
+    "sttSendLive": "Untertitel auf dem Bildschirm zeigen",
+    "sttLanguages": "Sprache & Übersetzung",
+    "sttAdvanced": "Erweitert",
+    "sttAddCaptionsSlideHint": "Fügen Sie dieser Präsentation eine Untertitel-Folie hinzu, um den Live-Text auf dem Projektor anzuzeigen."
   },
   "warnings": {
     "minSlides": "Es muss mindestens eine Folie übrig bleiben!",

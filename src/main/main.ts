@@ -3,20 +3,43 @@
  * remote (phone) control server, and .gpres file I/O.
  */
 
-import { app, BrowserWindow, Menu, ipcMain, dialog, screen, desktopCapturer, nativeImage, shell, protocol, net, session, systemPreferences } from 'electron';
-import path       from 'node:path';
-import fs         from 'node:fs/promises';
-import http       from 'node:http';
-import os         from 'node:os';
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  ipcMain,
+  dialog,
+  screen,
+  desktopCapturer,
+  nativeImage,
+  shell,
+  protocol,
+  net,
+  session,
+  systemPreferences,
+} from 'electron';
+import path from 'node:path';
+import fs from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import http from 'node:http';
+import os from 'node:os';
+import { Readable } from 'node:stream';
 import { WebSocketServer, WebSocket as WsSocket } from 'ws';
 import { REMOTE_HTML_NEW } from './remote-html';
 import { driveService } from './driveService';
 import { initUpdater } from './updater';
-import { startPublicTunnel, stopPublicTunnel, getPublicTunnelStatus, disposePublicTunnel, setPublicTunnelStatusListener } from './cloudflareTunnelService';
+import {
+  startPublicTunnel,
+  stopPublicTunnel,
+  getPublicTunnelStatus,
+  disposePublicTunnel,
+  setPublicTunnelStatusListener,
+} from './cloudflareTunnelService';
 import { initPerfMonitor, mainPerf, recordWs } from './perfMonitor';
 import { createPresetStore } from './presetStore';
 import { localResourceUrlToPath, isZip, mediaRefToName } from '../shared/mediaTree';
 import { getMediaLibrary } from './mediaLibrary';
+import { getOrCreateThumbnail, thumbRefToPath, pruneThumbnailCache } from './mediaThumbnails';
 import { heavyClient } from './heavyWorkerClient';
 import { registerSttIpc, cleanupStt } from './sonioxService';
 import {
@@ -53,14 +76,14 @@ import {
 
 // Paths
 
-const DIST         = path.join(__dirname, '../dist');
-const ICON_PATH    = path.join(__dirname, '../build', 'ico.png');
-const VITE_PUBLIC  = app.isPackaged ? DIST : path.join(DIST, '../public');
+const DIST = path.join(__dirname, '../dist');
+const ICON_PATH = path.join(__dirname, '../build', 'ico.png');
+const VITE_PUBLIC = app.isPackaged ? DIST : path.join(DIST, '../public');
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tif', '.tiff', '.avif', '.svg']);
 const VIDEO_EXTS = new Set(['.mp4', '.webm', '.mov', '.mkv', '.avi', '.m4v', '.wmv', '.flv', '.mpeg', '.mpg']);
 const AUDIO_EXTS = new Set(['.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a', '.wma']);
 
-process.env.DIST        = DIST;
+process.env.DIST = DIST;
 process.env.VITE_PUBLIC = VITE_PUBLIC;
 
 // Phase 0 perf monitor — MUST run before any ipcMain handler is registered.
@@ -183,8 +206,8 @@ function attachDisplayWatch(): void {
 
 // Remote server state
 
-let remoteServer:    http.Server     | null = null;
-let wss:             WebSocketServer | null = null;
+let remoteServer: http.Server | null = null;
+let wss: WebSocketServer | null = null;
 let remoteServerUrl = '';
 
 type SlideMeta = {
@@ -194,25 +217,25 @@ type SlideMeta = {
 };
 
 let remoteStatus: {
-  slideCount:          number;
-  currentIndex:        number;
-  isBlackout:          boolean;
-  isProjectorOpen:     boolean;
-  slideTransition:     string;
+  slideCount: number;
+  currentIndex: number;
+  isBlackout: boolean;
+  isProjectorOpen: boolean;
+  slideTransition: string;
   transitionDurationMs: number;
-  activePart:          number | null;
-  partsCount:          number | null;
-  slideMeta:           SlideMeta[] | null;
+  activePart: number | null;
+  partsCount: number | null;
+  slideMeta: SlideMeta[] | null;
 } = {
-  slideCount:      0,
-  currentIndex:    0,
-  isBlackout:      false,
+  slideCount: 0,
+  currentIndex: 0,
+  isBlackout: false,
   isProjectorOpen: false,
   slideTransition: 'fade',
   transitionDurationMs: 400,
-  activePart:  null,
-  partsCount:  null,
-  slideMeta:   null,
+  activePart: null,
+  partsCount: null,
+  slideMeta: null,
 };
 
 /** Last captured slide preview, sent immediately to new clients. */
@@ -229,7 +252,11 @@ function broadcast(msg: object): void {
   recordWs(str.length);
   for (const client of wsClients) {
     if (client.readyState === WsSocket.OPEN) {
-      try { client.send(str); } catch { /* dead socket, ignore */ }
+      try {
+        client.send(str);
+      } catch {
+        /* dead socket, ignore */
+      }
     }
   }
 }
@@ -285,7 +312,9 @@ function scheduleSlideCapture(delayMs = 300): void {
       const buf = img.resize({ width: 480 }).toJPEG(65);
       lastPreviewDataUrl = `data:image/jpeg;base64,${buf.toString('base64')}`;
       broadcast({ type: 'preview', data: lastPreviewDataUrl });
-    } catch { /* window not ready yet */ }
+    } catch {
+      /* window not ready yet */
+    }
   }, delayMs);
 }
 
@@ -316,7 +345,12 @@ function scoreLocalIPv4Candidate(name: string, address: string): number {
   if (/wi[-_]?fi|wlan|wireless/.test(normalized)) score += 30;
   if (/eth|en\d|ethernet|lan/.test(normalized)) score += 20;
   if (/realtek|intel|qualcomm|broadcom|bcm|atheros|rtl|marvell|r\d\d/.test(normalized)) score += 10;
-  if (/docker|vmware|virtual|vbox|hyper-?v|loopback|tun|tap|hamachi|bridge|br-|virbr|utun|wg|wireguard|ppp|vpn/.test(normalized)) score -= 100;
+  if (
+    /docker|vmware|virtual|vbox|hyper-?v|loopback|tun|tap|hamachi|bridge|br-|virbr|utun|wg|wireguard|ppp|vpn/.test(
+      normalized
+    )
+  )
+    score -= 100;
 
   if (isLinkLocalIPv4(address)) score -= 100;
   if (/^127\./.test(address) || /^0\./.test(address)) score -= 100;
@@ -359,7 +393,7 @@ function getLocalIPv4(): string {
   const candidates = listLocalIPv4Candidates();
   remoteDebugInfo.candidates = candidates;
 
-  const best = candidates.find(c => c.score > -50 && !isLinkLocalIPv4(c.address));
+  const best = candidates.find((c) => c.score > -50 && !isLinkLocalIPv4(c.address));
   cachedLocalIP = best?.address ?? candidates[0]?.address ?? '127.0.0.1';
   remoteDebugInfo.selectedAddress = cachedLocalIP;
   return cachedLocalIP;
@@ -386,7 +420,7 @@ interface ScanFolderOptions {
 async function walkFiles(
   dir: string,
   matches: (name: string, ext: string) => boolean,
-  recursive = true,
+  recursive = true
 ): Promise<string[]> {
   const entries = await fs.readdir(dir, { withFileTypes: true });
   const tasks = entries.map(async (entry): Promise<string[]> => {
@@ -408,7 +442,7 @@ const walkMediaFiles = (dir: string, opts: ScanFolderOptions = {}): Promise<stri
   return walkFiles(
     dir,
     (_name, ext) => (includeImages && IMAGE_EXTS.has(ext)) || (includeVideos && VIDEO_EXTS.has(ext)),
-    recursive,
+    recursive
   );
 };
 
@@ -421,12 +455,13 @@ function readBody(req: http.IncomingMessage): Promise<string> {
     req.on('data', (c) => {
       chunks.push(c);
       totalLength += c.length;
-      if (totalLength > 1024 * 1024 * 10) { // 10 MB limit
+      if (totalLength > 1024 * 1024 * 10) {
+        // 10 MB limit
         req.destroy();
         reject(new Error('Payload too large'));
       }
     });
-    req.on('end',   () => resolve(Buffer.concat(chunks).toString()));
+    req.on('end', () => resolve(Buffer.concat(chunks).toString()));
     req.on('error', reject);
   });
 }
@@ -434,11 +469,36 @@ function readBody(req: http.IncomingMessage): Promise<string> {
 // Window creation
 
 const QUIT_CONFIRM_TEXTS: Record<string, { message: string; detail: string; cancel: string; confirm: string }> = {
-  tr: { message: 'Çıkmak istediğinize emin misiniz?', detail: 'Çıkış yaparsanız canlı yayın durdurulur.', cancel: 'Vazgeç', confirm: 'Evet, Çık' },
-  en: { message: 'Are you sure you want to quit?', detail: 'Live projection will stop if you quit.', cancel: 'Cancel', confirm: 'Yes, Quit' },
-  es: { message: '¿Seguro que desea salir?', detail: 'La proyección en vivo se detendrá si sale.', cancel: 'Cancelar', confirm: 'Sí, salir' },
-  de: { message: 'Möchten Sie wirklich beenden?', detail: 'Die Live-Projektion wird beendet, wenn Sie beenden.', cancel: 'Abbrechen', confirm: 'Ja, beenden' },
-  ko: { message: '정말 종료하시겠습니까?', detail: '종료하면 라이브 프로젝션이 중지됩니다.', cancel: '취소', confirm: '예, 종료' },
+  tr: {
+    message: 'Çıkmak istediğinize emin misiniz?',
+    detail: 'Çıkış yaparsanız canlı yayın durdurulur.',
+    cancel: 'Vazgeç',
+    confirm: 'Evet, Çık',
+  },
+  en: {
+    message: 'Are you sure you want to quit?',
+    detail: 'Live projection will stop if you quit.',
+    cancel: 'Cancel',
+    confirm: 'Yes, Quit',
+  },
+  es: {
+    message: '¿Seguro que desea salir?',
+    detail: 'La proyección en vivo se detendrá si sale.',
+    cancel: 'Cancelar',
+    confirm: 'Sí, salir',
+  },
+  de: {
+    message: 'Möchten Sie wirklich beenden?',
+    detail: 'Die Live-Projektion wird beendet, wenn Sie beenden.',
+    cancel: 'Abbrechen',
+    confirm: 'Ja, beenden',
+  },
+  ko: {
+    message: '정말 종료하시겠습니까?',
+    detail: '종료하면 라이브 프로젝션이 중지됩니다.',
+    cancel: '취소',
+    confirm: '예, 종료',
+  },
 };
 
 let rendererLanguageCache = 'tr';
@@ -448,8 +508,12 @@ function refreshRendererLanguage(): void {
   const lng = win?.webContents.executeJavaScript(`localStorage.getItem('i18nextLng') || 'tr'`);
   if (lng && typeof (lng as unknown as Promise<string>).then === 'function') {
     (lng as unknown as Promise<string>)
-      .then((value) => { rendererLanguageCache = String(value).split('-')[0] ?? 'tr'; })
-      .catch(() => { /* default stays */ });
+      .then((value) => {
+        rendererLanguageCache = String(value).split('-')[0] ?? 'tr';
+      })
+      .catch(() => {
+        /* default stays */
+      });
   }
 }
 
@@ -488,15 +552,18 @@ function attachQuitConfirm(window: BrowserWindow): void {
 function createWindow(): void {
   win = new BrowserWindow({
     icon: ICON_PATH,
-    width: 1200, height: 800, minWidth: 800, minHeight: 600,
+    width: 1200,
+    height: 800,
+    minWidth: 800,
+    minHeight: 600,
     fullscreenable: true,
     autoHideMenuBar: true,
     title: 'Worship Presentation Assistant - Control Panel',
     webPreferences: {
-      preload:          path.join(__dirname, 'preload.js'),
-      nodeIntegration:  false,
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
       contextIsolation: true,
-      webSecurity:      true,
+      webSecurity: true,
     },
   });
 
@@ -548,10 +615,10 @@ function createProjectorWindow(requestedDisplayId?: string, initialData?: any): 
     backgroundColor: '#000000',
     title: 'Worship Presentation Assistant - Projection',
     webPreferences: {
-      preload:          path.join(__dirname, 'preload.js'),
-      nodeIntegration:  false,
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
       contextIsolation: true,
-      webSecurity:      true,
+      webSecurity: true,
     },
   });
 
@@ -579,13 +646,13 @@ function createProjectorWindow(requestedDisplayId?: string, initialData?: any): 
   // view from the very first paint (no projector flash in a stage window).
   // Mid-session mode switches are applied via projector-update → outputMode.
   const initialOutputMode =
-    initialData && typeof initialData === 'object' && (initialData as any).outputMode === 'stage'
-      ? 'stage'
-      : 'follow';
+    initialData && typeof initialData === 'object' && (initialData as any).outputMode === 'stage' ? 'stage' : 'follow';
   const query = `mode=projector&displayId=${encodeURIComponent(displayId)}&outputMode=${encodeURIComponent(initialOutputMode)}`;
   process.env.VITE_DEV_SERVER_URL
     ? projectorWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL}?${query}`)
-    : projectorWindow.loadFile(path.join(DIST, 'index.html'), { query: { mode: 'projector', displayId, outputMode: initialOutputMode } });
+    : projectorWindow.loadFile(path.join(DIST, 'index.html'), {
+        query: { mode: 'projector', displayId, outputMode: initialOutputMode },
+      });
 
   // Keyboard bridge: the projector window frequently holds focus. Keep the
   // existing global navigation behavior so the normal single-screen workflow
@@ -603,15 +670,20 @@ function createProjectorWindow(requestedDisplayId?: string, initialData?: any): 
     const key = input.key;
     let handled = false;
     if (PROJECTOR_NAV_NEXT.has(key)) {
-      sendRemote('next'); handled = true;
+      sendRemote('next');
+      handled = true;
     } else if (PROJECTOR_NAV_PREV.has(key)) {
-      sendRemote('prev'); handled = true;
+      sendRemote('prev');
+      handled = true;
     } else if (key === 'Home') {
-      sendRemote('goto', 0); handled = true;
+      sendRemote('goto', 0);
+      handled = true;
     } else if (key === 'End') {
-      sendRemote('goto', 2 ** 31 - 1); handled = true;
+      sendRemote('goto', 2 ** 31 - 1);
+      handled = true;
     } else if (key === 'b' || key === 'B') {
-      sendRemote('blackout'); handled = true;
+      sendRemote('blackout');
+      handled = true;
     } else if (key === 'Escape') {
       handled = true;
       if (!projectorWindow.isDestroyed()) projectorWindow.close();
@@ -698,11 +770,13 @@ function createRemoteServer(): void {
 
     if (pathname === '/api/diagnostics') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({
-        remoteServerUrl,
-        debug: remoteDebugInfo,
-        timestamp: new Date().toISOString(),
-      }));
+      res.end(
+        JSON.stringify({
+          remoteServerUrl,
+          debug: remoteDebugInfo,
+          timestamp: new Date().toISOString(),
+        })
+      );
       return;
     }
 
@@ -725,11 +799,20 @@ function createRemoteServer(): void {
 
     // Send current state to the newly connected client immediately.
     try {
-      client.send(JSON.stringify({
-        type: 'welcome',
-        data: { status: remoteStatus, preview: lastPreviewDataUrl, allPreviews: allSlidePreviews, slideMeta: remoteStatus.slideMeta },
-      }));
-    } catch { /* ignore */ }
+      client.send(
+        JSON.stringify({
+          type: 'welcome',
+          data: {
+            status: remoteStatus,
+            preview: lastPreviewDataUrl,
+            allPreviews: allSlidePreviews,
+            slideMeta: remoteStatus.slideMeta,
+          },
+        })
+      );
+    } catch {
+      /* ignore */
+    }
 
     client.on('message', (raw: WsSocket) => {
       try {
@@ -737,12 +820,21 @@ function createRemoteServer(): void {
         if (msg.type === 'command' && msg.action) {
           win?.webContents.send('remote-action', { action: msg.action, value: msg.value });
         }
-      } catch { /* invalid JSON, ignore */ }
+      } catch {
+        /* invalid JSON, ignore */
+      }
     });
 
-    client.on('close', () => { wsClients.delete(client); broadcastClientCount(); });
+    client.on('close', () => {
+      wsClients.delete(client);
+      broadcastClientCount();
+    });
     client.on('error', () => {
-      try { client.terminate(); } catch { /* already closed */ }
+      try {
+        client.terminate();
+      } catch {
+        /* already closed */
+      }
       wsClients.delete(client);
       broadcastClientCount();
     });
@@ -797,19 +889,133 @@ function startShareNetworkWatch(): void {
 // App lifecycle
 
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'local-resource', privileges: { bypassCSP: true, stream: true, supportFetchAPI: true } },
+  {
+    scheme: 'local-resource',
+    privileges: {
+      bypassCSP: true,
+      corsEnabled: true,
+      secure: true,
+      standard: true,
+      stream: true,
+      supportFetchAPI: true,
+    },
+  },
 ]);
 
 const MIME_BY_EXT: Record<string, string> = {
-  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-  '.png': 'image/png', '.gif': 'image/gif',
-  '.webp': 'image/webp', '.svg': 'image/svg+xml',
-  '.bmp': 'image/bmp', '.avif': 'image/avif',
-  '.tif': 'image/tiff', '.tiff': 'image/tiff',
-  '.mp4': 'video/mp4', '.webm': 'video/webm',
-  '.mov': 'video/quicktime', '.m4v': 'video/x-m4v',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.bmp': 'image/bmp',
+  '.avif': 'image/avif',
+  '.tif': 'image/tiff',
+  '.tiff': 'image/tiff',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
+  '.m4v': 'video/x-m4v',
   '.mkv': 'video/x-matroska',
+  '.avi': 'video/x-msvideo',
+  '.wmv': 'video/x-ms-wmv',
+  '.flv': 'video/x-flv',
+  '.mpeg': 'video/mpeg',
+  '.mpg': 'video/mpeg',
 };
+
+// ── Media file streaming over local-resource://mediafile/<base64url path> ───
+// The renderer cannot load `file://` URLs when it is served over http (dev
+// mode), which is why video thumbnails never appeared: the media library's
+// in-renderer fallback (a <video src="file://..."> element) is silently
+// blocked by webSecurity. This branch serves any *media* file the renderer
+// asks for, with HTTP Range support so a <video> element can stream and seek
+// (moov atom, target frame) without the main process or the renderer ever
+// holding the whole file in memory. Restricted to media extensions so a
+// compromised renderer cannot read arbitrary files (e.g. .env) through it.
+const MEDIAFILE_REF_PREFIX = 'local-resource://mediafile/';
+const MEDIAFILE_ALLOWED_EXTS = new Set([...IMAGE_EXTS, ...VIDEO_EXTS]);
+const MEDIAFILE_CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Range, Content-Type',
+  'Access-Control-Expose-Headers': 'Accept-Ranges, Content-Length, Content-Range, Content-Type',
+};
+
+async function serveMediaFile(url: string, request: Request): Promise<Response | null> {
+  if (!url.startsWith(MEDIAFILE_REF_PREFIX)) return null;
+  const encoded = url.slice(MEDIAFILE_REF_PREFIX.length);
+  if (!encoded || encoded.length > 4096) {
+    return new Response('Bad request', { status: 400 });
+  }
+  let filePath: string;
+  try {
+    filePath = decodeURIComponent(encoded);
+  } catch {
+    return new Response('Bad request', { status: 400 });
+  }
+  const resolved = path.resolve(filePath);
+  const ext = path.extname(resolved).toLowerCase();
+  if (!path.isAbsolute(resolved) || !MEDIAFILE_ALLOWED_EXTS.has(ext)) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
+  let stat: Awaited<ReturnType<typeof fs.stat>>;
+  try {
+    stat = await fs.stat(resolved);
+  } catch {
+    return new Response('Not found', { status: 404 });
+  }
+  const mime = MIME_BY_EXT[ext] || 'application/octet-stream';
+
+  // Range support: video elements issue byte-range requests when seeking and
+  // even for metadata (moov atom at the end of non-faststart files). Without
+  // 206 responses Chromium falls back to a full download.
+  const rangeHeader = request.headers.get('Range');
+  if (rangeHeader) {
+    const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+    if (m) {
+      let start = m[1] === '' ? null : parseInt(m[1], 10);
+      let end = m[2] === '' ? null : parseInt(m[2], 10);
+      if (start === null) {
+        // Suffix range: last N bytes
+        const n = end ?? 0;
+        start = Math.max(0, stat.size - n);
+        end = stat.size - 1;
+      } else if (end === null) {
+        end = stat.size - 1;
+      }
+      if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= stat.size) {
+        return new Response('Range not satisfiable', {
+          status: 416,
+          headers: { 'Content-Range': `bytes */${stat.size}` },
+        });
+      }
+      end = Math.min(end, stat.size - 1);
+      const stream = createReadStream(resolved, { start, end });
+      return new Response(Readable.toWeb(stream) as unknown as ReadableStream, {
+        status: 206,
+        headers: {
+          ...MEDIAFILE_CORS_HEADERS,
+          'Content-Type': mime,
+          'Accept-Ranges': 'bytes',
+          'Content-Range': `bytes ${start}-${end}/${stat.size}`,
+          'Content-Length': String(end - start + 1),
+        },
+      });
+    }
+  }
+
+  const stream = createReadStream(resolved);
+  return new Response(Readable.toWeb(stream) as unknown as ReadableStream, {
+    headers: {
+      ...MEDIAFILE_CORS_HEADERS,
+      'Content-Type': mime,
+      'Accept-Ranges': 'bytes',
+      'Content-Length': String(stat.size),
+    },
+  });
+}
 
 // Microphone / media permission handling.
 //
@@ -848,28 +1054,38 @@ app.whenReady().then(() => {
   setupMediaPermissionHandlers();
   protocol.handle('local-resource', async (request) => {
     let filePath: string;
-    const mediaName = mediaRefToName(request.url);
-    if (mediaName) {
-      // Phase 6 media library: userData/media/<name>, name validated above.
-      filePath = path.join(mediaLibrary.dir, mediaName);
+    const thumbPath = thumbRefToPath(request.url);
+    if (thumbPath) {
+      filePath = thumbPath;
     } else {
-      try {
-        filePath = localResourceUrlToPath(request.url);
-      } catch (err) {
-        console.error(`[local-resource] Bad URL: ${request.url}`, err);
-        return new Response('Bad request', { status: 400 });
-      }
+      const mediaName = mediaRefToName(request.url);
+      if (mediaName) {
+        // Phase 6 media library: userData/media/<name>, name validated above.
+        filePath = path.join(mediaLibrary.dir, mediaName);
+      } else {
+        // Arbitrary media files (folder-scanned images/videos) streamed with
+        // Range support — see serveMediaFile. Works from http (dev) and
+        // file:// (packaged) renderer origins alike.
+        const mediaFileRes = await serveMediaFile(request.url, request);
+        if (mediaFileRes) return mediaFileRes;
+        try {
+          filePath = localResourceUrlToPath(request.url);
+        } catch (err) {
+          console.error(`[local-resource] Bad URL: ${request.url}`, err);
+          return new Response('Bad request', { status: 400 });
+        }
 
-      // Security: legacy refs only serve files inside our own <tmp>/presenter-*
-      // dirs (path.resolve collapses any ".." traversal before the check).
-      const resolved = path.resolve(filePath);
-      const tmpRoot = path.resolve(os.tmpdir());
-      const rel = path.relative(tmpRoot, resolved);
-      const insideTmp = rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
-      const firstSegment = rel.split(path.sep)[0] ?? '';
-      if (!insideTmp || !firstSegment.startsWith('presenter-')) {
-        console.error(`[local-resource] Forbidden path: ${resolved}`);
-        return new Response('Forbidden', { status: 403 });
+        // Security: legacy refs only serve files inside our own <tmp>/presenter-*
+        // dirs (path.resolve collapses any ".." traversal before the check).
+        const resolved = path.resolve(filePath);
+        const tmpRoot = path.resolve(os.tmpdir());
+        const rel = path.relative(tmpRoot, resolved);
+        const insideTmp = rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+        const firstSegment = rel.split(path.sep)[0] ?? '';
+        if (!insideTmp || !firstSegment.startsWith('presenter-')) {
+          console.error(`[local-resource] Forbidden path: ${resolved}`);
+          return new Response('Forbidden', { status: 403 });
+        }
       }
     }
 
@@ -877,7 +1093,10 @@ app.whenReady().then(() => {
       const data = await fs.readFile(filePath);
       const ext = path.extname(filePath).toLowerCase();
       return new Response(data, {
-        headers: { 'Content-Type': MIME_BY_EXT[ext] || 'application/octet-stream' },
+        headers: {
+          'Content-Type': MIME_BY_EXT[ext] || 'application/octet-stream',
+          'Access-Control-Allow-Origin': '*',
+        },
       });
     } catch (err) {
       console.error(`[local-resource] Failed to serve ${filePath}:`, err);
@@ -892,10 +1111,15 @@ app.whenReady().then(() => {
   setClientCountListener((count) => win?.webContents.send('share:client-count', count));
   setScreenShareClientCountListener((count) => win?.webContents.send('screen-share:client-count', count));
   registerSttIpc();
+  void pruneThumbnailCache();
 });
 
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit();
+});
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
 
 app.on('will-quit', () => {
   cleanupTempDir();
@@ -920,10 +1144,14 @@ async function cleanupTempDir(): Promise<void> {
   try {
     const tmp = os.tmpdir();
     const entries = await fs.readdir(tmp);
-    await Promise.all(entries
-      .filter((e) => e.startsWith('presenter-'))
-      .map((e) => fs.rm(path.join(tmp, e), { recursive: true, force: true })));
-  } catch { /* nothing to clean */ }
+    await Promise.all(
+      entries
+        .filter((e) => e.startsWith('presenter-'))
+        .map((e) => fs.rm(path.join(tmp, e), { recursive: true, force: true }))
+    );
+  } catch {
+    /* nothing to clean */
+  }
 }
 
 // IPC: file operations
@@ -938,7 +1166,9 @@ function rememberDir(fromPath: string | undefined | null): void {
   try {
     const dir = path.dirname(fromPath);
     if (dir && dir !== fromPath) lastDialogDir = dir;
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 ipcMain.handle('save-file', async (_, content: string) => {
@@ -984,7 +1214,10 @@ ipcMain.handle('open-file', async () => {
 
 ipcMain.handle(
   'show-confirm-dialog',
-  async (_, options: { message: string; title?: string; detail?: string; confirmLabel?: string; cancelLabel?: string }) => {
+  async (
+    _,
+    options: { message: string; title?: string; detail?: string; confirmLabel?: string; cancelLabel?: string }
+  ) => {
     const parent = win ?? BrowserWindow.getFocusedWindow();
     const boxOptions = {
       type: 'question' as const,
@@ -999,7 +1232,7 @@ ipcMain.handle(
       ? await dialog.showMessageBox(parent, boxOptions)
       : await dialog.showMessageBox(boxOptions);
     return response === 1;
-  },
+  }
 );
 
 ipcMain.handle(
@@ -1014,7 +1247,7 @@ ipcMain.handle(
       detail: options.detail,
     };
     parent ? await dialog.showMessageBox(parent, boxOptions) : await dialog.showMessageBox(boxOptions);
-  },
+  }
 );
 
 // IPC: preset CRUD
@@ -1069,7 +1302,8 @@ ipcMain.handle('close-projector', (_, displayId: string) => {
 ipcMain.handle('update-projector', (_, data: unknown) => {
   if (!data || typeof data !== 'object') return false;
   const payload = data as Record<string, any>;
-  const outputs = payload.outputs && typeof payload.outputs === 'object' ? payload.outputs as Record<string, any> : null;
+  const outputs =
+    payload.outputs && typeof payload.outputs === 'object' ? (payload.outputs as Record<string, any>) : null;
 
   for (const entry of projectorWindows.values()) {
     if (entry.window.isDestroyed()) continue;
@@ -1108,7 +1342,10 @@ ipcMain.handle('get-projector-status', () => {
   const defaultId = getDefaultDisplayId();
   return defaultId ? projectorWindows.has(defaultId) : projectorWindows.size > 0;
 });
-ipcMain.handle('cleanup-temp-dir', () => { cleanupTempDir(); return true; });
+ipcMain.handle('cleanup-temp-dir', () => {
+  cleanupTempDir();
+  return true;
+});
 
 // IPC: remote control
 
@@ -1173,10 +1410,16 @@ ipcMain.handle('get-remote-diagnostics', async () => {
       const testResult = await new Promise<{ ok: boolean; error?: string }>((resolve) => {
         const req = http.get(testUrl, { timeout: 3000 }, (res) => {
           let body = '';
-          res.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+          res.on('data', (chunk: Buffer) => {
+            body += chunk.toString();
+          });
           res.on('end', () => {
-            try { JSON.parse(body); resolve({ ok: true }); }
-            catch { resolve({ ok: false, error: 'invalid-json' }); }
+            try {
+              JSON.parse(body);
+              resolve({ ok: true });
+            } catch {
+              resolve({ ok: false, error: 'invalid-json' });
+            }
           });
         });
         req.on('error', (err: NodeJS.ErrnoException) => {
@@ -1187,7 +1430,11 @@ ipcMain.handle('get-remote-diagnostics', async () => {
           resolve({ ok: false, error: 'timeout' });
         });
       });
-      result.selfConnectTest = { tried: true, success: testResult.ok, ...(testResult.error ? { error: testResult.error } : {}) };
+      result.selfConnectTest = {
+        tried: true,
+        success: testResult.ok,
+        ...(testResult.error ? { error: testResult.error } : {}),
+      };
     } catch {
       result.selfConnectTest = { tried: true, success: false, error: 'unexpected-error' };
     }
@@ -1197,9 +1444,7 @@ ipcMain.handle('get-remote-diagnostics', async () => {
   result.checks.push({
     label: 'serverListening',
     pass: listening,
-    detail: listening
-      ? `Listening on port ${result.port ?? '?'}`
-      : 'Server could not start — try restarting the app',
+    detail: listening ? `Listening on port ${result.port ?? '?'}` : 'Server could not start — try restarting the app',
   });
 
   const hasGoodInterface = candidates.some((c) => c.score > -50);
@@ -1250,7 +1495,7 @@ ipcMain.handle('share:start', async (_, subdomain?: string) => {
     const result = startShare(getLocalIPv4(), port);
     if (!result) return { ok: false, error: 'already-active' };
     startShareNetworkWatch();
-      if (process.platform === 'darwin') {
+    if (process.platform === 'darwin') {
       return { ok: true, url: result.url, localOnly: true };
     }
     const tunnel = await startPublicTunnel(port);
@@ -1266,7 +1511,6 @@ ipcMain.handle('share:start', async (_, subdomain?: string) => {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
 });
-
 
 ipcMain.handle('share:stop', async () => {
   stopShare();
@@ -1310,7 +1554,10 @@ ipcMain.on('screen-share:frame', (_event, frame: string) => {
 
 ipcMain.handle('screen-share:get-status', (): ScreenShareStatus => getScreenShareStatus());
 
-ipcMain.handle('quit-app', () => { app.quit(); return true; });
+ipcMain.handle('quit-app', () => {
+  app.quit();
+  return true;
+});
 
 ipcMain.handle('update-all-slide-previews', (_, previews: string[]) => {
   allSlidePreviews = Array.isArray(previews) ? previews : [];
@@ -1359,16 +1606,22 @@ ipcMain.handle('generate-thumbnail', async (_event, slide: any) => {
  */
 ipcMain.handle('update-remote-status', (_, status: Partial<typeof remoteStatus> & { slidePreviews?: SlideMeta[] }) => {
   remoteStatus = {
-    slideCount:      typeof status.slideCount   === 'number' ? status.slideCount   : remoteStatus.slideCount,
-    currentIndex:    typeof status.currentIndex === 'number' ? status.currentIndex : remoteStatus.currentIndex,
-    isBlackout:      !!status.isBlackout,
+    slideCount: typeof status.slideCount === 'number' ? status.slideCount : remoteStatus.slideCount,
+    currentIndex: typeof status.currentIndex === 'number' ? status.currentIndex : remoteStatus.currentIndex,
+    isBlackout: !!status.isBlackout,
     isProjectorOpen: !!status.isProjectorOpen,
-    slideTransition: typeof (status as any).slideTransition === 'string' ? (status as any).slideTransition : remoteStatus.slideTransition,
-    transitionDurationMs: typeof (status as any).transitionDurationMs === 'number' ? (status as any).transitionDurationMs : remoteStatus.transitionDurationMs,
+    slideTransition:
+      typeof (status as any).slideTransition === 'string'
+        ? (status as any).slideTransition
+        : remoteStatus.slideTransition,
+    transitionDurationMs:
+      typeof (status as any).transitionDurationMs === 'number'
+        ? (status as any).transitionDurationMs
+        : remoteStatus.transitionDurationMs,
     // partsMode fields — null when live slide is not a partsMode slide
-    activePart:  typeof (status as any).activePart  === 'number' ? (status as any).activePart  : null,
-    partsCount:  typeof (status as any).partsCount  === 'number' ? (status as any).partsCount  : null,
-    slideMeta:   Array.isArray((status as any).slidePreviews) ? (status as any).slidePreviews : remoteStatus.slideMeta,
+    activePart: typeof (status as any).activePart === 'number' ? (status as any).activePart : null,
+    partsCount: typeof (status as any).partsCount === 'number' ? (status as any).partsCount : null,
+    slideMeta: Array.isArray((status as any).slidePreviews) ? (status as any).slidePreviews : remoteStatus.slideMeta,
   };
 
   // slideMeta rides its own message (broadcast only when it changes), so strip
@@ -1397,9 +1650,7 @@ ipcMain.handle('update-remote-status', (_, status: Partial<typeof remoteStatus> 
   }
 
   const duration = Math.max(0, remoteStatus.transitionDurationMs || 0);
-  const transitionDelay = remoteStatus.slideTransition !== 'none' && duration > 0
-    ? Math.max(300, duration + 120)
-    : 300;
+  const transitionDelay = remoteStatus.slideTransition !== 'none' && duration > 0 ? Math.max(300, duration + 120) : 300;
 
   // Renderer thumbnails (send-slide-preview) are the accurate preview source
   // for parts/lyrics changes; the window capture is only a first-connect
@@ -1428,8 +1679,11 @@ ipcMain.handle('send-slide-preview', (_, dataUrl: string) => {
 ipcMain.handle('import-bible-xml', async (_, filePath?: string) => {
   let selected = filePath;
   if (selected) {
-    try { if (!(await fs.stat(selected)).isFile()) selected = undefined; }
-    catch { selected = undefined; }
+    try {
+      if (!(await fs.stat(selected)).isFile()) selected = undefined;
+    } catch {
+      selected = undefined;
+    }
   }
   if (!selected) {
     const { filePaths } = await dialog.showOpenDialog({
@@ -1455,7 +1709,10 @@ ipcMain.handle('save-bible-data', async (_, id: string, data: unknown) => {
   try {
     const dir = getBiblesDir();
     await fs.mkdir(dir, { recursive: true });
-    const safeName = String(id).replace(/[^a-zA-Z0-9_.\-]/g, '_').replace(/\.\./g, '_') || 'bible';
+    const safeName =
+      String(id)
+        .replace(/[^a-zA-Z0-9_.\-]/g, '_')
+        .replace(/\.\./g, '_') || 'bible';
     const filePath = path.join(dir, `${safeName}.json`);
     await fs.writeFile(filePath, JSON.stringify(data), 'utf-8');
     return filePath;
@@ -1493,9 +1750,10 @@ ipcMain.handle('delete-bible-data', async (_, filePath: string) => {
 });
 
 ipcMain.handle('select-media-file', async (_, type: 'image' | 'video') => {
-  const filters = type === 'image'
-    ? [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp'] }]
-    : [{ name: 'Videos', extensions: ['mp4', 'webm', 'ogg', 'mov'] }];
+  const filters =
+    type === 'image'
+      ? [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp'] }]
+      : [{ name: 'Videos', extensions: ['mp4', 'webm', 'ogg', 'mov'] }];
   const { filePaths } = await dialog.showOpenDialog({ defaultPath: lastDialogDir, filters, properties: ['openFile'] });
   rememberDir(filePaths?.[0]);
   return filePaths?.[0] ?? null;
@@ -1505,13 +1763,20 @@ ipcMain.handle('select-media-files-all', async () => {
   const filters = [
     { name: 'Media', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'mp4', 'webm', 'mov', 'mkv', 'avi'] },
   ];
-  const { filePaths } = await dialog.showOpenDialog({ defaultPath: lastDialogDir, filters, properties: ['openFile', 'multiSelections'] });
+  const { filePaths } = await dialog.showOpenDialog({
+    defaultPath: lastDialogDir,
+    filters,
+    properties: ['openFile', 'multiSelections'],
+  });
   if (filePaths?.length) rememberDir(filePaths[0]);
   return filePaths?.length ? filePaths : null;
 });
 
 ipcMain.handle('select-media-folder', async () => {
-  const result = await dialog.showOpenDialog({ defaultPath: lastDialogDir, properties: ['openDirectory', 'createDirectory'] });
+  const result = await dialog.showOpenDialog({
+    defaultPath: lastDialogDir,
+    properties: ['openDirectory', 'createDirectory'],
+  });
   if (result.canceled || result.filePaths.length === 0) return null;
   lastDialogDir = result.filePaths[0]; // the selection IS a directory
   return result.filePaths[0];
@@ -1546,7 +1811,10 @@ ipcMain.handle('select-media-folder', async () => {
 */
 
 ipcMain.handle('select-audio-folder', async () => {
-  const result = await dialog.showOpenDialog({ defaultPath: lastDialogDir, properties: ['openDirectory', 'createDirectory'] });
+  const result = await dialog.showOpenDialog({
+    defaultPath: lastDialogDir,
+    properties: ['openDirectory', 'createDirectory'],
+  });
   if (result.canceled || result.filePaths.length === 0) return null;
   lastDialogDir = result.filePaths[0];
   return result.filePaths[0];
@@ -1583,6 +1851,14 @@ ipcMain.handle('read-media-folder', async (_event, folderPath: string, options?:
   }
 });
 
+ipcMain.handle('media:getThumbnail', async (_evt, filePath: string, maxEdge: number) => {
+  try {
+    return await getOrCreateThumbnail(filePath, { maxEdge });
+  } catch {
+    return null;
+  }
+});
+
 // IPC: PowerPoint
 
 ipcMain.handle('select-pptx-file', async () => {
@@ -1611,9 +1887,10 @@ ipcMain.handle('export-pptx', async (event, content: string) => {
     return { success: false, error: 'Invalid presentation data' };
   }
 
-  const baseName = String(data?.name || 'presentation')
-    .replace(/[\\/:*?"<>|]/g, '_')
-    .trim() || 'presentation';
+  const baseName =
+    String(data?.name || 'presentation')
+      .replace(/[\\/:*?"<>|]/g, '_')
+      .trim() || 'presentation';
 
   const { filePath, canceled } = await dialog.showSaveDialog({
     title: 'Export PowerPoint',
@@ -1632,8 +1909,11 @@ ipcMain.handle('export-pptx', async (event, content: string) => {
 ipcMain.handle('import-hymn-archive', async (_, dirPath?: string) => {
   let selected = dirPath;
   if (selected) {
-    try { if (!(await fs.stat(selected)).isDirectory()) selected = undefined; }
-    catch { selected = undefined; }
+    try {
+      if (!(await fs.stat(selected)).isDirectory()) selected = undefined;
+    } catch {
+      selected = undefined;
+    }
   }
   if (!selected) {
     const { filePaths } = await dialog.showOpenDialog({ defaultPath: lastDialogDir, properties: ['openDirectory'] });
@@ -1650,7 +1930,7 @@ ipcMain.handle('import-hymn-archive', async (_, dirPath?: string) => {
   for (let i = 0; i < xmlPaths.length; i += CHUNK_SIZE) {
     const chunk = xmlPaths.slice(i, i + CHUNK_SIZE);
     const results = await Promise.all(
-      chunk.map(fp => fs.readFile(fp, 'utf-8').then(content => ({ name: path.basename(fp), content }))),
+      chunk.map((fp) => fs.readFile(fp, 'utf-8').then((content) => ({ name: path.basename(fp), content })))
     );
     contents.push(...results);
   }
@@ -1675,7 +1955,7 @@ ipcMain.handle('get-screen-sources', async () => {
       thumbnailSize: { width: 320, height: 180 },
       fetchWindowIcons: false,
     });
-    return sources.map(source => ({
+    return sources.map((source) => ({
       id: source.id,
       name: source.name,
       thumbnail: source.thumbnail.toDataURL(),
@@ -1694,7 +1974,7 @@ ipcMain.handle('capture-screen-source', async (_, sourceId: string) => {
       thumbnailSize: { width: 1920, height: 1080 },
       fetchWindowIcons: false,
     });
-    const source = sources.find(s => s.id === sourceId);
+    const source = sources.find((s) => s.id === sourceId);
     return source ? source.thumbnail.toDataURL() : null;
   } catch (error) {
     console.error('Error capturing screen source:', error);
@@ -1705,19 +1985,23 @@ ipcMain.handle('capture-screen-source', async (_, sourceId: string) => {
 // IPC: Google Drive
 
 ipcMain.handle('drive-sign-in', async () => {
-  try { return await driveService.signIn(); }
-  catch (error) {
+  try {
+    return await driveService.signIn();
+  } catch (error) {
     console.error('Drive sign-in error:', error);
     return { signedIn: false, email: null };
   }
 });
 
-ipcMain.handle('drive-sign-out', () => { driveService.signOut(); });
+ipcMain.handle('drive-sign-out', () => {
+  driveService.signOut();
+});
 ipcMain.handle('drive-status', async () => driveService.getStatus());
 
 ipcMain.handle('drive-list-files', async () => {
-  try { return await driveService.listFiles(); }
-  catch (error) {
+  try {
+    return await driveService.listFiles();
+  } catch (error) {
     console.error('Drive list error:', error);
     return [];
   }
@@ -1774,7 +2058,10 @@ ipcMain.handle('drive-save-presentation', async (_, content: string, customName?
     const { embeddedCount, zipBuffer } = await heavyClient.buildGpres(JSON.stringify(data), mediaLibrary.dir);
 
     // Strip characters invalid in filenames / Drive names.
-    const baseName = String(data.name || 'presentation').replace(/[\\/:*?"<>|]/g, '_').trim() || 'presentation';
+    const baseName =
+      String(data.name || 'presentation')
+        .replace(/[\\/:*?"<>|]/g, '_')
+        .trim() || 'presentation';
     const name = `${baseName}.gpres`;
 
     const id = await driveService.uploadBuffer(name, zipBuffer);
