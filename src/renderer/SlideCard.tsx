@@ -1,6 +1,6 @@
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Video, Monitor, ListOrdered, Play, Pause, Square } from 'lucide-react';
+import { Video, Monitor, ListOrdered, Play, Pause, Square, Lock } from 'lucide-react';
 import type { Slide, SlideItem, TextStyle } from './types';
 import { cn } from './utils';
 
@@ -127,10 +127,9 @@ const TextItem = memo(({ item }: { item: SlideItem }) => {
 TextItem.displayName = 'TextItem';
 
 // Slide items container
-const SlideItemsPreview = memo(({ items, slide, isHovered = false }: {
+const SlideItemsPreview = memo(({ items, slide }: {
   items: SlideItem[];
   slide: Slide;
-  isHovered?: boolean;
 }) => {
   const bgColor = slide.styles?.backgroundColor ?? '#000000';
   const bgImage = slide.styles?.backgroundImage;
@@ -324,7 +323,7 @@ const BackgroundVideoPlayer = memo(({ src }: { src: string }) => {
 
 BackgroundVideoPlayer.displayName = 'BackgroundVideoPlayer';
 
-const TextSlidePreview = memo(({ slide, isHovered = false, cardWidth = 320 }: { slide: Slide; isHovered?: boolean; cardWidth?: number }) => {
+const TextSlidePreview = memo(({ slide, cardWidth = 320 }: { slide: Slide; cardWidth?: number }) => {
   const displayContent = slide.partsMode && slide.parts?.length
     ? slide.parts[slide.activePart ?? 0]
     : slide.content;
@@ -383,8 +382,222 @@ const TextSlidePreview = memo(({ slide, isHovered = false, cardWidth = 320 }: { 
 
 TextSlidePreview.displayName = 'TextSlidePreview';
 
+const loopVideoThumbnailCache = new Map<string, string>();
+
+// Normalise a file:// or local-resource:// URL back to a plain OS path so we
+// can pass it to the Electron IPC thumbnail generator.
+function mediaUrlToFilePath(url: string): string | null {
+  try {
+    if (url.startsWith('file://')) {
+      let p = decodeURIComponent(new URL(url).pathname);
+      // Windows: /C:/... → C:/...
+      if (/^\/[a-zA-Z]:\//.test(p)) p = p.slice(1);
+      return p.replace(/\//g, '\\');
+    }
+    if (url.startsWith('local-resource://mediafile/')) {
+      const encoded = url.slice('local-resource://mediafile/'.length);
+      let p = decodeURIComponent(encoded);
+      if (/^[a-zA-Z]:\//.test(p)) p = p.replace(/\//g, '\\');
+      return p;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+// Render a single video frame to a data URL entirely in the renderer.
+// Uses play/pause + requestVideoFrameCallback (if available) to guarantee the
+// decoded frame is in the pixel buffer before drawing.
+function extractVideoFrameDataUrl(mediaUrl: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.crossOrigin = 'anonymous';
+    video.preload = 'auto';
+    video.setAttribute('muted', '');
+    video.setAttribute('playsinline', '');
+
+    // Convert file:// to local-resource:// so CORS canvas tainting is avoided.
+    let src = mediaUrl;
+    if (mediaUrl.startsWith('file://') && window.electronAPI) {
+      const fp = mediaUrlToFilePath(mediaUrl);
+      if (fp) src = `local-resource://mediafile/${encodeURIComponent(fp.replace(/\\/g, '/'))}`;
+    }
+    video.src = src;
+
+    let settled = false;
+    const timer = setTimeout(() => done(null), 10_000);
+
+    const done = (result: string | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      video.pause();
+      video.removeAttribute('src');
+      try { video.load(); } catch { /**/ }
+      resolve(result);
+    };
+
+    const capture = () => {
+      try {
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        if (!vw || !vh) { done(null); return; }
+        const maxEdge = 400;
+        const scale = Math.min(maxEdge / vw, maxEdge / vh, 1);
+        const c = document.createElement('canvas');
+        c.width = Math.round(vw * scale);
+        c.height = Math.round(vh * scale);
+        const ctx = c.getContext('2d');
+        if (!ctx) { done(null); return; }
+        ctx.drawImage(video, 0, 0, c.width, c.height);
+        // Detect all-black frame and retry up to 3 times at different positions
+        try {
+          const d = ctx.getImageData(0, 0, Math.min(c.width, 40), Math.min(c.height, 40)).data;
+          let sum = 0, n = 0;
+          for (let i = 0; i < d.length; i += 4 * 16) { sum += d[i] + d[i+1] + d[i+2]; n++; }
+          if (n > 0 && sum / (n * 3) < 10) { done(null); return; }
+        } catch { /**/ }
+        c.toBlob((blob) => {
+          if (!blob) { done(null); return; }
+          const reader = new FileReader();
+          reader.onload = () => done(reader.result as string);
+          reader.onerror = () => done(null);
+          reader.readAsDataURL(blob);
+        }, 'image/jpeg', 0.75);
+      } catch {
+        done(null);
+      }
+    };
+
+    const afterSeek = () => {
+      // play/pause forces the codec to decode the current frame into the buffer.
+      const p = video.play();
+      const proceed = () => { video.pause(); };
+      if (p) p.then(proceed).catch(proceed);
+      else proceed();
+
+      if (typeof (video as any).requestVideoFrameCallback === 'function') {
+        (video as any).requestVideoFrameCallback(() => { if (!settled) capture(); });
+        setTimeout(() => { if (!settled) capture(); }, 800);
+      } else {
+        requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => { if (!settled) capture(); }, 80)));
+      }
+    };
+
+    video.onloadedmetadata = () => {
+      const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+      const seekTo = duration > 0
+        ? Math.min(Math.max(duration * 0.08, 0.05), Math.max(0, duration - 0.1))
+        : 0;
+      if (seekTo > 0) {
+        video.currentTime = seekTo;
+      } else {
+        afterSeek();
+      }
+    };
+    video.onseeked = afterSeek;
+    video.onerror = () => done(null);
+    video.load();
+  });
+}
+
+const LoopVideoPreview = memo(({ item }: { item: NonNullable<Slide['loopItems']>[number] }) => {
+  const { t } = useTranslation();
+  const cacheKey = item.mediaUrl;
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | undefined>(
+    () => item.thumbnailUrl ?? loopVideoThumbnailCache.get(cacheKey)
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (item.thumbnailUrl) {
+      loopVideoThumbnailCache.set(cacheKey, item.thumbnailUrl);
+      setThumbnailUrl(item.thumbnailUrl);
+      return () => { cancelled = true; };
+    }
+
+    const cached = loopVideoThumbnailCache.get(cacheKey);
+    if (cached) {
+      setThumbnailUrl(cached);
+      return () => { cancelled = true; };
+    }
+
+    // ── 1. Try Electron main-process thumbnail (ffmpeg) ──────────────────
+    const api = window.electronAPI as (NonNullable<typeof window.electronAPI> & {
+      getMediaThumbnail?: (filePath: string, maxEdge: number) => Promise<string | null>;
+    }) | undefined;
+
+    const filePath = mediaUrlToFilePath(item.mediaUrl);
+
+    const tryMainProcess = async (): Promise<string | null> => {
+      if (!api?.getMediaThumbnail || !filePath) return null;
+      try {
+        const thumbUrl = await api.getMediaThumbnail(filePath, 400);
+        if (!thumbUrl) return null;
+        // Fetch as data URL so it survives without the cache on disk.
+        const res = await fetch(thumbUrl);
+        if (!res.ok) return thumbUrl;
+        const blob = await res.blob();
+        return await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        });
+      } catch {
+        return null;
+      }
+    };
+
+    const run = async () => {
+      // Try main-process first (ffmpeg — most reliable)
+      const mainResult = await tryMainProcess();
+      if (cancelled) return;
+      if (mainResult) {
+        loopVideoThumbnailCache.set(cacheKey, mainResult);
+        setThumbnailUrl(mainResult);
+        return;
+      }
+
+      // ── 2. Renderer-side video frame extraction ──────────────────────
+      const rendererResult = await extractVideoFrameDataUrl(item.mediaUrl);
+      if (cancelled || !rendererResult) return;
+      loopVideoThumbnailCache.set(cacheKey, rendererResult);
+      setThumbnailUrl(rendererResult);
+    };
+
+    run().catch(() => { /* placeholder icon remains */ });
+    return () => { cancelled = true; };
+  }, [cacheKey, item.thumbnailUrl, item.mediaUrl]);
+
+  if (thumbnailUrl) {
+    return (
+      <img
+        src={thumbnailUrl}
+        className="w-full h-full object-cover"
+        alt={t('common.slideVideo')}
+        loading="lazy"
+      />
+    );
+  }
+
+  return (
+    <div className="w-full h-full flex items-center justify-center bg-black/50">
+      <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+        <div className="w-0 h-0 border-l-[8px] border-l-white border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent ml-1" />
+      </div>
+    </div>
+  );
+});
+
+LoopVideoPreview.displayName = 'LoopVideoPreview';
+
 // Slide content renderer
-const SlideContent = memo(({ slide, isHovered = false, cardWidth }: { slide: Slide; isHovered?: boolean; cardWidth?: number }) => {
+const SlideContent = memo(({ slide, cardWidth }: { slide: Slide; cardWidth?: number }) => {
   const { t } = useTranslation();
   const hasItems = slide.items && slide.items.length > 0;
 
@@ -393,7 +606,6 @@ const SlideContent = memo(({ slide, isHovered = false, cardWidth }: { slide: Sli
       <SlideItemsPreview
         items={slide.items!}
         slide={slide}
-        isHovered={isHovered}
       />
     );
   }
@@ -435,11 +647,7 @@ const SlideContent = memo(({ slide, isHovered = false, cardWidth }: { slide: Sli
             loading="lazy"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-black/50">
-            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-              <div className="w-0 h-0 border-l-[8px] border-l-white border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent ml-1" />
-            </div>
-          </div>
+          <LoopVideoPreview item={firstItem} />
         );
       }
       return (
@@ -456,7 +664,9 @@ const SlideContent = memo(({ slide, isHovered = false, cardWidth }: { slide: Sli
         const data = JSON.parse(slide.content);
         minutes = data.minutes ?? 0;
         seconds = data.seconds ?? 0;
-      } catch {}
+      } catch {
+        // Invalid countdown content uses the initial 00:00 fallback.
+      }
       const timeStr = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
       return (
         <div
@@ -486,7 +696,7 @@ const SlideContent = memo(({ slide, isHovered = false, cardWidth }: { slide: Sli
       );
 
     default:
-      return <TextSlidePreview slide={slide} isHovered={isHovered} cardWidth={cardWidth} />;
+      return <TextSlidePreview slide={slide} cardWidth={cardWidth} />;
   }
 });
 
@@ -551,6 +761,22 @@ const SlideBadges = memo(({ slide, index, isSelected, isLive }: {
 
 SlideBadges.displayName = 'SlideBadges';
 
+// Small lock badge for the broadcast-locked slide (top-right corner)
+const LockBadge = memo(() => {
+  const { t } = useTranslation();
+  return (
+    <span
+      className="absolute top-2 right-2 z-10 inline-flex items-center justify-center w-6 h-6 rounded-md bg-amber-500/90 text-black shadow-md"
+      title={t('common.slideLockOn')}
+      aria-label={t('common.slideLockOn')}
+    >
+      <Lock className="w-3.5 h-3.5" aria-hidden="true" />
+    </span>
+  );
+});
+
+LockBadge.displayName = 'LockBadge';
+
 // Main SlideCard component
 export const SlideCard = memo(({
   slide,
@@ -564,11 +790,9 @@ export const SlideCard = memo(({
   onDragEnd,
   onDrop,
   isDragging,
-  zoom = 1,
   cardWidth,
 }: SlideCardProps) => {
   const { t } = useTranslation();
-  const [isHovered, setIsHovered] = useState(false);
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     onClick(slide.id, index, e);
@@ -592,20 +816,15 @@ export const SlideCard = memo(({
     onDragOver?.(slide.id, index);
   }, [onDragOver, slide.id, index]);
 
-  const handleDragEnter = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
-
   const handleDragEnd = useCallback(() => {
     onDragEnd?.();
-  }, [onDragEnd, slide.id]);
+  }, [onDragEnd]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     onDrop?.();
-  }, [onDrop, slide.id]);
+  }, [onDrop]);
 
   const groupColor = slide.group?.color;
   const cardClassName = useMemo(() => cn(
@@ -629,10 +848,6 @@ export const SlideCard = memo(({
       onDrop={handleDrop}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onFocus={() => setIsHovered(true)}
-      onBlur={() => setIsHovered(false)}
       tabIndex={0}
       data-slide-id={slide.id}
       role="button"
@@ -642,9 +857,10 @@ export const SlideCard = memo(({
       aria-label={slideLabel}
     >
       <SlideBadges slide={slide} index={index} isSelected={isSelected} isLive={isLive} />
+      {slide.locked && <LockBadge />}
 
       <div className="aspect-video bg-black flex items-center justify-center overflow-hidden">
-        <SlideContent slide={slide} isHovered={isHovered} cardWidth={cardWidth} />
+        <SlideContent slide={slide} cardWidth={cardWidth} />
       </div>
     </div>
   );

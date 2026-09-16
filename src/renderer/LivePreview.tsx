@@ -1,5 +1,5 @@
-import { memo, useEffect, useRef, useState } from 'react';
-import type { Slide, LoopItem } from './types';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { Slide } from './types';
 import { cn } from './utils';
 import { SLIDE_REFERENCE_WIDTH, ANIM_MAP } from './constants';
 import CountdownRenderer from './CountdownRenderer';
@@ -45,32 +45,44 @@ function VideoPlayer({ mediaUrl, objectFit, volume = 1, muted = false }: { media
 function LoopRenderer({ slide, width, height, isActive = true, volume = 1, muted = false }: { slide: Slide; width: number; height: number; isActive?: boolean; volume?: number; muted?: boolean }) {
   const { t } = useTranslation();
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [outgoing, setOutgoing] = useState<{ item: LoopItem; idx: number } | null>(null);
-  const items = slide.loopItems ?? [];
+  const [transition, setTransition] = useState<{ from: number; to: number } | null>(null);
+  const items = useMemo(() => slide.loopItems ?? [], [slide.loopItems]);
   const currentItem = items[currentIndex];
   const loopTr = slide.loopTransition;
   const trType = loopTr?.type ?? 'none';
   const trDuration = loopTr?.duration ?? 400;
   const anim = ANIM_MAP[trType];
 
-  useEffect(() => {
-    if (!items.length || !isActive) return;
-    const timer = setTimeout(() => {
-      setOutgoing({ item: currentItem, idx: currentIndex });
-      setCurrentIndex(prev => (prev + 1) % items.length);
-    }, currentItem?.duration ?? 5000);
-    return () => clearTimeout(timer);
-  }, [currentIndex, items.length, currentItem?.duration, isActive]);
+  const advanceToNext = useCallback(() => {
+    if (!items.length) return;
+    const nextIndex = (currentIndex + 1) % items.length;
+    const nextItem = items[nextIndex];
+    const shouldAnimate =
+      currentItem?.type !== 'video' &&
+      nextItem?.type !== 'video' &&
+      trType !== 'none' &&
+      trDuration > 0;
+
+    setTransition(shouldAnimate ? { from: currentIndex, to: nextIndex } : null);
+    setCurrentIndex(nextIndex);
+  }, [currentIndex, currentItem?.type, items, trDuration, trType]);
+
 
   useEffect(() => {
-    if (!outgoing) return;
-    if (trType === 'none' || trDuration === 0) {
-      setOutgoing(null);
-      return;
-    }
-    const timer = setTimeout(() => setOutgoing(null), trDuration + 50);
+    if (!items.length || !currentItem || !isActive) return;
+    // A full-duration video advances from its native `ended` event. Do not
+    // start a second timer here, otherwise the old manual duration adds a
+    // visible pause after the video has already finished.
+    if (currentItem.type === 'video' && currentItem.useVideoDuration) return;
+    const timer = setTimeout(advanceToNext, currentItem.duration || 5000);
     return () => clearTimeout(timer);
-  }, [outgoing, trType, trDuration]);
+  }, [advanceToNext, currentItem, items.length, isActive]);
+
+  useEffect(() => {
+    if (!transition) return;
+    const timer = setTimeout(() => setTransition(null), trDuration + 50);
+    return () => clearTimeout(timer);
+  }, [transition, trDuration]);
 
   if (!items.length) {
     return (
@@ -82,44 +94,55 @@ function LoopRenderer({ slide, width, height, isActive = true, volume = 1, muted
 
   if (!currentItem) return null;
 
-  const outgoingAnim = outgoing && anim.out ? `${anim.out} ${trDuration}ms ease forwards` : undefined;
-  const incomingAnim = outgoing && anim.in ? `${anim.in} ${trDuration}ms ease forwards` : undefined;
-  const showOutgoing = outgoing !== null && trType !== 'none' && trDuration > 0;
-
   return (
     <div className="relative overflow-hidden bg-black" style={{ width, height }}>
-      {/* Outgoing layer */}
-      {showOutgoing && outgoing && (
-        <div className="absolute inset-0" style={{ animation: outgoingAnim }}>
-          {outgoing.item.type === 'image' ? (
-            <img
-              src={outgoing.item.mediaUrl}
-              className="w-full h-full object-contain"
-              alt=""
-            />
-          ) : (
-            <LoopVideoPlayer mediaUrl={outgoing.item.mediaUrl} isActive={false} volume={volume} muted={muted} />
-          )}
-        </div>
-      )}
+      {items.map((item, index) => {
+        const isCurrent = index === currentIndex;
+        const isOutgoing = transition?.from === index;
+        const isIncoming = transition?.to === index;
+        const isVisible = isCurrent || isOutgoing;
+        const animation = isOutgoing
+          ? anim.out && `${anim.out} ${trDuration}ms ease forwards`
+          : isIncoming
+            ? anim.in && `${anim.in} ${trDuration}ms ease forwards`
+            : undefined;
 
-      {/* Incoming layer */}
-      <div className="absolute inset-0" style={{ animation: incomingAnim }}>
-        {currentItem.type === 'image' ? (
-          <img
-            src={currentItem.mediaUrl}
-            className="w-full h-full object-contain"
-            alt=""
-          />
-        ) : (
-          <LoopVideoPlayer mediaUrl={currentItem.mediaUrl} isActive={isActive} volume={volume} muted={muted} />
-        )}
-      </div>
+        return (
+          <div
+            key={item.id}
+            className="absolute inset-0"
+            aria-hidden={!isVisible}
+            style={{
+              zIndex: isIncoming ? 2 : isOutgoing ? 1 : 0,
+              opacity: isVisible ? 1 : 0,
+              pointerEvents: isVisible ? 'auto' : 'none',
+              animation: animation || undefined,
+            }}
+          >
+            {item.type === 'image' ? (
+              <img src={item.mediaUrl} className="w-full h-full object-contain" alt="" />
+            ) : (
+              <LoopVideoPlayer
+                onEnded={
+                  item.type === 'video' && item.useVideoDuration && isCurrent && isActive
+                    ? advanceToNext
+                    : undefined
+                }
+                mediaUrl={item.mediaUrl}
+                isActive={isActive && isCurrent}
+                preload={isCurrent || index === (currentIndex + 1) % items.length ? 'auto' : 'metadata'}
+                volume={volume}
+                muted={muted}
+              />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-function LoopVideoPlayer({ mediaUrl, isActive = true, volume = 1, muted = false }: { mediaUrl: string; isActive?: boolean; volume?: number; muted?: boolean }) {
+function LoopVideoPlayer({ mediaUrl, isActive = true, preload = 'auto', volume = 1, muted = false, onEnded }: { mediaUrl: string; isActive?: boolean; preload?: 'none' | 'metadata' | 'auto'; volume?: number; muted?: boolean; onEnded?: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Apply volume/muted (global media controls) — previously loop videos
@@ -131,23 +154,45 @@ function LoopVideoPlayer({ mediaUrl, isActive = true, volume = 1, muted = false 
     video.muted = muted;
   }, [volume, muted]);
 
+  // Reset only when a player receives a genuinely different source. The
+  // current player is moved into the outgoing layer during a transition; a
+  // reset here would replace its live frame with the video's first frame.
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    video.currentTime = 0;
+    try {
+      video.currentTime = 0;
+    } catch {
+      // The media may not have metadata yet; playback will still start at 0.
+    }
+  }, [mediaUrl]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
     if (isActive) {
+      if (video.ended || (Number.isFinite(video.duration) && video.currentTime >= video.duration - 0.05)) {
+        try {
+          video.currentTime = 0;
+        } catch {
+          // The browser will restart the ended media at its beginning.
+        }
+      }
       video.play().catch(() => {});
     } else {
+      // Freeze the last decoded frame while the outgoing layer animates away.
       video.pause();
     }
-  }, [mediaUrl, isActive]);
+  }, [isActive]);
 
   return (
     <video
       ref={videoRef}
       src={mediaUrl}
-      autoPlay
-      muted={muted}
+      preload={preload}
+      playsInline
+      loop={!onEnded}
+      onEnded={onEnded}
       className="w-full h-full object-contain"
     />
   );
@@ -465,24 +510,35 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
           {displayContent}
         </p>
         {hymnAuthor && (() => {
+          const pos = (() => { try { return localStorage.getItem('hymnAuthorPosition') || 'bottom-center'; } catch { return 'bottom-center'; } })();
+          const sizePct = (() => { try { return Number(localStorage.getItem('hymnAuthorSize') || '28'); } catch { return 28; } })();
+          const isTop    = pos.startsWith('top');
+          const isBottom = !isTop;
+          const isLeft   = pos.endsWith('left');
+          const isRight  = pos.endsWith('right');
+          const isCenter = pos.endsWith('center');
+
           const watermarkAtBottomCenter = wmConfig.enabled && wmConfig.logoDataUrl && wmConfig.position === 'bottom-center';
-          const watermarkAtBottomLeft = wmConfig.enabled && wmConfig.logoDataUrl && wmConfig.position === 'bottom-left';
-          const watermarkAtBottomRight = wmConfig.enabled && wmConfig.logoDataUrl && wmConfig.position === 'bottom-right';
-          const authorBottom = watermarkAtBottomCenter ? 13 : 3;
-          const authorPadding = `${20 * scale}px ${watermarkAtBottomLeft || watermarkAtBottomRight ? 28 * scale : 20 * scale}px`;
-          return (
-          <span
-            className="absolute left-0 right-0 z-10 text-center opacity-70"
-            style={{
-              bottom: `${authorBottom * scale}px`,
-              fontSize: `${Math.max(8, fontSize * scale * 0.28)}px`,
-              color: styles.textColor || '#fff',
-              padding: authorPadding,
-            }}
-          >
-            {hymnAuthor}
-          </span>
-          );
+          const watermarkAtSide = wmConfig.enabled && wmConfig.logoDataUrl &&
+            (wmConfig.position === 'bottom-left' || wmConfig.position === 'bottom-right');
+
+          const edgeOffset = (isBottom && watermarkAtBottomCenter ? 13 : 3) * scale;
+          const sidePad    = (watermarkAtSide && isBottom ? 28 : 20) * scale;
+
+          const posStyle: React.CSSProperties = {
+            position: 'absolute',
+            zIndex: 10,
+            fontSize: `${Math.max(8, fontSize * scale * (sizePct / 100))}px`,
+            color: styles.textColor || '#fff',
+            opacity: 0.7,
+            padding: `${20 * scale}px ${sidePad}px`,
+            ...(isTop    ? { top:    edgeOffset } : { bottom: edgeOffset }),
+            ...(isLeft   ? { left: 0, textAlign: 'left'   as const } : {}),
+            ...(isRight  ? { right: 0, textAlign: 'right'  as const } : {}),
+            ...(isCenter ? { left: 0, right: 0, textAlign: 'center' as const } : {}),
+          };
+
+          return <span style={posStyle}>{hymnAuthor}</span>;
         })()}
         <WatermarkOverlay slide={slide!} config={wmConfig} />
       </div>

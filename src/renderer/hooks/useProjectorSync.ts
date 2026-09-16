@@ -5,6 +5,7 @@ import { generateSlideThumbnail, useThrottle } from '../utils';
 import { computePatch, isPatchEmpty, type ProjectorPatch } from '../state/undoReducer';
 import type { Presentation, Slide, TransitionType } from '../types';
 import { chooseDefaultOutputDisplay, effectiveOutputSlideIndex, type DisplayMode } from '../../shared/displays';
+import { findLockedSlideIndex } from '../slideLock';
 import type { ThumbSlideData } from '../../shared/thumbnailConfig';
 
 /**
@@ -39,23 +40,9 @@ const TRANSITION_MAP: Record<TransitionType, string> = {
 };
 
 /**
- * Check if a slide is text-only (no external images) and can be sent to
- * the utility process for rendering. Image slides stay in the renderer
- * where the DOM images are already loaded.
- */
-function isTextOnlySlide(slide: Slide): boolean {
-  if (slide.type === 'screen' || slide.type === 'countdown') return true;
-  if (slide.type !== 'text' && slide.type !== 'loop' && slide.type !== 'captions') return false;
-  if (slide.mediaUrl && !slide.mediaUrl.startsWith('data:')) return false;
-  if (slide.thumbnailUrl && !slide.thumbnailUrl.startsWith('data:')) return false;
-  if (slide.items?.some(it => it.type === 'image' && it.mediaUrl && !it.mediaUrl.startsWith('data:'))) return false;
-  if (slide.loopItems?.some(it => it.mediaUrl && !it.mediaUrl.startsWith('data:'))) return false;
-  return true;
-}
-
-/**
  * Serialize a slide into the minimal format for the utility process worker.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for the planned utility-process thumbnail path
 function toThumbSlideData(slide: Slide): ThumbSlideData {
   return {
     id: slide.id,
@@ -185,8 +172,13 @@ export function useProjectorSync() {
   useEffect(() => {
     if (IS_PROJECTOR_MODE || !hasOpenOutputs || !projectorReady) return;
 
+    // Broadcast lock: the output always receives the locked slide's index,
+    // so a transient navigation request can never repaint it elsewhere.
+    const lockedIdx = findLockedSlideIndex(presentation.slides);
+    const effectiveLiveIndex = lockedIdx >= 0 ? lockedIdx : liveIndex;
+
     const nav = {
-      liveIndex,
+      liveIndex: effectiveLiveIndex,
       isBlackout,
       volume: mediaVolume,
       muted: isMediaMuted,

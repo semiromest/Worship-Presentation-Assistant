@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ChevronLeft, ChevronRight, Eye, EyeOff, Play, VolumeX, Volume2, Timer, Type,
   Edit3, ChevronUp, ChevronDown, Trash2, Monitor, Repeat, Image as ImageIcon, Video, MousePointer2,
-  PanelRightClose, Plus, Settings2, Captions
+  PanelRightClose, Plus, Settings2, Captions, Lock, LockOpen
 } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { cn, toFileUrl } from '../utils';
@@ -72,6 +72,7 @@ export default function RightPanel({
   const setIsEditorOpen = useStore((s) => s.setIsEditorOpen);
   const isRightPanelOpen = useStore((s) => s.isRightPanelOpen);
   const setIsRightPanelOpen = useStore((s) => s.setIsRightPanelOpen);
+  const toggleSlideLock = useStore((s) => s.toggleSlideLock);
 
   const transitionType = presentation.transition?.type ?? DEFAULT__TRANSITION.type;
   const transitionDuration = presentation.transition?.duration ?? DEFAULT__TRANSITION.duration;
@@ -79,6 +80,9 @@ export default function RightPanel({
   const selectedSlide = presentation.slides.find((s) => s.id === selectedSlideId);
   const selectedSlideIndex = presentation.slides.findIndex((s) => s.id === selectedSlideId);
   const liveSlide = presentation.slides[liveIndex] ?? presentation.slides[0];
+  // Broadcast lock state: single lock, pins the live output to one slide.
+  const isBroadcastLocked = presentation.slides.some((s) => s.locked);
+  const selectedSlideLocked = selectedSlide?.locked === true;
 
   const getSlideIndex = (slides: Slide[], id: string): number =>
     slides.findIndex((s) => s.id === id);
@@ -162,8 +166,8 @@ export default function RightPanel({
               )}
               <button
                 onClick={() => setLiveIndex((p) => Math.max(0, p - 1))}
-                disabled={liveIndex === 0}
-                title={t('common.prevSlide')}
+                disabled={liveIndex === 0 || isBroadcastLocked}
+                title={isBroadcastLocked ? t('common.slideLockActiveHint') : t('common.prevSlide')}
                 aria-label={t('common.prevSlide')}
                 className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-30 transition-[background-color,border-color,opacity] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92] disabled:active:scale-100"
               >
@@ -174,8 +178,8 @@ export default function RightPanel({
               </span>
               <button
                 onClick={() => setLiveIndex((p) => Math.min(presentation.slides.length - 1, p + 1))}
-                disabled={liveIndex === presentation.slides.length - 1}
-                title={t('common.nextSlide')}
+                disabled={liveIndex === presentation.slides.length - 1 || isBroadcastLocked}
+                title={isBroadcastLocked ? t('common.slideLockActiveHint') : t('common.nextSlide')}
                 aria-label={t('common.nextSlide')}
                 className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-30 transition-[background-color,border-color,opacity] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92] disabled:active:scale-100"
               >
@@ -208,14 +212,15 @@ export default function RightPanel({
             <button
               onClick={() => {
                 const idx = getSlideIndex(presentation.slides, selectedSlideId);
-                if (idx >= 0) {
+                if (idx >= 0 && !isBroadcastLocked) {
                   setLiveIndex(idx);
                   playSfx('start');
                 }
               }}
-              title={t('common.sendSelectedToLive')}
+              disabled={isBroadcastLocked}
+              title={isBroadcastLocked ? t('common.slideLockActiveHint') : t('common.sendSelectedToLive')}
               aria-label={t('common.sendSelectedToLive')}
-              className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 font-bold text-xs transition-[background-color,border-color] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.97]"
+              className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 font-bold text-xs transition-[background-color,border-color] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.97] disabled:opacity-40 disabled:hover:bg-blue-600/20 disabled:cursor-not-allowed"
             >
               <Play className="w-3.5 h-3.5" aria-hidden="true" />
               {t('common.goToSelected')}
@@ -281,6 +286,25 @@ export default function RightPanel({
             </div>
             {selectedSlide && (
               <div className="flex items-center gap-1.5">
+                {/* Broadcast lock toggle — pins the live output to this slide. */}
+                <button
+                  onClick={() => toggleSlideLock(selectedSlide.id)}
+                  aria-pressed={selectedSlideLocked}
+                  title={selectedSlideLocked ? t('common.slideLockOff') : t('common.slideLockOn')}
+                  aria-label={selectedSlideLocked ? t('common.slideLockOff') : t('common.slideLockOn')}
+                  className={cn(
+                    'p-1.5 rounded-lg border transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none',
+                    selectedSlideLocked
+                      ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 hover:bg-amber-500/30'
+                      : 'bg-white/5 text-white hover:bg-white/10 border-white/10'
+                  )}
+                >
+                  {selectedSlideLocked ? (
+                    <Lock className="w-3.5 h-3.5" aria-hidden="true" />
+                  ) : (
+                    <LockOpen className="w-3.5 h-3.5" aria-hidden="true" />
+                  )}
+                </button>
                 {selectedSlide && !['countdown', 'screen', 'loop', 'captions'].includes(selectedSlide.type) && (
                   <button
                     onClick={() => setIsEditorOpen(true)}
@@ -309,8 +333,10 @@ export default function RightPanel({
                 </button>
                 <button
                   onClick={() => removeSlide(selectedSlide.id)}
-                  className="p-1.5 text-red-400 hover:bg-red-400/10 rounded-lg border border-red-500/10 transition-colors"
+                  disabled={selectedSlideLocked}
+                  title={selectedSlideLocked ? t('common.slideLockActiveHint') : t('common.delete')}
                   aria-label={t('common.delete')}
+                  className="p-1.5 text-red-400 hover:bg-red-400/10 rounded-lg border border-red-500/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
                   <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                 </button>
@@ -651,16 +677,37 @@ function LoopEditor({
                 {item.fileName ?? (item.type === 'video' ? t('common.video') : t('common.image'))}
               </span>
 
+              {item.type === 'video' && (
+                <button
+                  type="button"
+                  onClick={() => updateItem(item.id, { useVideoDuration: !item.useVideoDuration })}
+                  aria-pressed={item.useVideoDuration}
+                  title={t('common.loopUseVideoDuration')}
+                  className={cn(
+                    'w-6 h-6 rounded border text-[10px] font-bold transition-colors shrink-0',
+                    item.useVideoDuration
+                      ? 'bg-blue-500/25 border-blue-400/60 text-blue-300'
+                      : 'bg-black/20 border-white/10 text-white/40 hover:text-white/70'
+                  )}
+                >
+                  ▶
+                </button>
+              )}
+
               <input
                 type="number"
                 min={1}
                 max={999}
+                disabled={item.type === 'video' && item.useVideoDuration}
                 value={Math.round(item.duration / 1000)}
                 onChange={(e) => {
                   const sec = Math.max(1, parseInt(e.target.value, 10) || 1);
                   updateItem(item.id, { duration: sec * 1000 });
                 }}
-                className="w-12 text-[10px] text-white/70 bg-black/40 border border-white/10 rounded px-1 py-0.5 text-center outline-none focus:border-blue-500/50"
+                className={cn(
+                  'w-12 text-[10px] text-white/70 bg-black/40 border border-white/10 rounded px-1 py-0.5 text-center outline-none focus:border-blue-500/50',
+                  item.type === 'video' && item.useVideoDuration && 'opacity-40 cursor-not-allowed'
+                )}
               />
 
               <div className="flex items-center gap-0.5 opacity-60 hover:opacity-100 focus-visible:opacity-100 transition-opacity">

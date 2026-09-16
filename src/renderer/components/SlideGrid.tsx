@@ -59,9 +59,8 @@ function useVirtualRows(
 }
 
 /**
- * Ghost slide — a translucent "empty slot" card that mirrors real slide
- * dimensions and creates a new slide on click. Visually distinct via
- * dashed double-frame, dotted texture and a soft blue glow on hover.
+ * Ghost slide — a quiet "empty slot" card that mirrors real slide
+ * dimensions and creates a new slide on click without competing with slides.
  */
 const GhostSlide = memo(({ onClick, zoom }: { onClick: () => void; zoom: number }) => {
   const { t } = useTranslation();
@@ -72,25 +71,12 @@ const GhostSlide = memo(({ onClick, zoom }: { onClick: () => void; zoom: number 
       aria-label={t('common.addNewSlide')}
       aria-describedby="add-slide-hint"
       title={t('common.addSlideHint')}
-      className="group relative w-full aspect-video rounded-xl border border-dashed border-white/15 bg-gradient-to-b from-white/[0.04] to-transparent overflow-hidden cursor-pointer text-left transition-[border-color,background-color,box-shadow,transform] duration-150 ease-out hover:border-blue-400/40 hover:bg-blue-500/[0.04] hover:shadow-[0_0_24px_rgba(59,130,246,0.12)] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.98]"
+      className="group relative w-full aspect-video rounded-xl border border-dashed border-white/12 bg-white/[0.015] overflow-hidden cursor-pointer text-left transition-colors duration-150 hover:border-white/25 hover:bg-white/[0.035] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
       style={{ zoom }}
     >
-      <span
-        className="absolute inset-0 bg-[radial-gradient(circle,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:12px_12px] pointer-events-none"
-        aria-hidden="true"
-      />
-      <span
-        className="absolute inset-2 rounded border border-dashed border-white/10 transition-colors group-hover:border-blue-400/25"
-        aria-hidden="true"
-      />
-      <span className="relative z-10 flex flex-col items-center justify-center gap-2 h-full">
-        <span className="w-10 h-10 rounded-full border border-white/15 bg-white/[0.04] flex items-center justify-center transition-[transform,border-color,background-color,box-shadow] duration-150 ease-out group-hover:scale-110 group-hover:border-blue-400/50 group-hover:bg-blue-500/15 group-hover:shadow-[0_0_16px_rgba(59,130,246,0.25)]">
-          <Plus
-            className="w-4 h-4 text-white/50 transition-colors group-hover:text-blue-300"
-            aria-hidden="true"
-          />
-        </span>
-        <span className="text-xs font-semibold text-white/45 transition-colors group-hover:text-blue-300">
+      <span className="relative flex flex-col items-center justify-center gap-2 h-full">
+        <Plus className="w-4 h-4 text-white/35" aria-hidden="true" />
+        <span className="text-xs font-medium text-white/40">
           {t('common.addNewSlide')}
         </span>
       </span>

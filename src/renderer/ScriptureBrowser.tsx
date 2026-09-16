@@ -73,16 +73,32 @@ const TURKISH_CHARS_MAP: Record<string, string> = {
   ş: 's',
   ö: 'o',
   ç: 'c',
-  İ: 'i',
-  Ğ: 'g',
-  Ü: 'u',
-  Ş: 's',
-  Ö: 'o',
-  Ç: 'c',
 };
 
+/**
+ * Case-, diacritic- and punctuation-insensitive normalization for search.
+ *
+ * Key detail: `"İ".toLowerCase()` produces "i̇" (i + combining dot U+0307),
+ * so a plain toLowerCase() leaves a hidden combining mark that breaks matching
+ * (searching "ilyas" never matched "İlyas"). NFD decomposition + combining-mark
+ * strip removes it; the Turkish map handles letters NFD cannot decompose (ı ğ ü ş ö ç).
+ */
 function normalize(str: string): string {
-  return str.toLowerCase().replace(/[ığüşöçİĞÜŞÖÇ]/g, (char) => TURKISH_CHARS_MAP[char] || char);
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[ığüşöç]/g, (char) => TURKISH_CHARS_MAP[char] || char);
+}
+
+/**
+ * Splits normalized text into search tokens, discarding punctuation so that
+ * "İlyas," / "İlyas'ın" are findable as "ilyas".
+ */
+function tokenize(str: string): string[] {
+  return normalize(str)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
 }
 
 function findMatthewIndex(books: BibleBook[]): number {
@@ -560,7 +576,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
       for (let ci = 0; ci < book.chapters.length; ci++) {
         const chapter = book.chapters[ci];
         for (let vi = 0; vi < chapter.verses.length; vi++) {
-          const words = new Set(normalize(chapter.verses[vi].text).split(/\s+/));
+          const words = new Set(tokenize(chapter.verses[vi].text));
           for (const word of words) {
             if (word.length < 2) continue;
             if (!index.has(word)) index.set(word, []);
@@ -576,8 +592,7 @@ export default function ScriptureBrowser({ onSendToLive }: ScriptureBrowserProps
   const contentSearchResults = useMemo(() => {
     if (!contentSearch || !bible || !searchIndex || !deferredSearch || deferredSearch.length < 2) return null;
 
-    const query = normalize(deferredSearch);
-    const words = query.split(/\s+/).filter((w) => w.length >= 2);
+    const words = tokenize(deferredSearch).filter((w) => w.length >= 2);
     if (words.length === 0) return null;
 
     const sets = words.map((word) => searchIndex.get(word) ?? []);

@@ -75,6 +75,10 @@ export interface LoopItem {
   type: 'image' | 'video';
   mediaUrl: string;
   duration: number;
+  /** Optional static frame used for loop slide thumbnails/previews. */
+  thumbnailUrl?: string;
+  /** When true, a video plays until its native end instead of using duration. */
+  useVideoDuration?: boolean;
   fileName?: string;
 }
 
@@ -143,6 +147,8 @@ export interface Slide {
   gridSize?: number;
   gridColor?: string;
   snapEnabled?: boolean;
+  /** Broadcast lock: while set, the live output is pinned to this slide. */
+  locked?: boolean;
   styles?: {
     fontSize: number;
     textTransform?: 'none' | 'uppercase' | 'lowercase';

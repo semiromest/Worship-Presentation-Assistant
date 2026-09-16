@@ -4,6 +4,7 @@ import { undoReducer, UndoState, UndoAction, applyProjectorPatch, ProjectorPatch
 // UndoAction is used in setPresentationName to keep rename in undo history
 import { DEFAULT_STYLES, DEFAULT__TRANSITION, PROJECTOR_OUTPUT_MODE } from '../constants';
 import { makeSlideId } from '../utils';
+import { resolveLiveIndexForLock, pinSlide, unpinSlide } from '../slideLock';
 import i18n from '../i18n';
 import { isSfxEnabled, setSfxEnabled } from '../sfx';
 import {
@@ -56,6 +57,8 @@ interface AppState {
   // Projector State
   liveIndex: number;
   setLiveIndex: (idx: number | ((prev: number) => number)) => void;
+  /** Broadcast lock: pins the live output to one slide (single lock). */
+  toggleSlideLock: (slideId: string) => void;
   /** Connected displays; hidden from the UI when there is only one display. */
   displays: DisplayInfo[];
   setDisplays: (displays: DisplayInfo[]) => void;
@@ -272,9 +275,45 @@ export const useStore = create<AppState>((set) => ({
 
   liveIndex: 0,
   setLiveIndex: (idx) =>
-    set((state) => ({
-      liveIndex: typeof idx === 'function' ? idx(state.liveIndex) : idx,
-    })),
+    set((state) => {
+      const requested = typeof idx === 'function' ? idx(state.liveIndex) : idx;
+      // Broadcast lock: the live output always resolves to the locked slide,
+      // regardless of which navigation path requested a change.
+      return { liveIndex: resolveLiveIndexForLock(requested, state.presentation.slides) };
+    }),
+
+  toggleSlideLock: (slideId) =>
+    set((state) => {
+      const slides = state.presentation.slides;
+      const wasLocked = slides.find((s) => s.id === slideId)?.locked === true;
+
+      if (wasLocked) {
+        // Unlock: clear the flag; the live index stays wherever it is.
+        const nextSlides = unpinSlide(slides, slideId);
+        const nextPresentation = { ...state.presentation, slides: nextSlides };
+        return {
+          undoState: { ...state.undoState, present: nextPresentation },
+          presentation: nextPresentation,
+        };
+      }
+
+      const pinned = pinSlide(slides, slideId);
+      if (!pinned) return {};
+
+      // Locking a non-live slide puts it live immediately (single store update:
+      // lock flag + live index + selection move together).
+      const idx = pinned.lockedIndex;
+      const slide = pinned.slides[idx];
+      const nextPresentation = { ...state.presentation, slides: pinned.slides };
+      return {
+        undoState: { ...state.undoState, present: nextPresentation },
+        presentation: nextPresentation,
+        liveIndex: idx,
+        selectedSlideId: slide.id,
+        selectedSlideIds: new Set([slide.id]),
+        lastSelectedIndex: idx,
+      };
+    }),
 
   displays: [],
   setDisplays: (displays) =>
@@ -373,7 +412,8 @@ export const useStore = create<AppState>((set) => ({
       const slide = state.presentation.slides[target];
       return {
         instantTransition: true,
-        liveIndex: target,
+        // Broadcast lock: navigation stays pinned to the locked slide.
+        liveIndex: resolveLiveIndexForLock(target, state.presentation.slides),
         ...(slide
           ? {
               selectedSlideId: slide.id,
@@ -503,7 +543,7 @@ export const useStore = create<AppState>((set) => ({
   backgroundMusicFiles: [],
   backgroundMusicCurrent: null,
   backgroundMusicPlaying: false,
-  setBackgroundMusicFolder: (folder) => { try { localStorage.setItem('backgroundMusicFolder', folder); } catch {} set({ backgroundMusicFolder: folder }); },
+  setBackgroundMusicFolder: (folder) => { try { localStorage.setItem('backgroundMusicFolder', folder); } catch { /* storage unavailable */ } set({ backgroundMusicFolder: folder }); },
   setBackgroundMusicFiles: (backgroundMusicFiles) => set({ backgroundMusicFiles }),
   setBackgroundMusicCurrent: (backgroundMusicCurrent) => set({ backgroundMusicCurrent }),
   setBackgroundMusicPlaying: (backgroundMusicPlaying) => set({ backgroundMusicPlaying }),

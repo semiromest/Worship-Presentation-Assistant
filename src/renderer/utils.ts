@@ -263,6 +263,41 @@ async function renderTextSlide(
     }
     ctx.fillText(lines[i], x, y);
   }
+
+  // ── Hymn author overlay — mirrors LivePreview.tsx author rendering ──
+  // Rendered only when group.author is set (i.e. showAuthorOnSlides was on
+  // at add-time), positioned according to the hymnAuthorPosition setting.
+  const hymnAuthor = slide.group?.author?.trim();
+  if (hymnAuthor) {
+    const pos = (() => { try { return localStorage.getItem('hymnAuthorPosition') || 'bottom-center'; } catch { return 'bottom-center'; } })();
+    const sizePct = (() => { try { return Number(localStorage.getItem('hymnAuthorSize') || '28'); } catch { return 28; } })();
+    const isTop   = pos.startsWith('top');
+    const isLeft  = pos.endsWith('left');
+    const isRight = pos.endsWith('right');
+
+    const authorFontSize = Math.max(8 / outScale, fontSize * (sizePct / 100));
+    const pad = 20 * baseScale;
+    const edgeOffset = 3 * baseScale;
+
+    ctx.save();
+    ctx.font = `normal normal ${authorFontSize}px ${ff}`;
+    ctx.fillStyle = styles.textColor || '#ffffff';
+    ctx.globalAlpha = 0.7;
+    ctx.textBaseline = isTop ? 'top' : 'bottom';
+
+    if (isLeft) {
+      ctx.textAlign = 'left';
+      ctx.fillText(hymnAuthor, pad, isTop ? edgeOffset + pad : H - edgeOffset - pad, W - pad * 2);
+    } else if (isRight) {
+      ctx.textAlign = 'right';
+      ctx.fillText(hymnAuthor, W - pad, isTop ? edgeOffset + pad : H - edgeOffset - pad, W - pad * 2);
+    } else {
+      ctx.textAlign = 'center';
+      ctx.fillText(hymnAuthor, W / 2, isTop ? edgeOffset + pad : H - edgeOffset - pad, W - pad * 2);
+    }
+    ctx.restore();
+  }
+
   return true;
 }
 
@@ -392,6 +427,125 @@ function renderCaptionsSlide(
   return true;
 }
 
+async function renderLoopVideoFrame(
+  ctx: CanvasRenderingContext2D,
+  mediaUrl: string,
+  W: number,
+  H: number,
+): Promise<boolean> {
+  const video = document.createElement('video');
+  video.preload = 'auto';
+  video.muted = true;
+  video.playsInline = true;
+  video.setAttribute('muted', '');
+  video.setAttribute('playsinline', '');
+  video.setAttribute('webkit-playsinline', '');
+
+  // Loop items created from a filesystem path normally contain a file:// URL.
+  // That URL is blocked by the dev-server origin, while the app's media
+  // protocol is Range-enabled and CORS-readable. Convert it for thumbnail
+  // decoding when the Electron bridge is available.
+  let source = mediaUrl;
+  if (mediaUrl.startsWith('file://') && typeof window !== 'undefined' && window.electronAPI) {
+    try {
+      let filePath = decodeURIComponent(new URL(mediaUrl).pathname);
+      if (/^\/[a-zA-Z]:\//.test(filePath)) filePath = filePath.slice(1);
+      source = `local-resource://mediafile/${encodeURIComponent(filePath)}`;
+      video.crossOrigin = 'anonymous';
+    } catch {
+      // Keep the original URL as a best-effort fallback.
+    }
+  } else if (mediaUrl.startsWith('local-resource://')) {
+    video.crossOrigin = 'anonymous';
+  }
+
+  const waitFor = (event: string, timeoutMs: number): Promise<boolean> =>
+    new Promise((resolve) => {
+      let settled = false;
+      const finish = (ok: boolean) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        video.removeEventListener(event, onEvent);
+        video.removeEventListener('error', onError);
+        resolve(ok);
+      };
+      const onEvent = () => finish(true);
+      const onError = () => finish(false);
+      const timer = setTimeout(() => finish(false), timeoutMs);
+      video.addEventListener(event, onEvent, { once: true });
+      video.addEventListener('error', onError, { once: true });
+    });
+
+  const waitForPaint = async () => {
+    // requestVideoFrameCallback fires exactly when the decoded frame is
+    // presented by the video engine — much more reliable than rAF alone.
+    if (typeof (video as any).requestVideoFrameCallback === 'function') {
+      await new Promise<void>((resolve) => {
+        (video as any).requestVideoFrameCallback(() => resolve());
+        // Safety net in case the callback never fires (e.g. paused decoder).
+        setTimeout(resolve, 800);
+      });
+    } else {
+      if (typeof requestAnimationFrame !== 'function') return;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      // Extra tick so the decoded frame is in the pixel buffer.
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    }
+  };
+
+  try {
+    video.src = source;
+    video.load();
+    if (video.readyState < HTMLMediaElement.HAVE_METADATA && !(await waitFor('loadedmetadata', 4_000))) return false;
+    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA && !(await waitFor('loadeddata', 4_000))) return false;
+
+    const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+    const seekTo = duration > 0
+      ? Math.min(Math.max(duration * 0.08, 0.05), Math.max(0, duration - 0.05))
+      : 0;
+    if (seekTo > 0) {
+      try {
+        video.currentTime = seekTo;
+        await waitFor('seeked', 4_000);
+      } catch {
+        // Some codecs cannot seek; the decoded current frame is still usable.
+      }
+    }
+
+    // Trigger the decoder to render the frame into the pixel buffer. Some
+    // codecs (e.g. H.265, VP9) only produce a visible frame after at least
+    // one play/pause cycle; a bare seek leaves the buffer black.
+    try {
+      const playPromise = video.play();
+      if (playPromise) await playPromise.catch(() => {});
+      video.pause();
+    } catch {
+      // Autoplay may be blocked; the decoded frame may still be usable.
+    }
+
+    await waitForPaint();
+
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (!vw || !vh) return false;
+    const { dx, dy, dw, dh } = calculateFit(vw, vh, W, H);
+    ctx.drawImage(video, dx, dy, dw, dh);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    video.pause();
+    video.removeAttribute('src');
+    try {
+      video.load();
+    } catch {
+      // Ignore media cleanup failures.
+    }
+  }
+}
+
 async function renderLoopSlide(
   ctx: CanvasRenderingContext2D,
   slide: Slide,
@@ -399,13 +553,61 @@ async function renderLoopSlide(
   H: number,
 ): Promise<boolean> {
   const first = slide.loopItems?.[0];
+
+  // Helper: convert a file:// or local-resource:// URL back to an OS path.
+  const toFilePath = (url: string): string | null => {
+    try {
+      if (url.startsWith('file://')) {
+        let p = decodeURIComponent(new URL(url).pathname);
+        if (/^\/[a-zA-Z]:\//.test(p)) p = p.slice(1);
+        return p.replace(/\//g, '\\');
+      }
+      if (url.startsWith('local-resource://mediafile/')) {
+        let p = decodeURIComponent(url.slice('local-resource://mediafile/'.length));
+        if (/^[a-zA-Z]:\//.test(p)) p = p.replace(/\//g, '\\');
+        return p;
+      }
+    } catch { /**/ }
+    return null;
+  };
+
+  // 1. Already-stored thumbnailUrl on the loop item (fastest).
+  if (first?.thumbnailUrl) {
+    const img = await loadImage(first.thumbnailUrl, { useFileUrl: true, applyCors: true });
+    if (img) { drawImageSafe(ctx, img, 'contain', W, H); return true; }
+  }
+
+  // 2. Image — load directly.
   if (first?.type === 'image' && first.mediaUrl) {
     const img = await loadImage(first.mediaUrl, { useFileUrl: true, applyCors: true });
-    if (img) {
-      drawImageSafe(ctx, img, 'contain', W, H);
-      return true;
-    }
+    if (img) { drawImageSafe(ctx, img, 'contain', W, H); return true; }
   }
+
+  // 3. Video — try Electron main-process thumbnail (ffmpeg) first.
+  if (first?.type === 'video' && first.mediaUrl) {
+    const api = (typeof window !== 'undefined' ? window.electronAPI : undefined) as
+      (NonNullable<typeof window.electronAPI> & {
+        getMediaThumbnail?: (filePath: string, maxEdge: number) => Promise<string | null>;
+      }) | undefined;
+
+    if (api?.getMediaThumbnail) {
+      const fp = toFilePath(first.mediaUrl);
+      if (fp) {
+        try {
+          const thumbUrl = await api.getMediaThumbnail(fp, Math.max(W, H));
+          if (thumbUrl) {
+            const img = await loadImage(thumbUrl, { useFileUrl: true, applyCors: true });
+            if (img) { drawImageSafe(ctx, img, 'contain', W, H); return true; }
+          }
+        } catch { /**/ }
+      }
+    }
+
+    // 4. Renderer-side video frame extraction (fallback).
+    if (await renderLoopVideoFrame(ctx, first.mediaUrl, W, H)) return true;
+  }
+
+  // 5. Placeholder.
   ctx.fillStyle = EMPTY_BG;
   ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = 'rgba(168,85,247,0.2)';

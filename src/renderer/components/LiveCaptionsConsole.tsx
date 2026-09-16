@@ -9,20 +9,24 @@ import {
   Captions,
   RefreshCw,
   AlertTriangle,
-  Globe2,
   LocateFixed,
   Plus,
   ChevronDown,
+  ChevronUp,
+  Download,
 } from 'lucide-react';
 import { useSttStore } from '../state/useSttStore';
 import { refreshSttInputDevices } from '../hooks/useStt';
 import { useSlideTrackerStore } from '../state/useSlideTrackerStore';
+import { useStore } from '../state/useStore';
 import { AUTO_STT_LANGUAGE, isAutoSttLanguage, languageName, STT_LANGUAGES } from '../../shared/stt';
 import type { Slide } from '../types';
 import { SLIDE_REFERENCE_WIDTH } from '../constants';
 import { cn } from '../utils';
 import CaptionsRenderer from './CaptionsRenderer';
 import SharePanel from './SharePanel';
+
+type ConsoleTab = 'setup' | 'share' | 'history';
 
 interface LiveCaptionsConsoleProps {
   /** Captions slide used for the WYSIWYG monitor (the live one when on air, otherwise the deck's). */
@@ -59,33 +63,39 @@ function Section({
   className?: string;
 }) {
   return (
-    <div className={cn('rounded-xl border border-white/10 bg-white/5 overflow-hidden', className)}>
+    <div
+      className={cn(
+        'rounded-[var(--radius-lg)] border border-white/10 bg-white/5 overflow-hidden',
+        className
+      )}
+    >
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-white/5 transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/5 transition-colors"
       >
         <ChevronDown
           className={cn('w-3.5 h-3.5 text-white/40 transition-transform shrink-0', open ? '' : '-rotate-90')}
           aria-hidden="true"
         />
-        <span className="flex-1 min-w-0 text-xs font-bold truncate">{title}</span>
-        {badge ? <span className="shrink-0 text-[10px] font-semibold text-white/40">{badge}</span> : null}
+        <span className="flex-1 min-w-0 text-xs font-semibold truncate">{title}</span>
+        {badge ? <span className="shrink-0 text-[11px] font-semibold text-white/40">{badge}</span> : null}
       </button>
-      {open && <div className="px-3 pb-3 pt-0.5 space-y-2">{children}</div>}
+      {open && <div className="px-3 pb-2.5 pt-0.5 space-y-2">{children}</div>}
     </div>
   );
 }
 
+function FieldLabel({ children }: { children: ReactNode }) {
+  return <span className="text-xs text-white/55">{children}</span>;
+}
+
 /**
- * Bottom-docked "Live captions console".
+ * Bottom-docked "Live captions console" — broadcast control desk layout.
  *
- * Two clear states:
- *  - idle → setup: one big Start action on top, optional settings in
- *    collapsible groups (progressive disclosure);
- *  - live → monitoring: WYSIWYG output preview + big Stop + compact status,
- *    with an inline prompt when the captions slide isn't on the screen yet.
+ * Shared shell for idle + live: hero output monitor on the left; primary
+ * Start/Stop + tabs (Setup / Share / History) on the right.
  */
 export default function LiveCaptionsConsole({
   captionsSlide,
@@ -101,7 +111,7 @@ export default function LiveCaptionsConsole({
   onAddQrSlide,
   onClose,
 }: LiveCaptionsConsoleProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const status = useSttStore((s) => s.status);
   const hasKey = useSttStore((s) => s.hasKey);
@@ -121,7 +131,13 @@ export default function LiveCaptionsConsole({
   const setError = useSttStore((s) => s.setError);
   const clearAll = useSttStore((s) => s.clearAll);
 
-  // Slide tracker (independent of translation — driven by original text).
+  const currentTranslation = useSttStore((s) => s.currentTranslation);
+  const partialTranslation = useSttStore((s) => s.partialTranslation);
+  const currentOriginal = useSttStore((s) => s.currentOriginal);
+  const partialOriginal = useSttStore((s) => s.partialOriginal);
+
+  const shareActive = useStore((s) => s.shareActive);
+
   const trackerEnabled = useSlideTrackerStore((s) => s.enabled);
   const setTrackerEnabled = useSlideTrackerStore((s) => s.setEnabled);
   const trackerSensitivity = useSlideTrackerStore((s) => s.sensitivity);
@@ -129,18 +145,36 @@ export default function LiveCaptionsConsole({
   const trackerLastResult = useSlideTrackerStore((s) => s.lastResult);
 
   const active = status !== 'idle';
-  const [openSections, setOpenSections] = useState<string[]>(['languages']);
+  const [openSections, setOpenSections] = useState<string[]>(['mic']);
   const [targetLanguageSearch, setTargetLanguageSearch] = useState('');
+  const [tickerOpen, setTickerOpen] = useState(true);
+  const [tab, setTab] = useState<ConsoleTab>('setup');
+  const prevActiveRef = useRef(active);
 
   const detectedName = detectedLanguage ? languageName(detectedLanguage) : null;
   const spokenName = isAutoSttLanguage(sttLanguage) ? t('common.sttSpokenLanguageAuto') : languageName(sttLanguage);
   const targetsName = targetLanguages.map(languageName).join(', ');
+
+  const liveText = translationEnabled
+    ? (currentTranslation + partialTranslation).trim() || (currentOriginal + partialOriginal).trim()
+    : (currentOriginal + partialOriginal).trim();
 
   const filteredTargetLanguages = useMemo(() => {
     const query = targetLanguageSearch.trim().toLocaleLowerCase();
     if (!query) return STT_LANGUAGES;
     return STT_LANGUAGES.filter((lang) => `${lang.name} ${lang.code}`.toLocaleLowerCase().includes(query));
   }, [targetLanguageSearch]);
+
+  // Default tab: idle → Setup; live → History (or Share if already broadcasting).
+  useEffect(() => {
+    const wasActive = prevActiveRef.current;
+    prevActiveRef.current = active;
+    if (active && !wasActive) {
+      setTab(shareActive ? 'share' : 'history');
+    } else if (!active && wasActive) {
+      setTab('setup');
+    }
+  }, [active, shareActive]);
 
   const toggleSection = (id: string) =>
     setOpenSections((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -157,8 +191,33 @@ export default function LiveCaptionsConsole({
     else void onStart();
   };
 
-  // Refresh the audio input device list (labels appear once mic permission is
-  // granted) and keep it in sync with hot-plugging.
+  const downloadHistory = () => {
+    if (utterances.length === 0) return;
+    const locale = i18n.language || 'en';
+    const dateFormatter = new Intl.DateTimeFormat(locale, {
+      dateStyle: 'short',
+      timeStyle: 'medium',
+    });
+    const lines = utterances.map((utterance, index) => {
+      const parts = [
+        `${index + 1}. ${dateFormatter.format(new Date(utterance.at))}`,
+        utterance.translation ? `${t('common.sttExportTranslation')}: ${utterance.translation}` : '',
+        utterance.original ? `${t('common.sttExportOriginal')}: ${utterance.original}` : '',
+      ].filter(Boolean);
+      return parts.join('\n');
+    });
+    const content = `${t('common.sttPanelTitle')}\n${'='.repeat(40)}\n\n${lines.join('\n\n')}\n`;
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `live-captions-${new Date().toISOString().slice(0, 10)}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+
   useEffect(() => {
     void refreshSttInputDevices();
     const onDeviceChange = () => void refreshSttInputDevices();
@@ -177,10 +236,30 @@ export default function LiveCaptionsConsole({
   const sessionDot =
     status === 'connected' ? 'bg-emerald-400' : status === 'connecting' ? 'bg-amber-400 animate-pulse' : 'bg-white/20';
 
+  // Unified status: one strip in the header (not duplicated on the monitor).
+  const statusTone = !active
+    ? 'text-white/55 border-white/10 bg-white/5'
+    : captionsOnAir
+      ? 'text-emerald-300 border-emerald-400/30 bg-emerald-400/10'
+      : 'text-amber-300 border-amber-400/30 bg-amber-400/10';
+  const statusText = !active
+    ? t('common.sttSessionReady')
+    : captionsOnAir
+      ? t('common.sttOnAir')
+      : t('common.sttOffAir');
+
+  const monitorFrame = !active
+    ? 'border-white/10'
+    : captionsOnAir
+      ? 'border-emerald-400/50 ring-2 ring-emerald-500/30'
+      : 'border-amber-400/45 ring-2 ring-amber-500/25';
+
+  const showSendLiveCta = active && !captionsOnAir;
+
   const errorBanner = error ? (
     <div
       role="alert"
-      className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200"
+      className="flex items-start gap-2 rounded-[var(--radius-lg)] border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200"
     >
       <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
       <div className="flex-1 min-w-0 space-y-1.5">
@@ -210,35 +289,56 @@ export default function LiveCaptionsConsole({
     </div>
   ) : null;
 
-  const monitorNote = active
-    ? captionsOnAir
-      ? { tone: 'text-emerald-300 border-emerald-400/30 bg-emerald-400/10', text: t('common.sttOnAir') }
-      : { tone: 'text-amber-300 border-amber-400/30 bg-amber-400/10', text: t('common.sttOffAir') }
-    : { tone: 'text-white/45 border-white/10 bg-white/5', text: t('common.sttSessionReady') };
+  const tabs: { id: ConsoleTab; label: string; badge?: string }[] = [
+    { id: 'setup', label: t('common.sttTabSetup') },
+    { id: 'share', label: t('common.sttTabShare') },
+    {
+      id: 'history',
+      label: t('common.sttTabHistory'),
+      badge: utterances.length > 0 ? String(utterances.length) : undefined,
+    },
+  ];
 
   return (
     <section aria-label={t('common.sttPanelTitle')} className="flex flex-col h-full bg-surface overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-white/10 bg-surface-raised shrink-0">
+      {/* Header — unified status */}
+      <div
+        className="flex items-center justify-between gap-2 px-4 py-1.5 border-b border-white/10 bg-surface-raised shrink-0"
+        title={t('common.sttPanelDesc')}
+      >
         <div className="flex items-center gap-2 min-w-0">
           <Captions className="w-4 h-4 text-blue-400 shrink-0" aria-hidden="true" />
-          <div className="min-w-0">
-            <h2 className="text-sm font-bold truncate leading-tight">{t('common.sttPanelTitle')}</h2>
-            <p className="text-[10px] text-white/45 truncate leading-tight">{t('common.sttPanelDesc')}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+          <h2 className="text-sm font-semibold truncate leading-tight">{t('common.sttPanelTitle')}</h2>
           <span
+            role="status"
+            aria-live="polite"
             className={cn(
-              'hidden md:inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-bold mr-1',
-              monitorNote.tone
+              'hidden sm:inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-semibold max-w-[min(280px,40vw)] truncate',
+              statusTone
             )}
           >
             {active && micActive && (
-              <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" aria-hidden="true" />
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse shrink-0" aria-hidden="true" />
             )}
-            {active ? t('common.sttSessionLive') : t('common.sttSessionReady')}
+            {!active && <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', sessionDot)} aria-hidden="true" />}
+            {active && !micActive && (
+              <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', sessionDot)} aria-hidden="true" />
+            )}
+            {statusText}
           </span>
+          <span className="hidden md:inline-flex items-center gap-1 text-[11px] font-semibold text-white/50 shrink-0 min-w-0">
+            <span className="truncate">{spokenName}</span>
+            {translationEnabled && targetsName ? (
+              <>
+                <span className="text-white/25" aria-hidden="true">
+                  →
+                </span>
+                <span className="text-emerald-300/90 truncate">{targetsName}</span>
+              </>
+            ) : null}
+          </span>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
             onClick={clearAll}
@@ -270,35 +370,35 @@ export default function LiveCaptionsConsole({
         </div>
       </div>
 
-      {/* Body */}
-      <div className="flex flex-1 min-h-0 gap-4 p-3">
-        {/* ── Output monitor: compact 16:9 screen, left-aligned ── */}
-        <div className="flex flex-col gap-2 shrink-0 max-w-[46%] min-w-0">
+      {/* Body — broadcast desk grid */}
+      <div className="flex-1 min-h-0 grid grid-cols-1 max-lg:grid-rows-[minmax(140px,200px)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)] gap-3 p-3">
+        {/* Output monitor */}
+        <div className="flex flex-col gap-1.5 min-h-0 min-w-0">
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
               {t('common.sttMonitor')}
             </span>
             {detectedName && active && (
               <span
-                className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] font-semibold text-white/55"
+                className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[11px] font-semibold text-white/55"
                 title={t('common.sttDetected')}
               >
                 {detectedName}
               </span>
             )}
-            <span
-              className={cn(
-                'ml-auto inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[10px] font-bold',
-                monitorNote.tone
-              )}
-            >
-              {active && micActive && (
-                <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" aria-hidden="true" />
-              )}
-              {monitorNote.text}
-            </span>
+            {active && (
+              <span className="ml-auto flex items-center gap-1.5 text-[11px] font-semibold text-white/50">
+                <span className={cn('w-1.5 h-1.5 rounded-full', sessionDot)} aria-hidden="true" />
+                {sessionLabel}
+              </span>
+            )}
           </div>
-          <div className="relative aspect-video h-[calc(100%-30px)] max-w-full rounded-xl border border-white/10 bg-black overflow-hidden">
+          <div
+            className={cn(
+              'relative flex-1 min-h-0 rounded-[var(--radius-lg)] border bg-black overflow-hidden',
+              monitorFrame
+            )}
+          >
             <FitStage
               captionsSlide={captionsSlide}
               captionsOnAir={captionsOnAir}
@@ -310,158 +410,148 @@ export default function LiveCaptionsConsole({
           </div>
         </div>
 
-        {/* ── Controls: fill the remaining space ── */}
-        <div className="flex-1 min-w-0 flex flex-col">
-          <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-0.5">
-            {errorBanner}
-
+        {/* Controls */}
+        <div className="flex flex-col min-h-0 min-w-0 gap-2">
+          {/* Primary action — always top of the control column */}
+          <button
+            type="button"
+            onClick={toggleSession}
+            disabled={!active && !hasKey}
+            className={cn(
+              'w-full shrink-0 inline-flex items-center justify-center gap-2 rounded-[var(--radius-lg)] px-4 py-2.5 text-sm font-bold text-white transition-colors focus-visible:outline-none active:scale-[0.99]',
+              active
+                ? 'bg-red-600 hover:bg-red-700 focus-visible:ring-2 focus-visible:ring-red-400'
+                : hasKey
+                  ? 'bg-blue-600 hover:bg-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500'
+                  : 'bg-blue-600 opacity-40 cursor-not-allowed'
+            )}
+          >
             {active ? (
               <>
-                {/* Big Stop */}
-                <button
-                  type="button"
-                  onClick={toggleSession}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 px-4 py-3 text-sm font-bold text-white transition-colors focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:outline-none active:scale-[0.99]"
-                >
-                  <MicOff className="w-4 h-4" aria-hidden="true" />
-                  {t('common.sttStop')}
-                </button>
-
-                {/* Compact status list */}
-                <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-white/40">
-                          <Mic className="w-3 h-3 text-white/35" aria-hidden="true" />
-                          {t('common.sttMic')}
-                        </span>
-                        <span
-                          className={cn(
-                            'flex items-center gap-1.5 text-xs font-semibold',
-                            micActive ? 'text-red-300' : 'text-white/50'
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              'w-1.5 h-1.5 rounded-full',
-                              micActive ? 'bg-red-400 animate-pulse' : 'bg-white/20'
-                            )}
-                            aria-hidden="true"
-                          />
-                          {micActive ? t('common.sttMicOn') : t('common.sttMicOff')}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-white/40">
-                          <Globe2 className="w-3 h-3 text-white/35" aria-hidden="true" />
-                          {t('common.sttSession')}
-                        </span>
-                        <span className="flex items-center gap-1.5 text-xs font-semibold text-white/80">
-                          <span className={cn('w-1.5 h-1.5 rounded-full', sessionDot)} aria-hidden="true" />
-                          {sessionLabel}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-white/40">
-                          <Languages className="w-3 h-3 text-white/35" aria-hidden="true" />
-                          {t('common.sttTranslation')}
-                        </span>
-                        <span className="flex items-center gap-1.5 text-xs font-semibold text-white/80">
-                          <span
-                            className={cn(
-                              'w-1.5 h-1.5 rounded-full',
-                              translationEnabled ? 'bg-emerald-400' : 'bg-white/20'
-                            )}
-                            aria-hidden="true"
-                          />
-                          {translationEnabled ? t('common.sttTranslationOn') : t('common.sttTranslationOff')}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap gap-1.5 pt-0.5">
-                        <span className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-[10px] text-white/60">
-                          {spokenName}
-                        </span>
-                        {translationEnabled && targetsName && (
-                          <>
-                            <span className="text-[10px] text-white/25 self-center" aria-hidden="true">
-                              →
-                            </span>
-                            <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] text-emerald-200">
-                              {targetsName}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-white/40">{t('common.sttNextStart')}</p>
-                    </div>
-                  </div>
-                </div>
+                <MicOff className="w-4 h-4" aria-hidden="true" />
+                {t('common.sttStop')}
               </>
             ) : (
               <>
-                {/* Start — the single primary action while idle */}
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
-                  <button
-                    type="button"
-                    onClick={toggleSession}
-                    disabled={!hasKey}
-                    className={cn(
-                      'w-full inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.99]',
-                      hasKey
-                        ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                        : 'bg-blue-600 text-white opacity-40 cursor-not-allowed'
-                    )}
-                  >
-                    <Mic className="w-4 h-4" aria-hidden="true" />
-                    {t('common.sttStart')}
-                  </button>
-                  <p className="text-[11px] text-white/55 leading-snug text-center">
-                    {translationEnabled ? t('common.sttTranslationOnDesc') : t('common.sttTranslationOffDesc')}
-                  </p>
-                  <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                    <span className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-[10px] text-white/60">
-                      {spokenName}
-                    </span>
-                    {translationEnabled && targetsName && (
-                      <>
-                        <span className="text-[10px] text-white/25" aria-hidden="true">
-                          →
-                        </span>
-                        <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] text-emerald-200">
-                          {targetsName}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                  {!hasKey && (
-                    <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100/90">
-                      {t('common.sttNoApiKeyDesc')}{' '}
-                      <button
-                        type="button"
-                        onClick={onOpenSettings}
-                        className="underline font-semibold hover:text-amber-50"
-                      >
-                        {t('common.sttGoToSettings')}
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <Mic className="w-4 h-4" aria-hidden="true" />
+                {t('common.sttStart')}
+              </>
+            )}
+          </button>
 
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Language & translation */}
-                  <Section
-                    className="col-span-2"
-                    title={t('common.sttLanguages')}
-                    open={openSections.includes('languages')}
-                    onToggle={() => toggleSection('languages')}
+          {showSendLiveCta && (
+            <button
+              type="button"
+              onClick={captionsSlide ? onSendCaptionsLive : onAddCaptionsSlide}
+              className="w-full shrink-0 inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-lg)] border border-emerald-400/40 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-2 text-xs font-bold text-emerald-100 transition-colors active:scale-[0.99]"
+            >
+              <Captions className="w-3.5 h-3.5" aria-hidden="true" />
+              {captionsSlide ? t('common.sttSendLive') : t('common.sttAddCaptionsSlide')}
+            </button>
+          )}
+
+          {!hasKey && !active && (
+            <div className="shrink-0 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100/90">
+              {t('common.sttNoApiKeyDesc')}{' '}
+              <button type="button" onClick={onOpenSettings} className="underline font-semibold hover:text-amber-50">
+                {t('common.sttGoToSettings')}
+              </button>
+            </div>
+          )}
+
+          {/* Live transcript ticker */}
+          {active && (
+            <div className="shrink-0 rounded-[var(--radius-lg)] border border-white/10 bg-white/5 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setTickerOpen((o) => !o)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left hover:bg-white/5 transition-colors"
+                aria-expanded={tickerOpen}
+              >
+                <span
+                  className={cn('w-1.5 h-1.5 rounded-full shrink-0', micActive ? 'bg-red-400 animate-pulse' : sessionDot)}
+                  aria-hidden="true"
+                />
+                <span className="flex-1 min-w-0 text-[11px] font-semibold text-white/50 truncate">
+                  {micActive ? t('common.sttListening') : sessionLabel}
+                </span>
+                {tickerOpen ? (
+                  <ChevronUp className="w-3.5 h-3.5 text-white/35 shrink-0" aria-hidden="true" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5 text-white/35 shrink-0" aria-hidden="true" />
+                )}
+              </button>
+              {tickerOpen && (
+                <p className="px-2.5 pb-2 max-h-16 overflow-y-auto text-xs text-white/70 leading-snug whitespace-pre-wrap">
+                  {liveText || t('common.sttWaiting')}
+                </p>
+              )}
+            </div>
+          )}
+
+          {errorBanner}
+
+          {/* Tabs */}
+          <div className="flex flex-col flex-1 min-h-0 rounded-[var(--radius-lg)] border border-white/10 bg-white/5 overflow-hidden">
+            <div role="tablist" aria-label={t('common.sttPanelTitle')} className="flex shrink-0 border-b border-white/10">
+              {tabs.map((item) => {
+                const selected = tab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="tab"
+                    id={`stt-tab-${item.id}`}
+                    aria-selected={selected}
+                    aria-controls={`stt-panel-${item.id}`}
+                    tabIndex={selected ? 0 : -1}
+                    onClick={() => setTab(item.id)}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+                      e.preventDefault();
+                      const idx = tabs.findIndex((x) => x.id === item.id);
+                      const next =
+                        e.key === 'ArrowRight'
+                          ? tabs[(idx + 1) % tabs.length]
+                          : tabs[(idx - 1 + tabs.length) % tabs.length];
+                      setTab(next.id);
+                    }}
+                    className={cn(
+                      'flex-1 px-2 py-2 text-xs font-semibold transition-colors inline-flex items-center justify-center gap-1.5',
+                      selected
+                        ? 'text-white bg-white/10 border-b-2 border-blue-400'
+                        : 'text-white/50 hover:text-white/80 hover:bg-white/5 border-b-2 border-transparent'
+                    )}
                   >
-                    <label className="block space-y-1">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-                        {t('common.sttSpokenLanguage')}
+                    <span className="truncate">{item.label}</span>
+                    {item.badge ? (
+                      <span className="shrink-0 rounded-full bg-white/15 px-1.5 py-px text-[10px] font-bold text-white/70">
+                        {item.badge}
                       </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-2.5">
+              {tab === 'setup' && (
+                <div
+                  role="tabpanel"
+                  id="stt-panel-setup"
+                  aria-labelledby="stt-tab-setup"
+                  className="space-y-2.5"
+                >
+                  {active && (
+                    <p className="text-[11px] text-white/45 leading-snug">{t('common.sttLangLocked')}</p>
+                  )}
+
+                  {/* Languages — always visible */}
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-white/70">{t('common.sttLanguages')}</p>
+
+                    <label className="block space-y-1">
+                      <FieldLabel>{t('common.sttSpokenLanguage')}</FieldLabel>
                       <div className="flex items-center gap-2">
                         <Mic className="w-4 h-4 text-white/35 shrink-0" aria-hidden="true" />
                         <select
@@ -469,7 +559,7 @@ export default function LiveCaptionsConsole({
                           onChange={(e) => setSttLanguage(e.target.value)}
                           disabled={active}
                           aria-label={t('common.sttSpokenLanguage')}
-                          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 outline-none focus-visible:border-blue-500/60 transition-colors disabled:opacity-50"
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/80 outline-none focus-visible:border-blue-500/60 transition-colors disabled:opacity-50"
                         >
                           <option value={AUTO_STT_LANGUAGE} className="bg-surface-overlay">
                             {t('common.sttSpokenLanguageAuto')}
@@ -482,20 +572,25 @@ export default function LiveCaptionsConsole({
                         </select>
                       </div>
                       {!isAutoSttLanguage(sttLanguage) && (
-                        <span className="block text-[10px] text-white/40">{t('common.sttSpokenLanguageHint')}</span>
+                        <span className="block text-[11px] text-white/40">{t('common.sttSpokenLanguageHint')}</span>
                       )}
                     </label>
 
-                    <div className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+                    <div className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <Languages
-                          className={cn('w-4 h-4 shrink-0', translationEnabled ? 'text-emerald-300' : 'text-white/35')}
+                          className={cn(
+                            'w-4 h-4 shrink-0',
+                            translationEnabled ? 'text-emerald-300' : 'text-white/35'
+                          )}
                           aria-hidden="true"
                         />
                         <div className="min-w-0">
                           <p className="text-xs font-semibold truncate">{t('common.sttTranslationToggle')}</p>
-                          <p className="text-[10px] text-white/45 truncate">
-                            {translationEnabled ? t('common.sttTranslationOnDesc') : t('common.sttTranslationOffDesc')}
+                          <p className="text-[11px] text-white/45 truncate">
+                            {translationEnabled
+                              ? t('common.sttTranslationOnDesc')
+                              : t('common.sttTranslationOffDesc')}
                           </p>
                         </div>
                       </div>
@@ -507,14 +602,14 @@ export default function LiveCaptionsConsole({
                         onClick={() => setTranslationEnabled(!translationEnabled)}
                         aria-label={t('common.sttTranslationToggle')}
                         className={cn(
-                          'relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none active:scale-[0.96] disabled:opacity-40',
+                          'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none active:scale-[0.96] disabled:opacity-40',
                           translationEnabled ? 'bg-emerald-500' : 'bg-white/15'
                         )}
                       >
                         <span
                           className={cn(
-                            'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
-                            translationEnabled ? 'translate-x-6' : 'translate-x-1'
+                            'inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform',
+                            translationEnabled ? 'translate-x-[18px]' : 'translate-x-[3px]'
                           )}
                         />
                       </button>
@@ -522,9 +617,9 @@ export default function LiveCaptionsConsole({
 
                     {translationEnabled && (
                       <label className="block space-y-1.5">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+                        <FieldLabel>
                           {t('common.sttTargetLanguage')} ({targetLanguages.length})
-                        </span>
+                        </FieldLabel>
                         <input
                           type="search"
                           value={targetLanguageSearch}
@@ -532,9 +627,9 @@ export default function LiveCaptionsConsole({
                           disabled={active}
                           placeholder={t('common.sttTargetLanguageSearch')}
                           aria-label={t('common.sttTargetLanguageSearch')}
-                          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 placeholder:text-white/35 outline-none focus-visible:border-blue-500/60 transition-colors disabled:opacity-50"
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/80 placeholder:text-white/35 outline-none focus-visible:border-blue-500/60 transition-colors disabled:opacity-50"
                         />
-                        <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto rounded-lg border border-white/10 bg-black/10 p-1.5">
+                        <div className="grid grid-cols-2 gap-1 max-h-28 overflow-y-auto rounded-lg border border-white/10 bg-black/10 p-1">
                           {filteredTargetLanguages.length > 0 ? (
                             filteredTargetLanguages.map((lang) => {
                               const selected = targetLanguages.includes(lang.code);
@@ -546,7 +641,7 @@ export default function LiveCaptionsConsole({
                                   disabled={active}
                                   aria-pressed={selected}
                                   className={cn(
-                                    'rounded-md px-2 py-1.5 text-left text-[11px] transition-colors disabled:opacity-50',
+                                    'rounded-md px-2 py-1 text-left text-[11px] transition-colors disabled:opacity-50',
                                     selected
                                       ? 'bg-emerald-400/20 text-emerald-100 ring-1 ring-emerald-400/40'
                                       : 'bg-white/5 text-white/65 hover:bg-white/10 hover:text-white'
@@ -562,7 +657,7 @@ export default function LiveCaptionsConsole({
                             </span>
                           )}
                         </div>
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="flex flex-wrap gap-1">
                           {targetLanguages.map((code) => (
                             <button
                               key={code}
@@ -571,32 +666,24 @@ export default function LiveCaptionsConsole({
                               disabled={active}
                               title={t('common.sttTargetLanguageRemove')}
                               aria-label={`${languageName(code)} ${t('common.sttTargetLanguageRemove')}`}
-                              className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] text-emerald-100 hover:bg-red-400/15 hover:border-red-400/40 hover:text-red-100 disabled:opacity-50"
+                              className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[11px] text-emerald-100 hover:bg-red-400/15 hover:border-red-400/40 hover:text-red-100 disabled:opacity-50"
                             >
                               {languageName(code)} ×
                             </button>
                           ))}
                         </div>
-                        <span className="block text-[10px] text-white/40">{t('common.sttTargetLanguageHint')}</span>
                       </label>
                     )}
-                  </Section>
-
-                  {/* Phone sharing — self-contained card */}
-                  <div className="col-span-2">
-                    <SharePanel onStartShare={onStartShare} onStopShare={onStopShare} onAddQrSlide={onAddQrSlide} />
                   </div>
 
-                  {/* Microphone / input source */}
+                  {/* Mic — collapsible */}
                   <Section
                     title={t('common.sttMic')}
                     open={openSections.includes('mic')}
                     onToggle={() => toggleSection('mic')}
                   >
                     <label className="block space-y-1">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-                        {t('common.sttInputDevice')}
-                      </span>
+                      <FieldLabel>{t('common.sttInputDevice')}</FieldLabel>
                       <div className="flex items-center gap-2">
                         <Mic className="w-4 h-4 text-white/35 shrink-0" aria-hidden="true" />
                         <select
@@ -604,7 +691,7 @@ export default function LiveCaptionsConsole({
                           onChange={(e) => setInputDeviceId(e.target.value)}
                           disabled={active}
                           aria-label={t('common.sttInputDevice')}
-                          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 outline-none focus-visible:border-blue-500/60 transition-colors disabled:opacity-50"
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/80 outline-none focus-visible:border-blue-500/60 transition-colors disabled:opacity-50"
                         >
                           <option value="" className="bg-surface-overlay">
                             {t('common.sttDefaultInputDevice')}
@@ -621,11 +708,11 @@ export default function LiveCaptionsConsole({
                           )}
                         </select>
                       </div>
-                      <span className="block text-[10px] text-white/40">{t('common.sttInputDeviceHint')}</span>
+                      <span className="block text-[11px] text-white/40">{t('common.sttInputDeviceHint')}</span>
                     </label>
                   </Section>
 
-                  {/* Advanced (slide tracking) */}
+                  {/* Advanced — collapsible */}
                   <Section
                     title={t('common.sttAdvanced')}
                     open={openSections.includes('advanced')}
@@ -636,7 +723,7 @@ export default function LiveCaptionsConsole({
                         <LocateFixed className="w-4 h-4 text-violet-300 shrink-0" aria-hidden="true" />
                         <div className="min-w-0">
                           <p className="text-xs font-semibold truncate">{t('common.sttTrackerTitle')}</p>
-                          <p className="text-[10px] text-white/45 truncate">{t('common.sttTrackerDesc')}</p>
+                          <p className="text-[11px] text-white/45 truncate">{t('common.sttTrackerDesc')}</p>
                         </div>
                       </div>
                       <button
@@ -646,14 +733,14 @@ export default function LiveCaptionsConsole({
                         onClick={() => setTrackerEnabled(!trackerEnabled)}
                         aria-label={t('common.sttTrackerTitle')}
                         className={cn(
-                          'relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:outline-none active:scale-[0.96]',
+                          'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:outline-none active:scale-[0.96]',
                           trackerEnabled ? 'bg-violet-500' : 'bg-white/15'
                         )}
                       >
                         <span
                           className={cn(
-                            'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
-                            trackerEnabled ? 'translate-x-6' : 'translate-x-1'
+                            'inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform',
+                            trackerEnabled ? 'translate-x-[18px]' : 'translate-x-[3px]'
                           )}
                         />
                       </button>
@@ -662,10 +749,8 @@ export default function LiveCaptionsConsole({
                     {trackerEnabled && (
                       <label className="block space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-                            {t('common.sttTrackerSensitivity')}
-                          </span>
-                          <span className="text-[10px] font-semibold text-violet-200/80">{trackerSensitivity}%</span>
+                          <FieldLabel>{t('common.sttTrackerSensitivity')}</FieldLabel>
+                          <span className="text-[11px] font-semibold text-violet-200/80">{trackerSensitivity}%</span>
                         </div>
                         <input
                           type="range"
@@ -677,14 +762,16 @@ export default function LiveCaptionsConsole({
                           aria-label={t('common.sttTrackerSensitivity')}
                           className="w-full accent-violet-500"
                         />
-                        <span className="block text-[10px] text-white/40">{t('common.sttTrackerSensitivityHint')}</span>
+                        <span className="block text-[11px] text-white/40">
+                          {t('common.sttTrackerSensitivityHint')}
+                        </span>
                       </label>
                     )}
 
                     {trackerEnabled && trackerLastResult && (
                       <p
                         className={cn(
-                          'text-[10px]',
+                          'text-[11px]',
                           trackerLastResult.confident ? 'text-violet-200/80' : 'text-white/40'
                         )}
                       >
@@ -697,57 +784,83 @@ export default function LiveCaptionsConsole({
                       </p>
                     )}
                   </Section>
+                </div>
+              )}
 
-                  {/* Utterance history */}
-                  {utterances.length > 0 && (
-                    <Section
-                      className="col-span-2"
-                      title={t('common.sttHistory')}
-                      badge={String(utterances.length)}
-                      open={openSections.includes('history')}
-                      onToggle={() => toggleSection('history')}
+              {tab === 'share' && (
+                <div role="tabpanel" id="stt-panel-share" aria-labelledby="stt-tab-share">
+                  <SharePanel
+                    embedded
+                    onStartShare={onStartShare}
+                    onStopShare={onStopShare}
+                    onAddQrSlide={onAddQrSlide}
+                  />
+                </div>
+              )}
+
+              {tab === 'history' && (
+                <div
+                  role="tabpanel"
+                  id="stt-panel-history"
+                  aria-labelledby="stt-tab-history"
+                  className="space-y-2"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold text-white/45">{t('common.sttTabHistory')}</span>
+                    <button
+                      type="button"
+                      onClick={downloadHistory}
+                      disabled={utterances.length === 0}
+                      title={t('common.sttExportHistory')}
+                      aria-label={t('common.sttExportHistory')}
+                      className="inline-flex items-center justify-center rounded-md border border-white/10 bg-white/5 p-1.5 text-white/55 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
                     >
-                      {utterances
-                        .slice()
-                        .reverse()
-                        .map((u) => (
-                          <div
-                            key={u.id}
-                            className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 flex items-start gap-2"
-                          >
-                            <div className="flex-1 min-w-0 space-y-0.5">
-                              {translationEnabled && u.translation && (
-                                <p className="text-xs font-semibold leading-snug whitespace-pre-wrap text-white">
-                                  {u.translation}
-                                </p>
-                              )}
-                              {u.original && (
-                                <p
-                                  className={cn(
-                                    'text-[11px] leading-snug whitespace-pre-wrap',
-                                    translationEnabled ? 'text-white/45' : 'text-white/80'
-                                  )}
-                                >
-                                  {u.original}
-                                </p>
-                              )}
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => onAddUtteranceSlide(u.original, u.translation)}
-                              title={t('common.sttAddUtteranceSlide')}
-                              aria-label={t('common.sttAddUtteranceSlide')}
-                              className="shrink-0 p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 hover:text-white/90 transition-colors"
-                            >
-                              <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-                            </button>
+                      <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                  {utterances.length === 0 ? (
+                    <p className="text-[11px] text-white/45 py-4 text-center">{t('common.sttEmpty')}</p>
+                  ) : (
+                    utterances
+                      .slice()
+                      .reverse()
+                      .map((u) => (
+                        <div
+                          key={u.id}
+                          className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 flex items-start gap-2"
+                        >
+                          <div className="flex-1 min-w-0 space-y-0.5">
+                            {translationEnabled && u.translation && (
+                              <p className="text-xs font-semibold leading-snug whitespace-pre-wrap text-white">
+                                {u.translation}
+                              </p>
+                            )}
+                            {u.original && (
+                              <p
+                                className={cn(
+                                  'text-[11px] leading-snug whitespace-pre-wrap',
+                                  translationEnabled ? 'text-white/45' : 'text-white/80'
+                                )}
+                              >
+                                {u.original}
+                              </p>
+                            )}
                           </div>
-                        ))}
-                    </Section>
+                          <button
+                            type="button"
+                            onClick={() => onAddUtteranceSlide(u.original, u.translation)}
+                            title={t('common.sttAddUtteranceSlide')}
+                            aria-label={t('common.sttAddUtteranceSlide')}
+                            className="shrink-0 p-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 hover:text-white/90 transition-colors"
+                          >
+                            <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                          </button>
+                        </div>
+                      ))
                   )}
                 </div>
-              </>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -835,7 +948,7 @@ function FitStage({
           <button
             type="button"
             onClick={onAddCaptionsSlide}
-            className="inline-flex items-center gap-2 rounded-xl border border-dashed border-white/25 px-4 py-2 text-xs font-semibold text-white/65 hover:text-white hover:border-white/45 hover:bg-white/5 transition-colors"
+            className="inline-flex items-center gap-2 rounded-[var(--radius-lg)] border border-dashed border-white/25 px-4 py-2 text-xs font-semibold text-white/65 hover:text-white hover:border-white/45 hover:bg-white/5 transition-colors"
           >
             <Plus className="w-3.5 h-3.5" aria-hidden="true" />
             {t('common.sttAddCaptionsSlide')}

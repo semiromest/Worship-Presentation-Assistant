@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, memo, useMemo } from 'react';
 import type { Slide, TransitionType } from './types';
 import { ANIM_MAP } from './constants';
 import { LivePreview } from './LivePreview';
@@ -93,10 +93,32 @@ function useTransitionManager(
             return true;
           };
 
+          const loopItemsEqual = (x: Slide['loopItems'], y: Slide['loopItems']) => {
+            const a = x ?? [];
+            const b = y ?? [];
+            if (a.length !== b.length) return false;
+            for (let i = 0; i < a.length; i++) {
+              const left = a[i];
+              const right = b[i];
+              if (
+                left.id !== right.id ||
+                left.type !== right.type ||
+                left.mediaUrl !== right.mediaUrl ||
+                left.thumbnailUrl !== right.thumbnailUrl ||
+                left.duration !== right.duration ||
+                left.useVideoDuration !== right.useVideoDuration
+              ) {
+                return false;
+              }
+            }
+            return true;
+          };
+
           const hasContentChanged =
             currentSlide.content !== prevSlide.content ||
             !shallowEqual(currentSlide.styles, prevSlide.styles) ||
             !itemsEqual(currentSlide.items ?? [], prevSlide.items ?? []) ||
+            !loopItemsEqual(currentSlide.loopItems, prevSlide.loopItems) ||
             !shallowEqual(currentSlide.loopTransition, prevSlide.loopTransition);
 
           if (hasContentChanged) {

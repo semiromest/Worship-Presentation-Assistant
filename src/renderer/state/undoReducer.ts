@@ -93,6 +93,7 @@ function slideHasChanged(a: Slide, b: Slide): boolean {
   if (a.gridSize !== b.gridSize) return true;
   if (a.gridColor !== b.gridColor) return true;
   if (a.snapEnabled !== b.snapEnabled) return true;
+  if (a.locked !== b.locked) return true;
   return false;
 }
 

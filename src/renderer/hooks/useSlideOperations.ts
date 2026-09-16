@@ -9,6 +9,7 @@ import { findPresetByRef } from '../presetUtils';
 import { isLiveSavePreset, getLiveSaveRetention } from './useLiveSave';
 import { parseCountdownContent, serializeCountdownContent, CountdownSlideData } from '../countdownUtils';
 import { splitHymnLyrics } from '../hymnSplit';
+import { findLockedSlideIndex } from '../slideLock';
 import { playSfx } from '../sfx';
 
 export const createSlide = (type: Slide['type'], overrides: Partial<Slide> = {}): Slide => ({
@@ -71,6 +72,10 @@ export function useSlideOperations() {
 
   const removeSlide = useCallback((id: string) => {
     if (presentation.slides.length <= 1) return;
+    // A locked slide is pinned to the live output — removing it would leave
+    // the broadcast dangling, so it must be unlocked first.
+    const target = presentation.slides.find((s) => s.id === id);
+    if (target?.locked) return;
     const slides = presentation.slides.filter((s) => s.id !== id);
     if (selectedSlideId === id) {
       setSelectedSlideId(slides[0].id);
@@ -327,7 +332,10 @@ export function useSlideOperations() {
                 id: typeof li.id === 'string' ? li.id : crypto.randomUUID(),
                 type: li.type === 'video' ? 'video' : 'image',
                 mediaUrl: typeof li.mediaUrl === 'string' ? li.mediaUrl : '',
+                thumbnailUrl: typeof li.thumbnailUrl === 'string' ? li.thumbnailUrl : undefined,
+                fileName: typeof li.fileName === 'string' ? li.fileName : undefined,
                 duration: typeof li.duration === 'number' ? li.duration : 5000,
+                useVideoDuration: li.type === 'video' && li.useVideoDuration === true,
               }))
             : undefined,
           group: s.group && typeof s.group === 'object'
@@ -339,6 +347,7 @@ export function useSlideOperations() {
               }
             : undefined,
           captions: s.captions && typeof s.captions === 'object' ? { ...s.captions } : undefined,
+          locked: s.locked === true,
           styles: { ...DEFAULT_STYLES, ...(s.styles ?? {}) },
         }))
       : [createSlide('text', { content: t('common.newSlideContent') })];
@@ -530,11 +539,11 @@ export function useSlideOperations() {
     appendSlides([newSlide]);
   }, [appendSlides]);
 
-  // Adds a QR slide (phone live-screen broadcast) so people can scan it from
-  // the projected screen. QR is embedded as an image item; URL + hint below.
-  const handleQrSlideAdd = useCallback((qrDataUrl: string, url: string) => {
+  // Adds a QR slide so people can scan it from the projected screen. The URL
+  // remains encoded in the QR itself and is intentionally not printed.
+  const handleQrSlideAdd = useCallback((qrDataUrl: string, _url: string) => {
     const qrSlide = createSlide('text', {
-      content: url,
+      content: '',
       styles: {
         ...DEFAULT_STYLES,
         fontSize: 0,
@@ -557,33 +566,15 @@ export function useSlideOperations() {
         {
           id: makeSlideId(),
           type: 'text',
-          content: url,
+          content: t('common.screenShareQrSlideHint'),
           x: 0,
-          y: 70,
+          y: 72,
           width: 100,
-          height: 12,
+          height: 20,
           zIndex: 2,
           styles: {},
           textStyles: {
-            fontSize: 26,
-            fontWeight: 'bold',
-            textAlign: 'center',
-            textColor: '#ffffff',
-            textDecoration: 'none',
-          },
-        },
-        {
-          id: makeSlideId(),
-          type: 'text',
-          content: t('common.screenShareQrSlideHint'),
-          x: 0,
-          y: 84,
-          width: 100,
-          height: 10,
-          zIndex: 3,
-          styles: {},
-          textStyles: {
-            fontSize: 17,
+            fontSize: 30,
             textAlign: 'center',
             textColor: '#9fb4d4',
             textDecoration: 'none',
@@ -742,21 +733,32 @@ export function useSlideOperations() {
     setLastSelectedIndex(index);
     // Live broadcast open: single click sends the selected slide straight to live.
     // Broadcast closed: click only selects; go live via Enter or double click.
-    if (isProjectorWindowOpen) setLiveIndex(index);
+    // With an active broadcast lock the live output cannot move (setLiveIndex
+    // resolves to the locked slide), so skip the live switch entirely.
+    if (isProjectorWindowOpen && findLockedSlideIndex(presentation.slides) === -1) setLiveIndex(index);
   }, [presentation.slides, lastSelectedIndex, isProjectorWindowOpen, setSelectedSlideIds, setSelectedSlideId, setLastSelectedIndex, setLiveIndex]);
 
   const handleSlideDoubleClick = useCallback((id: string, index: number) => {
     // Double click = quick Send to Live, active only while the broadcast is closed (single click already covers it when open).
     if (isProjectorWindowOpen) return;
+    // Locked slide owns the live output — double-click cannot take it away.
+    if (findLockedSlideIndex(presentation.slides) >= 0) {
+      setSelectedSlideIds(new Set([id]));
+      setSelectedSlideId(id);
+      setLastSelectedIndex(index);
+      return;
+    }
     setSelectedSlideIds(new Set([id]));
     setSelectedSlideId(id);
     setLastSelectedIndex(index);
     setLiveIndex(index);
     playSfx('start');
-  }, [isProjectorWindowOpen, setSelectedSlideIds, setSelectedSlideId, setLastSelectedIndex, setLiveIndex]);
+  }, [presentation.slides, isProjectorWindowOpen, setSelectedSlideIds, setSelectedSlideId, setLastSelectedIndex, setLiveIndex]);
 
   const deleteSelectedSlides = useCallback(async () => {
     if (selectedSlideIds.size === 0) return;
+    // The locked slide pins the live output and must not be deleted.
+    if (presentation.slides.some((s) => s.locked && selectedSlideIds.has(s.id))) return;
     if (presentation.slides.length - selectedSlideIds.size < 1) {
       await alertDialog(t('warnings.minSlides'));
       return;
@@ -801,6 +803,8 @@ export function useSlideOperations() {
       const cloned: Slide = {
         ...slide,
         id: cloneId,
+        // The lock never travels with a copy — single-lock invariant.
+        locked: false,
         group: slide.group ? { ...slide.group, id: makeSlideId() } : undefined,
       };
       if (slide.type === 'countdown') {

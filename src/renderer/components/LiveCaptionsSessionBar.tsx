@@ -41,6 +41,7 @@ export default function LiveCaptionsSessionBar({ onStop, onExpand }: LiveCaption
       : languageName(sttLanguage);
   const targets = targetLanguages.map(languageName).join(', ');
   const connected = status === 'connected';
+  const connecting = status === 'connecting';
 
   return (
     <div
@@ -50,32 +51,41 @@ export default function LiveCaptionsSessionBar({ onStop, onExpand }: LiveCaption
       <div className="flex items-center gap-2 min-w-0">
         <span
           className={cn(
-            'w-2 h-2 rounded-full shrink-0',
+            'w-1.5 h-1.5 rounded-full shrink-0',
             micActive ? 'bg-red-400 animate-pulse' : connected ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'
           )}
           aria-hidden="true"
         />
-        <Captions className="w-3.5 h-3.5 text-red-300 shrink-0" aria-hidden="true" />
-        <span className="text-xs font-bold text-white/90 truncate">{t('common.sttPanelTitle')}</span>
-        {!micActive && !connected && (
-          <span className="text-[10px] font-semibold text-amber-300/90 truncate">{t('common.sttConnecting')}</span>
-        )}
+        <Captions className="w-3.5 h-3.5 text-blue-400 shrink-0" aria-hidden="true" />
+        <span className="text-xs font-semibold text-white/90 truncate">{t('common.sttPanelTitle')}</span>
+        <span
+          className={cn(
+            'hidden sm:inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-semibold shrink-0',
+            micActive || connected
+              ? 'text-emerald-300 border-emerald-400/30 bg-emerald-400/10'
+              : 'text-amber-300 border-amber-400/30 bg-amber-400/10'
+          )}
+        >
+          {micActive || connected ? t('common.sttSessionLive') : connecting ? t('common.sttConnecting') : t('common.sttSessionLive')}
+        </span>
       </div>
 
-      {/* Language summary */}
-      <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold text-white/55 shrink-0">
-        {spoken}
+      {/* Language summary — matches console header chips */}
+      <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-white/50 shrink-0 min-w-0">
+        <span className="truncate">{spoken}</span>
         {translationEnabled && targets ? (
           <>
-            <span className="text-white/25">→</span>
-            <span className="text-emerald-300/90">{targets}</span>
+            <span className="text-white/25" aria-hidden="true">
+              →
+            </span>
+            <span className="text-emerald-300/90 truncate">{targets}</span>
           </>
         ) : null}
       </span>
 
       {/* Live text snippet */}
       <div className="flex-1 min-w-0 text-right sm:text-left">
-        <p className="text-[11px] text-white/45 italic truncate">{liveText || t('common.sttWaiting')}</p>
+        <p className="text-xs text-white/55 italic truncate">{liveText || t('common.sttWaiting')}</p>
       </div>
 
       <button

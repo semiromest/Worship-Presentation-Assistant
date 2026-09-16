@@ -246,7 +246,9 @@ function createVideoThumbnailBlob(
       video.removeAttribute('src');
       try {
         video.load();
-      } catch {}
+      } catch {
+        // Ignore media cleanup failures.
+      }
     };
     const done = (result: string | null) => {
       if (settled) return;
@@ -278,7 +280,7 @@ function createVideoThumbnailBlob(
         }
         try {
           ctx.drawImage(video, 0, 0, c.width, c.height);
-        } catch (e) {
+        } catch {
           done(null);
           return;
         }
@@ -325,12 +327,37 @@ function createVideoThumbnailBlob(
     };
 
     const afterSeek = () => {
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
+      // Wait for the video engine to actually decode the frame at the new
+      // position before drawing to canvas. requestVideoFrameCallback fires
+      // exactly when a new decoded frame is presented; fall back to a small
+      // timeout on browsers that don't support it.
+      if (typeof (video as any).requestVideoFrameCallback === 'function') {
+        // Trigger the decoder so it renders the current frame into the buffer.
+        video.play().catch(() => {});
+        video.pause();
+        (video as any).requestVideoFrameCallback(() => {
           if (settled) return;
           tryCapture();
-        })
-      );
+        });
+        // Safety net: if the callback never fires (e.g. paused video on some
+        // codecs), capture after 800 ms anyway.
+        setTimeout(() => {
+          if (!settled) tryCapture();
+        }, 800);
+      } else {
+        // Trigger decode: play/pause forces the codec to render into the buffer.
+        video.play().catch(() => {});
+        video.pause();
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            // Give the compositor one extra tick so the decoded frame is
+            // actually available in the video element's pixel buffer.
+            setTimeout(() => {
+              if (!settled) tryCapture();
+            }, 80);
+          })
+        );
+      }
     };
 
     video.onloadedmetadata = () => {
@@ -353,7 +380,9 @@ function createVideoThumbnailBlob(
       if (!settled && video.readyState >= 1 && video.videoWidth && video.videoHeight) {
         try {
           video.currentTime = Math.max(0.5, Math.min(video.duration || 2, 1.5));
-        } catch {}
+        } catch {
+          // Ignore media cleanup failures.
+        }
       }
     }, 2500);
   });
@@ -362,6 +391,65 @@ function createVideoThumbnailBlob(
 async function generateVideoThumbnail(filePath: string, signal: AbortSignal): Promise<ThumbEntry | null> {
   const url = await createVideoThumbnailBlob(filePath, signal);
   return url ? { url, isBlob: true } : null;
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('thumbnail conversion failed'));
+    reader.onerror = () => reject(reader.error ?? new Error('thumbnail conversion failed'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Create a portable thumbnail for a loop video. The main-process thumbnail
+ * cache is preferred, while the renderer decoder remains a fallback for
+ * installations without ffmpeg. Data URLs are used here because a loop item
+ * is persisted inside the presentation and must not depend on the disposable
+ * thumbnail cache surviving a save/reopen.
+ */
+async function generateLoopVideoThumbnail(filePath: string): Promise<string | undefined> {
+  // ── 1. Try Electron main-process thumbnail (ffmpeg – most reliable) ──────
+  const api = window.electronAPI as (NonNullable<typeof window.electronAPI> & {
+    getMediaThumbnail?: (filePath: string, maxEdge: number) => Promise<string | null>;
+  }) | undefined;
+
+  if (api?.getMediaThumbnail) {
+    try {
+      const thumbUrl = await api.getMediaThumbnail(filePath, 400);
+      if (thumbUrl) {
+        // Convert the local-resource:// URL to a data URL so it survives
+        // save/reopen without depending on the thumbnail cache.
+        try {
+          const response = await fetch(thumbUrl);
+          if (response.ok) {
+            const blob = await response.blob();
+            return await blobToDataUrl(blob);
+          }
+        } catch {
+          // Network fetch failed; return the URL as-is as a best-effort.
+          return thumbUrl;
+        }
+      }
+    } catch {
+      // IPC failed; fall through to renderer-side decoder.
+    }
+  }
+
+  // ── 2. Renderer-side decoder fallback ────────────────────────────────────
+  const controller = new AbortController();
+  const entry = await generateVideoThumbnail(filePath, controller.signal);
+  if (!entry) return undefined;
+  try {
+    const response = await fetch(entry.url);
+    if (!response.ok) return entry.url;
+    return await blobToDataUrl(await response.blob());
+  } catch {
+    return entry.url;
+  } finally {
+    if (entry.isBlob && entry.url.startsWith('blob:')) URL.revokeObjectURL(entry.url);
+  }
 }
 
 function useThumbnail(type: MediaKind, filePath: string): string | undefined {
@@ -403,10 +491,12 @@ function useThumbnail(type: MediaKind, filePath: string): string | undefined {
 const DurationInput = memo(function DurationInput({
   valueSecs,
   onChange,
+  disabled = false,
   'aria-label': ariaLabel,
 }: {
   valueSecs: number;
   onChange: (secs: number) => void;
+  disabled?: boolean;
   'aria-label'?: string;
 }) {
   const [local, setLocal] = useState(String(valueSecs));
@@ -426,6 +516,7 @@ const DurationInput = memo(function DurationInput({
         min={1}
         max={300}
         value={local}
+        disabled={disabled}
         onChange={(e) => setLocal(e.target.value)}
         onFocus={() => {
           isFocused.current = true;
@@ -439,7 +530,10 @@ const DurationInput = memo(function DurationInput({
         }}
         onClick={(e) => e.stopPropagation()}
         aria-label={ariaLabel}
-        className="w-12 bg-zinc-900 border border-zinc-700 rounded px-1 py-0.5 text-[11px] text-white text-center font-mono focus:outline-none focus:border-amber-500/70 transition-colors"
+        className={cn(
+          'w-12 bg-zinc-900 border border-zinc-700 rounded px-1 py-0.5 text-[11px] text-white text-center font-mono focus:outline-none focus:border-amber-500/70 transition-colors',
+          disabled && 'opacity-40 cursor-not-allowed'
+        )}
       />
       <span className="text-[10px] text-zinc-500 select-none">s</span>
     </div>
@@ -457,6 +551,7 @@ const LoopItemRow = memo(function LoopItemRow({
   onDragEnd,
   onRemove,
   onDurationChange,
+  onUseVideoDurationChange,
 }: {
   item: LoopItem;
   index: number;
@@ -466,6 +561,7 @@ const LoopItemRow = memo(function LoopItemRow({
   onDragEnd: () => void;
   onRemove: (id: string) => void;
   onDurationChange: (id: string, ms: number) => void;
+  onUseVideoDurationChange: (id: string, enabled: boolean) => void;
 }) {
   const { t } = useTranslation();
   const [imgErr, setImgErr] = useState(false);
@@ -524,9 +620,26 @@ const LoopItemRow = memo(function LoopItemRow({
           )}
         </div>
       </div>
+      {item.type === 'video' && (
+        <button
+          type="button"
+          onClick={() => onUseVideoDurationChange(item.id, !item.useVideoDuration)}
+          aria-pressed={item.useVideoDuration}
+          title={t('common.loopUseVideoDuration')}
+          className={cn(
+            'w-6 h-6 rounded border text-[10px] font-bold transition-colors shrink-0',
+            item.useVideoDuration
+              ? 'bg-blue-500/25 border-blue-400/60 text-blue-300'
+              : 'bg-black/20 border-white/10 text-zinc-500 hover:text-zinc-300'
+          )}
+        >
+          ▶
+        </button>
+      )}
       <DurationInput
         valueSecs={Math.round(item.duration / 1000)}
         onChange={handleDur}
+        disabled={item.type === 'video' && item.useVideoDuration}
         aria-label={t('common.loopDuration')}
       />
       <button
@@ -982,12 +1095,16 @@ export default function MediaLoopTab({
         if (r) paths = [r];
       }
       if (paths.length === 0) return;
-      const newItems: LoopItem[] = paths.map((p) => ({
-        id: crypto.randomUUID(),
-        type: VIDEO_EXTS.has(getExtension(p)) ? 'video' : 'image',
-        mediaUrl: toFileUrl(p),
-        fileName: getFileName(p),
-        duration: defaultDuration * 1000,
+      const newItems: LoopItem[] = await Promise.all(paths.map(async (p) => {
+        const type = VIDEO_EXTS.has(getExtension(p)) ? 'video' : 'image';
+        return {
+          id: crypto.randomUUID(),
+          type,
+          mediaUrl: toFileUrl(p),
+          fileName: getFileName(p),
+          duration: defaultDuration * 1000,
+          thumbnailUrl: type === 'video' ? await generateLoopVideoThumbnail(p) : undefined,
+        };
       }));
       setLoopItems((prev) => [...prev, ...newItems]);
     } finally {
@@ -1004,6 +1121,13 @@ export default function MediaLoopTab({
     (id: string, ms: number) => {
       const clamped = Math.max(MIN_DURATION_MS, Math.min(MAX_DURATION_MS, ms));
       setLoopItems((prev) => prev.map((i) => (i.id === id ? { ...i, duration: clamped } : i)));
+    },
+    [setLoopItems]
+  );
+
+  const updateLoopUseVideoDuration = useCallback(
+    (id: string, enabled: boolean) => {
+      setLoopItems((prev) => prev.map((i) => (i.id === id ? { ...i, useVideoDuration: enabled } : i)));
     },
     [setLoopItems]
   );
@@ -1031,7 +1155,7 @@ export default function MediaLoopTab({
     if (loopItems.length === 0) return;
     onAddLoopToPresentation(loopItems, defaultDuration * 1000);
     setLoopItems([]);
-  }, [loopItems, defaultDuration, onAddLoopToPresentation]);
+  }, [loopItems, defaultDuration, onAddLoopToPresentation, setLoopItems]);
 
   const handleDefaultDuration = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setDefaultDuration(parseDurationSecs(e.target.value));
@@ -1407,6 +1531,7 @@ export default function MediaLoopTab({
                     onDragEnd={handleDragEnd}
                     onRemove={removeLoopItem}
                     onDurationChange={updateLoopDuration}
+                    onUseVideoDurationChange={updateLoopUseVideoDuration}
                   />
                 ))}
                 <button

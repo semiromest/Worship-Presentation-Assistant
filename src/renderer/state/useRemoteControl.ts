@@ -5,6 +5,7 @@ import { useStore } from './useStore';
 import { useSttStore } from './useSttStore';
 import { IS_PROJECTOR_MODE, PROJECTOR_DISPLAY_ID } from '../constants';
 import { chooseDefaultOutputDisplay, effectiveOutputSlideIndex } from '../../shared/displays';
+import { findLockedSlideIndex } from '../slideLock';
 import { playSfx } from '../sfx';
 import { confirmDialog } from '../dialogs';
 
@@ -163,6 +164,8 @@ export function useRemoteControl() {
 
       switch (data.action) {
         case REMOTE_ACTIONS.next: {
+          // Broadcast lock: the live output stays pinned; phones only re-select.
+          if (findLockedSlideIndex(slides) >= 0) break;
           const baseIdx = projOpen ? state.liveIndex : Math.max(currentIdx, 0);
           const nextIdx = Math.min(baseIdx + 1, lastIndex);
           setSelectedSlideId(slides[nextIdx].id);
@@ -170,6 +173,7 @@ export function useRemoteControl() {
           break;
         }
         case REMOTE_ACTIONS.prev: {
+          if (findLockedSlideIndex(slides) >= 0) break;
           const baseIdx = projOpen ? state.liveIndex : Math.max(currentIdx, 0);
           const prevIdx = Math.max(baseIdx - 1, 0);
           setSelectedSlideId(slides[prevIdx].id);
@@ -193,6 +197,7 @@ export function useRemoteControl() {
           if (typeof data.value === 'number') {
             const idx = Math.max(0, Math.min(lastIndex, data.value));
             setSelectedSlideId(slides[idx]?.id ?? state.selectedSlideId);
+            if (findLockedSlideIndex(slides) >= 0) break;
             setLiveIndex(idx);
           }
           break;

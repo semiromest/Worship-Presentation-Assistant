@@ -83,6 +83,8 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
       const lastIndex = slides.length - 1;
       const selectedIdx = slides.findIndex(s => s.id === state.selectedSlideId);
       const canLive = state.isProjectorWindowOpen;
+      // Broadcast lock: the live output is pinned; navigation only re-selects.
+      const isLocked = slides.some(s => s.locked);
 
       const navigate = (index: number) => {
         if (index < 0 || index > lastIndex) return;
@@ -94,7 +96,7 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
         setLastSelectedIndex(index);
         // "Instant Live" mode: while the broadcast is open, selection changes also go live.
         // Needed for remotes that only send left/right keys; off preserves the old behavior.
-        if (state.autoGoLive && canLive) {
+        if (state.autoGoLive && canLive && !isLocked) {
           setLiveIndex(index);
         }
       };
@@ -155,8 +157,14 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
       } else if (e.key === 'Enter' && selectedIdx >= 0) {
         e.preventDefault();
         // Enter = "Send to Live": moves the selected slide live (staged when broadcast is off, projected when on).
-        setLiveIndex(selectedIdx);
-        playSfx('start');
+        // With a broadcast lock the pin is enforced inside setLiveIndex, but we
+        // skip the "go live" sound so feedback stays truthful.
+        if (!isLocked) {
+          setLiveIndex(selectedIdx);
+          playSfx('start');
+        } else {
+          setLiveIndex(selectedIdx);
+        }
       } else if (e.key === 'Escape' && state.isProjectorWindowOpen) {
         e.preventDefault();
         window.electronAPI?.toggleProjector?.();

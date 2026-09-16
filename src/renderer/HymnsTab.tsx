@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Music, Plus, Search, Trash2, FolderUp, CheckSquare, Pencil, X, ListOrdered, Cloud, Link2, CheckCircle } from 'lucide-react';
+import { Music, Plus, Search, Trash2, FolderUp, CheckSquare, Pencil, X, ListOrdered, Cloud, Link2, CheckCircle, UserRound } from 'lucide-react';
 import { Skeleton } from './components/Skeleton';
 import OnlineHymnsPanel from './components/OnlineHymnsPanel';
 import SetLinkImportDialog from './components/SetLinkImportDialog';
@@ -495,7 +495,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
               )}
               title={showAuthorOnSlides ? t('common.hymnsAuthorOnSlidesOn') : t('common.hymnsAuthorOnSlidesOff')}
             >
-              <Music className="w-4 h-4" aria-hidden="true" />
+              <UserRound className="w-4 h-4" aria-hidden="true" />
               {t('common.hymnsAuthorOnSlides')}
             </button>
 

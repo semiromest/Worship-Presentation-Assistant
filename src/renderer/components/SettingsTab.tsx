@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Globe, Zap, Settings2, Save, Trash2, DatabaseBackup, Volume2, Mic, KeyRound, Languages, Check, Loader2 } from 'lucide-react';
+import { Globe, Zap, Settings2, Save, Trash2, DatabaseBackup, Volume2, Mic, KeyRound, Languages, Check, Loader2, Music } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { useUpdaterStore } from '../state/useUpdaterStore';
 import { WatermarkSettingsPanel } from './WatermarkSettingsPanel';
@@ -24,6 +24,14 @@ export default function SettingsTab() {
   const uiSfxEnabled = useStore((s) => s.uiSfxEnabled);
   const setUiSfxEnabled = useStore((s) => s.setUiSfxEnabled);
   const updaterStatus = useUpdaterStore((s) => s.status);
+
+  // Hymn author position & size
+  const [hymnAuthorPosition, setHymnAuthorPosition] = useState(() => {
+    try { return localStorage.getItem('hymnAuthorPosition') || 'bottom-center'; } catch { return 'bottom-center'; }
+  });
+  const [hymnAuthorSize, setHymnAuthorSize] = useState(() => {
+    try { return Number(localStorage.getItem('hymnAuthorSize') || '28'); } catch { return 28; }
+  });
 
   // Soniox real-time captions
   const sttHasKey = useSttStore((s) => s.hasKey);
@@ -409,6 +417,65 @@ export default function SettingsTab() {
                 />
               )}
             </button>
+          </div>
+        </section>
+
+        {/* Hymn author position & size */}
+        <section className="rounded-xl border border-white/10 bg-surface-raised p-4 space-y-4" aria-label={t('common.hymnsAuthorPosition')}>
+          <div className="flex items-center gap-2">
+            <Music className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
+            <div>
+              <h3 className="text-sm font-semibold">{t('common.hymnsAuthorPosition')}</h3>
+              <p className="text-[11px] text-white/45">{t('common.hymnsAuthorPositionDesc')}</p>
+            </div>
+          </div>
+
+          {/* Position select */}
+          <select
+            value={hymnAuthorPosition}
+            onChange={(e) => {
+              const v = e.target.value;
+              setHymnAuthorPosition(v);
+              try { localStorage.setItem('hymnAuthorPosition', v); } catch {}
+            }}
+            aria-label={t('common.hymnsAuthorPosition')}
+            className="w-full sm:w-auto bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/40 transition-colors"
+          >
+            <option value="bottom-left"   className="bg-surface-overlay">{t('common.hymnsAuthorPosBottomLeft')}</option>
+            <option value="bottom-center" className="bg-surface-overlay">{t('common.hymnsAuthorPosBottomCenter')}</option>
+            <option value="bottom-right"  className="bg-surface-overlay">{t('common.hymnsAuthorPosBottomRight')}</option>
+            <option value="top-left"      className="bg-surface-overlay">{t('common.hymnsAuthorPosTopLeft')}</option>
+            <option value="top-center"    className="bg-surface-overlay">{t('common.hymnsAuthorPosTopCenter')}</option>
+            <option value="top-right"     className="bg-surface-overlay">{t('common.hymnsAuthorPosTopRight')}</option>
+          </select>
+
+          {/* Size slider */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label htmlFor="hymn-author-size" className="text-[11px] text-white/55">
+                {t('common.hymnsAuthorSize')}
+              </label>
+              <span className="text-[11px] font-mono text-amber-300">{hymnAuthorSize}%</span>
+            </div>
+            <input
+              id="hymn-author-size"
+              type="range"
+              min={10}
+              max={60}
+              step={1}
+              value={hymnAuthorSize}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setHymnAuthorSize(v);
+                try { localStorage.setItem('hymnAuthorSize', String(v)); } catch {}
+              }}
+              aria-label={t('common.hymnsAuthorSize')}
+              className="w-full h-1.5 accent-amber-400 cursor-pointer"
+            />
+            <div className="flex justify-between text-[10px] text-white/25">
+              <span>10%</span>
+              <span>60%</span>
+            </div>
           </div>
         </section>
 
