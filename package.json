@@ -1,6 +1,6 @@
 {
   "name": "worship-presentation-assistant",
-  "version": "1.4.9",
+  "version": "1.4.10",
   "main": "dist-electron/main.js",
   "description": "Worship Presentation Assistant - Simple Worship Presentation App",
   "author": "IPCA",
@@ -15,10 +15,13 @@
     "test:presets": "tsx --test src/main/presetStore.test.ts",
     "test:media": "tsx --test src/main/mediaLibrary.test.ts",
     "test:matcher": "tsx --test src/renderer/stt/slideMatcher.test.ts",
+    "test:stt": "tsx --test src/renderer/state/useSttStore.test.ts",
+    "test:canvas": "tsx --test src/renderer/canvasSource.test.ts",
     "test:zoom": "tsx --test src/renderer/__tests__/slideGridZoom.test.ts",
     "smoke:worker": "electron perf/worker-smoke.cjs"
   },
   "dependencies": {
+    "@base-ui/react": "^1.8.0",
     "@googleapis/drive": "^20.2.0",
     "@gracious.tech/fetch-client": "^2.2.0",
     "@napi-rs/canvas": "^1.0.8",
@@ -30,6 +33,7 @@
     "i18next": "^26.3.1",
     "i18next-browser-languagedetector": "^8.2.1",
     "lucide-react": "^0.363.0",
+    "motion": "^13.4.0",
     "pptx-glimpse": "^0.10.4",
     "pptxgenjs": "^4.0.1",
     "qrcode": "^1.5.1",

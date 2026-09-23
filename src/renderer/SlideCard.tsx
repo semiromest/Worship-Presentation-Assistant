@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Video, Monitor, ListOrdered, Play, Pause, Square, Lock } from 'lucide-react';
 import type { Slide, SlideItem, TextStyle } from './types';
+import { getSlideDisplayContent } from '../shared/slideContent';
 import { cn } from './utils';
 
 interface SlideCardProps {
@@ -324,9 +325,7 @@ const BackgroundVideoPlayer = memo(({ src }: { src: string }) => {
 BackgroundVideoPlayer.displayName = 'BackgroundVideoPlayer';
 
 const TextSlidePreview = memo(({ slide, cardWidth = 320 }: { slide: Slide; cardWidth?: number }) => {
-  const displayContent = slide.partsMode && slide.parts?.length
-    ? slide.parts[slide.activePart ?? 0]
-    : slide.content;
+  const displayContent = getSlideDisplayContent(slide);
   const bgColor = slide.styles?.backgroundColor ?? '#000000';
   const bgImage = slide.styles?.backgroundImage;
   const bgGradient = slide.styles?.backgroundGradient;

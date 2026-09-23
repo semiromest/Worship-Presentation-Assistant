@@ -1,3 +1,4 @@
+import { isSessionOnlyChange, writeLiveSession } from '../liveSession';
 import { useCallback, useEffect, useRef } from 'react';
 import { useStore } from '../state/useStore';
 import { IS_PROJECTOR_MODE } from '../constants';
@@ -111,9 +112,11 @@ const performSave = () => {
 
   return window.electronAPI?.savePreset?.({
     name,
-    // Persist the live slide position too, so a backup can resume
-    // exactly where the service left off.
-    presentation: { ...presentation, liveIndex: state.liveIndex },
+    presentation: {
+      ...presentation,
+      liveSlideId: state.liveSlideId ?? undefined,
+      liveIndex: state.liveIndex,
+    },
     retentionMs: state.liveSaveRetentionMs,
   });
 };
@@ -150,7 +153,11 @@ function writeFallback(): void {
   try {
     const snapshot: FallbackSnapshot = {
       savedAt: Date.now(),
-      presentation: { ...state.presentation, liveIndex: state.liveIndex },
+      presentation: {
+        ...state.presentation,
+        liveSlideId: state.liveSlideId ?? undefined,
+        liveIndex: state.liveIndex,
+      },
     };
     localStorage.setItem(FALLBACK_KEY, JSON.stringify(snapshot));
   } catch {
@@ -264,20 +271,24 @@ export function useLiveSave(): null {
     dirtyRef.current = false;
 
     let savedSuccessfully = false;
+    useStore.getState().setLiveSaveStatus('saving');
 
     try {
       const updated = await performSave();
 
+      if (!Array.isArray(updated)) throw new Error('Autosave unavailable');
       if (Array.isArray(updated)) {
         useStore.getState().setPresets(updated);
       }
 
       useStore.getState().setLiveSaveLastSaved(Date.now());
+      useStore.getState().setLiveSaveStatus('idle');
 
       savedSuccessfully = true;
     } catch {
       // The presentation has not been safely persisted.
       dirtyRef.current = true;
+      useStore.getState().setLiveSaveStatus('error');
     } finally {
       savingRef.current = false;
 
@@ -362,12 +373,14 @@ export function useLiveSave(): null {
     };
 
     const unsubscribe = useStore.subscribe((state, prev) => {
-      if (
-        state.presentation !== prev.presentation ||
-        state.liveIndex !== prev.liveIndex
-      ) {
-        scheduleSave();
+      const changed = state.presentation !== prev.presentation || state.liveSlideId !== prev.liveSlideId;
+      if (changed && state.liveSaveEnabled) {
+        try {
+          writeLiveSession(state.presentation, state.liveSlideId);
+          state.setSessionSaveStatus('idle');
+        } catch { state.setSessionSaveStatus('error'); }
       }
+      if (!isSessionOnlyChange(prev.presentation, state.presentation) || (!prev.liveSaveEnabled && state.liveSaveEnabled)) scheduleSave();
     });
 
     /*

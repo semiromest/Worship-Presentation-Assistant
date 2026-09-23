@@ -201,7 +201,7 @@ export default function LiveCaptionsConsole({
     const lines = utterances.map((utterance, index) => {
       const parts = [
         `${index + 1}. ${dateFormatter.format(new Date(utterance.at))}`,
-        utterance.translation ? `${t('common.sttExportTranslation')}: ${utterance.translation}` : '',
+        ...Object.entries(utterance.translations ?? (utterance.translation ? { [targetLanguages[0] ?? '']: utterance.translation } : {})).map(([code, text]) => `${languageName(code)}: ${text}`),
         utterance.original ? `${t('common.sttExportOriginal')}: ${utterance.original}` : '',
       ].filter(Boolean);
       return parts.join('\n');
@@ -341,7 +341,7 @@ export default function LiveCaptionsConsole({
         <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
-            onClick={clearAll}
+            onClick={() => { clearAll(); void window.electronAPI?.sttClear?.(); }}
             disabled={active}
             title={active ? t('common.sttNextStart') : t('common.sttClear')}
             aria-label={t('common.sttClear')}
@@ -469,11 +469,11 @@ export default function LiveCaptionsConsole({
                 aria-expanded={tickerOpen}
               >
                 <span
-                  className={cn('w-1.5 h-1.5 rounded-full shrink-0', micActive ? 'bg-red-400 animate-pulse' : sessionDot)}
+                  className={cn('w-1.5 h-1.5 rounded-full shrink-0', status === 'connected' && micActive ? 'bg-red-400' : sessionDot)}
                   aria-hidden="true"
                 />
                 <span className="flex-1 min-w-0 text-[11px] font-semibold text-white/50 truncate">
-                  {micActive ? t('common.sttListening') : sessionLabel}
+                  {status === 'connected' && micActive ? t('common.sttListening') : sessionLabel}
                 </span>
                 {tickerOpen ? (
                   <ChevronUp className="w-3.5 h-3.5 text-white/35 shrink-0" aria-hidden="true" />
@@ -830,11 +830,11 @@ export default function LiveCaptionsConsole({
                           className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 flex items-start gap-2"
                         >
                           <div className="flex-1 min-w-0 space-y-0.5">
-                            {translationEnabled && u.translation && (
-                              <p className="text-xs font-semibold leading-snug whitespace-pre-wrap text-white">
-                                {u.translation}
+                            {Object.entries(u.translations ?? (u.translation ? { [targetLanguages[0] ?? '']: u.translation } : {})).map(([code, text]) => (
+                              <p key={code} dir="auto" className="text-xs font-semibold leading-snug whitespace-pre-wrap text-white">
+                                <span className="text-white/50">{languageName(code)} · </span>{text}
                               </p>
-                            )}
+                            ))}
                             {u.original && (
                               <p
                                 className={cn(
@@ -916,7 +916,7 @@ function FitStage({
 
   // True WYSIWYG whenever a captions slide exists and either it is on air, or
   // nothing is running yet (styled idle preview of the deck's captions slide).
-  const showWysiwyg = !!captionsSlide && (captionsOnAir || !active);
+  const showWysiwyg = !!captionsSlide;
 
   return (
     <div ref={outerRef} className="absolute inset-0 flex items-center justify-center overflow-hidden bg-black">
@@ -928,7 +928,7 @@ function FitStage({
         ) : (
           <OffAirStage width={size.w} height={size.h} translationEnabled={translationEnabled} active={active} />
         ))}
-      {!showWysiwyg && active && (
+      {!captionsOnAir && active && (
         <div className="absolute left-0 right-0 bottom-0 flex items-center justify-between gap-3 px-4 py-3 bg-gradient-to-t from-black/90 to-transparent">
           <p className="text-[11px] text-white/55">{t('common.sttOffAir')}</p>
           <button
@@ -967,55 +967,11 @@ function OffAirStage({
   width,
   height,
   translationEnabled,
-  active,
 }: {
   width: number;
   height: number;
   translationEnabled: boolean;
   active: boolean;
 }) {
-  const { t } = useTranslation();
-  const currentTranslation = useSttStore((s) => s.currentTranslation);
-  const partialTranslation = useSttStore((s) => s.partialTranslation);
-  const currentOriginal = useSttStore((s) => s.currentOriginal);
-  const partialOriginal = useSttStore((s) => s.partialOriginal);
-  const lastTranslation = useSttStore((s) => s.lastTranslation);
-  const lastOriginal = useSttStore((s) => s.lastOriginal);
-
-  const liveTranslation = (currentTranslation + partialTranslation).trim();
-  const liveOriginal = (currentOriginal + partialOriginal).trim();
-  const hasLive = liveTranslation.length > 0 || liveOriginal.length > 0;
-  const translation = hasLive ? liveTranslation : lastTranslation;
-  const original = hasLive ? liveOriginal : lastOriginal;
-  const primary = translationEnabled ? translation : original;
-
-  return (
-    <div
-      className="flex flex-col items-center justify-center px-[6%] text-center"
-      style={{ width, height, backgroundColor: '#000000' }}
-    >
-      <div className="w-full">
-        {primary ? (
-          <p
-            className="whitespace-pre-wrap break-words text-center leading-snug w-full font-bold text-white"
-            style={{ fontSize: Math.max(16, 30 * (width / 1920)) }}
-          >
-            {primary}
-          </p>
-        ) : (
-          <p className="text-white/35 text-center w-full" style={{ fontSize: Math.max(13, 22 * (width / 1920)) }}>
-            {active ? t('common.sttWaiting') : t('common.sttEmpty')}
-          </p>
-        )}
-        {translationEnabled && original && (
-          <p
-            className="whitespace-pre-wrap break-words text-center leading-snug w-full text-white/50 mt-2"
-            style={{ fontSize: Math.max(11, 17 * (width / 1920)) }}
-          >
-            {original}
-          </p>
-        )}
-      </div>
-    </div>
-  );
+  return <CaptionsRenderer slide={{ id: 'caption-preview', type: 'captions', content: '', captions: { showOriginal: true, showTranslation: translationEnabled } }} width={width} height={height} scale={width / 1920} />;
 }

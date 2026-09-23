@@ -1,48 +1,13 @@
-// ─── Phone captions share: mobile client HTML shell ─────────────────────────
-/* eslint-disable */
 import shareClient from './share-client.js?raw';
-
 export const SHARE_HTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#000000">
-<title>Live Captions</title>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1020"><title>Live Captions</title>
 <style>
-*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-html,body { height: 100%; background: #000; color: #d6e8ff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif; overflow: hidden; }
-#wrap { height: 100%; display: flex; flex-direction: column; }
-#bar { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 12px 16px; font-size: 13px; font-weight: 600; color: #9db8d4; border-bottom: 1px solid rgba(255,255,255,.08); background: #0a0f18; }
-#original-toggle { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 12px; color: #9db8d4; }\n#original-toggle input { accent-color: #4b9eff; }\n#language-picker { margin-left: auto; max-width: 48%; background: #121a2a; color: #d6e8ff; border: 1px solid #2e4060; border-radius: 8px; padding: 6px 8px; font: inherit; font-size: 12px; }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: #3a526e; flex: 0 0 auto; }
-.dot.on { background: #00e5a0; box-shadow: 0 0 8px rgba(0,229,160,.7); animation: pulse 1.6s ease-in-out infinite; }
-.dot.wait { background: #ffb030; }
-.dot.off { background: #ff3d6b; }
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
-#feed { flex: 1 1 auto; overflow-y: auto; padding: 16px; -webkit-overflow-scrolling: touch; }
-.line { margin-bottom: 12px; display: flex; flex-direction: column; gap: 3px; }
-.line .tag { font-size: 10px; font-weight: 700; letter-spacing: .14em; color: #4b9eff; }
-.line .txt { white-space: pre-wrap; word-break: break-word; }
-.line.tr .txt { font-size: 21px; font-weight: 650; line-height: 1.35; color: #eaf3ff; }
-.line.orig .txt { font-size: 15px; font-weight: 400; line-height: 1.4; color: #8aa7c4; }
-.line.tr { border-left: 3px solid #4b9eff; padding-left: 10px; }
-.line.orig { padding-left: 13px; }
-.live { margin-top: 6px; padding-top: 12px; border-top: 1px dashed rgba(255,255,255,.14); }
-.live-active { border-top-color: #00e5a0; }
-.placeholder { color: #4a637f; font-size: 15px; font-style: italic; padding: 8px 0; text-align: center; }
-#ended { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: #000; color: #ff3d6b; font-size: 18px; font-weight: 600; z-index: 10; }
-.hidden { display: none !important; }
-</style>
-</head>
-<body>
-<div id="wrap">
-  <header id="bar"><span id="dot" class="dot"></span><span id="status">Connecting…</span><label id="original-toggle"><input id="show-original" type="checkbox" checked> Original</label><select id="language-picker" aria-label="Translation language"><option value="__all__">All languages</option><option value="__original__">Original</option></select></header>
-  <main id="feed"></main>
-</div>
-<div id="ended" class="hidden"><span>⚠</span><span id="endedText">Broadcast ended</span></div>
-<script>${shareClient.replace(/<\/script/gi, '<\\/script')}</script>
-</body>
-</html>`;
+*{box-sizing:border-box}body{margin:0;background:#0b1020;color:#edf3ff;font-family:system-ui,-apple-system,sans-serif}button,select,input{font:inherit}button,select{min-height:44px;border:1px solid #43506a;border-radius:12px;background:#172238;color:#edf3ff;padding:8px 12px}button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid #72b8ff;outline-offset:3px}#wrap{height:100vh;height:100dvh;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}header{padding:12px max(16px,env(safe-area-inset-right)) 10px max(16px,env(safe-area-inset-left));background:#10192b;border-bottom:1px solid #26334a}#connection{display:flex;align-items:center;gap:8px;font-size:13px;color:#b5c6df;margin-bottom:10px}.dot{width:8px;height:8px;border-radius:50%;background:#eab65b}.dot.on{background:#5fe0b2}.dot.off{background:#f58a98}#controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px}#language-picker{flex:1;min-width:140px;max-width:100%}#original-toggle{display:flex;align-items:center;gap:8px;min-height:44px;font-size:14px;color:#c5d3e8}input{width:20px;height:20px;accent-color:#7bb6ff}#font-size{min-width:65px}#feed{flex:1;min-height:0;overflow:auto;overflow-anchor:none;padding:20px max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));scrollbar-gutter:stable}.entry{padding:0 0 20px;margin:0 0 20px;border-bottom:1px solid #25314a}.line{margin-top:12px}.tag{display:block;font-size:12px;letter-spacing:.04em;color:#9cbfff;margin-bottom:5px}.txt{display:block;white-space:pre-wrap;overflow-wrap:anywhere;font-size:var(--caption-size,22px);line-height:1.5;font-weight:550}.orig .txt{font-size:calc(var(--caption-size,22px)*.82);color:#bccae0;font-weight:400}.live{border-left:3px solid #5fe0b2;padding-left:12px}.placeholder{color:#bccae0;font-size:16px;padding:24px 4px}#return-live{position:fixed;bottom:max(18px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:#c6ddff;color:#10213c;box-shadow:0 4px 24px #0008;white-space:nowrap}#ended{padding:16px;background:#241c2b;color:#ffd0d7;font-size:14px}.hidden{display:none!important}html[data-motion="true"] #return-live{animation:appear .16s ease-out}@keyframes appear{from{opacity:0}to{opacity:1}}@media(prefers-reduced-motion:reduce){*{animation:none!important;scroll-behavior:auto!important}}@media(min-width:700px){#feed{padding-left:max(24px,calc((100% - 760px)/2));padding-right:max(24px,calc((100% - 760px)/2))}}@media(max-height:450px){header{padding-top:6px;padding-bottom:6px}#connection{margin-bottom:4px}}
+</style></head><body><div id="wrap"><header>
+<div id="connection" role="status" aria-live="polite"><span id="dot" class="dot" aria-hidden="true"></span><span id="status"></span></div>
+<div id="controls"><select id="language-picker" aria-label="Translation language"></select><select id="font-size" aria-label="Text size"><option value="18">A−</option><option value="22">A</option><option value="26">A+</option></select><label id="original-toggle"><input id="show-original" type="checkbox"><span id="original-label"></span></label></div>
+</header><div id="ended" class="hidden" role="status"><span id="endedText"></span></div><main id="feed" tabindex="0"></main></div>
+<button id="return-live" class="hidden" type="button"></button>
+<script>${shareClient.replace(/<\/script/gi, '<\\/script')}</script></body></html>`;

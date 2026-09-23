@@ -1,25 +1,14 @@
+import { useShallow } from 'zustand/react/shallow';
 import { useEffect } from 'react';
 import { useStore } from '../state/useStore';
 import { playSfx } from '../sfx';
+import { tabForShortcut } from '../navigation';
 
 const NAV_KEYS = {
   NEXT: new Set(['ArrowRight', 'ArrowDown', ' ', 'PageDown', 'j', 'J']),
   PREV: new Set(['ArrowLeft', 'ArrowUp', 'PageUp', 'k', 'K']),
   HOME: new Set(['Home']),
   END: new Set(['End']),
-};
-
-const TAB_KEYS: Record<string, string> = {
-  '1': 'presentations',
-  '2': 'slides',
-  '3': 'bible',
-  '4': 'media',
-  '5': 'hymns',
-  '6': 'countdown',
-  '7': 'screen',
-  '8': 'calendar',
-  '9': 'autosaves',
-  '0': 'settings',
 };
 
 interface KeyboardNavigationOptions {
@@ -42,12 +31,26 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
     setIsCheatsheetOpen,
     setActiveTab,
     setIsMediaMuted,
-  } = useStore();
+  } = useStore(useShallow((s) => ({
+    dispatchUndo: s.dispatchUndo,
+    setSelectedSlideId: s.setSelectedSlideId,
+    setLiveIndex: s.setLiveIndex,
+    setIsBlackout: s.setIsBlackout,
+    setSelectedSlideIds: s.setSelectedSlideIds,
+    setLastSelectedIndex: s.setLastSelectedIndex,
+    setIsEditorOpen: s.setIsEditorOpen,
+    setIsCheatsheetOpen: s.setIsCheatsheetOpen,
+    setActiveTab: s.setActiveTab,
+    setIsMediaMuted: s.setIsMediaMuted,
+  })));
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const el = document.activeElement as HTMLElement | null;
       const tag = el?.tagName?.toLowerCase();
+      // Dialogs own their keys; inputs retain native text undo and punctuation.
+      if (el?.closest('[role="dialog"]')) return;
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || el?.isContentEditable) return;
 
       // When the SlideEditor is open, its own undo/redo handles these keys.
       const editorOpen = useStore.getState().isEditorOpen;
@@ -70,9 +73,10 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
         return;
       }
 
-      if (e.altKey && !e.ctrlKey && !e.metaKey && TAB_KEYS[e.key]) {
+      const destination = tabForShortcut(e.key);
+      if (e.altKey && !e.ctrlKey && !e.metaKey && destination) {
         e.preventDefault();
-        setActiveTab(TAB_KEYS[e.key] as any);
+        setActiveTab(destination);
         return;
       }
 

@@ -13,6 +13,7 @@ import {
   Check,
 } from 'lucide-react';
 import { loadMediaFolderSettings, saveMediaFolderSettings, type MediaFolderSettings } from './mediaFolderSettings';
+import { replaceFolderItems } from './mediaFolderItems';
 
 // ─── Types ────────────────────────────────────────────────
 type MediaKind = 'image' | 'video';
@@ -550,6 +551,9 @@ export default function MediaTab({ onAddMediaToPresentation }: MediaTabProps) {
   const [folderSettings, setFolderSettings] = useState<MediaFolderSettings>(() => loadMediaFolderSettings());
   const [scanLoading, setScanLoading] = useState(false);
   const [folderMissing, setFolderMissing] = useState(false);
+  const [scanError, setScanError] = useState(false);
+  const [folderCount, setFolderCount] = useState<number | null>(null);
+  const scanGeneration = useRef(0);
 
   // Click-outside to close dropdown
   useEffect(() => {
@@ -612,30 +616,39 @@ export default function MediaTab({ onAddMediaToPresentation }: MediaTabProps) {
 
   const scanFolder = useCallback(
     async (settings: MediaFolderSettings) => {
+      const generation = ++scanGeneration.current;
       const api = window.electronAPI;
-      if (!api?.readMediaFolder || !settings.path) return;
+      if (!settings.path) return;
       setScanLoading(true);
+      setScanError(false);
+      setFolderMissing(false);
+      setFolderCount(null);
       try {
+        if (!api?.readMediaFolder) throw new Error('Media API unavailable');
         const result = await api.readMediaFolder(settings.path, {
           recursive: settings.recursive,
           includeImages: settings.includeImages,
           includeVideos: settings.includeVideos,
         });
-        if (!result) return;
+        if (generation !== scanGeneration.current) return;
+        if (!result) throw new Error('Media scan failed');
         setFolderMissing(result.missing);
-        if (result.missing) {
-          setItems((prev) => prev.filter((i) => i.origin !== 'folder'));
-        } else if (result.paths.length) {
-          await addPaths(result.paths, 'folder');
-        }
+        const incoming: MediaItem[] = result.missing ? [] : result.paths.filter(isMediaFile).map((path) => ({
+          id: makeId(), path, name: getFileName(path), type: detectMediaType(path)!, origin: 'folder',
+        }));
+        setFolderCount(incoming.length);
+        setItems((prev) => replaceFolderItems(prev, incoming));
+      } catch {
+        if (generation === scanGeneration.current) setScanError(true);
       } finally {
-        setScanLoading(false);
+        if (generation === scanGeneration.current) setScanLoading(false);
       }
     },
-    [addPaths]
+    []
   );
 
   const updateFolderSettings = useCallback((patch: Partial<MediaFolderSettings>) => {
+    ++scanGeneration.current;
     setFolderSettings((prev) => {
       const next = { ...prev, ...patch };
       saveMediaFolderSettings(next);
@@ -655,11 +668,19 @@ export default function MediaTab({ onAddMediaToPresentation }: MediaTabProps) {
   const clearFolder = useCallback(() => {
     updateFolderSettings({ path: '', recursive: false, includeImages: true, includeVideos: true });
     setItems((prev) => prev.filter((i) => i.origin !== 'folder'));
+    setScanLoading(false);
+    setScanError(false);
+    setFolderCount(null);
   }, [updateFolderSettings]);
 
   // Auto-scan when folder settings change (including initial load)
   useEffect(() => {
-    if (folderSettings.path) scanFolder(folderSettings);
+    if (folderSettings.path) void scanFolder(folderSettings);
+    return () => {
+      // This is an async generation counter, not a DOM ref. Invalidate late responses.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      ++scanGeneration.current;
+    };
   }, [folderSettings, scanFolder]);
 
   const removeItem = useCallback((id: string) => {
@@ -788,6 +809,16 @@ export default function MediaTab({ onAddMediaToPresentation }: MediaTabProps) {
       </div>
 
       <div style={s.divider} />
+      {folderSettings.path && (
+        <p role={scanError || folderMissing ? 'alert' : 'status'} className="px-5 py-3 text-sm text-white/70">
+          {scanLoading ? t('common.mediaFolderLoading')
+            : scanError ? t('common.mediaScanFailed')
+            : folderMissing ? t('common.mediaFolderMissing')
+            : !folderSettings.includeImages && !folderSettings.includeVideos ? t('common.mediaFiltersOff')
+            : folderCount === 0 ? t('common.mediaFolderNoMatches')
+            : folderCount !== null ? t('common.mediaFolderFound', { count: folderCount }) : ''}
+        </p>
+      )}
 
       {/* Content — isolated in its own memoized component so that scrolling
           (which updates state ~60x/sec while dragging) only ever re-renders

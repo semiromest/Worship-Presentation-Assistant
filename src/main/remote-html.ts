@@ -418,6 +418,42 @@ body::after {
 .goto-inp[type=number] { -moz-appearance: textfield; }
 .goto-inp.invalid { border-color: var(--red); box-shadow: 0 0 0 3px var(--rglow); }
 
+/* ── Quick verse ─────────────────────────────────────────────────────── */
+.verse-inp { font-family: 'Barlow', sans-serif; font-size: .95rem; font-weight: 600; }
+.verse-live {
+  display: flex; align-items: center; gap: .6rem;
+  margin-top: .6rem; cursor: pointer; user-select: none; -webkit-user-select: none;
+}
+.verse-live input { position: absolute; opacity: 0; width: 0; height: 0; }
+.verse-box {
+  display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; flex-shrink: 0;
+  border: 1.5px solid var(--rim2); border-radius: 7px;
+  background: var(--z2); color: transparent;
+  transition: background .18s, border-color .18s, color .18s;
+}
+.verse-live input:checked + .verse-box {
+  background: var(--green); border-color: var(--green); color: #04150f;
+}
+.verse-live input:focus-visible + .verse-box { outline: 2.5px solid var(--blue); outline-offset: 2px; }
+.verse-live-txt { font-size: .82rem; font-weight: 600; color: var(--tx2); letter-spacing: .01em; }
+
+/* ── Transient notice toast ──────────────────────────────────────────── */
+.notice {
+  position: fixed; left: 50%; bottom: calc(1.2rem + env(safe-area-inset-bottom, 0px));
+  transform: translate(-50%, 1.5rem);
+  max-width: 88vw; padding: .7rem 1.1rem;
+  border-radius: 99px; font-size: .85rem; font-weight: 700; letter-spacing: .01em;
+  background: var(--z3); color: var(--tx); border: 1.5px solid var(--rim2);
+  box-shadow: 0 8px 30px rgba(0,0,0,.55);
+  opacity: 0; pointer-events: none; z-index: 60;
+  transition: opacity .22s ease, transform .22s cubic-bezier(0.22,1,0.36,1);
+}
+.notice.show { opacity: 1; transform: translate(-50%, 0); }
+.notice.ok { border-color: rgba(0,229,160,.5); color: var(--green); }
+.notice.error { border-color: rgba(255,61,107,.5); color: var(--red); }
+
+
 /* ── Projector status badge ──────────────────────────────────────────── */
 .proj-status {
   display: flex; align-items: center; gap: .5rem;
@@ -903,6 +939,33 @@ body::after {
 
   <div class="sep"></div>
 
+  <!-- Quick verse — resolves against the Bible currently loaded on the
+       presenter; no version/book picker. "Go live now" sends immediately,
+       otherwise the verse is appended as a slide. -->
+  <span class="lbl">Quick verse</span>
+  <form class="goto-row" id="verseForm" novalidate>
+    <input class="goto-inp verse-inp" id="verseInp" type="text"
+           placeholder="John 3:16" autocomplete="off" autocapitalize="off"
+           spellcheck="false" maxlength="160" enterkeyhint="send" aria-label="Bible reference">
+    <button class="btn btn-go" id="verseSubmit" type="submit" aria-label="Add verse">
+      <svg width="16" height="16" fill="none" viewBox="0 0 24 24"
+           stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+      </svg>
+    </button>
+  </form>
+  <label class="verse-live" for="verseLive">
+    <input type="checkbox" id="verseLive">
+    <span class="verse-box" aria-hidden="true">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
+    </span>
+    <span class="verse-live-txt">Go live now</span>
+  </label>
+
+  <div class="sep"></div>
+
   <!-- Slides Grid -->
   <span class="lbl">Slides</span>
   <div class="slides-grid" id="slidesGrid">
@@ -910,6 +973,8 @@ body::after {
   </div>
 
 </main><!-- /deck -->
+
+<div class="notice" id="notice" role="status" aria-live="polite"></div>
 
 <script>${remoteScript.replace(/<\/script/gi, '<\\/script')}</script>
 </body>

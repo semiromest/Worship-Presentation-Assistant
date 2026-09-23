@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ChevronLeft, ChevronRight, Eye, EyeOff, Play, VolumeX, Volume2, Timer, Type,
@@ -73,6 +74,16 @@ export default function RightPanel({
   const isRightPanelOpen = useStore((s) => s.isRightPanelOpen);
   const setIsRightPanelOpen = useStore((s) => s.setIsRightPanelOpen);
   const toggleSlideLock = useStore((s) => s.toggleSlideLock);
+  const searchQuery = useStore((s) => s.searchQuery);
+  const setSearchQuery = useStore((s) => s.setSearchQuery);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    if (isRightPanelOpen) panel.removeAttribute('inert');
+    else panel.setAttribute('inert', '');
+  }, [isRightPanelOpen]);
 
   const transitionType = presentation.transition?.type ?? DEFAULT__TRANSITION.type;
   const transitionDuration = presentation.transition?.duration ?? DEFAULT__TRANSITION.duration;
@@ -83,6 +94,11 @@ export default function RightPanel({
   // Broadcast lock state: single lock, pins the live output to one slide.
   const isBroadcastLocked = presentation.slides.some((s) => s.locked);
   const selectedSlideLocked = selectedSlide?.locked === true;
+  const q = searchQuery.trim().toLowerCase();
+  const selectedHidden = !!q && !!selectedSlide && !(
+    selectedSlide.content.toLowerCase().includes(q) ||
+    selectedSlide.group?.title.toLowerCase().includes(q) || selectedSlide.type.toLowerCase().includes(q)
+  );
 
   const getSlideIndex = (slides: Slide[], id: string): number =>
     slides.findIndex((s) => s.id === id);
@@ -97,14 +113,21 @@ export default function RightPanel({
           aria-hidden="true"
         />
       )}
-      <div className={cn(
+      <div
+        ref={panelRef}
+        data-testid="right-panel"
+        aria-hidden={!isRightPanelOpen}
+        className={cn(
         'fixed top-0 right-0 h-full z-50 w-[380px] max-w-[85vw]',
-        'lg:static lg:z-auto lg:w-[380px] lg:max-w-none lg:h-full',
+        'lg:relative lg:top-auto lg:right-auto lg:z-auto lg:max-w-none lg:h-full',
         'border-l border-white/10 bg-surface flex flex-col overflow-hidden flex-shrink-0',
-        'transition-transform duration-300 ease-in-out',
-        isRightPanelOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0 lg:hidden',
-      )}>
-      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        'transition-[transform,width,opacity,border-color] duration-200 ease-out',
+        isRightPanelOpen
+          ? 'translate-x-0 lg:w-[380px] lg:opacity-100'
+          : 'translate-x-full lg:translate-x-0 lg:w-0 lg:opacity-0 lg:border-transparent',
+        )}
+      >
+      <div className="h-full w-[380px] max-w-[85vw] lg:max-w-none flex-1 overflow-y-auto overflow-x-hidden">
         {/* Live preview — animated (TOP) */}
         <div className="bg-black aspect-video relative group">
           <AnimatedPreview
@@ -117,7 +140,7 @@ export default function RightPanel({
           />
 
           {/* Overlay Info */}
-          <div className="absolute top-0 left-0 right-0 p-3 bg-gradient-to-b from-black/80 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="absolute top-0 left-0 right-0 p-3 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
             <div className="flex items-center justify-between">
               <div className="flex flex-col">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-white/77">
@@ -273,6 +296,11 @@ export default function RightPanel({
 
         {/* Selected slide editor */}
         <div className="p-4 space-y-4">
+          {selectedSlide && <p className="text-xs text-white/70">{t('common.editingSlideNumber', { number: selectedSlideIndex + 1 })}</p>}
+          {selectedHidden && <div role="status" className="rounded-lg border border-amber-400/30 bg-amber-500/10 p-3 text-xs text-amber-100">
+            <p>{t('common.selectedOutsideSearch')}</p>
+            <button type="button" onClick={() => setSearchQuery('')} className="mt-2 underline focus-visible:ring-2 focus-visible:ring-amber-300">{t('common.clearSearch')}</button>
+          </div>}
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               {selectedSlide?.type === 'countdown' ? (
@@ -345,6 +373,26 @@ export default function RightPanel({
           </div>
 
           <div className="space-y-4">
+            {selectedSlide && (<>
+      {/* Operator notes — shown only on the confidence monitor, never on the audience output */}
+      <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
+        <label
+          htmlFor="operator-notes"
+          className="block text-[10px] font-bold uppercase tracking-widest text-white/40"
+        >
+          {t('common.operatorNotes')}
+        </label>
+        <textarea
+          id="operator-notes"
+          value={selectedSlide.operatorNotes ?? ''}
+          onChange={(e) => updateSlideProperty(selectedSlide.id, { operatorNotes: e.target.value })}
+          placeholder={t('common.operatorNotesPlaceholder')}
+          rows={2}
+          className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white/80 resize-y focus-visible:border-blue-500/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500/30 transition-colors"
+        />
+      </div>
+
+            </>)}
             {selectedSlide?.type === 'text' && !selectedSlide.items?.length ? (
               <SlideStyleEditor
                 selectedSlide={selectedSlide}

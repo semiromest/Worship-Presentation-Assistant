@@ -29,6 +29,22 @@ const active = {
 
 /** Connected phone clients for the CURRENT broadcast only. */
 const clients = new Set<WsSocket>();
+let broadcastId = '';
+let sequence = 0;
+let heartbeat: ReturnType<typeof setInterval> | undefined;
+const alive = new WeakSet<WsSocket>();
+function startHeartbeat(): void {
+  clearInterval(heartbeat);
+  heartbeat = setInterval(() => {
+    for (const client of clients) {
+      if (!alive.has(client)) { client.terminate(); continue; }
+      alive.delete(client);
+      client.ping();
+      send(client, active.lastSnapshot ? { type: 'snapshot', data: active.lastSnapshot, broadcastId, sequence } : { type: 'heartbeat' });
+    }
+  }, 10000);
+  heartbeat.unref?.();
+}
 
 /** Optional hook so main.ts can surface the connected-client count to the UI. */
 let clientCountListener: ((count: number) => void) | null = null;
@@ -63,6 +79,7 @@ function buildUrl(): string {
 
 function send(client: WsSocket, msg: object): void {
   if (client.readyState !== WsSocket.OPEN) return;
+  if (client.bufferedAmount > 1024 * 1024) { client.close(1013, 'Slow connection'); return; }
   try {
     client.send(JSON.stringify(msg));
   } catch {
@@ -78,6 +95,9 @@ function notifyClientCount(): void {
 export function startShare(ip: string, port: number): { url: string } | null {
   if (active.token) return null;
   active.token = newToken();
+  broadcastId = crypto.randomUUID();
+  sequence = 0;
+  startHeartbeat();
   active.ip = ip;
   active.port = port;
   active.lastSnapshot = null;
@@ -86,6 +106,7 @@ export function startShare(ip: string, port: number): { url: string } | null {
 
 /** Stop the broadcast: invalidate the token and drop every phone connection. */
 export function stopShare(): void {
+  clearInterval(heartbeat);
   for (const client of clients) {
     send(client, { type: 'ended' });
   }
@@ -117,12 +138,8 @@ export function publishShare(snapshot: ShareSnapshot): void {
     history: snapshot.history.slice(-MAX_HISTORY),
   };
   active.lastSnapshot = bounded;
-  const str = JSON.stringify({ type: 'snapshot', data: bounded });
-  for (const client of clients) {
-    if (client.readyState === WsSocket.OPEN) {
-      try { client.send(str); } catch { /* ignore */ }
-    }
-  }
+  sequence++;
+  for (const client of clients) send(client, { type: 'snapshot', data: bounded, broadcastId, sequence });
 }
 
 /** Re-resolve the host after a network change. Returns true if the URL changed. */
@@ -149,7 +166,7 @@ export function getShareStatus(): ShareStatus {
 export function handleShareHttp(req: IncomingMessage, res: ServerResponse): boolean {
   const token = queryToken(req.url);
   if (!active.token || !tokenMatches(token)) {
-    res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
     res.end('<!DOCTYPE html><html><body style="background:#000;color:#d6e8ff;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><p>Broadcast ended or invalid link.</p></body></html>');
     return true;
   }
@@ -174,13 +191,15 @@ export function handleShareConnection(client: WsSocket, req: IncomingMessage): b
   }
 
   clients.add(client);
+  alive.add(client);
+  client.on('pong', () => alive.add(client));
   notifyClientCount();
 
   // Initial snapshot so a phone joining mid-broadcast sees text immediately.
   if (active.lastSnapshot) {
-    send(client, { type: 'hello', data: active.lastSnapshot });
+    send(client, { type: 'hello', data: active.lastSnapshot, broadcastId, sequence });
   } else {
-    send(client, { type: 'hello', data: null });
+    send(client, { type: 'hello', data: null, broadcastId, sequence });
   }
 
   client.on('close', () => {
@@ -198,6 +217,7 @@ export function handleShareConnection(client: WsSocket, req: IncomingMessage): b
 
 /** Called on app quit — drop every phone connection without an `ended` frame. */
 export function disposeShare(): void {
+  clearInterval(heartbeat);
   for (const client of clients) {
     try { client.terminate(); } catch { /* ignore */ }
   }

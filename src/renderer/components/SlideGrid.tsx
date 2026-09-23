@@ -1,3 +1,4 @@
+import ServiceSections, { SectionAssignment } from './ServiceSections';
 import { memo, useMemo, useEffect, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, X, Plus, ZoomIn, ZoomOut } from 'lucide-react';
@@ -93,6 +94,7 @@ export default function SlideGrid({
   handleSlideDoubleClick,
 }: SlideGridProps) {
   const { t } = useTranslation();
+  const sectionsEnabled = useStore(s => s.serviceSectionsEnabled);
   const presentation = useStore((s) => s.presentation);
   const searchQuery = useStore((s) => s.searchQuery);
   const setSearchQuery = useStore((s) => s.setSearchQuery);
@@ -177,7 +179,7 @@ export default function SlideGrid({
 
   const filteredSlides = useMemo(() => {
     if (!searchQuery.trim()) return presentation.slides;
-    const q = searchQuery.toLowerCase();
+    const q = searchQuery.trim().toLowerCase();
     return presentation.slides.filter(
       (s) =>
         s.content.toLowerCase().includes(q) ||
@@ -201,6 +203,10 @@ export default function SlideGrid({
     const el = containerRef.current;
     if (!el || !selectedSlideId) return;
 
+    if (sectionsEnabled) {
+      requestAnimationFrame(() => el.querySelector<HTMLElement>(`[data-slide-id="${CSS.escape(selectedSlideId)}"]`)?.scrollIntoView({ block: 'nearest' }));
+      return;
+    }
     const idx = filteredSlides.findIndex((s) => s.id === selectedSlideId);
     if (idx === -1) return;
 
@@ -221,7 +227,7 @@ export default function SlideGrid({
         el.querySelector<HTMLElement>(`[data-slide-id="${selectedSlideId}"]`)?.focus({ preventScroll: true });
       });
     });
-  }, [selectedSlideId, filteredSlides, columnCount, rowHeight, cardHeight]);
+  }, [selectedSlideId, filteredSlides, columnCount, rowHeight, cardHeight, sectionsEnabled]);
 
   // Ghost slide ("add new") sits at the end of the grid; reserve a slot for it
   const showGhost = !searchQuery;
@@ -273,6 +279,7 @@ export default function SlideGrid({
             )}
           </div>
 
+          <SectionAssignment />
           {/* Zoom Controls */}
           <div className="flex items-center gap-1 shrink-0" role="group" aria-label={t('common.zoomControls')}>
             <button
@@ -312,6 +319,18 @@ export default function SlideGrid({
               <Search className="w-16 h-16" aria-hidden="true" />
               <p className="text-lg font-medium">{t('common.noResults')}</p>
             </div>
+          ) : sectionsEnabled ? (
+            <>
+              <ServiceSections slides={filteredSlides} columns={columnCount} renderSlide={slide => {
+                const index = slideIndexMap.get(slide.id)!;
+                return <div key={slide.id} role="listitem"><SlideCard slide={slide} index={index}
+                  isSelected={selectedSlideIds.has(slide.id)} isLive={isProjectorWindowOpen && liveIndex === index}
+                  onClick={handleSlideClick} onDoubleClick={handleSlideDoubleClick} onDragStart={handleDragStart}
+                  onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDrop={handleDrop}
+                  isDragging={draggedSlideId === slide.id} zoom={slideZoom} /></div>;
+              }} />
+              {showGhost && <div className="mt-4 max-w-xs"><GhostSlide onClick={addSlide} zoom={slideZoom} /></div>}
+            </>
           ) : (
             <div style={{ position: 'relative', height: totalHeight }}>
               {rows.slice(startRow, endRow).map((rowSlides, relIdx) => {

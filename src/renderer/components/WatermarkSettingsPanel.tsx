@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Collapsible } from '@base-ui/react/collapsible';
 import {
   Upload,
   Trash2,
@@ -98,20 +99,22 @@ export function WatermarkSettingsPanel() {
   };
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
+    <Collapsible.Root
+      open={expanded}
+      onOpenChange={setExpanded}
+      className="rounded-xl border border-white/10 bg-white/5 overflow-hidden"
+    >
       {/* Collapsible Header */}
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="w-full px-4 py-3 flex items-center justify-between gap-3 transition-colors hover:bg-white/5"
-        aria-expanded={expanded}
-        aria-label={expanded ? 'Logo ayarlarını daralt' : 'Logo ayarlarını genişlet'}
-      >
-        <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 px-2 transition-colors hover:bg-white/5">
+        <Collapsible.Trigger
+          className="min-w-0 flex-1 px-2 py-3 flex items-center justify-between gap-3 text-left"
+          aria-label={expanded ? 'Logo ayarlarını daralt' : 'Logo ayarlarını genişlet'}
+        >
+          <span className="flex items-center gap-3 min-w-0">
           <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-blue-600/20 text-blue-400 text-xs shrink-0">
             ◈
           </span>
-          <div className="flex flex-col items-start gap-0.5">
+          <span className="flex flex-col items-start gap-0.5 min-w-0">
             <span className="text-[10px] font-bold uppercase tracking-widest text-white/60 leading-tight">
               {t('watermark.title')}
             </span>
@@ -120,27 +123,8 @@ export function WatermarkSettingsPanel() {
                 ? (config.enabled ? t('watermark.statusActive') : t('watermark.statusInactive'))
                 : t('watermark.statusNoLogo')}
             </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setWatermarkConfig({ enabled: !config.enabled });
-            }}
-            aria-pressed={config.enabled}
-            aria-label={config.enabled ? 'Watermark kapat' : 'Watermark aç'}
-            className={cn(
-              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-colors shrink-0',
-              config.enabled
-                ? 'bg-emerald-600/15 border-emerald-500/30 text-emerald-300'
-                : 'bg-white/5 border-white/10 text-white/40',
-            )}
-          >
-            {config.enabled ? <CircleDot className="w-3 h-3" /> : <CircleOff className="w-3 h-3" />}
-            {config.enabled ? t('common.on') : t('common.off')}
-          </button>
+          </span>
+          </span>
           <ChevronDown
             className={cn(
               'w-4 h-4 text-white/40 shrink-0 transition-transform duration-200',
@@ -148,17 +132,27 @@ export function WatermarkSettingsPanel() {
             )}
             aria-hidden="true"
           />
-        </div>
-      </button>
+        </Collapsible.Trigger>
+        <button
+          type="button"
+          onClick={() => setWatermarkConfig({ enabled: !config.enabled })}
+          aria-pressed={config.enabled}
+          aria-label={config.enabled ? 'Watermark kapat' : 'Watermark aç'}
+          className={cn(
+            'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-colors shrink-0',
+            config.enabled
+              ? 'bg-emerald-600/15 border-emerald-500/30 text-emerald-300'
+              : 'bg-white/5 border-white/10 text-white/40',
+          )}
+        >
+          {config.enabled ? <CircleDot className="w-3 h-3" /> : <CircleOff className="w-3 h-3" />}
+          {config.enabled ? t('common.on') : t('common.off')}
+        </button>
+      </div>
 
       {/* Collapsible Body */}
-      <div
-        className={cn(
-          'grid transition-all duration-200 ease-out',
-          expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
-        )}
-      >
-        <div className="overflow-hidden">
+      <Collapsible.Panel className="base-collapsible-panel">
+        <div>
           <div className="p-4 pt-0 space-y-4">
             {/* Logo upload + preview */}
             <div className="space-y-2">
@@ -368,7 +362,7 @@ export function WatermarkSettingsPanel() {
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </Collapsible.Panel>
+    </Collapsible.Root>
   );
 }

@@ -94,6 +94,8 @@ function slideHasChanged(a: Slide, b: Slide): boolean {
   if (a.gridColor !== b.gridColor) return true;
   if (a.snapEnabled !== b.snapEnabled) return true;
   if (a.locked !== b.locked) return true;
+  if (a.operatorNotes !== b.operatorNotes) return true;
+  if (!shallowEqual(a.section, b.section)) return true;
   return false;
 }
 

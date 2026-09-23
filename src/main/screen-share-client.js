@@ -109,7 +109,8 @@
       }
     };
 
-    socket.onclose = function () {
+    socket.onclose = function (event) {
+      if (event.code === 1008) { showEnded(); return; }
       if (ended) return;
       scheduleReconnect();
     };

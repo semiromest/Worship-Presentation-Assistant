@@ -4,12 +4,6 @@ import { useSttStore, refreshSttStatus } from '../state/useSttStore';
 import { createPcmNode } from '../audio/pcmProcessor';
 import type { SttErrorCode, SttEvent } from '../../shared/stt';
 
-/** How long to wait after an endpoint for the delayed translation to arrive
- * before sealing the utterance and letting the captions fall back to the last
- * finalized text. Translation runs on the same stream but is delivered a beat
- * after the original, so we keep the utterance on screen during this window. */
-const TRANSLATION_GRACE_MS = 2000;
-
 // ─── Real-time STT + translation (renderer side) ────────────────────────────
 // - Captures the microphone in the renderer and streams 16 kHz mono PCM
 //   (Int16) chunks to the main process via fire-and-forget IPC.
@@ -97,8 +91,7 @@ export function useStt() {
   const ctxRef = useRef<AudioContext | null>(null);
   const nodeRef = useRef<AudioWorkletNode | ScriptProcessorNode | null>(null);
   const abortRef = useRef(false);
-  const closeGraceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const closingRef = useRef(false);
+  const startingRef = useRef(false);
 
   const cleanupMic = useCallback(() => {
     const node = nodeRef.current;
@@ -123,33 +116,6 @@ export function useStt() {
     useSttStore.getState().setMicActive(false);
   }, []);
 
-  const clearCloseGrace = useCallback(() => {
-    if (closeGraceRef.current) {
-      clearTimeout(closeGraceRef.current);
-      closeGraceRef.current = null;
-    }
-  }, []);
-
-  // Seals the current utterance (moving it to history + the "last" display
-  // fields) and cancels any pending close-grace timer.
-  const flushClose = useCallback(() => {
-    clearCloseGrace();
-    closingRef.current = false;
-    useSttStore.getState().sealCurrent();
-  }, [clearCloseGrace]);
-
-  // Starts (or restarts) the grace window that keeps a finalized utterance on
-  // screen while its translation is still in flight.
-  const beginCloseGrace = useCallback(() => {
-    closingRef.current = true;
-    if (closeGraceRef.current) clearTimeout(closeGraceRef.current);
-    closeGraceRef.current = setTimeout(() => {
-      closeGraceRef.current = null;
-      closingRef.current = false;
-      useSttStore.getState().sealCurrent();
-    }, TRANSLATION_GRACE_MS);
-  }, []);
-
   // Initial state + event subscription (runs in BOTH windows).
   useEffect(() => {
     void refreshSttStatus();
@@ -170,67 +136,19 @@ export function useStt() {
           }
           break;
         }
-        case 'result': {
-          if (event.sessionId !== useSttStore.getState().sessionId) break;
-
-          const hasOriginal = event.tokens.some((tok) => tok.translationStatus !== 'translation');
-          const hasTranslation = event.tokens.some((tok) => tok.translationStatus === 'translation');
-
-          // A new utterance begins while the previous one is still inside its
-          // close-grace window → seal the previous utterance first so its text
-          // does not merge into the new utterance.
-          if (hasOriginal && closingRef.current) {
-            flushClose();
-          }
-
-          const state = useSttStore.getState();
-          const liveEmpty =
-            state.currentOriginal.trim() === '' && state.currentTranslation.trim() === '';
-
-          // Translation final tokens that arrive after the utterance was
-          // already sealed (the grace window expired) are re-attached to the
-          // last utterance so they are never lost.
-          if (hasTranslation && !hasOriginal && !closingRef.current && liveEmpty) {
-            for (const tok of event.tokens) {
-              if (tok.translationStatus === 'translation' && tok.isFinal && tok.text) {
-                useSttStore.getState().appendLateTranslation(tok.text);
-              }
-            }
-            break;
-          }
-
-          useSttStore.getState().applyResult(event.tokens, event.targetLanguage);
-
-          // Keep the grace window open while translation is still streaming,
-          // so we don't seal mid-translation.
-          if (closingRef.current && hasTranslation) {
-            beginCloseGrace();
-          }
-          break;
-        }
-        case 'endpoint': {
-          const state = useSttStore.getState();
-          if (event.sessionId !== state.sessionId) break;
-          // Don't clear the captions the moment speech ends: when translation
-          // is enabled its final tokens arrive slightly after the endpoint, so
-          // hold the text on screen for a short grace window. Without
-          // translation there is nothing to wait for — seal immediately.
-          if (state.translationEnabled) {
-            beginCloseGrace();
-          } else {
-            flushClose();
-          }
+        case 'captions': {
+          if (event.sessionId === store.sessionId) store.setCaptions(event.captions);
           break;
         }
         case 'finished': {
           if (event.sessionId !== useSttStore.getState().sessionId) break;
-          flushClose();
           useSttStore.getState().setSessionId(null);
           useSttStore.getState().setStatus('idle');
           cleanupMic();
           break;
         }
         case 'error': {
+          if (event.sessionId && event.sessionId !== store.sessionId) break;
           useSttStore.getState().setError({
             code: event.code,
             message: errorMessage(t, event.code, event.message),
@@ -244,14 +162,13 @@ export function useStt() {
     });
     return () => {
       unsubscribe?.();
-      clearCloseGrace();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const start = useCallback(async () => {
     const store = useSttStore.getState();
-    if (store.status !== 'idle') return;
+    if (store.status !== 'idle' || startingRef.current) return;
     if (!store.hasKey) {
       useSttStore.getState().setError({
         code: 'NO_API_KEY',
@@ -260,6 +177,8 @@ export function useStt() {
       return;
     }
 
+      startingRef.current = true;
+      try {
       abortRef.current = false;
 
       // 1) Microphone. Constraints use ideal (not exact) values so a mic that
@@ -301,9 +220,10 @@ export function useStt() {
       //    legacy ScriptProcessorNode, so capture works even on Electron
       //    builds where worklet module loading is unavailable.
       let ctx: AudioContext;
+      let created: AudioContext | undefined;
       let node: Awaited<ReturnType<typeof createPcmNode>>;
       try {
-        let created: AudioContext;
+
         try {
           created = new AudioContext({ sampleRate: 16000 });
         } catch {
@@ -319,6 +239,7 @@ export function useStt() {
         ctx = created;
       } catch (err) {
         stream.getTracks().forEach((track) => track.stop());
+        void created?.close().catch(() => {});
         const raw = err instanceof Error ? err.message : 'Audio setup failed';
         console.error('[STT] AudioContext/PCM setup failed:', raw);
         useSttStore.getState().setError({
@@ -377,18 +298,18 @@ export function useStt() {
       }
       useSttStore.getState().setDetectedLanguage(null);
       useSttStore.getState().setError(null);
+      if (abortRef.current) await window.electronAPI?.sttStop?.();
+      } finally { startingRef.current = false; }
     },
     [cleanupMic, t]
   );
 
   const stop = useCallback(async () => {
     abortRef.current = true;
-    // Seal any in-flight text (kept visible via the "last" fields), release
-    // the mic, then close the session.
-    flushClose();
+    // Stop capture first; the main process drains final results before closing.
     cleanupMic();
     await window.electronAPI?.sttStop?.();
-  }, [cleanupMic, flushClose]);
+  }, [cleanupMic]);
 
   return { start, stop, refreshStatus: refreshSttStatus };
 }

@@ -1,3 +1,4 @@
+import OutputStatus from './OutputStatus';
 import { useTranslation } from 'react-i18next';
 import {
   Undo2,
@@ -14,13 +15,17 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Captions,
+  Save,
+  AlertCircle,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { useSttStore } from '../state/useSttStore';
+import { analyzePresentationReadiness } from '../../shared/readiness';
 import { cn } from '../utils';
 import DisplayOutputsPopover from './DisplayOutputsPopover';
 import BackgroundMusicPopover from './BackgroundMusicPopover';
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 
 interface ToolbarProps {
   moveSelectedSlides: (direction: -1 | 1) => void;
@@ -57,9 +62,20 @@ export default function Toolbar({
   const screenShareActive = useStore((s) => s.screenShareActive);
   const isSttPanelOpen = useStore((s) => s.isSttPanelOpen);
   const setIsSttPanelOpen = useStore((s) => s.setIsSttPanelOpen);
+  const liveSaveStatus = useStore((s) => s.liveSaveStatus);
+  const liveSaveLastSaved = useStore((s) => s.liveSaveLastSaved);
+  const liveSaveEnabled = useStore((s) => s.liveSaveEnabled);
+  const setIsPrepCheckOpen = useStore((s) => s.setIsPrepCheckOpen);
   // Running session state drives the button color/pulse so operators always
   // know captions are live — even when the console is collapsed.
   const sttLive = useSttStore((s) => s.micActive || s.status !== 'idle');
+
+  // Tick "X min ago" every minute to stay accurate.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState('');
@@ -91,8 +107,23 @@ export default function Toolbar({
     }
   };
 
+  const savedAgoLabel = (() => {
+    if (!liveSaveEnabled) return null;
+    if (liveSaveStatus === 'saving') return t('common.saving');
+    if (liveSaveStatus === 'error') return t('common.saveError');
+    if (!liveSaveLastSaved) return null;
+    const diffMin = Math.floor((Date.now() - liveSaveLastSaved) / 60_000);
+    if (diffMin < 1) return t('common.savedJustNow');
+    return t('common.savedMinAgo', { count: diffMin });
+  })();
+
+  const readinessIssueCount = useMemo(
+    () => analyzePresentationReadiness(presentation.slides).length,
+    [presentation.slides],
+  );
+
   return (
-    <header className="h-14 bg-surface-raised border-b border-white/10 flex items-center justify-between px-6 flex-shrink-0">
+    <div className="shrink-0"><header className="h-14 bg-surface-raised border-b border-white/10 flex items-center justify-between px-6 flex-shrink-0">
       <div className="flex items-center gap-2 min-w-0">
         {editingName ? (
           <input
@@ -128,6 +159,27 @@ export default function Toolbar({
               <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
             </svg>
           </button>
+        )}
+
+        {savedAgoLabel && (
+          <span
+            className={cn(
+              'hidden sm:inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0',
+              liveSaveStatus === 'error'
+                ? 'text-red-400 border-red-500/30 bg-red-500/10'
+                : liveSaveStatus === 'saving'
+                  ? 'text-amber-300 border-amber-500/30 bg-amber-500/10'
+                  : 'text-white/35 border-white/10',
+            )}
+            aria-live="polite"
+          >
+            {liveSaveStatus === 'error' ? (
+              <AlertCircle className="w-3 h-3 shrink-0" aria-hidden="true" />
+            ) : (
+              <Save className="w-3 h-3 shrink-0" aria-hidden="true" />
+            )}
+            {savedAgoLabel}
+          </span>
         )}
       </div>{' '}
       <div className="flex items-center gap-2">
@@ -256,6 +308,23 @@ export default function Toolbar({
         <div className="w-px h-6 bg-white/10 mx-1" />
 
         <button
+          onClick={() => setIsPrepCheckOpen(true)}
+          title={t('prepCheck.title')}
+          aria-label={t('prepCheck.title')}
+          className="relative p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]"
+        >
+          <ClipboardCheck className="w-4 h-4" aria-hidden="true" />
+          {readinessIssueCount > 0 && (
+            <span
+              className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-[10px] font-bold text-black flex items-center justify-center tabular-nums"
+              aria-hidden="true"
+            >
+              {readinessIssueCount}
+            </span>
+          )}
+        </button>
+
+        <button
           onClick={() => setIsCheatsheetOpen(true)}
           title={t('common.keyboardShortcuts')}
           aria-label={t('common.keyboardShortcuts')}
@@ -308,6 +377,6 @@ export default function Toolbar({
           {isRightPanelOpen ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
         </button>
       </div>
-    </header>
+    </header><OutputStatus /></div>
   );
 }

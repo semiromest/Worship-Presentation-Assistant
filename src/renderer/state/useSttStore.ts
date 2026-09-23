@@ -1,3 +1,4 @@
+import type { CaptionSnapshot } from '../../shared/captions';
 import { create } from 'zustand';
 import type { SttErrorCode, SttSessionConfig, SttSessionStatus, SttStatus, SttToken } from '../../shared/stt';
 import { isAutoSttLanguage, languageName, STT_LANGUAGES } from '../../shared/stt';
@@ -65,6 +66,8 @@ interface SttState {
 
   error: SttErrorInfo | null;
 
+  setCaptions: (snapshot: CaptionSnapshot) => void;
+
   // Actions
   setStatus: (status: SttSessionStatus) => void;
   setSessionId: (id: string | null) => void;
@@ -82,7 +85,7 @@ interface SttState {
   setInputDevices: (devices: SttInputDevice[]) => void;
   applyResult: (tokens: SttToken[], targetLanguage?: string) => void;
   sealCurrent: () => void;
-  appendLateTranslation: (text: string) => void;
+  appendLateTranslation: (text: string, targetLanguage?: string) => void;
   setError: (error: SttErrorInfo | null) => void;
   clearAll: () => void;
 }
@@ -137,6 +140,18 @@ export const useSttStore = create<SttState>((set) => {
 
     error: null,
 
+    setCaptions: (snapshot) => set(state => ({
+      currentOriginal: snapshot.original,
+      partialOriginal: '', partialTranslation: '', partialTranslations: {},
+      currentTranslations: snapshot.translations,
+      currentTranslation: snapshot.translations[state.targetLanguage] ?? '',
+      lastOriginal: snapshot.lastOriginal,
+      lastTranslations: snapshot.lastTranslations,
+      lastTranslation: snapshot.lastTranslations[state.targetLanguage] ?? '',
+      utterances: snapshot.history,
+      lastAt: snapshot.history.at(-1)?.at ?? 0,
+      detectedLanguage: snapshot.detectedLanguage,
+    })),
     setStatus: (status) => set({ status }),
     setSessionId: (sessionId) => set({ sessionId }),
     setKeyStatus: (hasKey, keyHint) => set({ hasKey, keyHint }),
@@ -210,12 +225,26 @@ export const useSttStore = create<SttState>((set) => {
 
     applyResult: (tokens, eventTargetLanguage) =>
       set((state) => {
+        // Soniox needs one session per translation target, and all of them are
+        // fed the same audio. Every result event therefore belongs to exactly
+        // ONE session: the original-only session (translation off) or the
+        // session of a single target language. Consequences handled here:
+        //   • only the session that owns the spoken timeline may append to the
+        //     original buffers, otherwise every sentence is duplicated once per
+        //     extra target language;
+        //   • the provisional (non-final) text is replaced per session, since
+        //     the two streams interleave — replacing the whole map on every
+        //     event would blank the live text of the other language.
+        const primaryTarget = state.targetLanguages[0] ?? state.targetLanguage;
+        const scopeTarget = eventTargetLanguage ?? null;
+        const ownsOriginal = scopeTarget === null || scopeTarget === primaryTarget;
+
         let currentOriginal = state.currentOriginal;
         let currentTranslation = state.currentTranslation;
         const currentTranslations = { ...state.currentTranslations };
-        let partialOriginal = '';
-        let partialTranslation = '';
-        const partialTranslations: Record<string, string> = {};
+        let partialOriginal = ownsOriginal ? '' : state.partialOriginal;
+        const partialTranslations: Record<string, string> = { ...state.partialTranslations };
+        if (scopeTarget) partialTranslations[scopeTarget] = '';
         let detectedLanguage = state.detectedLanguage;
 
         for (const t of tokens) {
@@ -232,16 +261,25 @@ export const useSttStore = create<SttState>((set) => {
               if (target === state.targetLanguage) currentTranslation += t.text;
             } else {
               partialTranslations[target] = (partialTranslations[target] ?? '') + t.text;
-              if (target === state.targetLanguage) partialTranslation += t.text;
             }
-          } else {
-            // 'original' or 'none' — spoken text
+          } else if (ownsOriginal) {
+            // 'original' or 'none' — spoken text of the owning session only.
             if (t.isFinal) currentOriginal += t.text;
             else partialOriginal += t.text;
           }
         }
 
-        return { currentOriginal, currentTranslation, currentTranslations, partialOriginal, partialTranslation, partialTranslations, detectedLanguage };
+        return {
+          currentOriginal,
+          currentTranslation,
+          currentTranslations,
+          partialOriginal,
+          // Mirrors the primary target's provisional text, which may come from
+          // an earlier event while another language streamed in between.
+          partialTranslation: partialTranslations[state.targetLanguage] ?? '',
+          partialTranslations,
+          detectedLanguage,
+        };
       }),
 
     // Seal the current utterance into history. Unlike a plain "commit", this
@@ -268,8 +306,15 @@ export const useSttStore = create<SttState>((set) => {
         return {
           currentOriginal: '',
           currentTranslation: '',
+          // Reset the per-language maps as well. They used to survive the seal,
+          // so every following utterance (and every phone history entry) kept
+          // the translations of all previous utterances, growing endlessly —
+          // with several target languages the feed printed the same text again
+          // and again.
+          currentTranslations: {},
           partialOriginal: '',
           partialTranslation: '',
+          partialTranslations: {},
           lastOriginal: original,
           lastTranslation: translation,
           lastTranslations: translations,
@@ -283,18 +328,34 @@ export const useSttStore = create<SttState>((set) => {
 
     // Final translation tokens that arrive after the utterance was already
     // sealed are appended to the most recent utterance instead of being
-    // dropped or mixed into the next utterance.
-    appendLateTranslation: (text) =>
+    // dropped or mixed into the next utterance. The target language decides
+    // where the text lands: a late token of a SECONDARY target must never be
+    // appended to the primary translation (that mixed Chinese into the English
+    // history entry), it belongs in that utterance's per-language map.
+    appendLateTranslation: (text, targetLanguage) =>
       set((state) => {
+        const target = targetLanguage ?? state.targetLanguage;
+        const isPrimary = target === state.targetLanguage;
         if (state.utterances.length === 0) {
-          return { currentTranslation: state.currentTranslation + text };
+          return isPrimary
+            ? { currentTranslation: state.currentTranslation + text }
+            : {
+                currentTranslations: {
+                  ...state.currentTranslations,
+                  [target]: (state.currentTranslations[target] ?? '') + text,
+                },
+              };
         }
         const last = state.utterances[state.utterances.length - 1];
-        const translation = last.translation + text;
-        const updated = { ...last, translation };
+        const translations = { ...(last.translations ?? {}) };
+        translations[target] = (translations[target] ?? '') + text;
+        const translation = isPrimary ? last.translation + text : last.translation;
+        const updated: SttUtterance = { ...last, translation, translations };
         return {
           utterances: [...state.utterances.slice(0, -1), updated],
-          lastTranslation: translation,
+          // Keep the captions' "last utterance" fallback in sync per language.
+          lastTranslations: { ...state.lastTranslations, [target]: translations[target] },
+          ...(isPrimary ? { lastTranslation: translation } : {}),
         };
       }),
 
@@ -303,8 +364,13 @@ export const useSttStore = create<SttState>((set) => {
       set({
         currentOriginal: '',
         currentTranslation: '',
+        // The per-language maps must be reset too, otherwise the next session
+        // starts with the previous one's translations still in the live text
+        // (and inside the first sealed history entry).
+        currentTranslations: {},
         partialOriginal: '',
         partialTranslation: '',
+        partialTranslations: {},
         utterances: [],
         lastOriginal: '',
         lastTranslation: '',
@@ -322,6 +388,7 @@ export async function refreshSttStatus(): Promise<void> {
     const snapshot = await window.electronAPI?.sttGetStatus?.();
     if (snapshot) {
       useSttStore.getState().setStatusSnapshot(snapshot);
+      if (snapshot.captions) useSttStore.getState().setCaptions(snapshot.captions);
     }
   } catch {
     // Electron API unavailable (e.g. plain web preview) — keep current state.

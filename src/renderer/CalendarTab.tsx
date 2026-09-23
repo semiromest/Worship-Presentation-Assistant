@@ -735,10 +735,8 @@ export default function CalendarTab({
                     {t('common.calendarPresNameLabel')}
                   </label>
 
-                  <input
+                  <select
                     id="cal-event-pres-name"
-                    type="text"
-                    list="calendar-presentation-names"
                     value={newEvent.presentationName}
                     onChange={e =>
                       setNewEvent(prev => ({
@@ -746,16 +744,16 @@ export default function CalendarTab({
                         presentationName: e.target.value,
                       }))
                     }
-                    placeholder={t('common.calendarPresPlaceholder')}
                     className="w-full h-12 rounded-2xl bg-black/[0.08] border border-white/10 px-4 outline-none focus:border-blue-500/40 transition-all"
-                  />
-                  {savedPresentationNames.length > 0 && (
-                    <datalist id="calendar-presentation-names">
-                      {savedPresentationNames.map(name => (
-                        <option key={name} value={name} />
-                      ))}
-                    </datalist>
-                  )}
+                  >
+                    <option value="" className="bg-surface-overlay">{t('common.calendarNoPresentation')}</option>
+                    {newEvent.presentationName && !savedPresentationNames.includes(newEvent.presentationName) && (
+                      <option value={newEvent.presentationName} className="bg-surface-overlay">
+                        {t('common.calendarMissingPresentation', { name: newEvent.presentationName })}
+                      </option>
+                    )}
+                    {savedPresentationNames.map(name => <option key={name} value={name} className="bg-surface-overlay">{name}</option>)}
+                  </select>
                   <p className="text-[11px] text-white/45 mt-2">
                     {t('common.calendarPresHint')}
                   </p>

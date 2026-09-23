@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Clock, Timer } from 'lucide-react';
 import { useStore } from '../state/useStore';
+import { getSlideDisplayContent, getNextDisplaySlide } from '../../shared/slideContent';
 import { cn } from '../utils';
 import type { Slide } from '../types';
 
@@ -27,14 +28,15 @@ function formatClock(date: Date): string {
  */
 function slideText(slide: Slide | undefined, t: (key: string) => string): string {
   if (!slide) return '';
+  const content = getSlideDisplayContent(slide).trim();
   switch (slide.type) {
     case 'text':
     case 'captions':
-      return slide.content?.trim() || t('stage.empty');
+      return content || t('stage.empty');
     case 'image':
-      return slide.content?.trim() || t('stage.imageSlide');
+      return content || t('stage.imageSlide');
     case 'video':
-      return slide.content?.trim() || t('stage.videoSlide');
+      return content || t('stage.videoSlide');
     case 'countdown':
       return t('stage.countdownSlide');
     case 'loop':
@@ -42,7 +44,7 @@ function slideText(slide: Slide | undefined, t: (key: string) => string): string
     case 'screen':
       return t('stage.screenSlide');
     default:
-      return slide.content?.trim() || t('stage.empty');
+      return content || t('stage.empty');
   }
 }
 
@@ -95,14 +97,14 @@ export default function StageDisplay() {
   }, []);
 
   const current = presentation.slides[liveIndex];
-  const next = presentation.slides[liveIndex + 1];
+  const next = getNextDisplaySlide(presentation.slides, liveIndex);
   const currentIsVisual = isVisualSlide(current);
   const nextIsVisual = isVisualSlide(next);
   const currentText = slideText(current, t);
   const nextText = slideText(next, t);
   // For visual slides the image IS the display; only a stored caption text
   // (not the generic type label) is shown alongside it.
-  const nextDisplayText = nextIsVisual ? (next?.content?.trim() ?? '') : nextText;
+  const nextDisplayText = nextIsVisual && next ? getSlideDisplayContent(next).trim() : nextText;
   const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - startedAtRef.current) / 1000));
 
   return (
@@ -138,9 +140,9 @@ export default function StageDisplay() {
             <div className="max-w-[85%] max-h-[58vh] rounded-lg overflow-hidden bg-black/40 border border-white/10 shadow-2xl">
               <StagePreview slide={current} />
             </div>
-            {current?.content?.trim() && (
+            {current && getSlideDisplayContent(current).trim() && (
               <p className="mt-4 text-2xl text-white/60 text-center whitespace-pre-wrap break-words max-w-[80%]">
-                {current.content}
+                {getSlideDisplayContent(current)}
               </p>
             )}
           </>
@@ -152,6 +154,16 @@ export default function StageDisplay() {
         <p className="mt-6 text-xl text-white/40 tabular-nums">
           {liveIndex + 1} / {presentation.slides.length}
         </p>
+        {current?.operatorNotes?.trim() && (
+          <div className="mt-4 max-w-[80%] rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-amber-300/80 mb-1">
+              {t('common.operatorNotes')}
+            </p>
+            <p className="text-lg text-amber-100/85 whitespace-pre-wrap break-words">
+              {current.operatorNotes}
+            </p>
+          </div>
+        )}
       </main>
 
       {/* Next slide — smaller, dimmed */}
@@ -173,6 +185,11 @@ export default function StageDisplay() {
               <p className="text-3xl leading-snug text-white/55 whitespace-pre-wrap break-words max-w-[95%]">
                 {nextDisplayText}
               </p>
+              {next.operatorNotes?.trim() && (
+                <p className="mt-2 text-base text-amber-200/70 italic whitespace-pre-wrap break-words max-w-[95%]">
+                  {next.operatorNotes}
+                </p>
+              )}
             </div>
           </div>
         ) : (

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useStore } from '../state/useStore';
 import { generateSlideThumbnail } from '../utils';
 import { IS_PROJECTOR_MODE } from '../constants';
+import { useSttStore } from '../state/useSttStore';
+import { drawCaptionsFrame } from '../captionDisplay';
 
 const FRAME_SCALE = 4; // 320×180 base → 1280×720 phone output (crisp text)
 const FRAME_QUALITY = 0.75;
@@ -128,6 +130,8 @@ export function useLiveScreenShare(): void {
           blackFrameRef.current = c.toDataURL('image/jpeg', 0.7);
         }
         frame = blackFrameRef.current;
+      } else if (slide.type === 'captions') {
+        frame = drawCaptionsFrame(slide, useSttStore.getState());
       } else if (slide.type === 'video') {
         frame = await captureVideoFrame({ mediaUrl: slide.mediaUrl ?? '', objectFit: slide.styles?.objectFit });
       } else if (slide.type === 'loop' && slide.loopItems?.[0]?.type === 'video') {
@@ -138,7 +142,10 @@ export function useLiveScreenShare(): void {
         videoRef.current?.pause();
         frame = await generateSlideThumbnail(slide, { scale: FRAME_SCALE, quality: FRAME_QUALITY });
       }
-      if (frame) window.electronAPI?.screenShareFrame?.(frame);
+      const current = useStore.getState();
+      if (frame && current.screenShareActive && current.liveIndex === idx && current.presentation.slides[idx] === slide && current.isBlackout === state.isBlackout) {
+        window.electronAPI?.screenShareFrame?.(frame);
+      }
     } finally {
       busyRef.current = false;
     }
@@ -150,6 +157,17 @@ export function useLiveScreenShare(): void {
     if (IS_PROJECTOR_MODE || !screenShareActive) return;
     void pushFrame();
   }, [liveIndex, screenShareActive, isBlackout, slides, pushFrame]);
+
+  useEffect(() => {
+    if (IS_PROJECTOR_MODE || !screenShareActive) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = useSttStore.subscribe(() => {
+      const state = useStore.getState();
+      if (state.presentation.slides[state.liveIndex]?.type !== 'captions' || timer) return;
+      timer = setTimeout(() => { timer = undefined; void pushFrame(); }, 100);
+    });
+    return () => { unsubscribe(); clearTimeout(timer); };
+  }, [screenShareActive, pushFrame]);
 
   // Periodic refresh for countdown ticks, loop rotation, etc.
   useEffect(() => {

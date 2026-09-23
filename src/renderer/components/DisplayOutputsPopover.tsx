@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
+import { Popover } from '@base-ui/react/popover';
 import { Eye, EyeOff, Monitor, Radio, Settings2, Tv } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../state/useStore';
@@ -26,43 +27,29 @@ export default function DisplayOutputsPopover({ openOutput, closeOutput }: Displ
   const setOutputSlide = useStore((s) => s.setOutputSlide);
   const setOutputBlackout = useStore((s) => s.setOutputBlackout);
   const [isOpen, setIsOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
 
   const outputDisplays = displays.filter((display) => !display.isPrimary);
   const defaultDisplayId = chooseDefaultOutputDisplay(displays)?.id;
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setIsOpen(false);
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [isOpen]);
-
   if (outputDisplays.length === 0) return null;
 
   return (
-    <div ref={rootRef} className="relative shrink-0">
-      <button
-        type="button"
-        onClick={() => setIsOpen((value) => !value)}
-        aria-expanded={isOpen}
-        aria-haspopup="dialog"
+    <Popover.Root open={isOpen} onOpenChange={setIsOpen}>
+      <Popover.Trigger
         title={t('common.displayOutputs')}
         aria-label={t('common.displayOutputs')}
         className="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.96]"
       >
         <Monitor className="w-4 h-4" aria-hidden="true" />
         <span className="hidden xl:inline text-xs font-semibold">{outputDisplays.length}</span>
-      </button>
+      </Popover.Trigger>
 
-      {isOpen && (
-        <div
-          role="dialog"
-          aria-label={t('common.displayOutputs')}
-          className="absolute right-0 top-full mt-2 z-[80] w-[330px] max-w-[calc(100vw-24px)] rounded-xl border border-white/10 bg-surface-overlay shadow-2xl p-3 space-y-3"
-        >
+      <Popover.Portal>
+        <Popover.Positioner side="bottom" align="end" sideOffset={8} className="z-[80]">
+          <Popover.Popup
+            aria-label={t('common.displayOutputs')}
+            className="base-popover-popup w-[330px] max-w-[calc(100vw-24px)] rounded-xl border border-white/10 bg-surface-overlay shadow-2xl p-3 space-y-3 origin-[var(--transform-origin)]"
+          >
           <div className="flex items-center gap-2 px-1">
             <Settings2 className="w-4 h-4 text-blue-400" aria-hidden="true" />
             <div className="min-w-0">
@@ -171,8 +158,9 @@ export default function DisplayOutputsPopover({ openOutput, closeOutput }: Displ
               );
             })}
           </div>
-        </div>
-      )}
-    </div>
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }

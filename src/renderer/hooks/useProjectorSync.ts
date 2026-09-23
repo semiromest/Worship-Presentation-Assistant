@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../state/useStore';
+import { useShallow } from 'zustand/shallow';
 import { IS_PROJECTOR_MODE, DEFAULT__TRANSITION } from '../constants';
-import { generateSlideThumbnail, useThrottle } from '../utils';
+import { generateSlideThumbnail, useThrottle, type ThumbnailStatus } from '../utils';
 import { computePatch, isPatchEmpty, type ProjectorPatch } from '../state/undoReducer';
 import type { Presentation, Slide, TransitionType } from '../types';
 import { chooseDefaultOutputDisplay, effectiveOutputSlideIndex, type DisplayMode } from '../../shared/displays';
@@ -80,15 +81,16 @@ function toThumbSlideData(slide: Slide): ThumbSlideData {
  * image slides → renderer DOM (images already loaded).
  * Falls back to DOM if IPC fails or times out.
  */
-async function generateThumbnailHybrid(slide: Slide): Promise<string | null> {
+async function generateThumbnailHybrid(slide: Slide, status?: ThumbnailStatus): Promise<string | null> {
   // Always try DOM first for reliability — utility process is an optimization
   // that should never block the user experience.
-  return generateSlideThumbnail(slide);
+  return generateSlideThumbnail(slide, { status });
 }
 
 export function useProjectorSync() {
   const {
     presentation,
+    liveSlideId,
     liveIndex,
     instantTransition,
     isBlackout,
@@ -98,7 +100,21 @@ export function useProjectorSync() {
     isMediaMuted,
     displays,
     outputAssignments,
-  } = useStore();
+  } = useStore(
+    useShallow((s) => ({
+      presentation: s.presentation,
+      liveSlideId: s.liveSlideId,
+      liveIndex: s.liveIndex,
+      instantTransition: s.instantTransition,
+      isBlackout: s.isBlackout,
+      isProjectorWindowOpen: s.isProjectorWindowOpen,
+      projectorReady: s.projectorReady,
+      mediaVolume: s.mediaVolume,
+      isMediaMuted: s.isMediaMuted,
+      displays: s.displays,
+      outputAssignments: s.outputAssignments,
+    })),
+  );
 
   const transitionType = presentation.transition?.type ?? DEFAULT__TRANSITION.type;
   const transitionDuration = presentation.transition?.duration ?? DEFAULT__TRANSITION.duration;
@@ -122,13 +138,16 @@ export function useProjectorSync() {
     const frames: Record<string, {
       mode: DisplayMode;
       slideIndex: number;
+      slideId: string | null;
       isBlackout: boolean;
     }> = {};
     for (const displayId of ids) {
       const assignment = outputAssignments[displayId];
+      const slideIndex = effectiveOutputSlideIndex(assignment, liveIndex, presentation.slides.length);
       frames[displayId] = {
         mode: assignment?.mode ?? 'follow',
-        slideIndex: effectiveOutputSlideIndex(assignment, liveIndex, presentation.slides.length),
+        slideIndex,
+        slideId: presentation.slides[slideIndex]?.id ?? null,
         isBlackout: displayId === defaultDisplayId
           ? isBlackout
           : !!assignment?.isBlackout,
@@ -139,7 +158,7 @@ export function useProjectorSync() {
     displays,
     outputAssignments,
     liveIndex,
-    presentation.slides.length,
+    presentation.slides,
     isProjectorWindowOpen,
     isBlackout,
   ]);
@@ -176,9 +195,11 @@ export function useProjectorSync() {
     // so a transient navigation request can never repaint it elsewhere.
     const lockedIdx = findLockedSlideIndex(presentation.slides);
     const effectiveLiveIndex = lockedIdx >= 0 ? lockedIdx : liveIndex;
+    const effectiveLiveSlideId = presentation.slides[effectiveLiveIndex]?.id ?? liveSlideId;
 
     const nav = {
       liveIndex: effectiveLiveIndex,
+      liveSlideId: effectiveLiveSlideId,
       isBlackout,
       volume: mediaVolume,
       muted: isMediaMuted,
@@ -224,6 +245,8 @@ export function useProjectorSync() {
     window.electronAPI?.updateProjector?.({ ...nav, patch: transport });
   }, [
     throttledPresentation,
+    presentation.slides,
+    liveSlideId,
     liveIndex,
     instantTransition,
     isBlackout,
@@ -238,12 +261,19 @@ export function useProjectorSync() {
 
   const thumbnailCache = useRef<Map<string, { url: string }>>(new Map());
   const prevSlidesRef = useRef<Slide[]>([]);
-  // Retry slides whose last generation failed (null) even if unchanged, so their preview never stays empty forever.
+  // Retry slides whose last generation failed (null) or only produced a
+  // placeholder even if unchanged, so their preview never stays empty forever.
   const pendingRetryRef = useRef<Set<string>>(new Set());
+  // Bounded self-healing rounds for a deck (see the retry timer below).
+  const retryRoundsRef = useRef(0);
+  const [thumbRetryTick, setThumbRetryTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
     const CACHE_MAX = 100;
+    const MAX_RETRY_ROUNDS = 3;
+    const RETRY_DELAY_MS = 1500;
 
     (async () => {
       const prevSlides = prevSlidesRef.current;
@@ -303,12 +333,17 @@ export function useProjectorSync() {
           if (!changed) {
             if (!structurePreserved) thumbs[i] = cachedEntry?.url ?? null;
           } else {
-            const url = await generateThumbnailHybrid(s);
+            const status: ThumbnailStatus = {};
+            const url = await generateThumbnailHybrid(s, status);
             if (url && !cancelled) {
               thumbnailCache.current.set(s.id, { url });
-              pendingRetryRef.current.delete(s.id);
               if (structurePreserved) delta.push({ i, url });
               else thumbs[i] = url;
+              // A placeholder preview (media not readable yet — a cloud/Drive
+              // file that has not materialised, an image still downloading) is
+              // shown right away but flagged so a later round replaces it.
+              if (status.usedFallback) pendingRetryRef.current.add(s.id);
+              else pendingRetryRef.current.delete(s.id);
             } else if (!cancelled) {
               // On failure keep the last valid image and flag for retry instead of sending an empty preview.
               pendingRetryRef.current.add(s.id);
@@ -321,6 +356,9 @@ export function useProjectorSync() {
       };
 
       await Promise.all(Array.from({ length: 2 }, () => worker()));
+
+      // A structural change (add/remove/reorder) starts a fresh retry budget.
+      if (!structurePreserved) retryRoundsRef.current = 0;
 
       // FIX: only a non-cancelled run may advance prevSlidesRef; a late-finishing
       // cancelled run could otherwise corrupt the next changed() comparison.
@@ -347,19 +385,33 @@ export function useProjectorSync() {
         if (liveSlide && pendingRetryRef.current.has(liveSlide.id)) {
           setTimeout(async () => {
             if (cancelled) return;
-            const retryUrl = await generateThumbnailHybrid(liveSlide);
+            const status: ThumbnailStatus = {};
+            const retryUrl = await generateThumbnailHybrid(liveSlide, status);
             if (cancelled || !retryUrl) return;
             thumbnailCache.current.set(liveSlide.id, { url: retryUrl });
-            pendingRetryRef.current.delete(liveSlide.id);
+            if (status.usedFallback) pendingRetryRef.current.add(liveSlide.id);
+            else pendingRetryRef.current.delete(liveSlide.id);
             window.electronAPI?.sendSlidePreview?.(retryUrl);
           }, 180);
+        }
+
+        // Failed/placeholder previews used to stay that way until the next deck
+        // edit, which left the phone grid showing "LOADING" indefinitely. Retry
+        // a bounded number of times so they heal on their own.
+        if (pendingRetryRef.current.size > 0 && retryRoundsRef.current < MAX_RETRY_ROUNDS) {
+          retryRoundsRef.current += 1;
+          retryTimer = setTimeout(() => {
+            retryTimer = null;
+            if (!cancelled) setThumbRetryTick((tick) => tick + 1);
+          }, RETRY_DELAY_MS);
         }
       }
     })();
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [throttledPresentation.slides, liveIndex]);
+  }, [throttledPresentation.slides, liveIndex, thumbRetryTick]);
 
   useEffect(() => {
     const slides = throttledPresentation.slides;

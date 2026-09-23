@@ -73,6 +73,7 @@ function connect() {
       else if (msg.type === 'allPreviews')  { mergePreviews(msg.data); renderGrid(); }
       else if (msg.type === 'previewsDelta'){ applyPreviewsDelta(msg.data); }
       else if (msg.type === 'slideMeta')    { mergeSlideMeta(msg.data); renderGrid(); }
+      else if (msg.type === 'notice')       { showNotice(msg.data); }
     } catch (e) {
       console.warn('[remote] ws parse error', e);
     }
@@ -609,6 +610,35 @@ function cmd(action, value) {
       action === 'partNext' || action === 'partPrev' || action === 'partGoto') lastUrl = '';
   ws.send(JSON.stringify({ type: 'command', action, value }));
 }
+
+let versePending = false;
+let verseTimer;
+let noticeTimer;
+function showNotice(data) {
+  const notice = $('notice');
+  notice.textContent = data && typeof data.text === 'string' ? data.text : '';
+  notice.className = 'notice show ' + (data && data.tone === 'error' ? 'error' : 'ok');
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => notice.classList.remove('show'), 4500);
+  versePending = false;
+  clearTimeout(verseTimer);
+  $('verseSubmit').disabled = false;
+}
+
+$('verseForm').addEventListener('submit', e => {
+  e.preventDefault();
+  if (versePending) return;
+  const reference = $('verseInp').value.trim();
+  if (!reference) { $('verseInp').focus(); return; }
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    showNotice({ text: 'Not connected. Please reconnect and try again.', tone: 'error' });
+    return;
+  }
+  versePending = true;
+  $('verseSubmit').disabled = true;
+  cmd('quickVerse', { reference, goLive: $('verseLive').checked });
+  verseTimer = setTimeout(() => showNotice({ text: 'No response. Check the presentation before retrying.', tone: 'error' }), 15000);
+});
 
 // FIX: gotoSlide now shows visual feedback when the input is invalid or empty
 function gotoSlide() {

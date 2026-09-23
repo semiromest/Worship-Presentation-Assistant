@@ -17,7 +17,7 @@ export interface BibleBook {
 export interface BibleData {
   name: string;
   books: BibleBook[];
-  format: 'zefania' | 'holyBible' | 'helloAo' | 'fetchbible';
+  format: 'zefania' | 'holyBible' | 'helloAo' | 'fetchbible' | 'getbible';
 }
 
 export interface IBibleParser {
@@ -26,20 +26,72 @@ export interface IBibleParser {
 }
 
 const BOOK_NAMES_TR: string[] = [
-  'Tekvin', 'Çıkış', 'Levililer', 'Sayılar', 'Yasa\'nın Tekrarı',
-  'Yeşu', 'Hakimler', 'Rut', '1.Samuel', '2.Samuel',
-  '1.Krallar', '2.Krallar', '1.Tarihler', '2.Tarihler', 'Ezra',
-  'Nehemya', 'Ester', 'Eyüp', 'Mezmurlar', 'Süleyman\'ın Özdeyişleri',
-  'Vaiz', 'Ezgiler Ezgisi', 'Yeşaya', 'Yeremya', 'Ağıtlar',
-  'Hezekiel', 'Daniel', 'Hoşea', 'Yoel', 'Amos',
-  'Ovadya', 'Yunus', 'Mika', 'Nahum', 'Habakkuk',
-  'Sefanya', 'Haggay', 'Zekeriya', 'Malaki',
-  'Matta', 'Markos', 'Luka', 'Yuhanna',
-  'Elçilerin İşleri', 'Romalılar', '1.Korintliler', '2.Korintliler', 'Galatyalılar',
-  'Efesliler', 'Filipililer', 'Koloseliler', '1.Selanikliler', '2.Selanikliler',
-  '1.Timoteos', '2.Timoteos', 'Titus', 'Filimon', 'İbraniler',
-  'Yakup', '1.Petrus', '2.Petrus', '1.Yuhanna', '2.Yuhanna',
-  '3.Yuhanna', 'Yahuda', 'Vahiy',
+  'Tekvin',
+  'Çıkış',
+  'Levililer',
+  'Sayılar',
+  "Yasa'nın Tekrarı",
+  'Yeşu',
+  'Hakimler',
+  'Rut',
+  '1.Samuel',
+  '2.Samuel',
+  '1.Krallar',
+  '2.Krallar',
+  '1.Tarihler',
+  '2.Tarihler',
+  'Ezra',
+  'Nehemya',
+  'Ester',
+  'Eyüp',
+  'Mezmurlar',
+  "Süleyman'ın Özdeyişleri",
+  'Vaiz',
+  'Ezgiler Ezgisi',
+  'Yeşaya',
+  'Yeremya',
+  'Ağıtlar',
+  'Hezekiel',
+  'Daniel',
+  'Hoşea',
+  'Yoel',
+  'Amos',
+  'Ovadya',
+  'Yunus',
+  'Mika',
+  'Nahum',
+  'Habakkuk',
+  'Sefanya',
+  'Haggay',
+  'Zekeriya',
+  'Malaki',
+  'Matta',
+  'Markos',
+  'Luka',
+  'Yuhanna',
+  'Elçilerin İşleri',
+  'Romalılar',
+  '1.Korintliler',
+  '2.Korintliler',
+  'Galatyalılar',
+  'Efesliler',
+  'Filipililer',
+  'Koloseliler',
+  '1.Selanikliler',
+  '2.Selanikliler',
+  '1.Timoteos',
+  '2.Timoteos',
+  'Titus',
+  'Filimon',
+  'İbraniler',
+  'Yakup',
+  '1.Petrus',
+  '2.Petrus',
+  '1.Yuhanna',
+  '2.Yuhanna',
+  '3.Yuhanna',
+  'Yahuda',
+  'Vahiy',
 ];
 
 function getBookName(index: number): string {
@@ -73,9 +125,9 @@ export class ZefaniaParser implements IBibleParser {
       const bookNumber = isNumeric ? bnumber : String(index + 1);
 
       const chapterElements = b.querySelectorAll('CHAPTER, Chapter');
-      const chapters = Array.from(chapterElements, c => {
+      const chapters = Array.from(chapterElements, (c) => {
         const verseElements = c.querySelectorAll('VERS, vers, V');
-        const verses = Array.from(verseElements, v => ({
+        const verses = Array.from(verseElements, (v) => ({
           number: v.getAttribute('vnumber') ?? '',
           text: v.textContent ?? '',
         }));
@@ -113,19 +165,16 @@ export class HolyBibleParser implements IBibleParser {
     if (testamentElements.length > 0) {
       testamentElements.forEach((t) => {
         const bookElements = t.querySelectorAll('book');
-        bookElements.forEach(b => {
+        bookElements.forEach((b) => {
           bookIndex++;
           const bookNumber = b.getAttribute('number') || String(bookIndex);
-          const bookName =
-            b.getAttribute('name') ||
-            b.getAttribute('title') ||
-            `Book ${bookNumber}`;
+          const bookName = b.getAttribute('name') || b.getAttribute('title') || `Book ${bookNumber}`;
 
           const chapterElements = b.querySelectorAll('chapter');
-          const chapters = Array.from(chapterElements, c => {
+          const chapters = Array.from(chapterElements, (c) => {
             const chapterNumber = c.getAttribute('number') || '';
             const verseElements = c.querySelectorAll('verse');
-            const verses = Array.from(verseElements, v => ({
+            const verses = Array.from(verseElements, (v) => ({
               number: v.getAttribute('number') || '',
               text: (v.textContent ?? '').trim(),
             }));
@@ -137,19 +186,16 @@ export class HolyBibleParser implements IBibleParser {
       });
     } else {
       const bookElements = doc.querySelectorAll('book, BOOK, Book');
-      bookElements.forEach(b => {
+      bookElements.forEach((b) => {
         bookIndex++;
         const bookNumber = b.getAttribute('number') || String(bookIndex);
-        const bookName =
-          b.getAttribute('name') ||
-          b.getAttribute('title') ||
-          `Book ${bookNumber}`;
+        const bookName = b.getAttribute('name') || b.getAttribute('title') || `Book ${bookNumber}`;
 
         const chapterElements = b.querySelectorAll('chapter, CHAPTER, Chapter');
-        const chapters = Array.from(chapterElements, c => {
+        const chapters = Array.from(chapterElements, (c) => {
           const chapterNumber = c.getAttribute('number') || '';
           const verseElements = c.querySelectorAll('verse, VERSE, Verse');
-          const verses = Array.from(verseElements, v => ({
+          const verses = Array.from(verseElements, (v) => ({
             number: v.getAttribute('number') || '',
             text: (v.textContent ?? '').trim(),
           }));

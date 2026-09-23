@@ -25,6 +25,7 @@ import {
   THUMB_W, THUMB_H, PLACEHOLDER_BG, EMPTY_BG,
   type ThumbSlideData,
 } from '../../shared/thumbnailConfig';
+import { getSlideDisplayContent } from '../../shared/slideContent';
 
 type HeavyRequest =
   | { id: number; type: 'import-pptx'; payload: { filePath: string; mediaDir: string } }
@@ -177,10 +178,7 @@ async function renderTextSlide(ctx: any, slide: ThumbSlideData, W: number, H: nu
   }
 
   const styles = (slide.styles ?? {}) as Record<string, any>;
-  const displayContent =
-    slide.partsMode && slide.parts?.length
-      ? (slide.parts[slide.activePart ?? 0] ?? slide.content)
-      : slide.content;
+  const displayContent = getSlideDisplayContent(slide);
   if (!displayContent) return true;
 
   const ff = styles.fontFamily && styles.fontFamily !== 'inherit'

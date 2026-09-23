@@ -124,6 +124,7 @@ export interface SlideItem {
 }
 
 export interface Slide {
+  section?: { id: string; title: string };
   id: string;
   type: 'text' | 'image' | 'video' | 'countdown' | 'screen' | 'loop' | 'captions';
   content: string;
@@ -149,6 +150,8 @@ export interface Slide {
   snapEnabled?: boolean;
   /** Broadcast lock: while set, the live output is pinned to this slide. */
   locked?: boolean;
+  /** Operator-only note shown on the confidence monitor, never on the audience output. */
+  operatorNotes?: string;
   styles?: {
     fontSize: number;
     textTransform?: 'none' | 'uppercase' | 'lowercase';
@@ -189,7 +192,9 @@ export interface Presentation {
     type: TransitionType;
     duration: number;
   };
-  /** Index of the live (on-screen) slide, so backups can resume where you were. */
+  /** Stable identity of the live slide, used when restoring a backup after reordering. */
+  liveSlideId?: string;
+  /** Legacy live-slide position retained for backwards-compatible persistence. */
   liveIndex?: number;
 }
 

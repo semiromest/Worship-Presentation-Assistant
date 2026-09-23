@@ -19,6 +19,8 @@ declare global {
       openProjector: (displayId: string, initialData?: any) => Promise<boolean>;
       closeProjector: (displayId: string) => Promise<boolean>;
       updateProjector: (data: any) => Promise<boolean>;
+      checkMediaResources: (urls: string[]) => Promise<Record<string, boolean>>;
+      cacheGoogleFont: (family: string) => Promise<string>;
       getProjectorStatus: () => Promise<boolean>;
       importBibleXml: (filePath?: string) => Promise<any>;
       saveBibleData: (id: string, data: unknown) => Promise<string | null>;
@@ -59,6 +61,7 @@ declare global {
       updateAllSlidePreviews: (previews: (string | null)[]) => Promise<void>;
       updateSlidePreviewsDelta: (updates: { i: number; url: string }[]) => Promise<void>;
       sendSlidePreview: (dataUrl: string) => Promise<void>;
+      sendRemoteNotice: (notice: { text: string; tone?: 'ok' | 'error' }) => Promise<boolean>;
       generateThumbnail: (slide: any) => Promise<string | null>;
       showConfirmDialog: (options: {
         message: string;
@@ -113,6 +116,7 @@ declare global {
       sttStart: (config: SttConfig) => Promise<{ ok: boolean; code?: string; message?: string }>;
       sttSendAudio: (chunk: ArrayBuffer | Uint8Array) => void;
       sttStop: () => Promise<{ ok: boolean }>;
+      sttClear: () => Promise<void>;
       onSttEvent: (callback: (event: any) => void) => () => void;
 
       // Phone captions/translation share (LAN broadcast to phone browsers)

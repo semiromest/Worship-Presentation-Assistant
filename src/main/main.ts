@@ -1,3 +1,4 @@
+import { checkMediaResources, cacheGoogleFont } from './preparationResources';
 /**
  * Electron main process: presentation control, projector window,
  * remote (phone) control server, and .gpres file I/O.
@@ -1171,6 +1172,15 @@ function rememberDir(fromPath: string | undefined | null): void {
   }
 }
 
+ipcMain.handle('check-media-resources', async (_, urls: unknown) => {
+  if (!Array.isArray(urls) || urls.some(url => typeof url !== 'string')) throw new Error('Invalid resources');
+  return checkMediaResources(urls, mediaLibrary.dir);
+});
+ipcMain.handle('cache-google-font', async (_, family: unknown) => {
+  if (typeof family !== 'string') throw new Error('Invalid font');
+  return cacheGoogleFont(family, path.join(app.getPath('userData'), 'fonts'));
+});
+
 ipcMain.handle('save-file', async (_, content: string) => {
   const { filePath, canceled } = await dialog.showSaveDialog({
     defaultPath: lastDialogDir,
@@ -1315,6 +1325,7 @@ ipcMain.handle('update-projector', (_, data: unknown) => {
       ...(output && typeof output === 'object'
         ? {
             liveIndex: output.slideIndex,
+            liveSlideId: output.slideId,
             isBlackout: !!output.isBlackout,
             outputMode: output.mode,
             outputDisplayId: entry.displayId,
@@ -1671,6 +1682,18 @@ ipcMain.handle('send-slide-preview', (_, dataUrl: string) => {
   if (!dataUrl) return false;
   lastPreviewDataUrl = dataUrl;
   broadcast({ type: 'preview', data: dataUrl });
+  return true;
+});
+
+/**
+ * Broadcast a short transient notice to connected phones (e.g. the result of a
+ * quick-verse command). Text is capped so a malformed renderer call cannot be
+ * used to push an oversized frame to every client.
+ */
+ipcMain.handle('send-remote-notice', (_, notice: { text?: string; tone?: 'ok' | 'error' }) => {
+  const text = typeof notice?.text === 'string' ? notice.text.slice(0, 160) : '';
+  if (!text) return false;
+  broadcast({ type: 'notice', data: { text, tone: notice?.tone === 'error' ? 'error' : 'ok' } });
   return true;
 });
 

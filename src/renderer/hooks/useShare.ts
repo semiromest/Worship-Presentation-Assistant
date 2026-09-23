@@ -4,6 +4,7 @@ import { useStore } from '../state/useStore';
 import type { ShareSnapshot } from '../../shared/share';
 import { IS_PROJECTOR_MODE } from '../constants';
 import { useSttStore } from '../state/useSttStore';
+import { captionText } from '../captionDisplay';
 
 /** Bound the history pushed to phones (they only need the recent tail). */
 const HISTORY_LIMIT = 15;
@@ -12,13 +13,12 @@ type SttState = ReturnType<typeof useSttStore.getState>;
 
 /** Normalize the STT store into the single snapshot phones consume. */
 function buildSnapshot(s: SttState): ShareSnapshot {
-  const original = (s.currentOriginal + s.partialOriginal).trim();
-  const translations = Object.fromEntries(
-    s.targetLanguages.map((code) => [code, ((s.currentTranslations[code] ?? '') + (s.partialTranslations[code] ?? '')).trim()])
-  );
-  const translation = (s.currentTranslation + s.partialTranslation).trim();
+  const { original, translations } = captionText(s);
+  const translation = translations[s.targetLanguage] ?? '';
   return {
     sessionStatus: s.status,
+    sessionId: s.sessionId,
+    uiMotionEnabled: useStore.getState().uiMotionEnabled,
     translationEnabled: s.translationEnabled,
     detectedLanguage: s.detectedLanguage,
     targetLanguages: s.targetLanguages,
@@ -66,14 +66,18 @@ export function useShare(): { startShare: () => Promise<void>; stopShare: () => 
   // STT state → normalized snapshot → main process.
   useEffect(() => {
     if (IS_PROJECTOR_MODE) return;
-    const publish = (s: SttState) => {
-      if (!activeRef.current) return;
-      window.electronAPI?.sharePublish?.(buildSnapshot(s));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const publish = () => {
+      if (!activeRef.current || timer) return;
+      timer = setTimeout(() => {
+        timer = undefined;
+        if (activeRef.current) window.electronAPI?.sharePublish?.(buildSnapshot(useSttStore.getState()));
+      }, 80);
     };
     const unsub = useSttStore.subscribe(publish);
-    // Push the current state once so a just-started broadcast has a snapshot.
-    publish(useSttStore.getState());
-    return unsub;
+    const offMotion = useStore.subscribe((state, before) => { if (state.uiMotionEnabled !== before.uiMotionEnabled) publish(); });
+    publish();
+    return () => { unsub(); offMotion(); clearTimeout(timer); };
   }, []);
 
   // Main → renderer events: client count, network change, status re-hydration.

@@ -52,7 +52,7 @@ export default function LiveCaptionsSessionBar({ onStop, onExpand }: LiveCaption
         <span
           className={cn(
             'w-1.5 h-1.5 rounded-full shrink-0',
-            micActive ? 'bg-red-400 animate-pulse' : connected ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'
+            connected ? 'bg-emerald-400' : 'bg-amber-400'
           )}
           aria-hidden="true"
         />
@@ -61,7 +61,7 @@ export default function LiveCaptionsSessionBar({ onStop, onExpand }: LiveCaption
         <span
           className={cn(
             'hidden sm:inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-semibold shrink-0',
-            micActive || connected
+            connected
               ? 'text-emerald-300 border-emerald-400/30 bg-emerald-400/10'
               : 'text-amber-300 border-amber-400/30 bg-amber-400/10'
           )}

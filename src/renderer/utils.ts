@@ -2,15 +2,16 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useEffect, useState, useRef } from 'react';
 import type { Slide, WatermarkConfig, Position } from './types';
+import { getSlideDisplayContent } from '../shared/slideContent';
 import { useWatermarkStore } from './state/useWatermarkStore';
 import { parseCountdownContent, getCountdownRemaining } from './countdownUtils';
 import { rendererPerf } from './perf';
+import { resolveCanvasSource } from './canvasSource';
 
 // Precompiled regexes (compiled once, not per call)
 const SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
 const WINDOWS_DRIVE_RE = /^[a-zA-Z]:[\\/]/;
 const WINDOWS_DRIVE_ONLY_RE = /^[a-zA-Z]:$/;
-const HTTP_RE = /^https?:\/\//i;
 const LEADING_SLASHES_RE = /^\/+/;
 
 // ─── Tailwind merge helper ────────────────────────────────────────────────
@@ -42,11 +43,11 @@ async function loadImage(
   opts: { useFileUrl?: boolean; applyCors?: boolean } = {},
 ): Promise<HTMLImageElement | null> {
   if (!src) return null;
+  const target = opts.useFileUrl && !src.startsWith('data:') ? toFileUrl(src) : src;
+  const { url, cors } = resolveCanvasSource(target, opts.applyCors !== false);
   const img = new Image();
-  if (opts.applyCors !== false && HTTP_RE.test(src)) {
-    img.crossOrigin = 'anonymous';
-  }
-  img.src = opts.useFileUrl && !src.startsWith('data:') ? toFileUrl(src) : src;
+  if (cors) img.crossOrigin = 'anonymous';
+  img.src = url;
 
   return new Promise((resolve) => {
     if (img.complete && img.naturalWidth > 0) {
@@ -198,10 +199,7 @@ async function renderTextSlide(
   }
 
   const styles = (slide.styles ?? {}) as Record<string, any>;
-  const displayContent =
-    slide.partsMode && slide.parts?.length
-      ? (slide.parts[slide.activePart ?? 0] ?? slide.content)
-      : slide.content;
+  const displayContent = getSlideDisplayContent(slide);
   if (!displayContent) return true;
 
   const ff =
@@ -330,6 +328,7 @@ async function renderImageSlide(
   slide: Slide,
   W: number,
   H: number,
+  status?: ThumbnailStatus,
 ): Promise<boolean> {
   const sources = [slide.thumbnailUrl, slide.mediaUrl].filter(Boolean) as string[];
   for (const src of sources) {
@@ -339,6 +338,10 @@ async function renderImageSlide(
     drawImageSafe(ctx, img, fit, W, H);
     return true;
   }
+  // No media could be loaded: the preview is a placeholder, not the slide, so
+  // tell the caller it is worth retrying later (cloud/Drive files that are not
+  // materialised yet, an image still downloading, …).
+  if (status) status.usedFallback = true;
   ctx.fillStyle = EMPTY_BG;
   ctx.fillRect(0, 0, W, H);
   fillFallbackText(ctx, slide.content?.slice(0, 40) || '🖼 Görsel');
@@ -350,6 +353,7 @@ async function renderVideoSlide(
   slide: Slide,
   W: number,
   H: number,
+  status?: ThumbnailStatus,
 ): Promise<boolean> {
   if (slide.thumbnailUrl) {
     const img = await loadImage(slide.thumbnailUrl, { applyCors: true });
@@ -358,6 +362,7 @@ async function renderVideoSlide(
       return true;
     }
   }
+  if (status) status.usedFallback = true;
   ctx.fillStyle = EMPTY_BG;
   ctx.fillRect(0, 0, W, H);
   fillFallbackText(ctx, slide.content?.slice(0, 40) || '▶ Video', 'rgba(255,255,255,0.25)', '18px sans-serif');
@@ -551,6 +556,7 @@ async function renderLoopSlide(
   slide: Slide,
   W: number,
   H: number,
+  status?: ThumbnailStatus,
 ): Promise<boolean> {
   const first = slide.loopItems?.[0];
 
@@ -608,6 +614,7 @@ async function renderLoopSlide(
   }
 
   // 5. Placeholder.
+  if (status) status.usedFallback = true;
   ctx.fillStyle = EMPTY_BG;
   ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = 'rgba(168,85,247,0.2)';
@@ -626,6 +633,7 @@ async function renderItemsSlide(
   slide: Slide,
   W: number,
   H: number,
+  status?: ThumbnailStatus,
 ): Promise<boolean> {
   if (!slide.items?.length) return false;
 
@@ -738,6 +746,7 @@ async function renderItemsSlide(
   }
 
   if (!drewAny) {
+    if (status) status.usedFallback = true;
     fillFallbackText(ctx, slide.content?.slice(0, 40) || 'Düzen Slaytı', 'rgba(255,255,255,0.45)', 'bold 11px sans-serif');
   }
   return true;
@@ -827,8 +836,9 @@ async function drawWatermarkOnCanvas(
 
 async function generateSlideThumbnailInner(
   slide: Slide,
-  opts?: { scale?: number; quality?: number },
+  opts?: { scale?: number; quality?: number; status?: ThumbnailStatus },
 ): Promise<string | null> {
+  const status = opts?.status;
   // High-resolution output for phone broadcasts: draw everything in the base
   // 320×180 coordinate space and let ctx.scale upscale uniformly, so every
   // font/position stays proportionally correct at any size.
@@ -855,32 +865,34 @@ async function generateSlideThumbnailInner(
     // Item-based text slides (e.g. the QR slide: image + URL text) must route
     // to renderItemsSlide — renderTextSlide declines them by design.
     if (slide.type === 'text' && slide.items?.length) {
-      rendered = await renderItemsSlide(ctx, slide, BASE_W, BASE_H);
+      rendered = await renderItemsSlide(ctx, slide, BASE_W, BASE_H, status);
     } else if (slide.type === 'text') {
       rendered = await renderTextSlide(ctx, slide, BASE_W, BASE_H);
     } else if (slide.type === 'image') {
-      rendered = await renderImageSlide(ctx, slide, BASE_W, BASE_H);
+      rendered = await renderImageSlide(ctx, slide, BASE_W, BASE_H, status);
     } else if (slide.type === 'video') {
-      rendered = await renderVideoSlide(ctx, slide, BASE_W, BASE_H);
+      rendered = await renderVideoSlide(ctx, slide, BASE_W, BASE_H, status);
     } else if (slide.type === 'countdown') {
       rendered = renderCountdownSlide(ctx, slide, BASE_W, BASE_H);
     } else if (slide.type === 'screen') {
       rendered = renderScreenSlide(ctx, slide, BASE_W, BASE_H);
     } else if (slide.type === 'loop') {
-      rendered = await renderLoopSlide(ctx, slide, BASE_W, BASE_H);
+      rendered = await renderLoopSlide(ctx, slide, BASE_W, BASE_H, status);
     } else if (slide.type === 'captions') {
       rendered = renderCaptionsSlide(ctx, slide, BASE_W, BASE_H);
     } else if (slide.items?.length) {
-      rendered = await renderItemsSlide(ctx, slide, BASE_W, BASE_H);
+      rendered = await renderItemsSlide(ctx, slide, BASE_W, BASE_H, status);
     }
 
     if (!rendered) {
+      if (status) status.usedFallback = true;
       ctx.fillStyle = PLACEHOLDER_BG;
       ctx.fillRect(0, 0, BASE_W, BASE_H);
       fillFallbackText(ctx, slide.content?.slice(0, 60) || slide.type);
     }
   } catch {
     // Render pipeline failed — fallback placeholder
+    if (status) status.usedFallback = true;
     ctx.fillStyle = PLACEHOLDER_BG;
     ctx.fillRect(0, 0, BASE_W, BASE_H);
     fillFallbackText(ctx, slide.content?.slice(0, 40) || slide.type || 'Slayt', 'rgba(255,255,255,0.25)', 'bold 12px sans-serif');
@@ -901,14 +913,50 @@ async function generateSlideThumbnailInner(
     return canvas.toDataURL('image/webp', opts?.quality ?? 0.65);
   } catch (err) {
     console.error('generateSlideThumbnail: toDataURL failed (canvas tainted?):', err);
+    // A tainted canvas can never be exported, so retrying this slide would only
+    // fail again. Returning null left the phone grid stuck on "LOADING"
+    // forever, so hand back an untainted placeholder instead — the operator can
+    // still identify the slide, and the next real regeneration can replace it.
+    return buildFallbackThumbnail(slide, scale, opts?.quality);
+  }
+}
+
+/**
+ * Last-resort preview for a slide whose canvas could not be exported (tainted
+ * by a media source we are not allowed to read). Deliberately drawn on a fresh
+ * canvas with no external image, so encoding always succeeds.
+ */
+function buildFallbackThumbnail(slide: Slide, scale: number, quality?: number): string | null {
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = THUMB_W * scale;
+    canvas.height = THUMB_H * scale;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    if (scale > 1) ctx.scale(scale, scale);
+    ctx.fillStyle = PLACEHOLDER_BG;
+    ctx.fillRect(0, 0, THUMB_W, THUMB_H);
+    const label = slide.content?.trim() || slide.group?.title || slide.type;
+    fillFallbackText(ctx, label.slice(0, 60));
+    return canvas.toDataURL('image/webp', quality ?? 0.65);
+  } catch {
     return null;
   }
+}
+
+/**
+ * Optional out-param for generateSlideThumbnail: reports whether the image is a
+ * faithful render or only a placeholder (media missing/unreadable), so callers
+ * can retry instead of caching an empty preview forever.
+ */
+export interface ThumbnailStatus {
+  usedFallback?: boolean;
 }
 
 /** Phase 0: times thumbnail generation (dev-only, zero overhead in prod). */
 export async function generateSlideThumbnail(
   slide: Slide,
-  opts?: { scale?: number; quality?: number },
+  opts?: { scale?: number; quality?: number; status?: ThumbnailStatus },
 ): Promise<string | null> {
   if (!rendererPerf.enabled) return generateSlideThumbnailInner(slide, opts);
   const t0 = performance.now();

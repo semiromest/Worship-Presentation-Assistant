@@ -121,6 +121,97 @@ body {
   }
 }
 
+/* User override from Settings. Keep state changes instant and readable. */
+html[data-ui-motion='off'] *,
+html[data-ui-motion='off'] *::before,
+html[data-ui-motion='off'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* ─── Base UI state transitions ──────────────────────────── */
+/* These transitions explain visibility and selection changes. Base UI keeps
+   closing elements mounted until their ending transition has completed. */
+.base-dialog-backdrop {
+  opacity: 1;
+  transition: opacity 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.base-dialog-backdrop[data-starting-style],
+.base-dialog-backdrop[data-ending-style] {
+  opacity: 0;
+}
+
+.base-dialog-popup {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  transform-origin: center;
+  transition:
+    opacity 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.base-dialog-popup[data-starting-style],
+.base-dialog-popup[data-ending-style] {
+  opacity: 0;
+  transform: translate(-50%, calc(-50% + 8px)) scale(0.98);
+}
+
+.base-popover-popup {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition:
+    opacity 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.base-popover-popup[data-starting-style],
+.base-popover-popup[data-ending-style] {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+}
+
+.base-popover-popup[data-side='top'][data-starting-style],
+.base-popover-popup[data-side='top'][data-ending-style] {
+  transform: translateY(6px) scale(0.98);
+}
+
+.base-setting-switch {
+  transition:
+    background-color 160ms ease,
+    transform 100ms ease;
+}
+
+.base-setting-switch:active {
+  transform: scale(0.96);
+}
+
+.base-setting-switch-thumb {
+  transform: translateX(4px);
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.base-setting-switch-thumb[data-checked] {
+  transform: translateX(24px);
+}
+
+.base-collapsible-panel {
+  height: var(--collapsible-panel-height);
+  opacity: 1;
+  overflow: hidden;
+  transition:
+    height 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 140ms ease;
+}
+
+.base-collapsible-panel[data-starting-style],
+.base-collapsible-panel[data-ending-style] {
+  height: 0;
+  opacity: 0;
+}
+
 /* ─── Scrollbar (subtle) ─────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;

@@ -113,6 +113,7 @@ export function publishScreenFrame(frame: string): void {
   const str = JSON.stringify({ type: 'frame', data: frame });
   for (const client of clients) {
     if (client.readyState === WsSocket.OPEN) {
+      if (client.bufferedAmount > 1024 * 1024) { client.close(1013, 'Slow connection'); continue; }
       try { client.send(str); } catch { /* ignore */ }
     }
   }

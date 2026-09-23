@@ -1,7 +1,8 @@
 import { HexColorPicker } from 'react-colorful';
 import { useTranslation } from 'react-i18next';
-import { Image as ImageIcon, Video, X, Layers, ChevronDown, ChevronUp, AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd } from 'lucide-react';
+import { Image as ImageIcon, Video, X, Layers, ChevronDown, AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd } from 'lucide-react';
 import { useStore } from '../state/useStore';
+import { getActivePartIndex, getPartIndex, getSlideDisplayContent } from '../../shared/slideContent';
 import { cn } from '../utils';
 import type { Slide } from '../types';
 import { FONT_PRESETS } from '../editor/editorUtils';
@@ -39,11 +40,15 @@ export default function SlideStyleEditor({
   const setPanels = useStore((s) => s.setPanels);
 
   const parts = selectedSlide.parts ?? [];
-  const activePart = selectedSlide.activePart ?? 0;
+  const activePart = getActivePartIndex(selectedSlide);
   const partsMode = selectedSlide.partsMode ?? false;
 
   const setActivePart = (index: number) => {
-    updateSlideProperty(selectedSlide.id, { activePart: index, content: parts[index] });
+    const nextPart = getPartIndex(selectedSlide, index);
+    updateSlideProperty(selectedSlide.id, {
+      activePart: nextPart,
+      content: getSlideDisplayContent({ ...selectedSlide, activePart: nextPart }),
+    });
   };
 
   const handlePartsKeyDown = (e: React.KeyboardEvent) => {
@@ -73,7 +78,11 @@ export default function SlideStyleEditor({
                 if (!next) {
                   updateSlideProperty(selectedSlide.id, { partsMode: next, content: parts.join('\n\n') });
                 } else {
-                  updateSlideProperty(selectedSlide.id, { partsMode: next, content: parts[activePart] });
+                  updateSlideProperty(selectedSlide.id, {
+                    partsMode: next,
+                    activePart,
+                    content: getSlideDisplayContent({ ...selectedSlide, partsMode: next, activePart }),
+                  });
                 }
               }}
               className={cn(

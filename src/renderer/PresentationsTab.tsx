@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState, useTransition, memo, useEffect, useRef } from 'react';
+import { useCallback, useMemo, useState, memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import * as m from 'motion/react-m';
 import {
   Layers,
   Trash2,
@@ -32,12 +33,16 @@ import { confirmDialog } from './dialogs';
 import { useStore } from './state/useStore';
 import { isLiveSavePreset, getLiveSaveRetention } from './hooks/useLiveSave';
 import DrivePanel from './components/DrivePanel';
+import Dialog from './components/Dialog';
+import { presentationContentKey } from './presentationLibrary';
+import { uiMotion } from './uiMotion';
+import { useUiMotionEnabled } from './hooks/useUiMotionEnabled';
 
 // ─── Shared action/styles (page-scoped) ────────────────────────────────────
 // All actions use the same secondary outline style for a quiet, uniform look;
 // wider variants add extra horizontal padding for emphasis.
 const BTN_BASE =
-  'inline-flex items-center gap-2 h-10 rounded-xl text-sm font-medium transition-all active:scale-[0.98] shrink-0';
+  'inline-flex items-center gap-2 h-10 rounded-xl text-sm font-medium transition-all active:scale-[0.98] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50 disabled:pointer-events-none';
 const BTN_SECONDARY = `${BTN_BASE} border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] text-white/70 hover:text-white px-4`;
 const BTN_SECONDARY_WIDE = `${BTN_BASE} border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] text-white/70 hover:text-white px-6`;
 
@@ -57,10 +62,7 @@ const LazyAnimatedPreview = memo(function LazyAnimatedPreview({ slide }: { slide
       const io = new IntersectionObserver(
         (entries) => {
           for (const e of entries) {
-            if (e.isIntersecting) {
-              setVisible(true);
-              io.disconnect();
-            }
+            setVisible(e.isIntersecting);
           }
         },
         { rootMargin: '200px' }
@@ -106,7 +108,8 @@ interface PresetCardProps {
 }
 
 const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelete, onRename }: PresetCardProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const uiMotionEnabled = useUiMotionEnabled();
   const [isEditing, setIsEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -122,20 +125,15 @@ const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelet
   const openPreset = () => onApply(preset);
 
   return (
-    <article
+    <m.article
+      layout={uiMotionEnabled ? 'position' : false}
+      initial={uiMotionEnabled ? { opacity: 0, y: uiMotion.distance } : false}
+      animate={{ opacity: 1, y: 0 }}
+      exit={uiMotionEnabled ? { opacity: 0, scale: 0.98 } : { opacity: 1 }}
+      transition={{ duration: uiMotionEnabled ? uiMotion.duration.standard : 0, ease: uiMotion.ease }}
       aria-label={`${t('common.openPreset')}: ${preset.name}`}
-      role="button"
-      tabIndex={0}
-      onClick={openPreset}
-      onKeyDown={(e) => {
-        if (e.target !== e.currentTarget) return;
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          openPreset();
-        }
-      }}
       className={cn(
-        'group relative rounded-2xl border overflow-hidden transition-all duration-200 cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none',
+        'group relative rounded-2xl border overflow-hidden transition-all duration-200 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none',
         isLiveSave
           ? 'border-emerald-500/35 bg-emerald-500/[0.05] shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500/20'
           : isActive
@@ -220,11 +218,11 @@ const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelet
         <div className="flex items-center gap-3 text-xs text-white/45">
           <span className="flex items-center gap-1">
             <LayoutGrid className="w-3 h-3" />
-            {t('common.presetCount', { count: preset.presentation.slides.length })}
+            {t('library.slideCount', { count: preset.presentation.slides.length })}
           </span>
           <span className="flex items-center gap-1 min-w-0 truncate">
             <Clock className="w-3 h-3 shrink-0" />
-            {new Date(preset.createdAt).toLocaleString('tr-TR', {
+            {new Date(preset.createdAt).toLocaleString(i18n.language, {
               day: 'numeric',
               month: 'short',
               year: 'numeric',
@@ -259,7 +257,7 @@ const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelet
           <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
         </button>
       </div>
-    </article>
+    </m.article>
   );
 });
 
@@ -321,7 +319,7 @@ export default function PresentationsTab({
   onImportSlides,
   onNewPresentation,
 }: PresentationsTabProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const setPresentationName = useStore((s) => s.setPresentationName);
   const setDrivePanelOpen = useStore((s) => s.setDrivePanelOpen);
   const drivePanelOpen = useStore((s) => s.drivePanelOpen);
@@ -362,7 +360,24 @@ export default function PresentationsTab({
     return () => window.removeEventListener('drive-open-presentation', handler);
   }, [onApplyPreset]);
 
-  const [isSaving, startSaveTransition] = useTransition();
+  const [isSaving, setIsSaving] = useState(false);
+  const operationRef = useRef(false);
+  const [operationError, setOperationError] = useState<string | null>(null);
+  const [savedSnapshot, setSavedSnapshot] = useState<Presentation | null>(null);
+  const setActiveTab = useStore((s) => s.setActiveTab);
+  const liveSaveEnabled = useStore((s) => s.liveSaveEnabled);
+  const liveSaveLastSaved = useStore((s) => s.liveSaveLastSaved);
+  const visiblePresets = useMemo(() => presets.filter((p) => !isLiveSavePreset(p.name)), [presets]);
+  const currentSavedPreset = visiblePresets.find((p) => p.name === selectedPresetName);
+  const currentKey = useMemo(() => presentationContentKey(presentation), [presentation]);
+  const savedKey = useMemo(() => {
+    const snapshot = savedSnapshot ?? (currentSavedPreset && {
+      ...currentSavedPreset.presentation, name: currentSavedPreset.name,
+    });
+    return snapshot ? presentationContentKey(snapshot) : null;
+  }, [savedSnapshot, currentSavedPreset]);
+  const saved = currentKey === savedKey;
+
 
   useEffect(() => {
     if (!window.electronAPI?.onPptxImportProgress) return;
@@ -410,18 +425,18 @@ export default function PresentationsTab({
   );
 
   const filteredPresets = useMemo(() => {
-    const visible = presets.filter((p) => !isLiveSavePreset(p.name));
+    const visible = visiblePresets;
     const q = searchQuery.trim().toLowerCase();
     return q ? visible.filter((p) => p.name.toLowerCase().includes(q)) : visible;
-  }, [presets, searchQuery]);
+  }, [visiblePresets, searchQuery]);
 
   const sortedPresets = useMemo(() => {
     const arr = [...filteredPresets];
     if (sortOrder === 'name') {
-      return arr.sort((a, b) => a.name.localeCompare(b.name, 'tr'));
+      return arr.sort((a, b) => a.name.localeCompare(b.name, i18n.language));
     }
     return arr.sort((a, b) => (sortOrder === 'oldest' ? a.createdAt - b.createdAt : b.createdAt - a.createdAt));
-  }, [filteredPresets, sortOrder]);
+  }, [filteredPresets, sortOrder, i18n.language]);
 
   const startNameEdit = () => {
     setDraftName(presentation.name);
@@ -437,55 +452,70 @@ export default function PresentationsTab({
     setIsEditingName(false);
   };
 
-  const saveCurrentPreset = useCallback(() => {
-    const name = presentation.name || 'Yeni Sunum';
+  const saveCurrentPreset = useCallback(async () => {
+    if (operationRef.current) return;
+    operationRef.current = true;
+    setIsSaving(true);
+    setOperationError(null);
+    const name = presentation.name.trim() || t('common.newPresentation');
+    try {
+      const existing = visiblePresets.find((preset) => preset.name === name);
+      if (existing && existing.presentation.id !== presentation.id &&
+          !(await confirmDialog(t('library.confirmOverwrite', { name })))) return;
+      const updated = await window.electronAPI?.savePreset?.({
+        name, presentation: { ...presentation, name }, retentionMs: getLiveSaveRetention(),
+      });
+      if (!Array.isArray(updated)) throw new Error(t('library.saveFailed'));
+      onPresetsChange(updated);
+      if (useStore.getState().presentation.id === presentation.id) {
+        onSelectedPresetNameChange(name);
+        setSavedSnapshot(presentation);
+      }
+      playSfx('complete');
+    } catch (error) {
+      setOperationError(error instanceof Error ? error.message : t('library.saveFailed'));
+    } finally {
+      operationRef.current = false;
+      setIsSaving(false);
+    }
+  }, [presentation, visiblePresets, onPresetsChange, onSelectedPresetNameChange, t]);
 
-    startSaveTransition(() => {
-      void (async () => {
-        const updated = await window.electronAPI?.savePreset?.({
-          name,
-          presentation,
-          retentionMs: getLiveSaveRetention(),
-        });
-        if (Array.isArray(updated)) {
-          onPresetsChange(updated);
-          onSelectedPresetNameChange(name);
-          setPresentationName(name);
-          playSfx('complete');
-          if (onNewPresentation && (await confirmDialog(t('warnings.confirmNewAfterSave')))) {
-            onNewPresentation();
-          }
-        }
-      })();
-    });
-  }, [presentation, onPresetsChange, onSelectedPresetNameChange, setPresentationName, onNewPresentation, t]);
-
-  const deletePreset = useCallback(
-    async (name: string) => {
+  const deletePreset = useCallback(async (name: string) => {
+    if (operationRef.current) return;
+    operationRef.current = true;
+    setOperationError(null);
+    try {
       if (!(await confirmDialog(t('common.confirmDeletePreset', { name })))) return;
-
       const updated = await window.electronAPI?.deletePreset?.(name, getLiveSaveRetention());
-      if (Array.isArray(updated)) {
-        onPresetsChange(updated);
-        onSelectedPresetNameChange(name === selectedPresetName ? null : selectedPresetName);
-        playSfx('delete');
-      }
-    },
-    [selectedPresetName, onPresetsChange, onSelectedPresetNameChange, t]
-  );
+      if (!Array.isArray(updated)) throw new Error(t('library.operationFailed'));
+      onPresetsChange(updated);
+      if (name === selectedPresetName) { onSelectedPresetNameChange(null); setSavedSnapshot(null); }
+      playSfx('delete');
+    } catch (error) {
+      setOperationError(error instanceof Error ? error.message : t('library.operationFailed'));
+    } finally { operationRef.current = false; }
+  }, [selectedPresetName, onPresetsChange, onSelectedPresetNameChange, t]);
 
-  const renamePreset = useCallback(
-    async (oldName: string, newName: string) => {
+  const renamePreset = useCallback(async (oldName: string, newName: string) => {
+    if (operationRef.current) return;
+    setOperationError(null);
+    if (visiblePresets.some((p) => p.name === newName && p.name !== oldName)) {
+      setOperationError(t('library.nameExists')); return;
+    }
+    operationRef.current = true;
+    try {
       const updated = await window.electronAPI?.renamePreset?.(oldName, newName, getLiveSaveRetention());
-      if (Array.isArray(updated)) {
-        onPresetsChange(updated);
-        if (selectedPresetName === oldName) {
-          onSelectedPresetNameChange(newName);
-        }
+      if (!Array.isArray(updated)) throw new Error(t('library.operationFailed'));
+      onPresetsChange(updated);
+      if (selectedPresetName === oldName) {
+        setSavedSnapshot(null);
+        onSelectedPresetNameChange(newName);
+        setPresentationName(newName);
       }
-    },
-    [selectedPresetName, onPresetsChange, onSelectedPresetNameChange]
-  );
+    } catch (error) {
+      setOperationError(error instanceof Error ? error.message : t('library.operationFailed'));
+    } finally { operationRef.current = false; }
+  }, [selectedPresetName, visiblePresets, onPresetsChange, onSelectedPresetNameChange, setPresentationName, t]);
 
   const clearSearch = useCallback(() => setSearchQuery(''), []);
 
@@ -602,179 +632,90 @@ export default function PresentationsTab({
   }, [onImportSlides, t]);
 
   return (
-    <div className="h-full bg-surface-base text-white overflow-hidden flex flex-col">
-      <header className="flex-shrink-0 border-b border-white/5 bg-surface-raised/95 backdrop-blur-xl">
-        <div className="px-6 pt-4 flex items-center justify-between gap-x-4 gap-y-3 flex-wrap">
-          <div className="flex items-center gap-4 min-w-0">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500/20 to-violet-500/20 border border-white/10 flex items-center justify-center shadow-lg shadow-blue-500/10 shrink-0">
-              <Layers className="w-5 h-5 text-blue-400" />
-            </div>
+    <div className="h-full bg-surface-base text-white overflow-y-auto">
+      <header className="border-b border-white/10 bg-surface-raised">
+        <div className="px-5 py-5 sm:px-6 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight">{t('common.presetsTitle')}</h2>
+            <p className="text-sm text-white/60 mt-1">{t('library.subtitle')}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {onOpenFile && <button type="button" onClick={onOpenFile} className={BTN_SECONDARY}>
+              <FolderOpen className="w-4 h-4" aria-hidden="true" />{t('common.openFromFile')}
+            </button>}
+            {onNewPresentation && <button type="button" className={BTN_SECONDARY} disabled={isSaving}
+              onClick={async () => {
+                if (!saved && !(await confirmDialog(t('library.confirmNew'), { title: t('common.newPresentation') }))) return;
+                onNewPresentation();
+              }}><Plus className="w-4 h-4" aria-hidden="true" />{t('common.newPresentation')}</button>}
+          </div>
+        </div>
+        <section aria-label={t('library.current')} className="mx-5 mb-4 rounded-2xl border border-blue-400/20 bg-blue-500/[0.05] p-4 sm:mx-6 sm:p-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
-              <h2 className="text-lg font-semibold tracking-tight">{t('common.presetsTitle')}</h2>
-              <p className="text-xs text-white/40 mt-0.5 truncate">{t('common.presetsSubtitle')}</p>
+              <p className="text-xs font-medium text-blue-300 mb-2">{t('library.current')}</p>
+              {isEditingName ? <input ref={nameInputRef} autoFocus type="text" value={draftName}
+                onChange={(e) => setDraftName(e.target.value)} onBlur={commitName}
+                onKeyDown={(e) => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') setIsEditingName(false); }}
+                aria-label={t('common.presetName')}
+                className="w-full max-w-md rounded-lg bg-black/20 border border-blue-400 px-3 py-2 text-lg outline-none" />
+                : <button type="button" onClick={startNameEdit} title={t('common.clickToRename')}
+                    className="flex items-center gap-2 max-w-full text-lg font-semibold text-left rounded focus-visible:ring-2 focus-visible:ring-blue-400">
+                    <span className="truncate">{presentation.name}</span><Pencil className="w-4 h-4 shrink-0 text-white/50" aria-hidden="true" />
+                  </button>}
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/65" role="status">
+                <span>{t('library.slideCount', { count: presentation.slides.length })}</span>
+                <span className={saved ? 'text-emerald-300' : 'text-amber-200'}>{saved ? t('library.saved') : t('library.unsaved')}</span>
+                <span>{liveSaveEnabled
+                  ? liveSaveLastSaved ? t('library.backupAt', { time: new Date(liveSaveLastSaved).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' }) }) : t('library.backupOn')
+                  : t('library.backupOff')}</span>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => setActiveTab('slides')} className={BTN_SECONDARY}>
+                <Pencil className="w-4 h-4" aria-hidden="true" />{t('library.continueEditing')}
+              </button>
+              <button type="button" onClick={saveCurrentPreset} disabled={isSaving}
+                className={`${BTN_BASE} px-5 bg-blue-600 hover:bg-blue-500 text-white shadow-sm`}>
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Save className="w-4 h-4" aria-hidden="true" />}
+                {isSaving ? t('common.saving') : t('library.save')}
+              </button>
             </div>
           </div>
-
-          <div className="flex flex-wrap items-center gap-2 justify-end shrink-0">
-            <button
-              type="button"
-              onClick={handleExportPptx}
-              disabled={isExporting}
-              className={`${BTN_SECONDARY} disabled:opacity-50 disabled:hover:bg-white/[0.03]`}
-            >
-              {isExporting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-                  {exportProgress.total > 0
-                    ? `${exportProgress.current}/${exportProgress.total}`
-                    : t('common.exporting')}
-                </>
-              ) : (
-                <>
-                  <FileDown className="w-4 h-4" aria-hidden="true" />
-                  {t('common.exportPptx')}
-                </>
-              )}
+          {operationError && <p role="alert" className="mt-3 rounded-lg border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">{operationError}</p>}
+        </section>
+        <div className="px-5 pb-4 sm:px-6 flex flex-wrap items-start justify-between gap-2">
+          <details className="group max-w-full">
+            <summary className={`${BTN_SECONDARY} cursor-pointer list-none`}>
+              <FileUp className="w-4 h-4" aria-hidden="true" />{t('library.fileTools')}
+              <ChevronDown className="w-4 h-4 group-open:rotate-180" aria-hidden="true" />
+            </summary>
+            <div className="flex flex-wrap gap-2 mt-3 p-3 border border-white/10 rounded-xl bg-black/10">
+              {onSaveFile && <button type="button" onClick={onSaveFile} className={BTN_SECONDARY}>
+                <HardDrive className="w-4 h-4" aria-hidden="true" />{t('common.saveToFile')}
+              </button>}
+              {onImportSlides && <button type="button" onClick={handleImportPptx} disabled={isImporting || isExporting} className={BTN_SECONDARY}>
+                <FileUp className="w-4 h-4" aria-hidden="true" />{isImporting ? t('common.importing') : t('common.importPptx')}
+              </button>}
+              <button type="button" onClick={handleExportPptx} disabled={isExporting || isImporting} className={BTN_SECONDARY}>
+                <FileDown className="w-4 h-4" aria-hidden="true" />{isExporting ? t('common.exporting') : t('common.exportPptx')}
+              </button>
+            </div>
+          </details>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => setIsAutosaveOpen(true)} aria-haspopup="dialog" className={BTN_SECONDARY}>
+              <DatabaseBackup className="w-4 h-4" aria-hidden="true" />{t('nav.autosaves')}
             </button>
-            {onImportSlides && (
-              <button
-                type="button"
-                onClick={handleImportPptx}
-                disabled={isImporting}
-                className={`${BTN_SECONDARY} disabled:opacity-50 disabled:hover:bg-white/[0.03]`}
-              >
-                {isImporting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-                    {importProgress.total > 0
-                      ? `${importProgress.current}/${importProgress.total}`
-                      : t('common.importing')}
-                  </>
-                ) : (
-                  <>
-                    <FileUp className="w-4 h-4" aria-hidden="true" />
-                    {t('common.importPptx')}
-                  </>
-                )}
-              </button>
-            )}
-            {onOpenFile && (
-              <button type="button" onClick={onOpenFile} className={BTN_SECONDARY}>
-                <FolderOpen className="w-4 h-4" aria-hidden="true" />
-                {t('common.openFromFile')}
-              </button>
-            )}
-            {onSaveFile && (
-              <button type="button" onClick={onSaveFile} className={BTN_SECONDARY}>
-                <HardDrive className="w-4 h-4" aria-hidden="true" />
-                {t('common.saveToFile')}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setIsAutosaveOpen((prev) => !prev)}
-              className={cn(
-                BTN_SECONDARY,
-                isAutosaveOpen &&
-                  'border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/10 shadow-lg shadow-emerald-500/10'
-              )}
-            >
-              <DatabaseBackup className="w-4 h-4" aria-hidden="true" />
-              {t('nav.autosaves')}
+            <button type="button" onClick={() => setDrivePanelOpen(!drivePanelOpen)} aria-pressed={drivePanelOpen} className={BTN_SECONDARY}>
+              <Cloud className="w-4 h-4" aria-hidden="true" />Google Drive
             </button>
-            <button
-              type="button"
-              onClick={() => setDrivePanelOpen(!drivePanelOpen)}
-              aria-pressed={drivePanelOpen}
-              className={cn(
-                BTN_SECONDARY,
-                drivePanelOpen &&
-                  'border-blue-500/50 bg-blue-500/10 text-blue-400 hover:bg-blue-500/10 shadow-lg shadow-blue-500/10'
-              )}
-            >
-              <Cloud className="w-4 h-4" aria-hidden="true" />
-              Drive
-            </button>
-            {onNewPresentation && (
-              <button
-                type="button"
-                onClick={async () => {
-                  if (presentation?.slides?.length > 0) {
-                    const confirmed = await confirmDialog(
-                      'Yeni bir sunum açmak istediğinize emin misiniz? Kaydedilmemiş değişiklikler kaybolacak.',
-                      {
-                        title: 'Yeni Sunum',
-                        confirmLabel: 'Yeni Sunum Aç',
-                        cancelLabel: 'İptal',
-                      }
-                    );
-                    if (!confirmed) return;
-                  }
-                  onNewPresentation();
-                }}
-                className={BTN_SECONDARY_WIDE}
-              >
-                <Plus className="w-4 h-4" aria-hidden="true" />
-                {t('common.newPresentation')}
-              </button>
-            )}
           </div>
         </div>
-
-        {/* Action strip — current presentation name + save */}
-        <div className="px-6 py-3 border-t border-white/5 flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-xs text-white/40 shrink-0">{t('common.currentName')}:</span>
-            {isEditingName ? (
-              <input
-                ref={nameInputRef}
-                type="text"
-                value={draftName}
-                onChange={(e) => setDraftName(e.target.value)}
-                onBlur={commitName}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitName();
-                  if (e.key === 'Escape') setIsEditingName(false);
-                }}
-                aria-label={t('common.presetName')}
-                className="min-w-0 max-w-[260px] font-semibold text-sm text-white bg-transparent border-b border-blue-400/50 outline-none"
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={startNameEdit}
-                title={t('common.clickToRename')}
-                aria-label={t('common.clickToRename')}
-                className="group flex items-center gap-1.5 font-semibold text-sm text-white/85 truncate max-w-[260px] hover:text-blue-300 transition-colors cursor-pointer rounded px-1 py-0.5 -ml-1 hover:bg-white/5"
-              >
-                <span className="truncate">{presentation.name}</span>
-                <Pencil
-                  className="w-3 h-3 text-white/25 group-hover:text-white/50 transition-colors shrink-0"
-                  aria-hidden="true"
-                />
-              </button>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={saveCurrentPreset}
-            disabled={isSaving}
-            className={cn(BTN_SECONDARY_WIDE, 'disabled:opacity-50 disabled:pointer-events-none')}
-          >
-            {isSaving ? (
-              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <Save className="w-4 h-4" aria-hidden="true" />
-            )}
-            {isSaving ? t('common.saving') : t('common.savePreset')}
-          </button>
-
-          <p className="hidden md:block sm:ml-auto text-[11px] text-white/45 leading-relaxed max-w-[280px]">
-            {t('common.presetCalendarHint')}
-          </p>
-        </div>
-
+        {(isImporting || isExporting) && <p role="status" className="px-6 pb-3 text-sm text-blue-300">
+          {isImporting ? t('common.importing') : t('common.exporting')}{' '}
+          {isImporting && importProgress.total > 0 && `${importProgress.current}/${importProgress.total}`}
+          {isExporting && exportProgress.total > 0 && `${exportProgress.current}/${exportProgress.total}`}
+        </p>}
         <div aria-live="polite">
           {(importDuration !== null || importError) && (
             <div className="px-6 pb-3 space-y-2">
@@ -901,25 +842,25 @@ export default function PresentationsTab({
         </div>
       </header>
 
-      {isAutosaveOpen && (
-        <div className="absolute inset-0 z-40 bg-slate-950/60 backdrop-blur-[2px] flex items-center justify-center p-4" onClick={() => setIsAutosaveOpen(false)}>
-          <div className="w-full max-w-3xl max-h-[80vh] overflow-hidden rounded-3xl border border-emerald-500/20 bg-surface-raised shadow-2xl shadow-emerald-500/10" onClick={(e) => e.stopPropagation()}>
+      <Dialog open={isAutosaveOpen} onClose={() => setIsAutosaveOpen(false)} labelledBy="autosave-title"
+        className="w-full max-w-3xl max-h-[80vh] overflow-hidden rounded-3xl border border-emerald-500/20 bg-surface-raised shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
                   <ShieldCheck className="w-5 h-5 text-emerald-300" aria-hidden="true" />
                 </div>
                 <div>
-                  <h3 className="text-base font-semibold text-white">{t('nav.autosaves')}</h3>
+                  <h3 id="autosave-title" className="text-base font-semibold text-white">{t('nav.autosaves')}</h3>
                   <p className="text-[11px] text-white/45">{t('common.liveSaveBadge')}</p>
                 </div>
               </div>
-              <button type="button" onClick={() => setIsAutosaveOpen(false)} className="rounded-lg bg-white/5 p-2 text-white/60 hover:bg-white/10 hover:text-white">
+              <button type="button" aria-label={t('common.close')} onClick={() => setIsAutosaveOpen(false)} className="rounded-lg bg-white/5 p-2 text-white/60 hover:bg-white/10 hover:text-white">
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
 
             <div className="max-h-[60vh] overflow-y-auto p-4">
+              {operationError && <p role="alert" className="mb-3 rounded-lg border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">{operationError}</p>}
               {liveSavePresets.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-emerald-500/20 bg-emerald-500/5 p-8 text-center text-white/60">
                   {t('settings.liveSaveEmpty')}
@@ -940,7 +881,7 @@ export default function PresentationsTab({
                       </div>
 
                       <p className="mt-3 text-[11px] text-white/50">
-                        {new Date(preset.createdAt).toLocaleString('tr-TR', {
+                        {new Date(preset.createdAt).toLocaleString(i18n.language, {
                           day: '2-digit',
                           month: '2-digit',
                           year: 'numeric',
@@ -962,14 +903,7 @@ export default function PresentationsTab({
                         </button>
                         <button
                           type="button"
-                          onClick={async () => {
-                            const confirmed = await confirmDialog(t('common.confirmDeletePreset', { name: preset.name }));
-                            if (!confirmed) return;
-                            const updated = await window.electronAPI?.deletePreset?.(preset.name, getLiveSaveRetention());
-                            if (Array.isArray(updated)) {
-                              onPresetsChange(updated);
-                            }
-                          }}
+                          onClick={() => deletePreset(preset.name)}
                           className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/70 hover:bg-white/10 transition-colors"
                           aria-label={t('common.deletePreset')}
                         >
@@ -981,11 +915,9 @@ export default function PresentationsTab({
                 </div>
               )}
             </div>
-          </div>
-        </div>
-      )}
+      </Dialog>
 
-      <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+      <div className="flex flex-col min-h-0">
         <div className="flex-shrink-0 p-5 pb-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h2 className="font-semibold flex items-center gap-2">
@@ -993,7 +925,7 @@ export default function PresentationsTab({
               {t('common.savedPresentations')}
             </h2>
             <p className="text-xs text-white/40 mt-0.5">
-              {t('common.presetCount', { count: presets.length })}
+              {t('common.presetCount', { count: visiblePresets.length })}
               {searchQuery && t('common.searchResults', { count: filteredPresets.length })}
             </p>
           </div>
@@ -1046,23 +978,26 @@ export default function PresentationsTab({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 pt-1">
-          {presets.length === 0 ? (
+        <div className="p-5 pt-1">
+          {visiblePresets.length === 0 ? (
             <EmptyLibrary onSave={saveCurrentPreset} />
           ) : sortedPresets.length === 0 ? (
             <EmptySearch onClear={clearSearch} />
           ) : (
             <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-              {sortedPresets.map((preset) => (
-                <PresetCard
-                  key={preset.name}
-                  preset={preset}
-                  isActive={selectedPresetName === preset.name}
-                  onApply={onApplyPreset}
-                  onDelete={deletePreset}
-                  onRename={renamePreset}
-                />
-              ))}
+                {sortedPresets.map((preset) => (
+                  <PresetCard
+                    key={preset.name}
+                    preset={preset}
+                    isActive={selectedPresetName === preset.name}
+                    onApply={(preset) => {
+                      setSavedSnapshot(null);
+                      onApplyPreset(preset);
+                    }}
+                    onDelete={deletePreset}
+                    onRename={renamePreset}
+                  />
+                ))}
             </div>
           )}
         </div>

@@ -4,9 +4,10 @@ import { undoReducer, UndoState, UndoAction, applyProjectorPatch, ProjectorPatch
 // UndoAction is used in setPresentationName to keep rename in undo history
 import { DEFAULT_STYLES, DEFAULT__TRANSITION, PROJECTOR_OUTPUT_MODE } from '../constants';
 import { makeSlideId } from '../utils';
-import { resolveLiveIndexForLock, pinSlide, unpinSlide } from '../slideLock';
+import { pinSlide, resolveLiveSlidePosition, unpinSlide } from '../slideLock';
 import i18n from '../i18n';
 import { isSfxEnabled, setSfxEnabled } from '../sfx';
+import { readUiMotionEnabled, writeUiMotionEnabled } from '../uiMotion';
 import {
   chooseDefaultOutputDisplay,
   clampSlideIndex,
@@ -55,6 +56,10 @@ interface AppState {
   setLastSelectedIndex: (idx: number | null) => void;
 
   // Projector State
+  /** Stable identity of the live slide; survives slide reordering. */
+  liveSlideId: string | null;
+  setLiveSlideId: (id: string | null) => void;
+  /** Derived index retained for index-based renderers and output assignments. */
   liveIndex: number;
   setLiveIndex: (idx: number | ((prev: number) => number)) => void;
   /** Broadcast lock: pins the live output to one slide (single lock). */
@@ -95,10 +100,21 @@ interface AppState {
   setLiveSaveRetentionMs: (ms: number) => void;
   liveSaveLastSaved: number | null;
   setLiveSaveLastSaved: (ts: number | null) => void;
+  liveSaveStatus: 'idle' | 'saving' | 'error';
+  setLiveSaveStatus: (status: 'idle' | 'saving' | 'error') => void;
 
   // UI sound effects (uisfx, minimal pack) — off by default
   uiSfxEnabled: boolean;
   setUiSfxEnabled: (enabled: boolean) => void;
+
+  // Purposeful UI motion — control window only, on by default
+  uiMotionEnabled: boolean;
+  setUiMotionEnabled: (enabled: boolean) => void;
+
+  serviceSectionsEnabled: boolean;
+  setServiceSectionsEnabled: (enabled: boolean) => void;
+  sessionSaveStatus: 'idle' | 'error';
+  setSessionSaveStatus: (status: 'idle' | 'error') => void;
 
   // UI State
   activeTab: 'presentations' | 'slides' | 'bible' | 'media' | 'hymns' | 'countdown' | 'screen' | 'loop' | 'calendar' | 'autosaves' | 'settings';
@@ -201,6 +217,8 @@ interface AppState {
   setSearchQuery: (query: string) => void;
   isCheatsheetOpen: boolean;
   setIsCheatsheetOpen: (open: boolean) => void;
+  isPrepCheckOpen: boolean;
+  setIsPrepCheckOpen: (open: boolean) => void;
   isUpdatesOpen: boolean;
   setIsUpdatesOpen: (open: boolean) => void;
   isRemoteOpen: boolean;
@@ -244,9 +262,18 @@ export const useStore = create<AppState>((set) => ({
       } else if (action.type === 'REDO' && nextUndoState.future.length < state.undoState.future.length) {
         toast = 'redoNotification';
       }
+
+      const restoring = action.type === 'RESET';
+      const livePosition = resolveLiveSlidePosition(
+        restoring ? nextUndoState.present.liveSlideId : state.liveSlideId,
+        restoring ? nextUndoState.present.liveIndex ?? 0 : state.liveIndex,
+        nextUndoState.present.slides,
+      );
       return {
         undoState: nextUndoState,
         presentation: nextUndoState.present,
+        liveSlideId: livePosition.slideId,
+        liveIndex: livePosition.index,
         toastMessage: toast,
         toastKey: toast ? Date.now() : state.toastKey,
       };
@@ -255,9 +282,12 @@ export const useStore = create<AppState>((set) => ({
     set((state) => {
       const next = applyProjectorPatch(state.presentation, patch);
       if (next === state.presentation) return {};
+      const livePosition = resolveLiveSlidePosition(state.liveSlideId, state.liveIndex, next.slides);
       return {
         undoState: { ...state.undoState, present: next },
         presentation: next,
+        liveSlideId: livePosition.slideId,
+        liveIndex: livePosition.index,
       };
     }),
 
@@ -273,13 +303,19 @@ export const useStore = create<AppState>((set) => ({
   lastSelectedIndex: null,
   setLastSelectedIndex: (idx) => set({ lastSelectedIndex: idx }),
 
+  liveSlideId: initialUndoState.present.slides[0].id,
   liveIndex: 0,
+  setLiveSlideId: (id) =>
+    set((state) => {
+      const livePosition = resolveLiveSlidePosition(id, state.liveIndex, state.presentation.slides);
+      return { liveSlideId: livePosition.slideId, liveIndex: livePosition.index };
+    }),
   setLiveIndex: (idx) =>
     set((state) => {
       const requested = typeof idx === 'function' ? idx(state.liveIndex) : idx;
-      // Broadcast lock: the live output always resolves to the locked slide,
-      // regardless of which navigation path requested a change.
-      return { liveIndex: resolveLiveIndexForLock(requested, state.presentation.slides) };
+      const requestedSlideId = state.presentation.slides[Math.floor(requested)]?.id;
+      const livePosition = resolveLiveSlidePosition(requestedSlideId, requested, state.presentation.slides);
+      return { liveSlideId: livePosition.slideId, liveIndex: livePosition.index };
     }),
 
   toggleSlideLock: (slideId) =>
@@ -288,26 +324,27 @@ export const useStore = create<AppState>((set) => ({
       const wasLocked = slides.find((s) => s.id === slideId)?.locked === true;
 
       if (wasLocked) {
-        // Unlock: clear the flag; the live index stays wherever it is.
         const nextSlides = unpinSlide(slides, slideId);
         const nextPresentation = { ...state.presentation, slides: nextSlides };
+        const livePosition = resolveLiveSlidePosition(state.liveSlideId, state.liveIndex, nextSlides);
         return {
           undoState: { ...state.undoState, present: nextPresentation },
           presentation: nextPresentation,
+          liveSlideId: livePosition.slideId,
+          liveIndex: livePosition.index,
         };
       }
 
       const pinned = pinSlide(slides, slideId);
       if (!pinned) return {};
 
-      // Locking a non-live slide puts it live immediately (single store update:
-      // lock flag + live index + selection move together).
       const idx = pinned.lockedIndex;
       const slide = pinned.slides[idx];
       const nextPresentation = { ...state.presentation, slides: pinned.slides };
       return {
         undoState: { ...state.undoState, present: nextPresentation },
         presentation: nextPresentation,
+        liveSlideId: slide.id,
         liveIndex: idx,
         selectedSlideId: slide.id,
         selectedSlideIds: new Set([slide.id]),
@@ -409,18 +446,24 @@ export const useStore = create<AppState>((set) => ({
 
   autoTrackToSlide: (target) =>
     set((state) => {
-      const slide = state.presentation.slides[target];
+      const requestedSlideId = state.presentation.slides[target]?.id;
+      const livePosition = resolveLiveSlidePosition(
+        requestedSlideId,
+        target,
+        state.presentation.slides,
+      );
+      const slide = state.presentation.slides[livePosition.index];
       return {
         instantTransition: true,
-        // Broadcast lock: navigation stays pinned to the locked slide.
-        liveIndex: resolveLiveIndexForLock(target, state.presentation.slides),
+        liveSlideId: livePosition.slideId,
+        liveIndex: livePosition.index,
         ...(slide
           ? {
               selectedSlideId: slide.id,
               selectedSlideIds: new Set([slide.id]),
             }
           : {}),
-        lastSelectedIndex: target,
+        lastSelectedIndex: livePosition.index,
       };
     }),
 
@@ -473,10 +516,26 @@ export const useStore = create<AppState>((set) => ({
   liveSaveLastSaved: null,
   setLiveSaveLastSaved: (ts) => set({ liveSaveLastSaved: ts }),
 
+  liveSaveStatus: 'idle',
+  setLiveSaveStatus: (status) => set({ liveSaveStatus: status }),
+
   uiSfxEnabled: isSfxEnabled(),
   setUiSfxEnabled: (enabled) => {
     setSfxEnabled(enabled);
     set({ uiSfxEnabled: enabled });
+  },
+
+  sessionSaveStatus: 'idle',
+  setSessionSaveStatus: (sessionSaveStatus) => set({ sessionSaveStatus }),
+  serviceSectionsEnabled: (() => { try { return localStorage.getItem('serviceSectionsEnabled') === '1'; } catch { return false; } })(),
+  setServiceSectionsEnabled: (enabled) => {
+    try { localStorage.setItem('serviceSectionsEnabled', enabled ? '1' : '0'); } catch { /* unavailable */ }
+    set({ serviceSectionsEnabled: enabled });
+  },
+  uiMotionEnabled: readUiMotionEnabled(),
+  setUiMotionEnabled: (enabled) => {
+    writeUiMotionEnabled(enabled);
+    set({ uiMotionEnabled: enabled });
   },
 
   activeTab: 'presentations',
@@ -596,6 +655,9 @@ export const useStore = create<AppState>((set) => ({
 
   isCheatsheetOpen: false,
   setIsCheatsheetOpen: (open) => set({ isCheatsheetOpen: open }),
+
+  isPrepCheckOpen: false,
+  setIsPrepCheckOpen: (open) => set({ isPrepCheckOpen: open }),
 
   isUpdatesOpen: false,
   setIsUpdatesOpen: (open) => set({ isUpdatesOpen: open }),

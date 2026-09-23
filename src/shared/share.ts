@@ -14,6 +14,8 @@ export interface ShareHistoryItem {
 
 /** The complete view a phone needs to render captions + translation. */
 export interface ShareSnapshot {
+  sessionId?: string | null;
+  uiMotionEnabled?: boolean;
   sessionStatus: ShareSessionStatus;
   translationEnabled: boolean;
   detectedLanguage: string | null;

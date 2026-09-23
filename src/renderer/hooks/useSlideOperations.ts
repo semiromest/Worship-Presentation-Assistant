@@ -1,3 +1,6 @@
+import { restoreLiveSession } from '../liveSession';
+import { moveSelectedInOrder } from '../../shared/serviceSections';
+import { useShallow } from 'zustand/react/shallow';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../state/useStore';
@@ -41,7 +44,7 @@ export function useSlideOperations() {
     selectedSlideIds,
     lastSelectedIndex,
     isProjectorWindowOpen,
-    liveIndex,
+    setLiveSlideId,
     presets,
     dispatchUndo,
     setSelectedSlideId,
@@ -55,7 +58,27 @@ export function useSlideOperations() {
     setPresets,
     setPresentationName,
     setSlideZoom,
-  } = useStore();
+  } = useStore(useShallow((s) => ({
+    presentation: s.presentation,
+    selectedSlideId: s.selectedSlideId,
+    selectedSlideIds: s.selectedSlideIds,
+    lastSelectedIndex: s.lastSelectedIndex,
+    isProjectorWindowOpen: s.isProjectorWindowOpen,
+    setLiveSlideId: s.setLiveSlideId,
+    presets: s.presets,
+    dispatchUndo: s.dispatchUndo,
+    setSelectedSlideId: s.setSelectedSlideId,
+    setSelectedSlideIds: s.setSelectedSlideIds,
+    setLastSelectedIndex: s.setLastSelectedIndex,
+    setLiveIndex: s.setLiveIndex,
+    setIsBlackout: s.setIsBlackout,
+    setActiveTab: s.setActiveTab,
+    setPanels: s.setPanels,
+    setSelectedPresetName: s.setSelectedPresetName,
+    setPresets: s.setPresets,
+    setPresentationName: s.setPresentationName,
+    setSlideZoom: s.setSlideZoom,
+  })));
 
   const addSlide = useCallback(() => {
     const newSlide = createSlide('text', { content: t('common.newSlideContent') });
@@ -98,21 +121,12 @@ export function useSlideOperations() {
     const [item] = slides.splice(idx, 1);
     slides.splice(target, 0, item);
 
-    if (isProjectorWindowOpen) {
-      setLiveIndex((current) => {
-        if (current === idx) return target;
-        if (direction === -1 && current >= target && current < idx) return current + 1;
-        if (direction === 1 && current > idx && current <= target) return current - 1;
-        return current;
-      });
-    }
-
     dispatchUndo({
       type: 'SET',
       payload: { ...presentation, slides },
     });
     playSfx('reorder');
-  }, [presentation, selectedSlideId, isProjectorWindowOpen, dispatchUndo, setLiveIndex]);
+  }, [presentation, selectedSlideId, dispatchUndo]);
 
   const reorderSlides = useCallback((fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex) return;
@@ -121,16 +135,13 @@ export function useSlideOperations() {
     slides.splice(toIndex, 0, moved);
 
     setSelectedSlideId(moved.id);
-    if (isProjectorWindowOpen) {
-      setLiveIndex(toIndex);
-    }
 
     dispatchUndo({
       type: 'SET',
       payload: { ...presentation, slides },
     });
     playSfx('reorder');
-  }, [presentation, selectedSlideId, isProjectorWindowOpen, dispatchUndo, setSelectedSlideId, setLiveIndex]);
+  }, [presentation, dispatchUndo, setSelectedSlideId]);
 
   const updateSlideContent = useCallback((content: string) => {
     const targetIds = selectedSlideIds.size > 0 ? selectedSlideIds : new Set([selectedSlideId]);
@@ -285,7 +296,13 @@ export function useSlideOperations() {
   const savePresentation = useCallback(async () => {
     // Zoom lives in separate UI state; re-attach it to the saved payload so
     // files keep carrying the zoom level (legacy field, read on open).
-    const payload = { ...presentation, zoom: useStore.getState().slideZoom };
+    const state = useStore.getState();
+    const payload = {
+      ...presentation,
+      zoom: state.slideZoom,
+      liveSlideId: state.liveSlideId ?? undefined,
+      liveIndex: state.liveIndex,
+    };
     const content = JSON.stringify(payload, null, 2);
     const path = await window.electronAPI?.saveFile?.(content);
     if (path) {
@@ -344,10 +361,23 @@ export function useSlideOperations() {
                 title: typeof s.group.title === 'string' ? s.group.title : '',
                 part: typeof s.group.part === 'number' ? s.group.part : 1,
                 parts: typeof s.group.parts === 'number' ? s.group.parts : 1,
+                color: typeof s.group.color === 'string' ? s.group.color : undefined,
+                author: typeof s.group.author === 'string' ? s.group.author : undefined,
               }
             : undefined,
           captions: s.captions && typeof s.captions === 'object' ? { ...s.captions } : undefined,
           locked: s.locked === true,
+          partsMode: s.partsMode === true,
+          parts: Array.isArray(s.parts) ? s.parts.filter((part: unknown) => typeof part === 'string') : undefined,
+          activePart: typeof s.activePart === 'number' ? s.activePart : 0,
+          items: Array.isArray(s.items) ? s.items : undefined,
+          loopTransition: s.loopTransition,
+          section: s.section && typeof s.section.id === 'string' && typeof s.section.title === 'string' ? s.section : undefined,
+          operatorNotes: typeof s.operatorNotes === 'string' ? s.operatorNotes : undefined,
+          gridEnabled: s.gridEnabled === true,
+          gridSize: typeof s.gridSize === 'number' ? s.gridSize : undefined,
+          gridColor: typeof s.gridColor === 'string' ? s.gridColor : undefined,
+          snapEnabled: s.snapEnabled === true,
           styles: { ...DEFAULT_STYLES, ...(s.styles ?? {}) },
         }))
       : [createSlide('text', { content: t('common.newSlideContent') })];
@@ -360,21 +390,20 @@ export function useSlideOperations() {
         slides,
         zoom: typeof data.zoom === 'number' ? data.zoom : 1,
         transition: data.transition ?? { ...DEFAULT__TRANSITION },
+        liveSlideId: typeof data.liveSlideId === 'string' ? data.liveSlideId : undefined,
+        liveIndex: typeof data.liveIndex === 'number' ? data.liveIndex : undefined,
       },
     });
     setSelectedSlideId(slides[0].id);
-    // Restore zoom level
     if (typeof data.zoom === 'number') {
       setSlideZoom(data.zoom);
     }
-    // Reset live position on open so it never points to a stale/out-of-range index.
-    setLiveIndex(0);
     playSfx('open');
-  }, [t, dispatchUndo, setSelectedSlideId, setSlideZoom, setLiveIndex]);
+  }, [t, dispatchUndo, setSelectedSlideId, setSlideZoom]);
 
   const applyPreset = useCallback((preset: Preset) => {
     const presentationWithId = {
-      ...preset.presentation,
+      ...(isLiveSavePreset(preset.name) ? restoreLiveSession(preset.presentation, preset.createdAt) : preset.presentation),
       id: preset.presentation.id || crypto.randomUUID(),
     };
     dispatchUndo({ type: 'RESET', payload: presentationWithId });
@@ -385,18 +414,18 @@ export function useSlideOperations() {
     if (typeof preset.presentation.zoom === 'number') {
       setSlideZoom(preset.presentation.zoom);
     }
-    // Resume the live slide position recorded in the backup (clamped to the
-    // current slide count); falls back to the first slide when unavailable.
-    const slidesCount = presentationWithId.slides.length;
-    const savedLiveIndex =
-      typeof presentationWithId.liveIndex === 'number'
-        ? Math.min(Math.max(0, Math.floor(presentationWithId.liveIndex)), Math.max(0, slidesCount - 1))
-        : 0;
-    setLiveIndex(savedLiveIndex);
+    const savedLiveSlideId = presentationWithId.liveSlideId
+      ?? presentationWithId.slides[
+        typeof presentationWithId.liveIndex === 'number'
+          ? Math.min(Math.max(0, Math.floor(presentationWithId.liveIndex)), Math.max(0, presentationWithId.slides.length - 1))
+          : 0
+      ]?.id
+      ?? null;
+    setLiveSlideId(savedLiveSlideId);
     setSelectedPresetName(preset.name);
     setActiveTab('slides');
     playSfx('open');
-  }, [dispatchUndo, setPresentationName, setSelectedSlideId, setSlideZoom, setLiveIndex, setSelectedPresetName, setActiveTab]);
+  }, [dispatchUndo, setPresentationName, setSelectedSlideId, setSlideZoom, setLiveSlideId, setSelectedPresetName, setActiveTab]);
 
   const openSavedPresentationByName = useCallback(async (presentationName: string) => {
     const loaded = await window.electronAPI?.loadPresets?.(getLiveSaveRetention());
@@ -444,20 +473,18 @@ export function useSlideOperations() {
     // Read the latest state on each call so chained appends (e.g. bulk hymn inserts) don't stick to a stale closure.
     const current = useStore.getState();
     const slides = [...current.presentation.slides, ...newSlides];
-    const newIndex = current.presentation.slides.length;
-    // Only an explicit goLive flag sends appended content live; otherwise the slide is just selected (Enter goes live).
-    if (goLive) {
-      setLiveIndex(newIndex);
-    }
 
     dispatchUndo({
       type: 'SET',
       payload: { ...current.presentation, slides },
     });
+    if (goLive) {
+      setLiveSlideId(newSlides[0].id);
+    }
     setSelectedSlideId(newSlides[0].id);
     setActiveTab('slides');
     playSfx('success');
-  }, [dispatchUndo, setSelectedSlideId, setLiveIndex, setActiveTab]);
+  }, [dispatchUndo, setSelectedSlideId, setLiveSlideId, setActiveTab]);
 
   const handleSendToLive = useCallback((content: string | string[], options?: { groupTitle?: string; goLive?: boolean }) => {
     if (Array.isArray(content)) {
@@ -541,7 +568,7 @@ export function useSlideOperations() {
 
   // Adds a QR slide so people can scan it from the projected screen. The URL
   // remains encoded in the QR itself and is intentionally not printed.
-  const handleQrSlideAdd = useCallback((qrDataUrl: string, _url: string) => {
+  const handleQrSlideAdd = useCallback((qrDataUrl: string) => {
     const qrSlide = createSlide('text', {
       content: '',
       styles: {
@@ -815,17 +842,6 @@ export function useSlideOperations() {
       cloneIds.push(cloneId);
     });
 
-    let nextLiveIndex = liveIndex;
-    if (isProjectorWindowOpen) {
-      const liveSlide = presentation.slides[liveIndex];
-      if (liveSlide && selectedSlideIds.has(liveSlide.id)) {
-        nextLiveIndex = slides.findIndex((s) => s.id === cloneIds[selectedIndices.indexOf(liveIndex)]);
-      } else {
-        const insertionsBefore = selectedIndices.filter((i) => i < liveIndex).length;
-        nextLiveIndex = liveIndex + insertionsBefore;
-      }
-    }
-
     dispatchUndo({
       type: 'SET',
       payload: { ...presentation, slides },
@@ -834,36 +850,13 @@ export function useSlideOperations() {
     setSelectedSlideIds(new Set(cloneIds));
     setLastSelectedIndex(slides.findIndex((s) => s.id === cloneIds[cloneIds.length - 1]));
     setSelectedSlideId(cloneIds[0]);
-    if (isProjectorWindowOpen) setLiveIndex(nextLiveIndex);
-  }, [presentation, selectedSlideIds, liveIndex, isProjectorWindowOpen, dispatchUndo, setSelectedSlideIds, setLastSelectedIndex, setSelectedSlideId, setLiveIndex]);
+  }, [presentation, selectedSlideIds, dispatchUndo, setSelectedSlideIds, setLastSelectedIndex, setSelectedSlideId]);
 
   const moveSelectedSlides = useCallback((direction: -1 | 1) => {
     if (selectedSlideIds.size === 0) return;
 
-    const selectedIndices = presentation.slides
-      .map((s, i) => (selectedSlideIds.has(s.id) ? i : -1))
-      .filter((i) => i !== -1)
-      .sort((a, b) => (direction === -1 ? b - a : a - b));
-
-    if (selectedIndices.length === 0) return;
-
-    const firstIdx = selectedIndices[0];
-    const lastIdx = selectedIndices[selectedIndices.length - 1];
-    const target = direction === -1 ? firstIdx - 1 : lastIdx + 1;
-
-    if (target < 0 || target >= presentation.slides.length) return;
-
-    let slides = [...presentation.slides];
-    const movedSlides: Slide[] = [];
-
-    for (const idx of selectedIndices) {
-      movedSlides.push(slides[idx]);
-    }
-
-    slides = slides.filter((_, i) => !selectedSlideIds.has(slides[i].id));
-
-    const insertIdx = target;
-    slides.splice(insertIdx, 0, ...movedSlides);
+    const slides = moveSelectedInOrder(presentation.slides, selectedSlideIds, direction);
+    if (slides === presentation.slides) return;
 
     dispatchUndo({
       type: 'SET',

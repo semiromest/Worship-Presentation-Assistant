@@ -1,3 +1,4 @@
+import type { CaptionSnapshot } from './captions';
 // ─── Soniox real-time STT + translation: shared types ───────────────────────
 // Used by the main process (sonioxService) and the renderer (store + UI).
 // The API key itself is NEVER part of these types.
@@ -40,6 +41,7 @@ export interface SttSessionConfig {
 }
 
 export type SttEvent =
+  | { type: 'captions'; sessionId: string | null; captions: CaptionSnapshot }
   | { type: 'status'; sessionId: string | null; status: SttSessionStatus; config?: SttSessionConfig | null }
   | { type: 'result'; sessionId: string; targetLanguage?: string; tokens: SttToken[] }
   | { type: 'endpoint'; sessionId: string }
@@ -65,6 +67,7 @@ export function isAutoSttLanguage(code: string): boolean {
 }
 
 export interface SttStatus {
+  captions?: CaptionSnapshot;
   hasKey: boolean;
   keyHint: string | null;
   sessionStatus: SttSessionStatus;

@@ -101,6 +101,8 @@ function SkeletonRow() {
 export default function DrivePanel() {
   const { t } = useTranslation();
   const presentation = useStore((s) => s.presentation);
+  const liveSlideId = useStore((s) => s.liveSlideId);
+  const liveIndex = useStore((s) => s.liveIndex);
   const driveSignedIn = useStore((s) => s.driveSignedIn);
   const driveEmail = useStore((s) => s.driveEmail);
   const driveFiles = useStore((s) => s.driveFiles);
@@ -206,7 +208,7 @@ const [loading, setLoading] = useState(false);
     setUploading(true);
     clearFeedback();
     try {
-      const content = JSON.stringify({ ...presentation, name: finalName }, null, 2);
+      const content = JSON.stringify({ ...presentation, name: finalName, liveSlideId: liveSlideId ?? undefined, liveIndex }, null, 2);
       const result = await window.electronAPI.driveSavePresentation(content, finalName);
       if ('ok' in result && result.ok) {
         showSuccess(t('drive.uploadSuccess'));

@@ -5,6 +5,7 @@ import './index.css';
 import './i18n';
 import { initRendererPerf, rendererPerf } from './perf';
 import { useStore } from './state/useStore';
+import UiMotionProvider from './components/UiMotionProvider';
 
 // Phase 0: renderer instrumentation (store timing, long tasks, window.__perf).
 initRendererPerf(useStore);
@@ -25,10 +26,10 @@ function onRenderCallback(
 
 const app = rendererPerf.enabled ? (
   <Profiler id="App" onRender={onRenderCallback}>
-    <App />
+    <UiMotionProvider><App /></UiMotionProvider>
   </Profiler>
 ) : (
-  <App />
+  <UiMotionProvider><App /></UiMotionProvider>
 );
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Globe, Zap, Settings2, Save, Trash2, DatabaseBackup, Volume2, Mic, KeyRound, Languages, Check, Loader2, Music } from 'lucide-react';
+import { Globe, Zap, Settings2, Save, Trash2, DatabaseBackup, Volume2, Mic, KeyRound, Languages, Check, Loader2, Music, Sparkles } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { useUpdaterStore } from '../state/useUpdaterStore';
 import { WatermarkSettingsPanel } from './WatermarkSettingsPanel';
@@ -8,9 +8,12 @@ import { useSttStore, refreshSttStatus } from '../state/useSttStore';
 import { AUTO_STT_LANGUAGE, STT_LANGUAGES } from '../../shared/stt';
 import { cn } from '../utils';
 import { DEFAULT_LIVE_SAVE_RETENTION_MS, isLiveSavePreset, LIVE_SAVE_RETENTION_OPTIONS, getLiveSaveRetention } from '../hooks/useLiveSave';
+import SettingSwitch from './SettingSwitch';
 
 export default function SettingsTab() {
   const { t, i18n } = useTranslation();
+  const sectionsEnabled = useStore(s => s.serviceSectionsEnabled);
+  const setSectionsEnabled = useStore(s => s.setServiceSectionsEnabled);
   const autoGoLive = useStore((s) => s.autoGoLive);
   const setAutoGoLive = useStore((s) => s.setAutoGoLive);
   const setIsUpdatesOpen = useStore((s) => s.setIsUpdatesOpen);
@@ -23,6 +26,8 @@ export default function SettingsTab() {
   const setPresets = useStore((s) => s.setPresets);
   const uiSfxEnabled = useStore((s) => s.uiSfxEnabled);
   const setUiSfxEnabled = useStore((s) => s.setUiSfxEnabled);
+  const uiMotionEnabled = useStore((s) => s.uiMotionEnabled);
+  const setUiMotionEnabled = useStore((s) => s.setUiMotionEnabled);
   const updaterStatus = useUpdaterStore((s) => s.status);
 
   // Hymn author position & size
@@ -137,26 +142,14 @@ export default function SettingsTab() {
                 <p className="text-[11px] text-white/45">{t('common.autoGoLiveHint')}</p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setAutoGoLive(!autoGoLive)}
-              aria-pressed={autoGoLive}
-              aria-label={t('common.autoGoLive')}
-              className={cn(
-                'relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.96]',
-                autoGoLive ? 'bg-emerald-500' : 'bg-white/15'
-              )}
-            >
-              <span
-                className={cn(
-                  'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
-                  autoGoLive ? 'translate-x-6' : 'translate-x-1'
-                )}
-              />
-            </button>
+            <SettingSwitch checked={autoGoLive} onCheckedChange={setAutoGoLive} label={t('common.autoGoLive')} />
           </div>
         </section>
 
+        <section className="rounded-xl border border-white/10 bg-surface-raised p-4 flex items-center justify-between gap-4">
+          <div><h3 className="text-sm font-semibold">{t('sections.title')}</h3><p className="text-[11px] text-white/45">{t('sections.description')}</p></div>
+          <SettingSwitch checked={sectionsEnabled} onCheckedChange={setSectionsEnabled} label={t('sections.title')} />
+        </section>
         {/* Sound Effects */}
         <section className="rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.soundEffects')}>
           <div className="flex items-center justify-between gap-4">
@@ -167,23 +160,26 @@ export default function SettingsTab() {
                 <p className="text-[11px] text-white/45">{t('settings.soundEffectsDesc')}</p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setUiSfxEnabled(!uiSfxEnabled)}
-              aria-pressed={uiSfxEnabled}
-              aria-label={t('settings.soundEffects')}
-              className={cn(
-                'relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.96]',
-                uiSfxEnabled ? 'bg-emerald-500' : 'bg-white/15'
-              )}
-            >
-              <span
-                className={cn(
-                  'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
-                  uiSfxEnabled ? 'translate-x-6' : 'translate-x-1'
-                )}
-              />
-            </button>
+            <SettingSwitch checked={uiSfxEnabled} onCheckedChange={setUiSfxEnabled} label={t('settings.soundEffects')} />
+          </div>
+        </section>
+
+        {/* Purposeful UI motion */}
+        <section className="rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.uiMotion')}>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 min-w-0">
+              <Sparkles className={cn('w-4 h-4 shrink-0', uiMotionEnabled ? 'text-violet-300' : 'text-white/35')} aria-hidden="true" />
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold">{t('settings.uiMotion')}</h3>
+                <p className="text-[11px] text-white/45">{t('settings.uiMotionDesc')}</p>
+              </div>
+            </div>
+            <SettingSwitch
+              checked={uiMotionEnabled}
+              onCheckedChange={setUiMotionEnabled}
+              label={t('settings.uiMotion')}
+              activeClassName="bg-violet-500"
+            />
           </div>
         </section>
 
@@ -436,7 +432,7 @@ export default function SettingsTab() {
             onChange={(e) => {
               const v = e.target.value;
               setHymnAuthorPosition(v);
-              try { localStorage.setItem('hymnAuthorPosition', v); } catch {}
+              try { localStorage.setItem('hymnAuthorPosition', v); } catch { /* storage unavailable */ }
             }}
             aria-label={t('common.hymnsAuthorPosition')}
             className="w-full sm:w-auto bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/40 transition-colors"
@@ -467,7 +463,7 @@ export default function SettingsTab() {
               onChange={(e) => {
                 const v = Number(e.target.value);
                 setHymnAuthorSize(v);
-                try { localStorage.setItem('hymnAuthorSize', String(v)); } catch {}
+                try { localStorage.setItem('hymnAuthorSize', String(v)); } catch { /* storage unavailable */ }
               }}
               aria-label={t('common.hymnsAuthorSize')}
               className="w-full h-1.5 accent-amber-400 cursor-pointer"

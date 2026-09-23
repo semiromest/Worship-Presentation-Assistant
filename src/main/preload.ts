@@ -61,6 +61,8 @@ contextBridge.exposeInMainWorld('electronAPI', wrapApi({
   openProjector: (displayId: string, initialData?: any) => ipcRenderer.invoke('open-projector', displayId, initialData),
   closeProjector: (displayId: string) => ipcRenderer.invoke('close-projector', displayId),
   updateProjector: (data: any) => ipcRenderer.invoke('update-projector', data),
+  checkMediaResources: (urls: string[]) => ipcRenderer.invoke('check-media-resources', urls),
+  cacheGoogleFont: (family: string) => ipcRenderer.invoke('cache-google-font', family),
   getProjectorStatus: () => ipcRenderer.invoke('get-projector-status'),
   importBibleXml: (filePath?: string) => ipcRenderer.invoke('import-bible-xml', filePath),
   saveBibleData: (id: string, data: unknown) => ipcRenderer.invoke('save-bible-data', id, data),
@@ -88,6 +90,8 @@ contextBridge.exposeInMainWorld('electronAPI', wrapApi({
   updateAllSlidePreviews: (previews: any) => ipcRenderer.invoke('update-all-slide-previews', previews),
   updateSlidePreviewsDelta: (updates: any) => ipcRenderer.invoke('update-slide-previews-delta', updates),
   sendSlidePreview: (dataUrl: string) => ipcRenderer.invoke('send-slide-preview', dataUrl),
+  sendRemoteNotice: (notice: { text: string; tone?: 'ok' | 'error' }) =>
+    ipcRenderer.invoke('send-remote-notice', notice),
   generateThumbnail: (slide: any) => ipcRenderer.invoke('generate-thumbnail', slide),
   showConfirmDialog: (options: {
     message: string;
@@ -198,6 +202,7 @@ contextBridge.exposeInMainWorld('electronAPI', wrapApi({
   sttStart: (config: SttConfig) => ipcRenderer.invoke('stt:start', config),
   sttSendAudio: (chunk: ArrayBuffer | Uint8Array) => ipcRenderer.send('stt:audio', chunk),
   sttStop: () => ipcRenderer.invoke('stt:stop'),
+  sttClear: () => ipcRenderer.invoke('stt:clear'),
 
   onSttEvent: (callback: (event: any) => void) => {
     const subscription = (_event: any, data: any) => callback(data);

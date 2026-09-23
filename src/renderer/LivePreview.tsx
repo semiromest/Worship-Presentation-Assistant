@@ -1,5 +1,7 @@
+import { loadGoogleFont, slideFonts } from './fontLoader';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Slide } from './types';
+import { getSlideDisplayContent } from '../shared/slideContent';
 import { cn } from './utils';
 import { SLIDE_REFERENCE_WIDTH, ANIM_MAP } from './constants';
 import CountdownRenderer from './CountdownRenderer';
@@ -199,6 +201,7 @@ function LoopVideoPlayer({ mediaUrl, isActive = true, preload = 'auto', volume =
 }
 
 export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = false, isActive = true }: LivePreviewProps) => {
+  useEffect(() => { if (slide) slideFonts(slide).forEach(family => { void loadGoogleFont(family); }); }, [slide]);
   const outerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0, scale: 1 });
   const wmConfig = useWatermarkStore((s) => s.config);
@@ -459,9 +462,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
     }
 
     const styles = (slide.styles || {}) as Record<string, any>;
-    const displayContent = slide.partsMode && slide.parts?.length
-      ? slide.parts[slide.activePart ?? 0]
-      : slide.content;
+    const displayContent = getSlideDisplayContent(slide);
     const hymnAuthor = slide.group?.author?.trim();
     const fontSize = styles.fontSize || 48;
     const fontWeight = (styles as any).fontWeight || 'bold';
@@ -504,7 +505,8 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
             fontFamily: (styles as any).fontFamily || 'inherit',
             lineHeight: (styles as any).lineHeight || 1.3,
             width: '100%',
-            padding: `${20 * scale}px`,
+            boxSizing: 'border-box',
+            padding: `${54 * scale}px ${96 * scale}px`,
           }}
         >
           {displayContent}

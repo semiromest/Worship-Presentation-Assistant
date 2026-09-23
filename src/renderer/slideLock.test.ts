@@ -4,6 +4,7 @@ import type { Slide } from './types';
 import {
   findLockedSlideIndex,
   resolveLiveIndexForLock,
+  resolveLiveSlidePosition,
   pinSlide,
   unpinSlide,
 } from './slideLock';
@@ -33,6 +34,23 @@ test('resolveLiveIndexForLock: with lock always resolves to the locked slide', (
   assert.equal(resolveLiveIndexForLock(0, slides), 1);
   assert.equal(resolveLiveIndexForLock(2, slides), 1);
   assert.equal(resolveLiveIndexForLock(99, slides), 1);
+});
+
+test('resolveLiveSlidePosition: follows the same slide through reordering', () => {
+  const original = [slide('a'), slide('b'), slide('c')];
+  const reordered = [original[2], original[0], original[1]];
+  assert.deepEqual(resolveLiveSlidePosition('c', 2, reordered), { slideId: 'c', index: 0 });
+});
+
+test('resolveLiveSlidePosition: falls back to the legacy index when no identity exists', () => {
+  const slides = [slide('a'), slide('b'), slide('c')];
+  assert.deepEqual(resolveLiveSlidePosition(undefined, 2, slides), { slideId: 'c', index: 2 });
+  assert.deepEqual(resolveLiveSlidePosition('missing', 99, slides), { slideId: 'c', index: 2 });
+});
+
+test('resolveLiveSlidePosition: lock overrides a requested identity', () => {
+  const slides = [slide('a'), slide('b', true), slide('c')];
+  assert.deepEqual(resolveLiveSlidePosition('c', 2, slides), { slideId: 'b', index: 1 });
 });
 
 test('pinSlide: locks the target slide and clears any previous lock', () => {

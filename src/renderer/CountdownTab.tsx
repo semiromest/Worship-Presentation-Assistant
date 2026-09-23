@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Play, Pause, Square, RotateCcw, PlusSquare } from 'lucide-react';
+import { Play, Pause, RotateCcw, PlusSquare } from 'lucide-react';
 
 interface CountdownTabProps {
   onAddCountdownToPresentation?: (minutes: number, seconds: number, styles?: any) => void;
@@ -52,6 +52,7 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
   const [seconds, setSeconds] = useState(0);
   const [timeLeft, setTimeLeft] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
   const [selectedThemeId, setSelectedThemeId] = useState('dark');
 
   // startTime stored in ref — interval not dependent on timeLeft
@@ -94,6 +95,7 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
     const total = minutes * 60 + seconds;
     if (total <= 0) return;
     totalSecondsRef.current = total;
+    setHasStarted(true);
     setTimeLeft(total);
     setIsRunning(true);
   }, [minutes, seconds]);
@@ -112,6 +114,7 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
   }, [timeLeft]);
 
   const resetCountdown = useCallback(() => {
+    setHasStarted(false);
     setIsRunning(false);
     setTimeLeft(0);
     totalSecondsRef.current = 0;
@@ -126,8 +129,8 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
     setSeconds(clamp(parseInt(e.target.value) || 0, 0, 59));
   }, []);
 
-  const isStarted = timeLeft > 0;
-  const displayTime = isStarted ? timeLeft : minutes * 60 + seconds;
+  const isStarted = hasStarted;
+  const displayTime = hasStarted ? timeLeft : minutes * 60 + seconds;
 
   return (
     <div className="p-6 space-y-6">
@@ -140,8 +143,10 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
             const isMin = key === 'minutes';
             return (
               <div key={key}>
-                <label className="block text-sm font-medium text-white mb-1">{isMin ? t('common.countdownMinutes') : t('common.countdownSeconds')}</label>
+                <label htmlFor={`countdown-${key}`} className="block text-sm font-medium text-white mb-1">{isMin ? t('common.countdownMinutes') : t('common.countdownSeconds')}</label>
                 <input
+                  id={`countdown-${key}`}
+                  aria-describedby="countdown-range-hint"
                   type="number"
                   min="0"
                   max={isMin ? 99 : 59}
@@ -154,6 +159,8 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
             );
           })}
         </div>
+
+        <p id="countdown-range-hint" className="text-xs text-white/60">{t('common.countdownRangeHint')}</p>
 
         {/* Counter display */}
         <div className="text-center">
@@ -181,7 +188,7 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
               <Pause size={20} />
               <span>{t('common.countdownPause')}</span>
             </button>
-          ) : (
+          ) : timeLeft > 0 ? (
             <button
               onClick={resumeCountdown}
               className="flex items-center space-x-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
@@ -189,7 +196,7 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
               <Play size={20} />
               <span>{t('common.countdownResume')}</span>
             </button>
-          )}
+          ) : <span role="status" className="self-center text-emerald-300">{t('common.countdownFinished')}</span>}
 
           <button
             onClick={resetCountdown}

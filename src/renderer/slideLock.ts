@@ -13,6 +13,11 @@
 
 import type { Slide } from './types';
 
+export interface LiveSlidePosition {
+  slideId: string | null;
+  index: number;
+}
+
 /** Returns the index of the single locked slide, or -1 when none is locked. */
 export function findLockedSlideIndex(slides: Slide[]): number {
   for (let i = 0; i < slides.length; i++) {
@@ -22,14 +27,40 @@ export function findLockedSlideIndex(slides: Slide[]): number {
 }
 
 /**
- * Central rule: where should the live output point?
- * - With an active lock, always the locked slide (its position may shift as
- *   the deck is reordered; the lock follows the slide identity).
- * - Without a lock, the requested index unchanged.
+ * Resolves the live output by slide identity, with the broadcast lock taking
+ * precedence. The numeric index is derived only for legacy consumers.
+ */
+export function resolveLiveSlidePosition(
+  requestedSlideId: string | null | undefined,
+  fallbackIndex: number,
+  slides: Slide[],
+): LiveSlidePosition {
+  if (slides.length === 0) return { slideId: null, index: 0 };
+
+  const lockedIndex = findLockedSlideIndex(slides);
+  if (lockedIndex >= 0) {
+    return { slideId: slides[lockedIndex].id, index: lockedIndex };
+  }
+
+  const requestedIndex = requestedSlideId
+    ? slides.findIndex((slide) => slide.id === requestedSlideId)
+    : -1;
+  if (requestedIndex >= 0) {
+    return { slideId: slides[requestedIndex].id, index: requestedIndex };
+  }
+
+  const safeFallback = Number.isFinite(fallbackIndex) ? Math.floor(fallbackIndex) : 0;
+  const index = Math.min(Math.max(0, safeFallback), slides.length - 1);
+  return { slideId: slides[index].id, index };
+}
+
+/**
+ * Legacy index-only wrapper. New code should use resolveLiveSlidePosition so a
+ * live slide stays stable when the deck is reordered.
  */
 export function resolveLiveIndexForLock(requested: number, slides: Slide[]): number {
-  const lockedIdx = findLockedSlideIndex(slides);
-  return lockedIdx >= 0 ? lockedIdx : requested;
+  const lockedIndex = findLockedSlideIndex(slides);
+  return lockedIndex >= 0 ? lockedIndex : requested;
 }
 
 /**

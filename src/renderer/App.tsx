@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useCallback } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import * as m from 'motion/react-m';
 import {
   Layers,
   Layout,
@@ -13,21 +14,25 @@ import {
   Settings,
 } from 'lucide-react';
 
-import ScriptureBrowser from './ScriptureBrowser';
-import MediaLoopTab from './MediaLoopTab';
-import CountdownTab from './CountdownTab';
-import ScreenCaptureTab from './ScreenCaptureTab';
-import CalendarTab from './CalendarTab';
-import PresentationsTab from './PresentationsTab';
-import HymnsTab from './HymnsTab';
 import SlideEditor from './SlideEditor';
-import SettingsTab from './components/SettingsTab';
 import StageDisplay from './components/StageDisplay';
 import { AnimatedPreview } from './AnimatedPreview';
+
+const loadScriptureBrowser = () => import('./ScriptureBrowser');
+const ScriptureBrowser = lazy(loadScriptureBrowser);
+const MediaLoopTab = lazy(() => import('./MediaLoopTab'));
+const CountdownTab = lazy(() => import('./CountdownTab'));
+const ScreenCaptureTab = lazy(() => import('./ScreenCaptureTab'));
+const CalendarTab = lazy(() => import('./CalendarTab'));
+const PresentationsTab = lazy(() => import('./PresentationsTab'));
+const HymnsTab = lazy(() => import('./HymnsTab'));
+const SettingsTab = lazy(() => import('./components/SettingsTab'));
 
 import { IS_PROJECTOR_MODE, DEFAULT__TRANSITION } from './constants';
 import { cn } from './utils';
 import { initSfx } from './sfx';
+import { uiMotion } from './uiMotion';
+import { useUiMotionEnabled } from './hooks/useUiMotionEnabled';
 
 // State & Hooks
 import { useStore } from './state/useStore';
@@ -49,6 +54,7 @@ import Toolbar from './components/Toolbar';
 import SlideGrid from './components/SlideGrid';
 import RightPanel from './components/RightPanel';
 import CheatsheetModal from './components/CheatsheetModal';
+import PreparationCheckModal from './components/PreparationCheckModal';
 import UpdatesModal from './components/UpdatesModal';
 import RemoteControlModal from './components/RemoteControlModal';
 import LiveShareModal from './components/LiveShareModal';
@@ -110,6 +116,8 @@ export default function App() {
   const isSttPanelOpen = useStore((s) => s.isSttPanelOpen);
   const setIsSttPanelOpen = useStore((s) => s.setIsSttPanelOpen);
   const outputMode = useStore((s) => s.outputMode);
+  const uiMotionEnabled = useUiMotionEnabled();
+  const [shouldMountBible, setShouldMountBible] = useState(false);
   // Live captions session (mic on / connecting / connected). Read at App level
   // only for layout decisions; the console and session bar subscribe to text.
   const sttSessionActive = useSttStore((s) => s.micActive || s.status !== 'idle');
@@ -259,6 +267,35 @@ export default function App() {
     initSfx();
   }, []);
 
+  // Warm the Bible screen after the app shell becomes idle. Its code and saved
+  // data are then ready before the first click, while the visible startup work
+  // remains the priority. Once mounted, keep it alive to preserve navigation
+  // state and avoid reloading the full Bible on every tab switch.
+  useEffect(() => {
+    if (IS_PROJECTOR_MODE || shouldMountBible) return;
+
+    let idleHandle: number | null = null;
+    let timeoutHandle: number | null = null;
+    const warmBible = () => {
+      void loadScriptureBrowser().then(() => setShouldMountBible(true));
+    };
+
+    if (activeTab === 'bible') {
+      warmBible();
+    } else if (typeof window.requestIdleCallback === 'function') {
+      idleHandle = window.requestIdleCallback(warmBible, { timeout: 2000 });
+    } else {
+      timeoutHandle = window.setTimeout(warmBible, 800);
+    }
+
+    return () => {
+      if (idleHandle != null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleHandle);
+      }
+      if (timeoutHandle != null) window.clearTimeout(timeoutHandle);
+    };
+  }, [activeTab, shouldMountBible]);
+
   // ─── Effect: Dropdown Click-Outside ───────────────────────────────────────
   useEffect(() => {
     if (!panels.styles && !activeColorPicker) return;
@@ -348,14 +385,21 @@ export default function App() {
             aria-label={t(titleKey)}
             aria-current={activeTab === id ? 'page' : undefined}
             className={cn(
-              'w-[60px] min-h-[52px] flex flex-col items-center justify-center gap-1 rounded-xl transition-[background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none px-1 active:scale-[0.96]',
+              'relative isolate overflow-hidden w-[60px] min-h-[52px] flex flex-col items-center justify-center gap-1 rounded-xl transition-[color,box-shadow] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none px-1 active:scale-[0.96]',
               activeTab === id
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
+                ? 'text-white shadow-lg shadow-blue-900/40'
                 : 'text-white/60 hover:bg-white/5 hover:text-white'
             )}
           >
-            <Icon className="w-5 h-5 shrink-0" aria-hidden="true" />
-            <span className="text-[10px] font-semibold leading-tight text-white/65 max-w-[56px] truncate text-center text-balance">
+            {activeTab === id && (
+              <m.span
+                layoutId="active-sidebar-tab"
+                className="absolute inset-0 -z-10 rounded-xl bg-blue-600"
+                transition={{ duration: uiMotionEnabled ? uiMotion.duration.standard : 0, ease: uiMotion.ease }}
+              />
+            )}
+            <Icon className="relative z-10 w-5 h-5 shrink-0" aria-hidden="true" />
+            <span className="relative z-10 text-[10px] font-semibold leading-tight text-white/65 max-w-[56px] truncate text-center text-balance">
               {t(titleKey)}
             </span>
           </button>
@@ -377,8 +421,23 @@ export default function App() {
         <main id="main-content" className="flex-1 overflow-hidden">
           {/* Screen-reader-only page title — provides h1 for every tab view */}
           <h1 className="sr-only">{t(SIDEBAR_TABS.find((tab) => tab.id === activeTab)?.titleKey ?? 'nav.slides')}</h1>
+            {activeTab !== 'bible' && <m.div
+              key={activeTab}
+              className="h-full"
+              initial={uiMotionEnabled ? { opacity: 0, y: uiMotion.distance } : false}
+              animate={{ opacity: 1, y: 0 }}
+              exit={uiMotionEnabled ? { opacity: 0, y: -4 } : { opacity: 1, y: 0 }}
+              transition={{ duration: uiMotionEnabled ? uiMotion.duration.standard : 0, ease: uiMotion.ease }}
+            >
+            <Suspense
+              fallback={
+                <div className="h-full grid place-items-center text-sm text-white/50" role="status">
+                  {t('common.loading')}
+                </div>
+              }
+            >
           {activeTab === 'presentations' && (
-            <div className="h-full gp-slide-enter">
+            <div className="h-full">
               <PresentationsTab
                 presentation={presentation}
                 presets={presets}
@@ -395,7 +454,7 @@ export default function App() {
           )}
 
           {activeTab === 'slides' && (
-            <div className="h-full gp-slide-enter">
+            <div className="h-full">
               <div className="h-full flex flex-col lg:flex-row">
                 <div className="flex-1 min-w-0 overflow-hidden">
                   <SlideGrid
@@ -406,8 +465,7 @@ export default function App() {
                   />
                 </div>
 
-                {isRightPanelOpen ? (
-                  <RightPanel
+                <RightPanel
                     addSlide={addSlide}
                     removeSlide={removeSlide}
                     moveSelectedSlide={moveSelectedSlide}
@@ -426,28 +484,31 @@ export default function App() {
                     updateLoopItems={updateLoopItems}
                     updateSlideProperty={updateSlideProperty}
                     onClose={() => setIsRightPanelOpen(false)}
-                  />
-                ) : (
-                  <button
-                    onClick={() => setIsRightPanelOpen(true)}
-                    className="hidden lg:flex items-center justify-center w-6 flex-shrink-0 border-l border-white/10 bg-surface hover:bg-surface-raised transition-colors cursor-pointer group"
-                    title={t('common.panelOpen')}
-                    aria-label={t('common.panelOpen')}
-                  >
-                    <PanelRightOpen className="w-4 h-4 text-white/40 group-hover:text-white/70 transition-colors" />
-                  </button>
-                )}
+                />
+                <button
+                  data-testid="right-panel-opener"
+                  onClick={() => setIsRightPanelOpen(true)}
+                  tabIndex={isRightPanelOpen ? -1 : 0}
+                  aria-hidden={isRightPanelOpen}
+                  className={cn(
+                    'hidden lg:flex items-center justify-center flex-shrink-0 overflow-hidden',
+                    'border-l border-white/10 bg-surface hover:bg-surface-raised cursor-pointer group',
+                    'transition-[width,opacity,background-color,border-color] duration-200 ease-out',
+                    isRightPanelOpen
+                      ? 'w-0 opacity-0 border-transparent pointer-events-none'
+                      : 'w-6 opacity-100 delay-150',
+                  )}
+                  title={t('common.panelOpen')}
+                  aria-label={t('common.panelOpen')}
+                >
+                  <PanelRightOpen className="w-4 h-4 shrink-0 text-white/40 group-hover:text-white/70 transition-colors" />
+                </button>
               </div>
             </div>
           )}
 
-          {activeTab === 'bible' && (
-            <div className="h-full gp-slide-enter">
-              <ScriptureBrowser onSendToLive={handleSendToLive} />
-            </div>
-          )}
           {activeTab === 'media' && (
-            <div className="h-full gp-slide-enter">
+            <div className="h-full">
               <MediaLoopTab
                 onAddMediaToPresentation={handleMediaAdd}
                 onAddAllMediaToPresentation={handleAddAllMedia}
@@ -456,22 +517,22 @@ export default function App() {
             </div>
           )}
           {activeTab === 'hymns' && (
-            <div className="h-full gp-slide-enter">
+            <div className="h-full">
               <HymnsTab onAddHymnToPresentation={handleHymnAdd} />
             </div>
           )}
           {activeTab === 'countdown' && (
-            <div className="h-full gp-slide-enter">
+            <div className="h-full">
               <CountdownTab onAddCountdownToPresentation={handleAddCountdownToPresentation} />
             </div>
           )}
           {activeTab === 'screen' && (
-            <div className="h-full gp-slide-enter">
+            <div className="h-full">
               <ScreenCaptureTab onAddScreenToPresentation={handleScreenAdd} />
             </div>
           )}
           {activeTab === 'calendar' && (
-            <div className="h-full gp-slide-enter">
+            <div className="h-full">
               <CalendarTab
                 savedPresentationNames={savedPresentationNames}
                 onOpenPresentation={openSavedPresentationByName}
@@ -479,10 +540,27 @@ export default function App() {
             </div>
           )}
           {activeTab === 'settings' && (
-            <div className="h-full gp-slide-enter">
+            <div className="h-full">
               <SettingsTab />
             </div>
           )}
+            </Suspense>
+            </m.div>}
+            {(shouldMountBible || activeTab === 'bible') && (
+              <Suspense
+                fallback={
+                  activeTab === 'bible' ? (
+                    <div className="h-full grid place-items-center text-sm text-white/50" role="status">
+                      {t('common.loading')}
+                    </div>
+                  ) : null
+                }
+              >
+                <div className={activeTab === 'bible' ? 'h-full' : 'hidden'} aria-hidden={activeTab !== 'bible'}>
+                  <ScriptureBrowser active={activeTab === 'bible'} onSendToLive={handleSendToLive} />
+                </div>
+              </Suspense>
+            )}
         </main>
 
         {/* Live captions: bottom-docked console / persistent session bar (any tab) */}
@@ -531,6 +609,9 @@ export default function App() {
 
       {/* Cheatsheet Modal */}
       <CheatsheetModal />
+
+      {/* Preparation Check Modal */}
+      <PreparationCheckModal />
 
       {/* Updates Modal */}
       <UpdatesModal />
