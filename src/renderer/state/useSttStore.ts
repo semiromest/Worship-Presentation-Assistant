@@ -142,7 +142,9 @@ export const useSttStore = create<SttState>((set) => {
 
     setCaptions: (snapshot) => set(state => ({
       currentOriginal: snapshot.original,
-      partialOriginal: '', partialTranslation: '', partialTranslations: {},
+      partialOriginal: snapshot.partialOriginal,
+      partialTranslation: snapshot.partialTranslations[state.targetLanguage] ?? '',
+      partialTranslations: snapshot.partialTranslations,
       currentTranslations: snapshot.translations,
       currentTranslation: snapshot.translations[state.targetLanguage] ?? '',
       lastOriginal: snapshot.lastOriginal,

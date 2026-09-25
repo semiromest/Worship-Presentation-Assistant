@@ -1,5 +1,4 @@
 // ─── Phone live-screen share: mobile client HTML shell ─────────────────────
-/* eslint-disable */
 import screenShareClient from './screen-share-client.js?raw';
 
 export const SCREEN_SHARE_HTML = `<!DOCTYPE html>

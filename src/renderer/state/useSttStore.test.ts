@@ -126,3 +126,23 @@ test('tek seferlik endpoint → tek geçmiş kaydı (duplicate seal yok)', () =>
   assert.equal(store().utterances[0].translations?.zh, '第一句');
   assert.equal(store().utterances[1].translations?.zh, undefined);
 });
+
+test('normalize edilmiş altyazı anlık görüntüsü kesin ve geçici metni ayrı korur', () => {
+  startTwoTargets();
+  store().setCaptions({
+    original: 'Mer',
+    partialOriginal: 'haba',
+    translations: { en: 'Hel', zh: '' },
+    partialTranslations: { en: 'lo', zh: '你' },
+    lastOriginal: '',
+    lastTranslations: {},
+    history: [],
+    detectedLanguage: 'tr',
+  });
+
+  assert.equal(store().currentOriginal, 'Mer');
+  assert.equal(store().partialOriginal, 'haba');
+  assert.equal(store().currentTranslation, 'Hel');
+  assert.equal(store().partialTranslation, 'lo');
+  assert.equal(store().partialTranslations.zh, '你');
+});

@@ -20,10 +20,14 @@ export interface ShareSnapshot {
   translationEnabled: boolean;
   detectedLanguage: string | null;
   targetLanguages?: string[];
-  /** Live display text (final + provisional, already assembled by the store). */
+  /** Finalized text in the current live utterance. */
   original: string;
   translation: string;
   translations?: Record<string, string>;
+  /** Provisional text is rendered immediately, but with quieter styling. */
+  partialOriginal?: string;
+  partialTranslation?: string;
+  partialTranslations?: Record<string, string>;
   /** Fallback: last finalized utterance kept on screen after sealing. */
   lastOriginal: string;
   lastTranslation: string;

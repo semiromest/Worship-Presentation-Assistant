@@ -4,7 +4,6 @@ import { useStore } from '../state/useStore';
 import type { ShareSnapshot } from '../../shared/share';
 import { IS_PROJECTOR_MODE } from '../constants';
 import { useSttStore } from '../state/useSttStore';
-import { captionText } from '../captionDisplay';
 
 /** Bound the history pushed to phones (they only need the recent tail). */
 const HISTORY_LIMIT = 15;
@@ -13,7 +12,14 @@ type SttState = ReturnType<typeof useSttStore.getState>;
 
 /** Normalize the STT store into the single snapshot phones consume. */
 function buildSnapshot(s: SttState): ShareSnapshot {
-  const { original, translations } = captionText(s);
+  const translations = Object.fromEntries(s.targetLanguages.map((code) => [
+    code,
+    s.currentTranslations[code] ?? (code === s.targetLanguage ? s.currentTranslation : ''),
+  ]));
+  const partialTranslations = Object.fromEntries(s.targetLanguages.map((code) => [
+    code,
+    s.partialTranslations[code] ?? (code === s.targetLanguage ? s.partialTranslation : ''),
+  ]));
   const translation = translations[s.targetLanguage] ?? '';
   return {
     sessionStatus: s.status,
@@ -22,9 +28,12 @@ function buildSnapshot(s: SttState): ShareSnapshot {
     translationEnabled: s.translationEnabled,
     detectedLanguage: s.detectedLanguage,
     targetLanguages: s.targetLanguages,
-    original,
+    original: s.currentOriginal,
     translation,
     translations,
+    partialOriginal: s.partialOriginal,
+    partialTranslation: partialTranslations[s.targetLanguage] ?? '',
+    partialTranslations,
     lastOriginal: s.lastOriginal,
     lastTranslation: s.lastTranslation,
     lastTranslations: s.lastTranslations,
