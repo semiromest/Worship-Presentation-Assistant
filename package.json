@@ -1,6 +1,6 @@
 {
   "name": "worship-presentation-assistant",
-  "version": "1.4.11",
+  "version": "1.4.12",
   "main": "dist-electron/main.js",
   "description": "Worship Presentation Assistant - Simple Worship Presentation App",
   "author": "IPCA",
@@ -11,12 +11,14 @@
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,html}\"",
+    "test:sections": "tsx --test src/shared/sectionModel.test.ts",
     "test:updater": "tsx --test src/renderer/state/updaterReducer.test.ts",
     "test:presets": "tsx --test src/main/presetStore.test.ts",
     "test:media": "tsx --test src/main/mediaLibrary.test.ts",
     "test:matcher": "tsx --test src/renderer/stt/slideMatcher.test.ts",
     "test:stt": "tsx --test src/renderer/state/useSttStore.test.ts",
     "test:canvas": "tsx --test src/renderer/canvasSource.test.ts",
+    "test:editor": "tsx --test src/renderer/editor/editorSelection.test.ts src/renderer/editor/slideDraft.test.ts src/renderer/editor/elementDrag.test.ts src/renderer/editor/useEditorDeck.test.ts src/renderer/editor/editorDeckCommit.test.ts",
     "test:zoom": "tsx --test src/renderer/__tests__/slideGridZoom.test.ts",
     "smoke:worker": "electron perf/worker-smoke.cjs"
   },

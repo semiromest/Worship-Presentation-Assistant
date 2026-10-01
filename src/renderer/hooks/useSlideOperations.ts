@@ -1,5 +1,5 @@
 import { restoreLiveSession } from '../liveSession';
-import { moveSelectedInOrder } from '../../shared/serviceSections';
+import { moveSectionSlidesOneStep, moveSlidesToSection } from '../../shared/sectionModel';
 import { useShallow } from 'zustand/react/shallow';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -81,7 +81,7 @@ export function useSlideOperations() {
   })));
 
   const addSlide = useCallback(() => {
-    const newSlide = createSlide('text', { content: t('common.newSlideContent') });
+    const newSlide = createSlide('text', { content: t('common.newSlideContent'), sectionId: presentation.slides.at(-1)?.sectionId });
     dispatchUndo({
       type: 'SET',
       payload: {
@@ -111,35 +111,30 @@ export function useSlideOperations() {
   }, [presentation, selectedSlideId, dispatchUndo, setSelectedSlideId]);
 
   const moveSelectedSlide = useCallback((direction: -1 | 1) => {
+    const state = useStore.getState();
+    if (state.serviceSectionsEnabled && (state.searchQuery.trim() || state.sectionFilterId)) return;
     const idx = presentation.slides.findIndex((s) => s.id === selectedSlideId);
     if (idx === -1) return;
 
     const target = idx + direction;
     if (target < 0 || target >= presentation.slides.length) return;
 
-    const slides = [...presentation.slides];
-    const [item] = slides.splice(idx, 1);
-    slides.splice(target, 0, item);
-
-    dispatchUndo({
-      type: 'SET',
-      payload: { ...presentation, slides },
-    });
+    dispatchUndo({ type: 'SET', payload: moveSectionSlidesOneStep(presentation, new Set([selectedSlideId]), direction) });
     playSfx('reorder');
   }, [presentation, selectedSlideId, dispatchUndo]);
 
   const reorderSlides = useCallback((fromIndex: number, toIndex: number) => {
+    const state = useStore.getState();
+    if (state.serviceSectionsEnabled && (state.searchQuery.trim() || state.sectionFilterId)) return;
     if (fromIndex === toIndex) return;
-    const slides = [...presentation.slides];
-    const [moved] = slides.splice(fromIndex, 1);
-    slides.splice(toIndex, 0, moved);
-
+    const moved = presentation.slides[fromIndex];
+    const target = presentation.slides[toIndex];
+    if (!moved || !target) return;
+    const next = moveSlidesToSection(presentation, new Set([moved.id]), target.sectionId!,
+      fromIndex < toIndex ? (presentation.slides[toIndex + 1]?.sectionId === target.sectionId
+        ? { beforeId: presentation.slides[toIndex + 1].id } : 'end') : { beforeId: target.id });
     setSelectedSlideId(moved.id);
-
-    dispatchUndo({
-      type: 'SET',
-      payload: { ...presentation, slides },
-    });
+    dispatchUndo({ type: 'SET', payload: next });
     playSfx('reorder');
   }, [presentation, dispatchUndo, setSelectedSlideId]);
 
@@ -372,6 +367,7 @@ export function useSlideOperations() {
           activePart: typeof s.activePart === 'number' ? s.activePart : 0,
           items: Array.isArray(s.items) ? s.items : undefined,
           loopTransition: s.loopTransition,
+          sectionId: typeof s.sectionId === 'string' ? s.sectionId : undefined,
           section: s.section && typeof s.section.id === 'string' && typeof s.section.title === 'string' ? s.section : undefined,
           operatorNotes: typeof s.operatorNotes === 'string' ? s.operatorNotes : undefined,
           gridEnabled: s.gridEnabled === true,
@@ -385,6 +381,7 @@ export function useSlideOperations() {
     dispatchUndo({
       type: 'RESET',
       payload: {
+        sections: Array.isArray(data.sections) ? data.sections : undefined,
         id: data.id || crypto.randomUUID(),
         name: result.path.split('\\').pop()?.replace('.gpres', '') ?? data.name ?? t('common.presentation'),
         slides,
@@ -740,6 +737,19 @@ export function useSlideOperations() {
   const handleSlideClick = useCallback((id: string, index: number, e?: React.MouseEvent) => {
     const isShift = e?.shiftKey;
 
+    // Ctrl/Cmd+click toggles a slide in and out of the bulk set — the grid
+    // counterpart of the editor rail. It never moves the live output.
+    if (e?.ctrlKey || e?.metaKey) {
+      const next = new Set(selectedSlideIds);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      if (next.size === 0) next.add(id);
+      setSelectedSlideIds(next);
+      if (!next.has(selectedSlideId) || next.has(id)) setSelectedSlideId(id);
+      setLastSelectedIndex(index);
+      return;
+    }
+
     if (isShift && lastSelectedIndex !== null) {
       const start = Math.min(lastSelectedIndex, index);
       const end = Math.max(lastSelectedIndex, index);
@@ -763,7 +773,7 @@ export function useSlideOperations() {
     // With an active broadcast lock the live output cannot move (setLiveIndex
     // resolves to the locked slide), so skip the live switch entirely.
     if (isProjectorWindowOpen && findLockedSlideIndex(presentation.slides) === -1) setLiveIndex(index);
-  }, [presentation.slides, lastSelectedIndex, isProjectorWindowOpen, setSelectedSlideIds, setSelectedSlideId, setLastSelectedIndex, setLiveIndex]);
+  }, [presentation.slides, selectedSlideIds, selectedSlideId, lastSelectedIndex, isProjectorWindowOpen, setSelectedSlideIds, setSelectedSlideId, setLastSelectedIndex, setLiveIndex]);
 
   const handleSlideDoubleClick = useCallback((id: string, index: number) => {
     // Double click = quick Send to Live, active only while the broadcast is closed (single click already covers it when open).
@@ -853,15 +863,11 @@ export function useSlideOperations() {
   }, [presentation, selectedSlideIds, dispatchUndo, setSelectedSlideIds, setLastSelectedIndex, setSelectedSlideId]);
 
   const moveSelectedSlides = useCallback((direction: -1 | 1) => {
+    const state = useStore.getState();
+    if (state.serviceSectionsEnabled && (state.searchQuery.trim() || state.sectionFilterId)) return;
     if (selectedSlideIds.size === 0) return;
 
-    const slides = moveSelectedInOrder(presentation.slides, selectedSlideIds, direction);
-    if (slides === presentation.slides) return;
-
-    dispatchUndo({
-      type: 'SET',
-      payload: { ...presentation, slides },
-    });
+    dispatchUndo({ type: 'SET', payload: moveSectionSlidesOneStep(presentation, selectedSlideIds, direction) });
     playSfx('reorder');
   }, [presentation, selectedSlideIds, dispatchUndo]);
 

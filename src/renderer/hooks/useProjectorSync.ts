@@ -235,6 +235,7 @@ export function useProjectorSync() {
       patch.prevOrder.some((id, i) => id !== patch.nextOrder[i]);
 
     const transport: ProjectorPatch = {
+      ...(patch.nextSections !== undefined && { nextSections: patch.nextSections }),
       slidesPatch: patch.slidesPatch.map(({ id, nextSlide }) => ({ id, nextSlide })),
       ...(orderChanged && { nextOrder: patch.nextOrder }),
       ...(patch.nextName !== undefined && { nextName: patch.nextName }),

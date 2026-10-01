@@ -124,6 +124,8 @@ export interface SlideItem {
 }
 
 export interface Slide {
+  sectionId?: string;
+  /** Compatibility snapshot for older project readers. */
   section?: { id: string; title: string };
   id: string;
   type: 'text' | 'image' | 'video' | 'countdown' | 'screen' | 'loop' | 'captions';
@@ -184,6 +186,8 @@ export interface Slide {
 }
 
 export interface Presentation {
+  /** Ordered section records. Slide order remains the presentation playback order. */
+  sections?: PresentationSection[];
   id?: string;
   name: string;
   slides: Slide[];
@@ -196,6 +200,14 @@ export interface Presentation {
   liveSlideId?: string;
   /** Legacy live-slide position retained for backwards-compatible persistence. */
   liveIndex?: number;
+}
+
+export interface PresentationSection {
+  id: string;
+  title: string;
+  color?: string;
+  icon?: string;
+  unassigned?: boolean;
 }
 
 export interface Preset {

@@ -13,6 +13,10 @@ export function useKeyboardShortcuts(params: {
   onRedo?: () => void;
   onCopy?: () => void;
   onPaste?: () => void;
+  /** Ctrl/Cmd+Shift+V — opens the alternative paste menu. */
+  onPasteVariant?: () => void;
+  /** Escape is owned by the caller so it can run its own dismissal chain. */
+  onEscape?: () => void;
 }) {
   const {
     selectedIds,
@@ -26,6 +30,8 @@ export function useKeyboardShortcuts(params: {
     onRedo,
     onCopy,
     onPaste,
+    onPasteVariant,
+    onEscape,
   } = params;
 
   useEffect(() => {
@@ -34,7 +40,8 @@ export function useKeyboardShortcuts(params: {
       const meta = e.ctrlKey || e.metaKey;
 
       if (e.key === 'Escape') {
-        setSelectedIds(new Set());
+        if (onEscape) onEscape();
+        else setSelectedIds(new Set());
         return;
       }
 
@@ -79,7 +86,9 @@ export function useKeyboardShortcuts(params: {
 
         if (key === 'v') {
           e.preventDefault();
-          onPaste?.();
+          // Ctrl/Cmd+Shift+V asks for the paste variants instead of a plain paste.
+          if (e.shiftKey) onPasteVariant?.();
+          else onPaste?.();
           return;
         }
 
@@ -115,5 +124,7 @@ export function useKeyboardShortcuts(params: {
     onRedo,
     onCopy,
     onPaste,
+    onPasteVariant,
+    onEscape,
   ]);
 }

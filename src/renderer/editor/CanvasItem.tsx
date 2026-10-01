@@ -76,6 +76,8 @@ export const CanvasItem = memo(function CanvasItem({
   const startDrag = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (item.locked) return;
+      // Alt+drag is a cross-slide drag gesture owned by the canvas wrapper.
+      if (e.altKey) return;
       if (!canvasRef.current) return;
       e.stopPropagation();
       onSelect();
@@ -99,7 +101,7 @@ export const CanvasItem = memo(function CanvasItem({
   const startResize = useCallback(
     (handle: 'tl' | 'tr' | 'bl' | 'br') =>
       (e: React.PointerEvent<HTMLDivElement>) => {
-        if (item.locked) return;
+        if (item.locked || e.altKey) return;
         if (!canvasRef.current) return;
         e.stopPropagation();
         e.preventDefault();
@@ -122,7 +124,7 @@ export const CanvasItem = memo(function CanvasItem({
 
   const startRotate = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if (item.locked) return;
+      if (item.locked || e.altKey) return;
       if (!canvasRef.current) return;
       e.stopPropagation();
       e.preventDefault();

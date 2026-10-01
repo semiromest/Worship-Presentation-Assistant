@@ -1,3 +1,4 @@
+import { moveSectionSlidesOneStep } from '../../shared/sectionModel';
 import { useShallow } from 'zustand/react/shallow';
 import { useEffect } from 'react';
 import { useStore } from '../state/useStore';
@@ -52,8 +53,26 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
       if (el?.closest('[role="dialog"]')) return;
       if (tag === 'input' || tag === 'textarea' || tag === 'select' || el?.isContentEditable) return;
 
-      // When the SlideEditor is open, its own undo/redo handles these keys.
+      // The journal slide editor owns every key it needs while it is open:
+      // deck undo/redo, slide navigation, delete/duplicate, move and Escape all
+      // belong to the editor session instead of the deck.
       const editorOpen = useStore.getState().isEditorOpen;
+      if (editorOpen) {
+        const navKey =
+          e.key === 'Escape' ||
+          e.key === 'Delete' ||
+          e.key === 'Home' ||
+          e.key === 'End' ||
+          e.key === 'PageUp' ||
+          e.key === 'PageDown' ||
+          e.key.startsWith('Arrow') ||
+          NAV_KEYS.NEXT.has(e.key) ||
+          NAV_KEYS.PREV.has(e.key) ||
+          ((e.ctrlKey || e.metaKey) && ['z', 'y', 'd', 'a'].includes(e.key.toLowerCase())) ||
+          (e.altKey && e.key.startsWith('Arrow'));
+        // Operator shortcuts (mute, blackout) stay live; editing keys do not.
+        if (navKey) return;
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
         if (editorOpen) return;
         e.preventDefault();
@@ -106,26 +125,14 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
       };
 
       const moveSelectedSlide = (direction: -1 | 1) => {
+        if (state.serviceSectionsEnabled && (state.searchQuery.trim() || state.sectionFilterId)) return;
         if (selectedIdx === -1) return;
         const target = selectedIdx + direction;
         if (target < 0 || target >= slides.length) return;
 
-        const reordered = [...slides];
-        const [item] = reordered.splice(selectedIdx, 1);
-        reordered.splice(target, 0, item);
-
-        if (canLive) {
-          setLiveIndex((current) => {
-            if (current === selectedIdx) return target;
-            if (direction === -1 && current >= target && current < selectedIdx) return current + 1;
-            if (direction === 1 && current > selectedIdx && current <= target) return current - 1;
-            return current;
-          });
-        }
-
         dispatchUndo({
           type: 'SET',
-          payload: { ...state.presentation, slides: reordered },
+          payload: moveSectionSlidesOneStep(state.presentation, state.selectedSlideIds.size ? state.selectedSlideIds : new Set([state.selectedSlideId]), direction),
         });
       };
 

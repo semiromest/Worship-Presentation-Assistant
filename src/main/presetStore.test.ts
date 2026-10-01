@@ -189,3 +189,22 @@ test('corrupt single preset file is skipped without losing others', async () => 
     await fs.rm(dir, { recursive: true, force: true });
   }
 });
+
+
+test('section records, empty sections and memberships survive library and autosave reload', async () => {
+  const { normalizeSections, createSectionAt, insertEmptySection } = await import('../shared/sectionModel');
+  const dir = await makeUserData();
+  try {
+    const legacy = { name: 'Bölümler', slides: [{ id: 'a', type: 'text' as const, content: 'Giriş' }, { id: 'b', type: 'text' as const, content: 'Vaaz' }] };
+    const deck = insertEmptySection(createSectionAt(normalizeSections(legacy), 'b', { id: 'sermon', title: 'Özel Vaaz', color: '#60a5fa', icon: '✝' }), undefined, { id: 'empty', title: 'Kapanış' });
+    const writer = createPresetStore(dir);
+    await writer.savePreset({ name: 'Bölümler', presentation: deck });
+    await writer.savePreset({ name: '__live_autosave_sections__', presentation: deck });
+    const reader = createPresetStore(dir);
+    const saved = await reader.readPresets();
+    assert.equal(saved.length, 2);
+    for (const preset of saved) assert.deepEqual(normalizeSections(preset.presentation as typeof deck), deck);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});

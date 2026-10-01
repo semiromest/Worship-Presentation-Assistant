@@ -2016,7 +2016,12 @@ ipcMain.handle('drive-sign-in', async () => {
   }
 });
 
+ipcMain.handle('drive-sign-in-cancel', () => {
+  driveService.cancelSignIn();
+});
+
 ipcMain.handle('drive-sign-out', () => {
+  driveService.cancelSignIn();
   driveService.signOut();
 });
 ipcMain.handle('drive-status', async () => driveService.getStatus());

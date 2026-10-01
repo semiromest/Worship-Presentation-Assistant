@@ -28,6 +28,14 @@ interface CanvasStageProps {
   gridSize?: number;
   gridColor?: string;
   snapEnabled?: boolean;
+  /** Canvas context menu (paste variants live there). */
+  onContextMenu?: (event: React.MouseEvent) => void;
+  /**
+   * Alt+drag starts a native drag carrying the given items so they can be
+   * dropped onto a slide thumbnail. Plain pointer dragging is untouched and Alt
+   * suspends item moving/resizing for the duration of the gesture.
+   */
+  onItemDragStart?: (event: React.DragEvent, itemIds: string[]) => void;
 }
 
 interface SnapGuide {
@@ -51,6 +59,8 @@ export function CanvasStage({
   gridSize = 10,
   gridColor,
   snapEnabled,
+  onContextMenu,
+  onItemDragStart,
 }: CanvasStageProps) {
   const { t } = useTranslation();
   const outerRef = useRef<HTMLDivElement | null>(null);
@@ -69,6 +79,22 @@ export function CanvasStage({
     endX: number;
     endY: number;
   } | null>(null);
+  // Held Alt turns the selection into a drag source for cross-slide transfer.
+  const [altHeld, setAltHeld] = useState(false);
+
+  useEffect(() => {
+    if (!onItemDragStart) return;
+    const sync = (event: KeyboardEvent) => setAltHeld(event.altKey);
+    const clear = () => setAltHeld(false);
+    window.addEventListener('keydown', sync);
+    window.addEventListener('keyup', sync);
+    window.addEventListener('blur', clear);
+    return () => {
+      window.removeEventListener('keydown', sync);
+      window.removeEventListener('keyup', sync);
+      window.removeEventListener('blur', clear);
+    };
+  }, [onItemDragStart]);
   const rubberStart = useRef({ x: 0, y: 0 });
   const rubberActive = useRef(false);
 
@@ -329,6 +355,7 @@ export function CanvasStage({
         <div
           ref={canvasRef}
           onPointerDown={handlePointerDown}
+          onContextMenu={onContextMenu}
           className={cn(
             'absolute top-0 left-0',
             isPanning ? 'cursor-grabbing' : 'cursor-default',
@@ -423,7 +450,18 @@ export function CanvasStage({
 
           {/* Items */}
           {items.map(item => (
-            <div key={item.id} data-item>
+            <div
+              key={item.id}
+              data-item
+              draggable={altHeld && !item.locked && !!onItemDragStart}
+              onDragStart={(event) => {
+                if (!onItemDragStart) return;
+                const dragged = selectedIds.has(item.id) && selectedIds.size > 0
+                  ? [...selectedIds]
+                  : [item.id];
+                onItemDragStart(event, dragged);
+              }}
+            >
               <CanvasItem
                 item={item}
                 isSelected={selectedIds.has(item.id)}

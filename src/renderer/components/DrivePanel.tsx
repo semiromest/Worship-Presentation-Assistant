@@ -174,12 +174,24 @@ const [loading, setLoading] = useState(false);
         playSfx('connect');
         refreshFiles();
       } else {
-        setError(t('drive.error'));
-        playSfx('error');
+        // The flow ended without a session: cancelled or an error. Either way we
+        // just drop back to the sign-in button instead of reporting a failure.
+        setDriveSigningIn(false);
       }
     } catch {
       setError(t('drive.error'));
       playSfx('error');
+    } finally {
+      setDriveSigningIn(false);
+    }
+  };
+
+  // Aborts an in-flight sign-in (e.g. the user closed the Google tab without
+  // picking an account), so the panel stops spinning and offers sign-in again.
+  const handleCancelSignIn = async () => {
+    clearFeedback();
+    try {
+      await window.electronAPI?.driveSignInCancel?.();
     } finally {
       setDriveSigningIn(false);
     }
@@ -281,8 +293,6 @@ const [loading, setLoading] = useState(false);
     }
   };
 
-  const signedInLabel = t('drive.signedInAs', { email: driveEmail ?? '' });
-
   const filteredFiles = driveFiles.filter((file) =>
     file.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
   );
@@ -361,6 +371,15 @@ const [loading, setLoading] = useState(false);
                 </>
               )}
             </button>
+            {driveSigningIn && (
+              <button
+                type="button"
+                onClick={handleCancelSignIn}
+                className="rounded text-xs text-white/50 underline underline-offset-2 hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"
+              >
+                {t('common.cancel')}
+              </button>
+            )}
           </div>
         ) : (
           /* ── Signed in content ── */

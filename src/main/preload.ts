@@ -174,6 +174,7 @@ contextBridge.exposeInMainWorld('electronAPI', wrapApi({
   // Google Drive
 
   driveSignIn: () => ipcRenderer.invoke('drive-sign-in'),
+  driveSignInCancel: () => ipcRenderer.invoke('drive-sign-in-cancel'),
   driveSignOut: () => ipcRenderer.invoke('drive-sign-out'),
   driveStatus: () => ipcRenderer.invoke('drive-status'),
   driveListFiles: () => ipcRenderer.invoke('drive-list-files'),

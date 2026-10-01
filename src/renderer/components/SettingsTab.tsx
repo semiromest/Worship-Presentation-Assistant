@@ -14,6 +14,8 @@ export default function SettingsTab() {
   const { t, i18n } = useTranslation();
   const sectionsEnabled = useStore(s => s.serviceSectionsEnabled);
   const setSectionsEnabled = useStore(s => s.setServiceSectionsEnabled);
+  const operatorNotesEnabled = useStore((s) => s.operatorNotesEnabled);
+  const setOperatorNotesEnabled = useStore((s) => s.setOperatorNotesEnabled);
   const autoGoLive = useStore((s) => s.autoGoLive);
   const setAutoGoLive = useStore((s) => s.setAutoGoLive);
   const setIsUpdatesOpen = useStore((s) => s.setIsUpdatesOpen);
@@ -150,6 +152,14 @@ export default function SettingsTab() {
           <div><h3 className="text-sm font-semibold">{t('sections.title')}</h3><p className="text-[11px] text-white/45">{t('sections.description')}</p></div>
           <SettingSwitch checked={sectionsEnabled} onCheckedChange={setSectionsEnabled} label={t('sections.title')} />
         </section>
+        <section className="rounded-xl border border-white/10 bg-surface-raised p-4 flex items-center justify-between gap-4" aria-label={t('common.operatorNotes')}>
+          <div>
+            <h3 className="text-sm font-semibold">{t('common.operatorNotes')}</h3>
+            <p className="text-[11px] text-white/45">{t('settings.operatorNotesDesc')}</p>
+          </div>
+          <SettingSwitch checked={operatorNotesEnabled} onCheckedChange={setOperatorNotesEnabled} label={t('common.operatorNotes')} />
+        </section>
+
         {/* Sound Effects */}
         <section className="rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.soundEffects')}>
           <div className="flex items-center justify-between gap-4">

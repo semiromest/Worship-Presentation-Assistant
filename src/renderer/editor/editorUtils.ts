@@ -114,6 +114,23 @@ export const FONT_PRESETS = [
 export const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
+/**
+ * Unique item id factory.
+ *
+ * Multi-slide operations (paste into N slides, apply to selected slides)
+ * create many items in a single tick, so a plain `Date.now()` suffix is not
+ * unique enough. A per-session counter keeps ids collision-free even when the
+ * same millisecond produces dozens of copies.
+ */
+let itemIdCounter = 0;
+
+export function makeItemId(prefix = 'item'): string {
+  itemIdCounter = (itemIdCounter + 1) % 0xffff;
+  return `${prefix}-${Date.now().toString(36)}-${itemIdCounter.toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 7)}`;
+}
+
 export function getSafeColor(value: string | undefined, fallback: string): string {
   return value && value.trim().length > 0 ? value : fallback;
 }
@@ -179,7 +196,7 @@ export function createItem(
 ): SlideItem {
   const maxZ = items.reduce((max, item) => Math.max(max, item.zIndex ?? 0), -1);
   return normalizeItem({
-    id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    id: makeItemId(),
     type,
     content: type === 'text' ? (initialContent ?? 'Yeni metin') : undefined,
     x: type === 'text' ? 12 : 15,
@@ -220,7 +237,7 @@ export function duplicateItem(items: SlideItem[], id: string): SlideItem[] {
 
   const copy = normalizeItem({
     ...source,
-    id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    id: makeItemId(),
     x: clamp(source.x + 2, 0, 100 - source.width),
     y: clamp(source.y + 2, 0, 100 - source.height),
     zIndex: ordered.length,
@@ -271,7 +288,7 @@ export function duplicateItems(items: SlideItem[], ids: Set<string>): SlideItem[
   const copies = toDuplicate.map(source =>
     normalizeItem({
       ...source,
-      id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      id: makeItemId(),
       x: clamp(source.x + 2, 0, 100 - source.width),
       y: clamp(source.y + 2, 0, 100 - source.height),
       zIndex: ordered.length + Math.random(),
@@ -302,7 +319,7 @@ export function convertSlideToItems(slide: Slide): SlideItem[] {
     const slideStyles = slide.styles as Record<string, unknown> | undefined;
     items.push(
       normalizeItem({
-        id: `item-${Date.now()}-main-text`,
+        id: makeItemId(),
         type: 'text',
         content: slide.content,
         x: 10,
@@ -334,7 +351,7 @@ export function convertSlideToItems(slide: Slide): SlideItem[] {
   ) {
     items.push(
       normalizeItem({
-        id: `item-${Date.now()}-main-media`,
+        id: makeItemId(),
         type: 'image',
         mediaUrl: baseMediaUrl,
         x: 5,

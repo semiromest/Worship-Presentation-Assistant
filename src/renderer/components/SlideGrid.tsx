@@ -1,10 +1,11 @@
-import ServiceSections, { SectionAssignment } from './ServiceSections';
+import ServiceSections from './ServiceSections';
 import { memo, useMemo, useEffect, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, X, Plus, ZoomIn, ZoomOut } from 'lucide-react';
+import { Search, X, Plus, ZoomIn, ZoomOut, Layers2, Lock } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { SlideCard } from '../SlideCard';
 import { useDragAndDrop } from '../hooks/useDragAndDrop';
+import { getSectionBlocks } from '../../shared/sectionModel';
 
 const MIN_ZOOM = 0.4;
 const MAX_ZOOM = 2;
@@ -98,12 +99,25 @@ export default function SlideGrid({
   const presentation = useStore((s) => s.presentation);
   const searchQuery = useStore((s) => s.searchQuery);
   const setSearchQuery = useStore((s) => s.setSearchQuery);
+  const sectionFilterId = useStore((s) => s.sectionFilterId);
+  const setSectionFilterId = useStore((s) => s.setSectionFilterId);
   const selectedSlideIds = useStore((s) => s.selectedSlideIds);
   const selectedSlideId = useStore((s) => s.selectedSlideId);
   const isProjectorWindowOpen = useStore((s) => s.isProjectorWindowOpen);
   const liveIndex = useStore((s) => s.liveIndex);
   const slideZoom = useStore((s) => s.slideZoom);
   const setSlideZoom = useStore((s) => s.setSlideZoom);
+  const setSelectedSlideIds = useStore((s) => s.setSelectedSlideIds);
+
+  // Section filter lives next to search: both narrow the grid and both suspend
+  // order editing, so they belong to the same control group.
+  const sectionBlocks = useMemo(
+    () => (sectionsEnabled ? getSectionBlocks(presentation) : []),
+    [sectionsEnabled, presentation]
+  );
+  const sectionTitle = (block: { title: string; unassigned?: boolean }) =>
+    block.unassigned ? t('sections.none') : block.title;
+  const orderRestricted = sectionsEnabled && (!!searchQuery.trim() || !!sectionFilterId);
 
   const { handleDragStart, handleDragOver, handleDragEnd, handleDrop, resetDragState, draggedSlideId, dragOverIndex } =
     useDragAndDrop(reorderSlides);
@@ -162,6 +176,9 @@ export default function SlideGrid({
       const el = document.activeElement as HTMLElement | null;
       const tag = el?.tagName?.toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select' || el?.isContentEditable) return;
+      // The slide editor is a full-screen workspace with its own zoom keys; the
+      // grid zoom behind it would only change something the user cannot see.
+      if (useStore.getState().isEditorOpen) return;
       if (e.ctrlKey || e.metaKey) {
         if (e.key === '=' || e.key === '+') { e.preventDefault(); adjustZoom(ZOOM_STEP); }
         else if (e.key === '-') { e.preventDefault(); adjustZoom(-ZOOM_STEP); }
@@ -184,6 +201,7 @@ export default function SlideGrid({
       (s) =>
         s.content.toLowerCase().includes(q) ||
         s.group?.title.toLowerCase().includes(q) ||
+        s.section?.title.toLowerCase().includes(q) ||
         s.type.toLowerCase().includes(q),
     );
   }, [presentation.slides, searchQuery]);
@@ -279,7 +297,62 @@ export default function SlideGrid({
             )}
           </div>
 
-          <SectionAssignment />
+          {sectionsEnabled && sectionBlocks.length > 1 && (
+            <select
+              aria-label={t('sections.filter')}
+              value={sectionFilterId}
+              onChange={(e) => setSectionFilterId(e.target.value)}
+              className="h-9 max-w-40 shrink-0 rounded-xl border border-white/10 bg-white/5 px-2 text-xs text-white/70 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+            >
+              <option value="">{t('sections.all')}</option>
+              {sectionBlocks.map((block) => (
+                <option key={block.id} value={block.id}>
+                  {sectionTitle(block)} · {t('sections.slideCount', { count: block.slides.length })}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {orderRestricted && (
+            <div
+              role="status"
+              className="flex shrink-0 items-center gap-1.5 rounded-xl border border-amber-400/30 bg-amber-500/10 px-2 py-1.5 text-[11px] font-medium text-amber-100"
+            >
+              <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+              {t('sections.orderLocked')}
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSectionFilterId('');
+                }}
+                className="rounded px-1 underline hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+              >
+                {t('sections.fullFlow')}
+              </button>
+            </div>
+          )}
+
+          {/* Bulk selection indicator: always visible while several slides are selected */}
+          {selectedSlideIds.size > 1 && (
+            <div
+              role="status"
+              className="flex shrink-0 items-center gap-1 rounded-xl border border-blue-500/30 bg-blue-500/15 px-2 py-1.5 text-[11px] font-medium text-blue-100"
+            >
+              <Layers2 className="h-3.5 w-3.5" aria-hidden="true" />
+              {t('common.slidesSelected', { count: selectedSlideIds.size })}
+              <button
+                type="button"
+                onClick={() => setSelectedSlideIds(new Set([selectedSlideId]))}
+                aria-label={t('common.clearSelection')}
+                title={t('common.clearSelection')}
+                className="rounded p-0.5 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+              >
+                <X className="h-3 w-3" aria-hidden="true" />
+              </button>
+            </div>
+          )}
+
           {/* Zoom Controls */}
           <div className="flex items-center gap-1 shrink-0" role="group" aria-label={t('common.zoomControls')}>
             <button
@@ -314,22 +387,19 @@ export default function SlideGrid({
       {/* Virtual scroll container */}
       <div ref={containerRef} className="flex-1 overflow-y-auto p-4" role="list" aria-label={t('common.slideList')}>
         <div aria-live="polite">
-          {filteredSlides.length === 0 && searchQuery ? (
+          {!sectionsEnabled && filteredSlides.length === 0 && searchQuery ? (
             <div className="h-64 flex flex-col items-center justify-center text-center opacity-30 space-y-4">
               <Search className="w-16 h-16" aria-hidden="true" />
               <p className="text-lg font-medium">{t('common.noResults')}</p>
             </div>
           ) : sectionsEnabled ? (
             <>
-              <ServiceSections slides={filteredSlides} columns={columnCount} renderSlide={slide => {
+              <ServiceSections slides={filteredSlides} columns={columnCount} renderSlide={(slide, drag) => {
                 const index = slideIndexMap.get(slide.id)!;
                 return <div key={slide.id} role="listitem"><SlideCard slide={slide} index={index}
                   isSelected={selectedSlideIds.has(slide.id)} isLive={isProjectorWindowOpen && liveIndex === index}
-                  onClick={handleSlideClick} onDoubleClick={handleSlideDoubleClick} onDragStart={handleDragStart}
-                  onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDrop={handleDrop}
-                  isDragging={draggedSlideId === slide.id} zoom={slideZoom} /></div>;
+                  onClick={handleSlideClick} onDoubleClick={handleSlideDoubleClick} {...drag} zoom={slideZoom} /></div>;
               }} />
-              {showGhost && <div className="mt-4 max-w-xs"><GhostSlide onClick={addSlide} zoom={slideZoom} /></div>}
             </>
           ) : (
             <div style={{ position: 'relative', height: totalHeight }}>

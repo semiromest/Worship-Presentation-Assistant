@@ -2,6 +2,7 @@ import { app, safeStorage, shell } from 'electron';
 import { drive as googleDrive, auth } from '@googleapis/drive';
 import type { OAuth2Client } from 'google-auth-library';
 import http from 'node:http';
+import type { Server } from 'node:http';
 import path from 'node:path';
 import fsSync from 'node:fs';
 import { DRIVE_CREDENTIALS } from './driveCredentials';
@@ -54,6 +55,13 @@ function deleteToken(): void {
 class GoogleDriveService {
   private oAuth2Client: OAuth2Client | null = null;
   private cachedEmail: string | null = null;
+  // Live OAuth attempt, kept so the user can cancel it (closing the Google tab,
+  // picking no account) instead of leaving the panel spinning forever.
+  private pendingSignIn: {
+    server: Server;
+    timer: ReturnType<typeof setTimeout>;
+    reject: (error: Error) => void;
+  } | null = null;
 
   private createClient(): OAuth2Client {
     return new auth.OAuth2(
@@ -114,10 +122,22 @@ class GoogleDriveService {
     return { signedIn: true, email: this.cachedEmail };
   }
 
+  isSigningIn(): boolean {
+    return !!this.pendingSignIn;
+  }
+
   private startOAuthFlow(): Promise<{ code: string; client: OAuth2Client }> {
     let oauthClient: OAuth2Client | null = null;
 
     return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = <T,>(fn: (value: T) => void, value: T) => {
+        if (settled) return;
+        settled = true;
+        this.clearPending();
+        fn(value);
+      };
+
       const server = http.createServer((req, res) => {
         const url = new URL(req.url ?? '/', 'http://localhost');
         if (url.pathname === '/oauth2callback') {
@@ -125,13 +145,17 @@ class GoogleDriveService {
           if (codeParam && oauthClient) {
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
             res.end('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;background:#1a1a2e;color:#fff"><div style="text-align:center"><h2>✅ Giriş başarılı!</h2><p>Uygulamaya dönebilirsiniz.</p></div></body></html>');
-            resolve({ code: codeParam, client: oauthClient });
+            finish(resolve, { code: codeParam, client: oauthClient });
           } else {
             res.writeHead(400);
             res.end('Authorization code not found');
-            reject(new Error('No authorization code in callback'));
+            finish(reject, new Error('No authorization code in callback'));
           }
-          server.close();
+          try {
+            server.close();
+          } catch {
+            /* already closed */
+          }
         }
       });
 
@@ -155,11 +179,36 @@ class GoogleDriveService {
 
         shell.openExternal(authUrl);
 
-        setTimeout(() => reject(new Error('Authorization timeout')), 120_000);
+        const timer = setTimeout(() => finish(reject, new Error('Authorization timeout')), 120_000);
+        this.pendingSignIn = {
+          server,
+          timer,
+          reject: (error) => finish(reject, error),
+        };
       });
 
-      server.on('error', reject);
+      server.on('error', (error) => finish(reject, error));
     });
+  }
+
+  private clearPending(): void {
+    const pending = this.pendingSignIn;
+    this.pendingSignIn = null;
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    try {
+      pending.server.close();
+    } catch {
+      /* already closed */
+    }
+  }
+
+  // Aborts an in-flight sign-in; signIn() rejects and the UI returns to its
+  // signed-out state. Safe to call when nothing is pending.
+  cancelSignIn(): void {
+    const pending = this.pendingSignIn;
+    if (!pending) return;
+    pending.reject(new Error('cancelled'));
   }
 
   private async fetchUserEmail(client: OAuth2Client): Promise<string | null> {

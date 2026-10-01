@@ -23,6 +23,8 @@ interface LayerPanelProps {
   onToggleVisibility: (id: string) => void;
   onDuplicate: (id: string) => void;
   onToggleLock: (id: string) => void;
+  /** Enables dragging a row onto a slide thumbnail to move the element. */
+  onDragItemStart?: (event: React.DragEvent<HTMLDivElement>, itemId: string) => void;
 }
 
 export const LayerPanel = memo(function LayerPanel({
@@ -34,6 +36,7 @@ export const LayerPanel = memo(function LayerPanel({
   onToggleVisibility,
   onDuplicate,
   onToggleLock,
+  onDragItemStart,
 }: LayerPanelProps) {
   const { t } = useTranslation();
   const sorted = useMemo(
@@ -70,8 +73,12 @@ export const LayerPanel = memo(function LayerPanel({
           <div
             key={item.id}
             onClick={() => onSelect(item.id)}
+            draggable={!!onDragItemStart}
+            onDragStart={(event) => onDragItemStart?.(event, item.id)}
+            title={onDragItemStart ? t('common.editorLayerDragHint') : undefined}
             className={cn(
-              'flex cursor-pointer items-center gap-2 rounded-xl border px-2 py-2 transition',
+              'flex items-center gap-2 rounded-xl border px-2 py-2 transition',
+              onDragItemStart && 'cursor-grab active:cursor-grabbing',
               selectedIds.has(item.id)
                 ? 'border-blue-500/50 bg-blue-600/20'
                 : 'border-white/10 bg-black/20 hover:bg-black/30',

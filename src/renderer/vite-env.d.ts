@@ -95,6 +95,7 @@ declare global {
 
       // Google Drive API
       driveSignIn: () => Promise<DriveStatus>;
+      driveSignInCancel: () => Promise<void>;
       driveSignOut: () => Promise<void>;
       driveStatus: () => Promise<DriveStatus>;
       driveListFiles: () => Promise<DriveFile[]>;

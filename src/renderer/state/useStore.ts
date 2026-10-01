@@ -1,3 +1,4 @@
+import { normalizeSections } from '../../shared/sectionModel';
 import { create } from 'zustand';
 import { Presentation, Preset, MediaItem, LoopItem, DriveFile } from '../types';
 import { undoReducer, UndoState, UndoAction, applyProjectorPatch, ProjectorPatch } from './undoReducer';
@@ -35,7 +36,7 @@ const createInitialPresentation = (): Presentation => ({
 
 const initialUndoState: UndoState = {
   past: [],
-  present: createInitialPresentation(),
+  present: normalizeSections(createInitialPresentation()),
   future: [],
 };
 
@@ -93,6 +94,9 @@ interface AppState {
   autoGoLive: boolean;
   setAutoGoLive: (auto: boolean) => void;
 
+  operatorNotesEnabled: boolean;
+  setOperatorNotesEnabled: (enabled: boolean) => void;
+
   // Live Save: regularly write presentation changes to a local backup (power-outage safety)
   liveSaveEnabled: boolean;
   setLiveSaveEnabled: (enabled: boolean) => void;
@@ -111,6 +115,8 @@ interface AppState {
   uiMotionEnabled: boolean;
   setUiMotionEnabled: (enabled: boolean) => void;
 
+  sectionFilterId: string;
+  setSectionFilterId: (id: string) => void;
   serviceSectionsEnabled: boolean;
   setServiceSectionsEnabled: (enabled: boolean) => void;
   sessionSaveStatus: 'idle' | 'error';
@@ -255,7 +261,9 @@ export const useStore = create<AppState>((set) => ({
   setToastMessage: (msg) => set({ toastMessage: msg, toastKey: msg ? Date.now() : 0 }),
   dispatchUndo: (action) =>
     set((state) => {
-      const nextUndoState = undoReducer(state.undoState, action);
+      const normalizedAction = action.type === 'SET' || action.type === 'RESET'
+        ? { ...action, payload: normalizeSections(action.payload) } : action;
+      const nextUndoState = undoReducer(state.undoState, normalizedAction);
       let toast: string | null = null;
       if (action.type === 'UNDO' && nextUndoState.past.length < state.undoState.past.length) {
         toast = 'undoNotification';
@@ -527,6 +535,13 @@ export const useStore = create<AppState>((set) => ({
 
   sessionSaveStatus: 'idle',
   setSessionSaveStatus: (sessionSaveStatus) => set({ sessionSaveStatus }),
+  operatorNotesEnabled: (() => { try { return localStorage.getItem('operatorNotesEnabled') === '1'; } catch { return false; } })(),
+  setOperatorNotesEnabled: (enabled) => {
+    try { localStorage.setItem('operatorNotesEnabled', enabled ? '1' : '0'); } catch { /* storage unavailable */ }
+    set({ operatorNotesEnabled: enabled });
+  },
+  sectionFilterId: '',
+  setSectionFilterId: (sectionFilterId) => set({ sectionFilterId }),
   serviceSectionsEnabled: (() => { try { return localStorage.getItem('serviceSectionsEnabled') === '1'; } catch { return false; } })(),
   setServiceSectionsEnabled: (enabled) => {
     try { localStorage.setItem('serviceSectionsEnabled', enabled ? '1' : '0'); } catch { /* unavailable */ }

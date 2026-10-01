@@ -12,6 +12,8 @@ export type PresentationPatch = {
   slidesPatch: SlidePatch[];
   prevOrder: string[];
   nextOrder: string[];
+  prevSections?: Presentation['sections'];
+  nextSections?: Presentation['sections'];
   prevName?: string;
   nextName?: string;
   prevZoom?: number;
@@ -39,6 +41,7 @@ export type UndoAction =
  * order/name/transition only when they actually change.
  */
 export type ProjectorPatch = {
+  nextSections?: Presentation['sections'];
   slidesPatch: { id: string; nextSlide?: Slide }[];
   nextOrder?: string[];
   nextName?: string;
@@ -68,6 +71,7 @@ export function isPatchEmpty(patch: PresentationPatch): boolean {
     patch.prevOrder.some((id, i) => id !== patch.nextOrder[i]);
   return (
     patch.slidesPatch.length === 0 &&
+    patch.nextSections === undefined &&
     !patch.prevName &&
     !patch.prevZoom &&
     !patch.prevTransition &&
@@ -95,6 +99,7 @@ function slideHasChanged(a: Slide, b: Slide): boolean {
   if (a.snapEnabled !== b.snapEnabled) return true;
   if (a.locked !== b.locked) return true;
   if (a.operatorNotes !== b.operatorNotes) return true;
+  if (a.sectionId !== b.sectionId) return true;
   if (!shallowEqual(a.section, b.section)) return true;
   return false;
 }
@@ -135,6 +140,11 @@ export function computePatch(prev: Presentation, next: Presentation): Presentati
     prevOrder: prevSlides.map(s => s.id),
     nextOrder: nextSlides.map(s => s.id),
   };
+
+  if (prev.sections !== next.sections && JSON.stringify(prev.sections) !== JSON.stringify(next.sections)) {
+    patch.prevSections = prev.sections ?? [];
+    patch.nextSections = next.sections ?? [];
+  }
 
   if (prev.name !== next.name) {
     patch.prevName = prev.name;
@@ -181,6 +191,8 @@ export function applyPatch(current: Presentation, patch: PresentationPatch): Pre
 
   return {
     id: current.id, // keep deck identity — undo/redo must not change it (live-save keys on presentation.id)
+    ...current,
+    sections: patch.nextSections ?? current.sections,
     name: patch.nextName ?? current.name,
     slides: reordered,
     zoom: patch.nextZoom ?? current.zoom,
@@ -215,6 +227,8 @@ export function applyProjectorPatch(current: Presentation, patch: ProjectorPatch
 
   return {
     id: current.id,
+    ...current,
+    sections: patch.nextSections ?? current.sections,
     name: patch.nextName ?? current.name,
     slides: reordered,
     zoom: patch.nextZoom ?? current.zoom,
@@ -248,6 +262,8 @@ export function applyInversePatch(current: Presentation, patch: PresentationPatc
 
   return {
     id: current.id, // keep deck identity — undo/redo must not change it (live-save keys on presentation.id)
+    ...current,
+    sections: patch.prevSections ?? current.sections,
     name: patch.prevName ?? current.name,
     slides: reordered,
     zoom: patch.prevZoom ?? current.zoom,

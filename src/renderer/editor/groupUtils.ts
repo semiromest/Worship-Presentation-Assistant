@@ -1,5 +1,5 @@
 import type { SlideItem } from '../types';
-import { normalizeItems, normalizeItem } from './editorUtils';
+import { makeItemId, normalizeItems, normalizeItem } from './editorUtils';
 
 export function createGroup(
   items: SlideItem[],
@@ -18,7 +18,7 @@ export function createGroup(
   const maxZ = Math.max(...selected.map(i => i.zIndex ?? 0));
 
   const group = normalizeItem({
-    id: `group-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    id: makeItemId('group'),
     type: 'group',
     x: minX,
     y: minY,
@@ -54,7 +54,7 @@ export function ungroupGroup(
       x: child.x + group.x,
       y: child.y + group.y,
       zIndex: child.zIndex + group.zIndex,
-      id: `ungroup-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      id: makeItemId('ungroup'),
     }),
   );
 

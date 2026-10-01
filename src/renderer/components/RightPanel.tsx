@@ -76,6 +76,10 @@ export default function RightPanel({
   const toggleSlideLock = useStore((s) => s.toggleSlideLock);
   const searchQuery = useStore((s) => s.searchQuery);
   const setSearchQuery = useStore((s) => s.setSearchQuery);
+  const operatorNotesEnabled = useStore((s) => s.operatorNotesEnabled);
+  const sectionFilterId = useStore(s => s.sectionFilterId);
+  const sectionsEnabled = useStore(s => s.serviceSectionsEnabled);
+  const sectionOrderRestricted = sectionsEnabled && (!!searchQuery.trim() || !!sectionFilterId);
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -345,7 +349,7 @@ export default function RightPanel({
                 )}
                 <button
                   onClick={() => moveSelectedSlide(-1)}
-                  disabled={selectedSlideIndex <= 0}
+                  disabled={sectionOrderRestricted || selectedSlideIndex <= 0}
                   className="p-1.5 rounded-lg bg-white/5 text-white hover:bg-white/10 disabled:opacity-20 border border-white/10 transition-colors"
                   aria-label={t('common.moveUp')}
                 >
@@ -353,7 +357,7 @@ export default function RightPanel({
                 </button>
                 <button
                   onClick={() => moveSelectedSlide(1)}
-                  disabled={selectedSlideIndex === presentation.slides.length - 1}
+                  disabled={sectionOrderRestricted || selectedSlideIndex === presentation.slides.length - 1}
                   className="p-1.5 rounded-lg bg-white/5 text-white hover:bg-white/10 disabled:opacity-20 border border-white/10 transition-colors"
                   aria-label={t('common.moveDown')}
                 >
@@ -373,26 +377,6 @@ export default function RightPanel({
           </div>
 
           <div className="space-y-4">
-            {selectedSlide && (<>
-      {/* Operator notes — shown only on the confidence monitor, never on the audience output */}
-      <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
-        <label
-          htmlFor="operator-notes"
-          className="block text-[10px] font-bold uppercase tracking-widest text-white/40"
-        >
-          {t('common.operatorNotes')}
-        </label>
-        <textarea
-          id="operator-notes"
-          value={selectedSlide.operatorNotes ?? ''}
-          onChange={(e) => updateSlideProperty(selectedSlide.id, { operatorNotes: e.target.value })}
-          placeholder={t('common.operatorNotesPlaceholder')}
-          rows={2}
-          className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white/80 resize-y focus-visible:border-blue-500/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500/30 transition-colors"
-        />
-      </div>
-
-            </>)}
             {selectedSlide?.type === 'text' && !selectedSlide.items?.length ? (
               <SlideStyleEditor
                 selectedSlide={selectedSlide}
@@ -465,6 +449,25 @@ export default function RightPanel({
             )}
           </div>
         </div>
+        {operatorNotesEnabled && selectedSlide && (
+          <div className="m-4 rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
+            <label
+              htmlFor="operator-notes"
+              className="block text-[10px] font-bold uppercase tracking-widest text-white/40"
+            >
+              {t('common.operatorNotes')}
+            </label>
+            <textarea
+              id="operator-notes"
+              value={selectedSlide.operatorNotes ?? ''}
+              onChange={(e) => updateSlideProperty(selectedSlide.id, { operatorNotes: e.target.value })}
+              placeholder={t('common.operatorNotesPlaceholder')}
+              rows={2}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white/80 resize-y focus-visible:border-blue-500/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500/30 transition-colors"
+            />
+          </div>
+
+            )}
       </div>
       </div>
     </>

@@ -55,10 +55,21 @@ export default function CheatsheetModal() {
         <ShortcutRow keys="Escape" label={t('common.cheatsheet.clearSelection')} />
       </Section>
 
+      {/* Slide Editor */}
+      <Section title={t('common.cheatsheet.editor')}>
+        <ShortcutRow keys="↑ / ↓ · PageUp / PageDown" label={t('common.cheatsheet.editorSlideNav')} />
+        <ShortcutRow keys="Shift+↑ / Shift+↓" label={t('common.cheatsheet.editorExtendSelection')} />
+        <ShortcutRow keys="Ctrl+C / Ctrl+V" label={t('common.cheatsheet.editorCopyPaste')} />
+        <ShortcutRow keys="Ctrl+Shift+V" label={t('common.cheatsheet.editorPasteVariants')} />
+        <ShortcutRow keys="Alt+Sürükle" label={t('common.cheatsheet.editorDragElement')} />
+        <ShortcutRow keys="Ctrl+Tık" label={t('common.cheatsheet.editorMultiSelectSlides')} />
+      </Section>
+
       {/* Slide Operations */}
       <Section title={t('common.cheatsheet.slideOperations')}>
         <ShortcutRow keys="Alt+Enter" label={t('common.cheatsheet.splitSlide')} />
         <ShortcutRow keys="Shift+Tık" label={t('common.cheatsheet.multiSelect')} />
+        <ShortcutRow keys="Ctrl+Tık" label={t('common.cheatsheet.toggleSlideSelection')} />
         <ShortcutRow keys="Çift Tık" label={t('common.cheatsheet.doubleClickGoLive')} />
         <ShortcutRow keys="Alt+↑" label={t('common.cheatsheet.moveUp')} />
         <ShortcutRow keys="Alt+↓" label={t('common.cheatsheet.moveDown')} />

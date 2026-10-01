@@ -593,12 +593,16 @@ export default function App() {
       {isEditorOpen && selectedSlide && (
         <SlideEditor
           slide={selectedSlide}
-          onSave={(editedSlide) => {
+          deck={presentation}
+          onSave={(editedSlides) => {
+            // Every slide the editor touched lands in the deck through a single
+            // undo entry, so one Ctrl+Z reverts the whole editing session.
+            const byId = new Map(editedSlides.map((edited) => [edited.id, edited] as const));
             dispatchUndo({
               type: 'SET',
               payload: {
                 ...presentation,
-                slides: presentation.slides.map((s) => (s.id === selectedSlideId ? editedSlide : s)),
+                slides: presentation.slides.map((s) => byId.get(s.id) ?? s),
               },
             });
             setIsEditorOpen(false);
