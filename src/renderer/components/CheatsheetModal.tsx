@@ -40,7 +40,7 @@ export default function CheatsheetModal() {
       {/* Tab Switching */}
       <Section title={t('common.cheatsheet.tabs')}>
         <ShortcutRow keys="?" label={t('common.cheatsheet.openCheatsheet')} />
-        <ShortcutRow keys="Alt+1-9" label={t('common.cheatsheet.switchTab')} />
+        <ShortcutRow keys="Alt+1-9 / Alt+0" label={t('common.cheatsheet.switchTab')} />
       </Section>
 
       {/* Editing */}
@@ -93,6 +93,7 @@ export default function CheatsheetModal() {
           <TabDescRow tab="Alt+6" name={t('nav.countdown')} desc={t('common.cheatsheet.tabCountdown')} />
           <TabDescRow tab="Alt+7" name={t('nav.screen')} desc={t('common.cheatsheet.tabScreen')} />
           <TabDescRow tab="Alt+8" name={t('nav.calendar')} desc={t('common.cheatsheet.tabCalendar')} />
+          <TabDescRow tab="Alt+0" name={t('nav.editor')} desc={t('common.editorTitle')} />
           <TabDescRow tab="Alt+9" name={t('nav.settings')} desc={t('common.cheatsheet.tabSettings')} />
         </Section>
       </div>

@@ -1,4 +1,6 @@
 import type { Presentation, Slide, SlideItem, TextStyle } from '../types';
+import { isItemEditableSlide, isEditorEditableSlide, isVideoEditableSlide } from './slideCapabilities';
+export { isItemEditableSlide } from './slideCapabilities';
 import {
   clamp,
   convertSlideToItems,
@@ -18,6 +20,8 @@ import {
 
 /** Per-slide editing draft held while the editor is open. */
 export interface SlideDraft {
+  videoPlayback?: Slide['videoPlayback'];
+  videoOverlays?: Slide['videoOverlays'];
   items: SlideItem[];
   styles: Record<string, unknown>;
   gridEnabled: boolean;
@@ -35,7 +39,9 @@ export const DEFAULT_GRID_COLOR = 'rgba(255,255,255,0.06)';
 
 export function createDraft(slide: Slide): SlideDraft {
   return {
-    items: convertSlideToItems(slide),
+    videoPlayback: slide.videoPlayback ? { ...slide.videoPlayback } : undefined,
+    videoOverlays: slide.videoOverlays?.map(item => ({ ...item, textStyles: item.textStyles ? { ...item.textStyles } : undefined })),
+    items: isItemEditableSlide(slide) ? convertSlideToItems(slide) : [],
     styles: normalizeSlideStyles(slide.styles as Record<string, unknown>),
     gridEnabled: slide.gridEnabled ?? false,
     gridSize: slide.gridSize ?? 10,
@@ -55,10 +61,6 @@ export function cloneDraft(draft: SlideDraft): SlideDraft {
  * `partsMode` slides are excluded on purpose: converting them to the items
  * model would drop the verse/part navigation their type depends on.
  */
-export function isItemEditableSlide(slide: Slide): boolean {
-  if (slide.partsMode) return false;
-  return slide.type === 'text' || slide.type === 'image' || slide.type === 'video';
-}
 
 /**
  * Folds a draft back into its slide. Mirrors the historical single-slide save
@@ -66,6 +68,8 @@ export function isItemEditableSlide(slide: Slide): boolean {
  * legacy `content`/`styles` fields so older readers keep working.
  */
 export function draftToSlide(slide: Slide, draft: SlideDraft): Slide {
+  if (isVideoEditableSlide(slide)) return { ...slide, videoPlayback: draft.videoPlayback ? { ...draft.videoPlayback } : undefined, videoOverlays: draft.videoOverlays?.map(item => ({ ...item, textStyles: item.textStyles ? { ...item.textStyles } : undefined })) };
+  if (!isItemEditableSlide(slide)) return slide;
   const items = normalizeItems(draft.items);
   const next: Slide = {
     ...slide,
@@ -122,7 +126,7 @@ export function applyDraftsToDeck(
   let changed = false;
   const slides = deck.slides.map((slide) => {
     const draft = drafts.get(slide.id);
-    if (!draft) return slide;
+    if (!draft || !isEditorEditableSlide(slide)) return slide;
     changed = true;
     return draftToSlide(slide, draft);
   });

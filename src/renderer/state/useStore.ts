@@ -123,8 +123,8 @@ interface AppState {
   setSessionSaveStatus: (status: 'idle' | 'error') => void;
 
   // UI State
-  activeTab: 'presentations' | 'slides' | 'bible' | 'media' | 'hymns' | 'countdown' | 'screen' | 'loop' | 'calendar' | 'autosaves' | 'settings';
-  setActiveTab: (tab: 'presentations' | 'slides' | 'bible' | 'media' | 'hymns' | 'countdown' | 'screen' | 'loop' | 'calendar' | 'autosaves' | 'settings') => void;
+  activeTab: 'presentations' | 'slides' | 'bible' | 'media' | 'hymns' | 'countdown' | 'screen' | 'loop' | 'calendar' | 'autosaves' | 'editor' | 'settings';
+  setActiveTab: (tab: 'presentations' | 'slides' | 'bible' | 'media' | 'hymns' | 'countdown' | 'screen' | 'loop' | 'calendar' | 'autosaves' | 'editor' | 'settings') => void;
   presets: Preset[];
   setPresets: (presets: Preset[]) => void;
   panels: { preset: boolean; remote: boolean; styles: boolean; imageStyles: boolean };
@@ -195,8 +195,11 @@ interface AppState {
   setLoopItems: (items: LoopItem[] | ((prev: LoopItem[]) => LoopItem[])) => void;
 
   // Editor State
-  isEditorOpen: boolean;
-  setIsEditorOpen: (open: boolean) => void;
+  editorDirty: boolean;
+  setEditorDirty: (dirty: boolean) => void;
+  editorSessionVersion: number;
+  editorTargetId: string | null;
+  openEditor: (slideId: string) => void;
   slideZoom: number;
   setSlideZoom: (zoom: number | ((prev: number) => number)) => void;
 
@@ -278,6 +281,9 @@ export const useStore = create<AppState>((set) => ({
         nextUndoState.present.slides,
       );
       return {
+        editorSessionVersion: restoring ? state.editorSessionVersion + 1 : state.editorSessionVersion,
+        editorTargetId: restoring ? null : state.editorTargetId,
+        editorDirty: restoring ? false : state.editorDirty,
         undoState: nextUndoState,
         presentation: nextUndoState.present,
         liveSlideId: livePosition.slideId,
@@ -653,8 +659,11 @@ export const useStore = create<AppState>((set) => ({
       return { slideZoom: newZoom };
     }),
 
-  isEditorOpen: false,
-  setIsEditorOpen: (open) => set({ isEditorOpen: open }),
+  editorDirty: false,
+  setEditorDirty: (editorDirty) => set({ editorDirty }),
+  editorSessionVersion: 0,
+  editorTargetId: null,
+  openEditor: (editorTargetId) => set({ editorTargetId, activeTab: 'editor' }),
 
   draggedSlideId: null,
   setDraggedSlideId: (id) => set({ draggedSlideId: id }),

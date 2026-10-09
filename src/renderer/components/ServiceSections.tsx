@@ -10,6 +10,7 @@ import {
   getSectionBlocks,
   moveSectionTo,
   moveSlidesToSection,
+  slideDropDestination,
   normalizeSections,
   removeSection,
   sectionInsertionPoints,
@@ -72,7 +73,7 @@ export default function ServiceSections({
   const [position, setPosition] = useState<'start' | 'end'>('end');
   const [dragIds, setDragIds] = useState<string[]>([]);
   const [dragSection, setDragSection] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<{ sectionId: string; beforeId?: string } | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ sectionId: string; beforeId?: string; targetSlideId?: string } | null>(null);
   const dragRef = useRef<string[]>([]);
   const targetRef = useRef<typeof dropTarget>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -235,8 +236,11 @@ export default function ServiceSections({
     setDragSection(null);
     setDropTarget(null);
   }
-  function markDrop(sectionId: string, beforeId?: string) {
-    const next = { sectionId, beforeId };
+  function markDrop(sectionId: string, targetSlideId?: string) {
+    const destination = targetSlideId
+      ? slideDropDestination(useStore.getState().presentation, new Set(dragRef.current), targetSlideId)
+      : { sectionId };
+    const next = destination ? { ...destination, targetSlideId } : null;
     targetRef.current = next;
     setDropTarget(next);
   }
@@ -412,7 +416,7 @@ export default function ServiceSections({
                 <div
                   className={cn(
                     'group/header sticky z-20 flex items-center gap-1 rounded-t-xl bg-surface-raised p-2 border-b border-white/10',
-                    dropTarget?.sectionId === b.id && !dropTarget.beforeId && 'ring-2 ring-blue-400'
+                    dropTarget?.sectionId === b.id && !dropTarget.targetSlideId && 'ring-2 ring-blue-400'
                   )}
                   style={{ top: toolbarHeight + 8 }}
                   onDragOver={(e) => {
@@ -571,7 +575,7 @@ export default function ServiceSections({
                             className={cn(
                               'relative min-w-0 scroll-mt-36 rounded-xl',
                               previewIds.has(s.id) && 'ring-2 ring-amber-300',
-                              dropTarget?.beforeId === s.id && 'ring-2 ring-blue-400'
+                              dropTarget?.targetSlideId === s.id && 'ring-2 ring-blue-400'
                             )}
                             onContextMenu={(e) => {
                               e.preventDefault();

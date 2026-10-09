@@ -1,311 +1,166 @@
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type RefObject,
-} from 'react';
+import { memo, useCallback, useEffect, useRef, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SlideItem } from '../types';
 import { cn } from '../utils';
-import { clamp, DEFAULT_TEXT_STYLE, DEFAULT_IMAGE_STYLE } from './editorUtils';
+import { SlideImage } from '../components/SlideImage';
+import { DEFAULT_TEXT_STYLE, DEFAULT_IMAGE_STYLE } from './editorUtils';
+import {
+  moveBounds,
+  resizeItemBounds,
+  rotateBounds,
+  screenDelta,
+  type ItemBounds,
+  type ResizeCorner,
+} from './canvasGeometry';
+import { usePointerGesture, FINISH_EDITOR_GESTURE } from './usePointerGesture';
 
 interface CanvasItemProps {
   item: SlideItem;
   isSelected: boolean;
+  keyboardEnabled?: boolean;
   canvasRef: RefObject<HTMLDivElement | null>;
-  onSelect: () => void;
+  onSelect: (id: string, multi?: boolean) => void;
   onDrag: (id: string, x: number, y: number) => void;
   onDragEnd?: (id: string) => void;
-  onResize?: (id: string, width: number, height: number) => void;
+  onTransform: (id: string, bounds: ItemBounds) => void;
   onRotate?: (id: string, rotation: number) => void;
   snapEnabled?: boolean;
   gridSize?: number;
-  zoom: number;
+  lockRatio?: boolean;
 }
-
-const HANDLE_SIZE = 10;
 
 function stylesTextHighlight(value?: string): React.CSSProperties['backgroundColor'] {
   return value && value !== 'transparent' ? value : undefined;
 }
-const ROTATION_HANDLE_OFFSET = 30;
 
 export const CanvasItem = memo(function CanvasItem({
   item,
   isSelected,
+  keyboardEnabled = true,
   canvasRef,
   onSelect,
   onDrag,
   onDragEnd,
-  onResize,
+  onTransform,
   onRotate,
   snapEnabled,
   gridSize,
-  zoom,
+  lockRatio,
 }: CanvasItemProps) {
   const { t } = useTranslation();
   const selfRef = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState(false);
-  const [resizing, setResizing] = useState<'tl' | 'tr' | 'bl' | 'br' | null>(null);
-  const [rotating, setRotating] = useState(false);
-  const dragStart = useRef<{
-    pointerX: number;
-    pointerY: number;
-    startX: number;
-    startY: number;
-    startWidth: number;
-    startHeight: number;
-    startRotation: number;
-    rect: DOMRect;
-  } | null>(null);
-  const dragActive = useRef(false);
-  // Store zoom in a ref so drag/resize listeners don't re-attach on zoom change.
-  const zoomRef = useRef(zoom);
-  zoomRef.current = zoom;
-
-  const snap = useCallback(
-    (value: number, grid: number): number => {
-      if (!snapEnabled || grid <= 0) return value;
-      return Math.round(value / grid) * grid;
-    },
-    [snapEnabled],
-  );
-
-  const startDrag = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      if (item.locked) return;
-      // Alt+drag is a cross-slide drag gesture owned by the canvas wrapper.
-      if (e.altKey) return;
-      if (!canvasRef.current) return;
-      e.stopPropagation();
-      onSelect();
-      const rect = canvasRef.current.getBoundingClientRect();
-      dragStart.current = {
-        pointerX: e.clientX,
-        pointerY: e.clientY,
-        startX: item.x,
-        startY: item.y,
-        startWidth: item.width,
-        startHeight: item.height,
-        startRotation: item.rotation || 0,
-        rect,
-      };
-      setDragging(true);
-      (e.currentTarget as HTMLDivElement).setPointerCapture?.(e.pointerId);
-    },
-    [canvasRef, item.locked, item.x, item.y, onSelect],
-  );
-
-  const startResize = useCallback(
-    (handle: 'tl' | 'tr' | 'bl' | 'br') =>
-      (e: React.PointerEvent<HTMLDivElement>) => {
-        if (item.locked || e.altKey) return;
-        if (!canvasRef.current) return;
-        e.stopPropagation();
-        e.preventDefault();
-        const rect = canvasRef.current.getBoundingClientRect();
-        dragStart.current = {
-          pointerX: e.clientX,
-          pointerY: e.clientY,
-          startX: item.x,
-          startY: item.y,
-          startWidth: item.width,
-          startHeight: item.height,
-          startRotation: item.rotation || 0,
-          rect,
-        };
-        setResizing(handle);
-        (e.currentTarget as HTMLDivElement).setPointerCapture?.(e.pointerId);
-      },
-    [item.locked, canvasRef, item.x, item.y, item.width, item.height, item.rotation],
-  );
-
-  const startRotate = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      if (item.locked || e.altKey) return;
-      if (!canvasRef.current) return;
-      e.stopPropagation();
-      e.preventDefault();
-      const rect = canvasRef.current.getBoundingClientRect();
-      dragStart.current = {
-        pointerX: e.clientX,
-        pointerY: e.clientY,
-        startX: item.x,
-        startY: item.y,
-        startWidth: item.width,
-        startHeight: item.height,
-        startRotation: item.rotation || 0,
-        rect,
-      };
-      setRotating(true);
-      (e.currentTarget as HTMLDivElement).setPointerCapture?.(e.pointerId);
-    },
-    [item.locked, canvasRef, item.x, item.y, item.width, item.height, item.rotation],
-  );
-
+  const keyboardEnd = useRef<(() => void) | null>(null);
+  const finishKeyboard = useCallback(() => {
+    const finish = keyboardEnd.current;
+    keyboardEnd.current = null;
+    finish?.();
+  }, []);
   useEffect(() => {
-    if (!dragging && !resizing && !rotating) return;
-    dragActive.current = true;
-
-    const handleMove = (e: PointerEvent) => {
-      if (!dragActive.current) return;
-      const start = dragStart.current;
-      if (!start) return;
-
-      const currentZoom = zoomRef.current;
-      const dxPct = ((e.clientX - start.pointerX) / start.rect.width) * 100 * currentZoom;
-      const dyPct = ((e.clientY - start.pointerY) / start.rect.height) * 100 * zoom;
-
-      if (dragging) {
-        let nextX = clamp(start.startX + dxPct, 0, Math.max(0, 100 - item.width));
-        let nextY = clamp(start.startY + dyPct, 0, Math.max(0, 100 - item.height));
-
-        if (snapEnabled && gridSize && gridSize > 0) {
-          nextX = snap(nextX, gridSize);
-          nextY = snap(nextY, gridSize);
-        }
-
-        onDrag(item.id, nextX, nextY);
-      }
-
-      if (resizing) {
-        let newW: number;
-        let newH: number;
-        let newX = start.startX;
-        let newY = start.startY;
-
-        if (resizing === 'br') {
-          newW = start.startWidth + dxPct;
-          newH = start.startHeight + dyPct;
-        } else if (resizing === 'bl') {
-          newW = start.startWidth - dxPct;
-          newH = start.startHeight + dyPct;
-          newX = start.startX + dxPct;
-        } else if (resizing === 'tr') {
-          newW = start.startWidth + dxPct;
-          newH = start.startHeight - dyPct;
-          newY = start.startY + dyPct;
-        } else {
-          newW = start.startWidth - dxPct;
-          newH = start.startHeight - dyPct;
-          newX = start.startX + dxPct;
-          newY = start.startY + dyPct;
-        }
-
-        if (snapEnabled && gridSize && gridSize > 0) {
-          newW = snap(newW, gridSize);
-          newH = snap(newH, gridSize);
-        }
-
-        newW = clamp(newW, 4, 100);
-        newH = clamp(newH, 4, 100);
-        newX = clamp(newX, 0, 100 - newW);
-        newY = clamp(newY, 0, 100 - newH);
-
-        onDrag(item.id, newX, newY);
-        onResize?.(item.id, newW, newH);
-      }
-
-      if (rotating && onRotate) {
-        const centerX = start.rect.left + start.rect.width / 2;
-        const centerY = start.rect.top + start.rect.height / 2;
-        const angle =
-          (Math.atan2(e.clientY - centerY, e.clientX - centerX) * 180) / Math.PI;
-        const startAngle =
-          (Math.atan2(
-            start.pointerY - centerY,
-            start.pointerX - centerX,
-          ) * 180) /
-          Math.PI;
-        const delta = angle - startAngle;
-        const newRotation = ((start.startRotation + delta) % 360 + 360) % 360;
-        onRotate(item.id, Math.round(newRotation));
-      }
+    const up = (event: KeyboardEvent) => {
+      if (event.key.startsWith('Arrow')) finishKeyboard();
     };
-
-    const handleUp = () => {
-      if (!dragActive.current) return;
-      dragActive.current = false;
-      setDragging(false);
-      setResizing(null);
-      setRotating(false);
-      onDragEnd?.(item.id);
-      dragStart.current = null;
-    };
-
-    window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', handleUp);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', finishKeyboard);
+    window.addEventListener(FINISH_EDITOR_GESTURE, finishKeyboard);
     return () => {
-      window.removeEventListener('pointermove', handleMove);
-      window.removeEventListener('pointerup', handleUp);
+      finishKeyboard();
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', finishKeyboard);
+      window.removeEventListener(FINISH_EDITOR_GESTURE, finishKeyboard);
     };
-  }, [
-    dragging,
-    resizing,
-    rotating,
-    item.id,
-    item.width,
-    item.height,
-    onDrag,
-    onResize,
-    onRotate,
-    onDragEnd,
-    snap,
-    snapEnabled,
-    gridSize,
-  ]);
+  }, [finishKeyboard]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (item.locked) return;
-      const STEP = e.shiftKey ? 2 : 0.5;
-      let dx = 0;
-      let dy = 0;
-      switch (e.key) {
-        case 'ArrowLeft':
-          dx = -STEP;
-          break;
-        case 'ArrowRight':
-          dx = STEP;
-          break;
-        case 'ArrowUp':
-          dy = -STEP;
-          break;
-        case 'ArrowDown':
-          dy = STEP;
-          break;
-        default:
-          return;
+  type Gesture = {
+    kind: 'move' | 'rotate' | ResizeCorner;
+    item: SlideItem;
+    rect: DOMRect;
+    x: number;
+    y: number;
+    moved: boolean;
+  };
+  const begin = usePointerGesture<Gesture>(
+    (event, start) => {
+      if (!start.moved && event.clientX === start.x && event.clientY === start.y) return;
+      start.moved = true;
+      const delta = screenDelta(event.clientX - start.x, event.clientY - start.y, start.rect);
+      const grid = snapEnabled ? (gridSize ?? 0) : 0;
+      if (start.kind === 'move') {
+        const next = moveBounds(start.item, delta.x, delta.y, grid);
+        onDrag(start.item.id, next.x, next.y);
+      } else if (start.kind === 'rotate') {
+        onRotate?.(
+          start.item.id,
+          rotateBounds(
+            { ...start.item, rotation: start.item.rotation ?? 0 },
+            start.rect,
+            { x: start.x, y: start.y },
+            { x: event.clientX, y: event.clientY }
+          )
+        );
+      } else {
+        onTransform(
+          start.item.id,
+          resizeItemBounds(
+            start.item,
+            start.kind,
+            event.clientX - start.x,
+            event.clientY - start.y,
+            start.rect,
+            grid,
+            lockRatio
+          )
+        );
       }
-      e.preventDefault();
-      e.stopPropagation();
-      const nextX = clamp(item.x + dx, 0, Math.max(0, 100 - item.width));
-      const nextY = clamp(item.y + dy, 0, Math.max(0, 100 - item.height));
-      onDrag(item.id, nextX, nextY);
     },
-    [item, onDrag],
+    (start) => onDragEnd?.(start.item.id)
   );
+
+  const startGesture = (kind: Gesture['kind']) => (event: React.PointerEvent<HTMLDivElement>) => {
+    if (item.locked || event.altKey || event.button !== 0 || !canvasRef.current) return;
+    event.stopPropagation();
+    event.preventDefault();
+    finishKeyboard();
+    selfRef.current?.focus({ preventScroll: true });
+    const multi = event.shiftKey || event.ctrlKey || event.metaKey;
+    onSelect(item.id, multi);
+    if (multi && kind === 'move') return;
+    begin(event, {
+      kind,
+      item,
+      rect: canvasRef.current.getBoundingClientRect(),
+      x: event.clientX,
+      y: event.clientY,
+      moved: false,
+    });
+  };
+  const startDrag = startGesture('move');
+  const startResize = (corner: ResizeCorner) => startGesture(corner);
+  const startRotate = startGesture('rotate');
+
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (!keyboardEnabled || event.defaultPrevented) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      event.stopPropagation();
+      onSelect(item.id);
+      return;
+    }
+    if (item.locked || event.altKey || event.ctrlKey || event.metaKey) return;
+    const step = event.shiftKey ? 2 : 0.5;
+    const dx = event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0;
+    const dy = event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0;
+    if (!dx && !dy) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!keyboardEnd.current) keyboardEnd.current = () => onDragEnd?.(item.id);
+    const next = moveBounds(item, dx, dy);
+    onDrag(item.id, next.x, next.y);
+  };
 
   const textStyles = item.textStyles ?? DEFAULT_TEXT_STYLE;
   const imageStyles = item.imageStyles ?? DEFAULT_IMAGE_STYLE;
 
   const vAlignMap: Record<string, string> = { top: 'flex-start', center: 'center', bottom: 'flex-end' };
-
-  const cssFilter = [
-    imageStyles.brightness !== 1
-      ? `brightness(${imageStyles.brightness})`
-      : null,
-    imageStyles.contrast !== 1
-      ? `contrast(${imageStyles.contrast})`
-      : null,
-    imageStyles.grayscale ? `grayscale(${imageStyles.grayscale})` : null,
-    imageStyles.sepia ? `sepia(${imageStyles.sepia})` : null,
-    imageStyles.blur ? `blur(${imageStyles.blur}px)` : null,
-  ]
-    .filter(Boolean)
-    .join(' ') || undefined;
 
   const borderStyle =
     item.borderWidth && item.borderWidth > 0
@@ -313,10 +168,6 @@ export const CanvasItem = memo(function CanvasItem({
       : undefined;
 
   const borderRadius = item.borderRadius ? `${item.borderRadius}px` : undefined;
-
-  const cropClipPath = imageStyles.crop
-    ? `inset(${imageStyles.crop.y}% ${100 - imageStyles.crop.x - imageStyles.crop.width}% ${100 - imageStyles.crop.y - imageStyles.crop.height}% ${imageStyles.crop.x}%)`
-    : undefined;
 
   const sharedStyle: React.CSSProperties = {
     left: `${item.x}%`,
@@ -333,11 +184,10 @@ export const CanvasItem = memo(function CanvasItem({
     'absolute select-none focus-visible:outline-none',
     item.locked ? 'cursor-not-allowed' : 'cursor-move',
     item.visible === false && 'opacity-0 pointer-events-none',
-    isSelected && 'ring-2 ring-blue-500 ring-offset-0',
+    isSelected && 'ring-2 ring-blue-500 ring-offset-0'
   );
 
-  const handleClassName =
-    'absolute w-3 h-3 bg-white border-2 border-blue-500 rounded-full z-10';
+  const handleClassName = 'absolute w-3 h-3 bg-white border-2 border-blue-500 rounded-full z-10';
 
   const renderResizeHandles = () => {
     if (!isSelected || item.locked) return null;
@@ -372,13 +222,6 @@ export const CanvasItem = memo(function CanvasItem({
   };
 
   if (item.type === 'image') {
-    const flipTransform = [
-      imageStyles.flipX ? 'scaleX(-1)' : '',
-      imageStyles.flipY ? 'scaleY(-1)' : '',
-    ]
-      .filter(Boolean)
-      .join(' ');
-
     return (
       <div
         ref={selfRef}
@@ -386,33 +229,15 @@ export const CanvasItem = memo(function CanvasItem({
         role="button"
         onPointerDown={startDrag}
         onKeyDown={handleKeyDown}
+        onBlur={finishKeyboard}
+        aria-label={item.content || t('common.editorImage')}
         className={sharedClassName}
         style={{
           ...sharedStyle,
-          opacity: imageStyles.opacity ?? 1,
-          filter: cssFilter,
-          overflow: 'hidden',
         }}
       >
         {item.mediaUrl ? (
-          <div className="h-full w-full" style={{ clipPath: cropClipPath }}>
-            <img
-              src={item.mediaUrl}
-              alt=""
-              draggable={false}
-              className={cn(
-                'h-full w-full pointer-events-none',
-                imageStyles.objectFit === 'cover'
-                  ? 'object-cover'
-                  : imageStyles.objectFit === 'fill'
-                    ? 'object-fill'
-                    : 'object-contain',
-              )}
-              style={{
-                transform: flipTransform || undefined,
-              }}
-            />
-          </div>
+          <SlideImage src={item.mediaUrl} styles={imageStyles} />
         ) : (
           <div className="flex h-full w-full items-center justify-center rounded-lg border border-dashed border-white/20 bg-white/5 text-xs text-white/50">
             {t('common.editorNoImageShort')}
@@ -431,10 +256,12 @@ export const CanvasItem = memo(function CanvasItem({
         role="button"
         onPointerDown={startDrag}
         onKeyDown={handleKeyDown}
+        onBlur={finishKeyboard}
+        aria-label={item.content || t('common.editorImage')}
         className={cn(sharedClassName, 'border border-dashed border-blue-400/40')}
         style={sharedStyle}
       >
-        {item.groupItems.map(child => (
+        {item.groupItems.map((child) => (
           <div
             key={child.id}
             className="absolute"
@@ -456,7 +283,9 @@ export const CanvasItem = memo(function CanvasItem({
                   textAlign: child.textStyles?.textAlign || 'center',
                   padding: '4px',
                 }}
-              >                  <span
+              >
+                {' '}
+                <span
                   style={{
                     color: child.textStyles?.textColor ?? '#ffffff',
                     backgroundColor: stylesTextHighlight(child.textStyles?.textHighlight),
@@ -473,12 +302,7 @@ export const CanvasItem = memo(function CanvasItem({
                 </span>
               </div>
             ) : (
-              <img
-                src={child.mediaUrl}
-                alt=""
-                draggable={false}
-                className="w-full h-full object-contain"
-              />
+              <SlideImage src={child.mediaUrl} styles={child.imageStyles} />
             )}
           </div>
         ))}
@@ -494,6 +318,8 @@ export const CanvasItem = memo(function CanvasItem({
       role="button"
       onPointerDown={startDrag}
       onKeyDown={handleKeyDown}
+      onBlur={finishKeyboard}
+      aria-label={item.content || t('common.editorImage')}
       className={sharedClassName}
       style={{
         ...sharedStyle,
@@ -502,19 +328,17 @@ export const CanvasItem = memo(function CanvasItem({
         justifyContent: 'center',
         textAlign: textStyles.textAlign || 'center',
         padding: '8px',
-        overflow: 'hidden',
       }}
     >
       <span
         style={{
           color: textStyles.textColor,
+          textTransform: textStyles.textTransform ?? 'none',
           fontSize: `${Math.max(4, textStyles.fontSize || 32)}px`,
           fontFamily: textStyles.fontFamily,
           fontWeight: textStyles.fontWeight,
           fontStyle: textStyles.fontStyle,
-          letterSpacing: textStyles.letterSpacing
-            ? `${textStyles.letterSpacing}px`
-            : undefined,
+          letterSpacing: textStyles.letterSpacing ? `${textStyles.letterSpacing}px` : undefined,
           lineHeight: textStyles.lineHeight || 1.25,
           backgroundColor: stylesTextHighlight(textStyles.textHighlight) ?? textStyles.backgroundColor,
           textDecoration: textStyles.textDecoration || undefined,
@@ -526,6 +350,8 @@ export const CanvasItem = memo(function CanvasItem({
             : undefined,
           whiteSpace: 'pre-wrap',
           width: '100%',
+          maxHeight: '100%',
+          overflow: 'hidden',
         }}
       >
         {item.content}

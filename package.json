@@ -1,6 +1,6 @@
 {
   "name": "worship-presentation-assistant",
-  "version": "1.4.12",
+  "version": "1.4.13",
   "main": "dist-electron/main.js",
   "description": "Worship Presentation Assistant - Simple Worship Presentation App",
   "author": "IPCA",
@@ -18,7 +18,7 @@
     "test:matcher": "tsx --test src/renderer/stt/slideMatcher.test.ts",
     "test:stt": "tsx --test src/renderer/state/useSttStore.test.ts",
     "test:canvas": "tsx --test src/renderer/canvasSource.test.ts",
-    "test:editor": "tsx --test src/renderer/editor/editorSelection.test.ts src/renderer/editor/slideDraft.test.ts src/renderer/editor/elementDrag.test.ts src/renderer/editor/useEditorDeck.test.ts src/renderer/editor/editorDeckCommit.test.ts",
+    "test:editor": "tsx --test src/renderer/videoOverlays.test.ts src/renderer/editor/videoTimeline.test.ts src/renderer/videoPlayback.test.ts src/renderer/editor/videoDraft.test.ts src/main/mediaPosterSource.test.ts src/renderer/editor/slideCapabilities.test.ts src/renderer/components/mediaPosterQueue.test.ts src/renderer/editor/editorSelection.test.ts src/renderer/editor/slideDraft.test.ts src/renderer/editor/elementDrag.test.ts src/renderer/editor/useEditorDeck.test.ts src/renderer/editor/editorDeckCommit.test.ts src/renderer/editor/editorWorkspace.test.ts src/renderer/slidePreviewGeometry.test.ts src/renderer/editor/canvasGeometry.test.ts src/renderer/editor/pointerSession.test.ts src/renderer/editor/colors.test.ts src/renderer/imageGeometry.test.ts src/renderer/editor/imageLayout.test.ts",
     "test:zoom": "tsx --test src/renderer/__tests__/slideGridZoom.test.ts",
     "smoke:worker": "electron perf/worker-smoke.cjs"
   },
@@ -67,6 +67,7 @@
     "eslint-plugin-react": "^7.34.1",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
+    "mediabunny": "1.61.3",
     "postcss": "^8.4.38",
     "prettier": "^3.2.5",
     "rimraf": "^6.1.3",

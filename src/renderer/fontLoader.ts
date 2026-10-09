@@ -5,7 +5,7 @@ export function slideFonts(slide: Slide): string[] {
   const families = new Set<string>();
   const add = (family?: string) => { if (family) families.add(family); };
   const visit = (items?: SlideItem[]) => items?.forEach(item => { add(item.textStyles?.fontFamily); visit(item.groupItems); });
-  add(slide.styles?.fontFamily); visit(slide.items);
+  add(slide.styles?.fontFamily); visit(slide.items); visit(slide.videoOverlays);
   return [...families];
 }
 export function loadGoogleFont(family: string): Promise<boolean> {

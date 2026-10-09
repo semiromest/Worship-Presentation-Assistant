@@ -67,20 +67,18 @@ export function createSelection(activeId: string): RailSelection {
 export function normalizeSelection(selection: RailSelection, order: string[]): RailSelection {
   if (order.length === 0) return selection;
 
-  const selected = uniqueInOrder(order, selection.selectedIds).filter((id) => order.includes(id));
+  const alive = new Set(order);
+  const selected = uniqueInOrder(order, selection.selectedIds).filter((id) => alive.has(id));
 
   let activeId = selected.includes(selection.activeId) ? selection.activeId : selected[0];
   if (!activeId) {
-    activeId = selection.activeId && order.includes(selection.activeId)
-      ? selection.activeId
-      : order[0];
+    activeId = selection.activeId && alive.has(selection.activeId) ? selection.activeId : order[0];
   }
 
   const selectedIds = selected.length > 0 ? selected : [activeId];
   if (!selectedIds.includes(activeId)) selectedIds.push(activeId);
 
-  const inRange =
-    selection.anchorIndex !== null && selection.anchorIndex >= 0 && selection.anchorIndex < order.length;
+  const inRange = selection.anchorIndex !== null && selection.anchorIndex >= 0 && selection.anchorIndex < order.length;
 
   return {
     activeId,
@@ -103,7 +101,7 @@ export function clickSelect(
   selection: RailSelection,
   order: string[],
   id: string,
-  modifiers: SelectModifiers = {},
+  modifiers: SelectModifiers = {}
 ): RailSelection {
   const index = order.indexOf(id);
   if (index === -1) return selection;
@@ -112,7 +110,7 @@ export function clickSelect(
     const anchor = resolveAnchor(selection, order);
     return normalizeSelection(
       { activeId: id, selectedIds: rangeBetween(order, anchor, index), anchorIndex: anchor },
-      order,
+      order
     );
   }
 
@@ -125,30 +123,20 @@ export function clickSelect(
 
     if (isSelected) {
       const remaining = selection.selectedIds.filter((selectedId) => selectedId !== id);
-      const activeId = selection.activeId === id
-        ? remaining[remaining.length - 1]
-        : selection.activeId;
+      const activeId = selection.activeId === id ? remaining[remaining.length - 1] : selection.activeId;
       return normalizeSelection({ activeId, selectedIds: remaining, anchorIndex: index }, order);
     }
 
     // Added slides become the active one, matching how the canvas follows the
     // most recent click in every mainstream editor.
-    return normalizeSelection(
-      { activeId: id, selectedIds: [...selection.selectedIds, id], anchorIndex: index },
-      order,
-    );
+    return normalizeSelection({ activeId: id, selectedIds: [...selection.selectedIds, id], anchorIndex: index }, order);
   }
 
   return normalizeSelection({ activeId: id, selectedIds: [id], anchorIndex: null }, order);
 }
 
 /** Arrow / PageUp-PageDown navigation. `extend` keeps the anchor (Shift). */
-export function moveActive(
-  selection: RailSelection,
-  order: string[],
-  delta: number,
-  extend = false,
-): RailSelection {
+export function moveActive(selection: RailSelection, order: string[], delta: number, extend = false): RailSelection {
   if (order.length === 0) return selection;
   const current = order.indexOf(selection.activeId);
   const from = current === -1 ? 0 : current;
@@ -159,7 +147,7 @@ export function moveActive(
     const anchor = resolveAnchor(selection, order);
     return normalizeSelection(
       { activeId: nextId, selectedIds: rangeBetween(order, anchor, next), anchorIndex: anchor },
-      order,
+      order
     );
   }
 
@@ -170,7 +158,7 @@ export function selectEdge(
   selection: RailSelection,
   order: string[],
   edge: 'start' | 'end',
-  extend = false,
+  extend = false
 ): RailSelection {
   if (order.length === 0) return selection;
   const current = Math.max(0, order.indexOf(selection.activeId));
@@ -180,17 +168,14 @@ export function selectEdge(
 
 export function selectAll(selection: RailSelection, order: string[]): RailSelection {
   if (order.length === 0) return selection;
-  return normalizeSelection(
-    { activeId: selection.activeId, selectedIds: order, anchorIndex: null },
-    order,
-  );
+  return normalizeSelection({ activeId: selection.activeId, selectedIds: order, anchorIndex: null }, order);
 }
 
 /** Collapses a bulk selection back onto the active slide (Esc step 2). */
 export function clearSelection(selection: RailSelection, order: string[]): RailSelection {
   return normalizeSelection(
     { activeId: selection.activeId, selectedIds: [selection.activeId], anchorIndex: null },
-    order,
+    order
   );
 }
 

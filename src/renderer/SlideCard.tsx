@@ -1,6 +1,9 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { RangeVideo } from './components/RangeVideo';
+import { VideoOverlayLayer } from './components/VideoOverlayLayer';
+import { MediaPoster } from './components/MediaPoster';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Video, ListOrdered, Play, Square, Lock } from 'lucide-react';
+import { ListOrdered, Play, Square, Lock } from 'lucide-react';
 import type { Slide } from './types';
 import { cn } from './utils';
 import {
@@ -53,24 +56,31 @@ const Badge = memo(({
 Badge.displayName = 'Badge';
 
 // Media preview components
-const VideoPreview = memo(({ thumbnailUrl, objectFit, mediaUrl }: {
+const VideoPreview = memo(({ thumbnailUrl, objectFit, mediaUrl, playback, slideId, overlays }: {
+  overlays?: Slide['videoOverlays'];
+  playback?: Slide['videoPlayback'];
+  slideId: string;
   thumbnailUrl?: string;
   objectFit?: string;
   mediaUrl?: string;
 }) => {
   const { t } = useTranslation();
   const [playing, setPlaying] = useState(false);
+  const [position, setPosition] = useState(playback?.startSeconds ?? 0);
 
   if (playing && mediaUrl) {
     return (
       <div className="relative w-full h-full">
-        <video
+        <RangeVideo
+          key={slideId}
           src={mediaUrl}
-          autoPlay
-          loop
+          playback={playback}
+          autoplay
           muted
+          onPosition={overlays?.length ? setPosition : undefined}
           className={cn('w-full h-full', objectFit === 'cover' ? 'object-cover' : 'object-contain')}
         />
+        <VideoOverlayLayer overlays={overlays} position={position} />
         {/* Stop button is its own control: clicks elsewhere on the slide still select it. */}
         <button
           type="button"
@@ -86,19 +96,8 @@ const VideoPreview = memo(({ thumbnailUrl, objectFit, mediaUrl }: {
 
   return (
     <div className="relative w-full h-full">
-      {thumbnailUrl ? (
-        <img
-          src={thumbnailUrl}
-          className={cn('w-full h-full', objectFit === 'cover' ? 'object-cover' : 'object-contain')}
-          alt="Video thumbnail"
-          loading="lazy"
-        />
-      ) : (
-        <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-          <Video className="w-10 h-10 text-white/20" aria-hidden="true" />
-          <span className="text-[10px] text-white/50">{t('common.slideVideo')}</span>
-        </div>
-      )}
+      <MediaPoster mediaUrl={mediaUrl} thumbnailUrl={thumbnailUrl} objectFit={objectFit} />
+      <VideoOverlayLayer overlays={overlays} position={playback?.startSeconds ?? 0} />
       {/* Play button is its own control: clicks elsewhere on the slide still select it. */}
       <button
         type="button"
@@ -114,224 +113,15 @@ const VideoPreview = memo(({ thumbnailUrl, objectFit, mediaUrl }: {
 
 VideoPreview.displayName = 'VideoPreview';
 
-const loopVideoThumbnailCache = new Map<string, string>();
-
-// Normalise a file:// or local-resource:// URL back to a plain OS path so we
-// can pass it to the Electron IPC thumbnail generator.
-function mediaUrlToFilePath(url: string): string | null {
-  try {
-    if (url.startsWith('file://')) {
-      let p = decodeURIComponent(new URL(url).pathname);
-      // Windows: /C:/... → C:/...
-      if (/^\/[a-zA-Z]:\//.test(p)) p = p.slice(1);
-      return p.replace(/\//g, '\\');
-    }
-    if (url.startsWith('local-resource://mediafile/')) {
-      const encoded = url.slice('local-resource://mediafile/'.length);
-      let p = decodeURIComponent(encoded);
-      if (/^[a-zA-Z]:\//.test(p)) p = p.replace(/\//g, '\\');
-      return p;
-    }
-  } catch {
-    // ignore
-  }
-  return null;
-}
-
-// Render a single video frame to a data URL entirely in the renderer.
-// Uses play/pause + requestVideoFrameCallback (if available) to guarantee the
-// decoded frame is in the pixel buffer before drawing.
-function extractVideoFrameDataUrl(mediaUrl: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    const video = document.createElement('video');
-    video.muted = true;
-    video.playsInline = true;
-    video.crossOrigin = 'anonymous';
-    video.preload = 'auto';
-    video.setAttribute('muted', '');
-    video.setAttribute('playsinline', '');
-
-    // Convert file:// to local-resource:// so CORS canvas tainting is avoided.
-    let src = mediaUrl;
-    if (mediaUrl.startsWith('file://') && window.electronAPI) {
-      const fp = mediaUrlToFilePath(mediaUrl);
-      if (fp) src = `local-resource://mediafile/${encodeURIComponent(fp.replace(/\\/g, '/'))}`;
-    }
-    video.src = src;
-
-    let settled = false;
-    const timer = setTimeout(() => done(null), 10_000);
-
-    const done = (result: string | null) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      video.pause();
-      video.removeAttribute('src');
-      try { video.load(); } catch { /**/ }
-      resolve(result);
-    };
-
-    const capture = () => {
-      try {
-        const vw = video.videoWidth;
-        const vh = video.videoHeight;
-        if (!vw || !vh) { done(null); return; }
-        const maxEdge = 400;
-        const scale = Math.min(maxEdge / vw, maxEdge / vh, 1);
-        const c = document.createElement('canvas');
-        c.width = Math.round(vw * scale);
-        c.height = Math.round(vh * scale);
-        const ctx = c.getContext('2d');
-        if (!ctx) { done(null); return; }
-        ctx.drawImage(video, 0, 0, c.width, c.height);
-        // Detect all-black frame and retry up to 3 times at different positions
-        try {
-          const d = ctx.getImageData(0, 0, Math.min(c.width, 40), Math.min(c.height, 40)).data;
-          let sum = 0, n = 0;
-          for (let i = 0; i < d.length; i += 4 * 16) { sum += d[i] + d[i+1] + d[i+2]; n++; }
-          if (n > 0 && sum / (n * 3) < 10) { done(null); return; }
-        } catch { /**/ }
-        c.toBlob((blob) => {
-          if (!blob) { done(null); return; }
-          const reader = new FileReader();
-          reader.onload = () => done(reader.result as string);
-          reader.onerror = () => done(null);
-          reader.readAsDataURL(blob);
-        }, 'image/jpeg', 0.75);
-      } catch {
-        done(null);
-      }
-    };
-
-    const afterSeek = () => {
-      // play/pause forces the codec to decode the current frame into the buffer.
-      const p = video.play();
-      const proceed = () => { video.pause(); };
-      if (p) p.then(proceed).catch(proceed);
-      else proceed();
-
-      if (typeof (video as any).requestVideoFrameCallback === 'function') {
-        (video as any).requestVideoFrameCallback(() => { if (!settled) capture(); });
-        setTimeout(() => { if (!settled) capture(); }, 800);
-      } else {
-        requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => { if (!settled) capture(); }, 80)));
-      }
-    };
-
-    video.onloadedmetadata = () => {
-      const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
-      const seekTo = duration > 0
-        ? Math.min(Math.max(duration * 0.08, 0.05), Math.max(0, duration - 0.1))
-        : 0;
-      if (seekTo > 0) {
-        video.currentTime = seekTo;
-      } else {
-        afterSeek();
-      }
-    };
-    video.onseeked = afterSeek;
-    video.onerror = () => done(null);
-    video.load();
-  });
-}
-
-const LoopVideoPreview = memo(({ item }: { item: NonNullable<Slide['loopItems']>[number] }) => {
-  const { t } = useTranslation();
-  const cacheKey = item.mediaUrl;
-  const [thumbnailUrl, setThumbnailUrl] = useState<string | undefined>(
-    () => item.thumbnailUrl ?? loopVideoThumbnailCache.get(cacheKey)
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (item.thumbnailUrl) {
-      loopVideoThumbnailCache.set(cacheKey, item.thumbnailUrl);
-      setThumbnailUrl(item.thumbnailUrl);
-      return () => { cancelled = true; };
-    }
-
-    const cached = loopVideoThumbnailCache.get(cacheKey);
-    if (cached) {
-      setThumbnailUrl(cached);
-      return () => { cancelled = true; };
-    }
-
-    // ── 1. Try Electron main-process thumbnail (ffmpeg) ──────────────────
-    const api = window.electronAPI as (NonNullable<typeof window.electronAPI> & {
-      getMediaThumbnail?: (filePath: string, maxEdge: number) => Promise<string | null>;
-    }) | undefined;
-
-    const filePath = mediaUrlToFilePath(item.mediaUrl);
-
-    const tryMainProcess = async (): Promise<string | null> => {
-      if (!api?.getMediaThumbnail || !filePath) return null;
-      try {
-        const thumbUrl = await api.getMediaThumbnail(filePath, 400);
-        if (!thumbUrl) return null;
-        // Fetch as data URL so it survives without the cache on disk.
-        const res = await fetch(thumbUrl);
-        if (!res.ok) return thumbUrl;
-        const blob = await res.blob();
-        return await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = () => reject(reader.error);
-          reader.readAsDataURL(blob);
-        });
-      } catch {
-        return null;
-      }
-    };
-
-    const run = async () => {
-      // Try main-process first (ffmpeg — most reliable)
-      const mainResult = await tryMainProcess();
-      if (cancelled) return;
-      if (mainResult) {
-        loopVideoThumbnailCache.set(cacheKey, mainResult);
-        setThumbnailUrl(mainResult);
-        return;
-      }
-
-      // ── 2. Renderer-side video frame extraction ──────────────────────
-      const rendererResult = await extractVideoFrameDataUrl(item.mediaUrl);
-      if (cancelled || !rendererResult) return;
-      loopVideoThumbnailCache.set(cacheKey, rendererResult);
-      setThumbnailUrl(rendererResult);
-    };
-
-    run().catch(() => { /* placeholder icon remains */ });
-    return () => { cancelled = true; };
-  }, [cacheKey, item.thumbnailUrl, item.mediaUrl]);
-
-  if (thumbnailUrl) {
-    return (
-      <img
-        src={thumbnailUrl}
-        className="w-full h-full object-cover"
-        alt={t('common.slideVideo')}
-        loading="lazy"
-      />
-    );
-  }
-
-  return (
-    <div className="w-full h-full flex items-center justify-center bg-black/50">
-      <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-        <div className="w-0 h-0 border-l-[8px] border-l-white border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent ml-1" />
-      </div>
-    </div>
-  );
-});
-
+const LoopVideoPreview = memo(({ item }: { item: NonNullable<Slide['loopItems']>[number] }) => (
+  <MediaPoster mediaUrl={item.mediaUrl} thumbnailUrl={item.thumbnailUrl} objectFit="cover" />
+));
 LoopVideoPreview.displayName = 'LoopVideoPreview';
 
 // Slide content renderer
 const SlideContent = memo(({ slide, cardWidth }: { slide: Slide; cardWidth?: number }) => {
   const { t } = useTranslation();
-  const hasItems = slide.items && slide.items.length > 0;
+  const hasItems = !slide.partsMode && (slide.type === 'text' || slide.type === 'image') && slide.items && slide.items.length > 0;
 
   if (hasItems) {
     return (
@@ -359,6 +149,9 @@ const SlideContent = memo(({ slide, cardWidth }: { slide: Slide; cardWidth?: num
     case 'video':
       return (
         <VideoPreview
+          slideId={slide.id}
+          overlays={slide.videoOverlays}
+          playback={slide.videoPlayback}
           thumbnailUrl={slide.thumbnailUrl}
           objectFit={slide.styles?.objectFit}
           mediaUrl={slide.mediaUrl}

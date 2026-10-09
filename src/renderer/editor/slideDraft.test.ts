@@ -382,7 +382,7 @@ test('bulk style apply reports slides without a counterpart instead of inventing
 test('isItemEditableSlide describes exactly what the editor can hold', () => {
   assert.equal(isItemEditableSlide(slide()), true);
   assert.equal(isItemEditableSlide(slide({ type: 'image' })), true);
-  assert.equal(isItemEditableSlide(slide({ type: 'video' })), true);
+  assert.equal(isItemEditableSlide(slide({ type: 'video' })), false);
   assert.equal(isItemEditableSlide(slide({ type: 'countdown' })), false);
   assert.equal(isItemEditableSlide(slide({ type: 'screen' })), false);
   assert.equal(isItemEditableSlide(slide({ type: 'loop' })), false);

@@ -1,5 +1,5 @@
 import { restoreLiveSession } from '../liveSession';
-import { moveSectionSlidesOneStep, moveSlidesToSection } from '../../shared/sectionModel';
+import { moveSectionSlidesOneStep, dropSlidesOnSlide } from '../../shared/sectionModel';
 import { useShallow } from 'zustand/react/shallow';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +7,7 @@ import { useStore } from '../state/useStore';
 import type { Slide, Preset, TransitionType, LoopItem } from '../types';
 import { DEFAULT_STYLES, DEFAULT__TRANSITION } from '../constants';
 import { makeSlideId, toFileUrl } from '../utils';
+import { guardEditorReplacement } from '../editor/editorSessionGuard';
 import { confirmDialog, alertDialog } from '../dialogs';
 import { findPresetByRef } from '../presetUtils';
 import { isLiveSavePreset, getLiveSaveRetention } from './useLiveSave';
@@ -130,9 +131,7 @@ export function useSlideOperations() {
     const moved = presentation.slides[fromIndex];
     const target = presentation.slides[toIndex];
     if (!moved || !target) return;
-    const next = moveSlidesToSection(presentation, new Set([moved.id]), target.sectionId!,
-      fromIndex < toIndex ? (presentation.slides[toIndex + 1]?.sectionId === target.sectionId
-        ? { beforeId: presentation.slides[toIndex + 1].id } : 'end') : { beforeId: target.id });
+    const next = dropSlidesOnSlide(presentation, new Set([moved.id]), target.id);
     setSelectedSlideId(moved.id);
     dispatchUndo({ type: 'SET', payload: next });
     playSfx('reorder');
@@ -378,6 +377,7 @@ export function useSlideOperations() {
         }))
       : [createSlide('text', { content: t('common.newSlideContent') })];
 
+    if (!(await guardEditorReplacement())) return;
     dispatchUndo({
       type: 'RESET',
       payload: {
@@ -391,14 +391,15 @@ export function useSlideOperations() {
         liveIndex: typeof data.liveIndex === 'number' ? data.liveIndex : undefined,
       },
     });
-    setSelectedSlideId(slides[0].id);
+    setSelectedSlideId(slides[0]?.id ?? '');
     if (typeof data.zoom === 'number') {
       setSlideZoom(data.zoom);
     }
     playSfx('open');
   }, [t, dispatchUndo, setSelectedSlideId, setSlideZoom]);
 
-  const applyPreset = useCallback((preset: Preset) => {
+  const applyPreset = useCallback(async (preset: Preset) => {
+    if (!(await guardEditorReplacement())) return;
     const presentationWithId = {
       ...(isLiveSavePreset(preset.name) ? restoreLiveSession(preset.presentation, preset.createdAt) : preset.presentation),
       id: preset.presentation.id || crypto.randomUUID(),
@@ -436,11 +437,12 @@ export function useSlideOperations() {
       return;
     }
 
-    applyPreset(preset);
+    await applyPreset(preset);
   }, [presets, applyPreset, t, setPresets]);
 
   const createNewPresentation = useCallback(async () => {
     if (!(await confirmDialog(t('warnings.confirmNewPresentation')))) return;
+    if (!(await guardEditorReplacement())) return;
 
     if (isProjectorWindowOpen) {
       await window.electronAPI?.toggleProjector?.();

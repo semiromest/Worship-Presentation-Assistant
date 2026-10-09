@@ -434,6 +434,8 @@ export function useProjectorSync() {
         type: slide.type,
         content: slide.content,
         mediaUrl: slide.mediaUrl,
+        videoPlayback: slide.videoPlayback,
+        videoOverlays: slide.videoOverlays,
         styles: slide.styles,
         partsMode: !!slide.partsMode,
         parts: slide.parts ?? null,

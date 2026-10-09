@@ -3,7 +3,7 @@ import type { Slide, SlideItem, TextStyle, ImageStyle } from '../types';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 export const SLIDE_REFERENCE_WIDTH = 1920;
-export const SLIDE_REFERENCE_HEIGHT = Math.round(SLIDE_REFERENCE_WIDTH * 9 / 16);
+export const SLIDE_REFERENCE_HEIGHT = Math.round((SLIDE_REFERENCE_WIDTH * 9) / 16);
 
 export const MIN_ITEM_WIDTH = 4;
 export const MIN_ITEM_HEIGHT = 4;
@@ -111,8 +111,7 @@ export const FONT_PRESETS = [
 
 // ─── Utility functions ────────────────────────────────────────────────────────
 
-export const clamp = (value: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, value));
+export const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
 /**
  * Unique item id factory.
@@ -126,9 +125,7 @@ let itemIdCounter = 0;
 
 export function makeItemId(prefix = 'item'): string {
   itemIdCounter = (itemIdCounter + 1) % 0xffff;
-  return `${prefix}-${Date.now().toString(36)}-${itemIdCounter.toString(36)}-${Math.random()
-    .toString(36)
-    .slice(2, 7)}`;
+  return `${prefix}-${Date.now().toString(36)}-${itemIdCounter.toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
 export function getSafeColor(value: string | undefined, fallback: string): string {
@@ -138,12 +135,7 @@ export function getSafeColor(value: string | undefined, fallback: string): strin
 export function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName.toLowerCase();
-  return (
-    tag === 'input' ||
-    tag === 'textarea' ||
-    tag === 'select' ||
-    target.isContentEditable
-  );
+  return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable;
 }
 
 // ─── Normalizers ──────────────────────────────────────────────────────────────
@@ -189,11 +181,7 @@ export function normalizeItems(items: SlideItem[]): SlideItem[] {
 
 // ─── Immutable item operations ────────────────────────────────────────────────
 
-export function createItem(
-  type: 'text' | 'image',
-  items: SlideItem[] = [],
-  initialContent?: string,
-): SlideItem {
+export function createItem(type: 'text' | 'image', items: SlideItem[] = [], initialContent?: string): SlideItem {
   const maxZ = items.reduce((max, item) => Math.max(max, item.zIndex ?? 0), -1);
   return normalizeItem({
     id: makeItemId(),
@@ -213,13 +201,9 @@ export function createItem(
   });
 }
 
-export function swapLayer(
-  items: SlideItem[],
-  id: string,
-  direction: 'up' | 'down',
-): SlideItem[] {
+export function swapLayer(items: SlideItem[], id: string, direction: 'up' | 'down'): SlideItem[] {
   const ordered = normalizeItems(items);
-  const idx = ordered.findIndex(item => item.id === id);
+  const idx = ordered.findIndex((item) => item.id === id);
   if (idx === -1) return ordered;
 
   const targetIndex = direction === 'up' ? idx + 1 : idx - 1;
@@ -232,7 +216,7 @@ export function swapLayer(
 
 export function duplicateItem(items: SlideItem[], id: string): SlideItem[] {
   const ordered = normalizeItems(items);
-  const source = ordered.find(item => item.id === id);
+  const source = ordered.find((item) => item.id === id);
   if (!source) return ordered;
 
   const copy = normalizeItem({
@@ -249,50 +233,46 @@ export function duplicateItem(items: SlideItem[], id: string): SlideItem[] {
 export function updateItemAt(
   items: SlideItem[],
   id: string,
-  updates: Partial<SlideItem>,
+  updates: Partial<SlideItem> | ((item: SlideItem) => Partial<SlideItem>)
 ): SlideItem[] {
-  return items.map(item =>
-    item.id === id ? normalizeItemShape({ ...item, ...updates }) : item,
+  return items.map((item) =>
+    item.id === id
+      ? normalizeItemShape({ ...item, ...(typeof updates === 'function' ? updates(item) : updates) })
+      : item
   );
 }
 
 export function deleteItemAt(items: SlideItem[], id: string): SlideItem[] {
-  return normalizeItems(items.filter(item => item.id !== id));
+  return normalizeItems(items.filter((item) => item.id !== id));
 }
 
 export function toggleVisibility(items: SlideItem[], id: string): SlideItem[] {
-  return items.map(item =>
-    item.id === id
-      ? { ...item, visible: !(item.visible ?? true) }
-      : item,
-  );
+  return items.map((item) => (item.id === id ? { ...item, visible: !(item.visible ?? true) } : item));
 }
 
 export function toggleLock(items: SlideItem[], id: string): SlideItem[] {
-  return items.map(item =>
-    item.id === id ? { ...item, locked: !item.locked } : item,
-  );
+  return items.map((item) => (item.id === id ? { ...item, locked: !item.locked } : item));
 }
 
 // ─── Multi-selection operations ───────────────────────────────────────────────
 
 export function deleteItems(items: SlideItem[], ids: Set<string>): SlideItem[] {
-  return normalizeItems(items.filter(item => !ids.has(item.id)));
+  return normalizeItems(items.filter((item) => !ids.has(item.id)));
 }
 
 export function duplicateItems(items: SlideItem[], ids: Set<string>): SlideItem[] {
   const ordered = normalizeItems(items);
-  const toDuplicate = ordered.filter(i => ids.has(i.id));
+  const toDuplicate = ordered.filter((i) => ids.has(i.id));
   if (toDuplicate.length === 0) return ordered;
 
-  const copies = toDuplicate.map(source =>
+  const copies = toDuplicate.map((source) =>
     normalizeItem({
       ...source,
       id: makeItemId(),
       x: clamp(source.x + 2, 0, 100 - source.width),
       y: clamp(source.y + 2, 0, 100 - source.height),
       zIndex: ordered.length + Math.random(),
-    }),
+    })
   );
 
   return normalizeItems([...ordered, ...copies]);
@@ -303,17 +283,11 @@ export function duplicateItems(items: SlideItem[], ids: Set<string>): SlideItem[
 export function convertSlideToItems(slide: Slide): SlideItem[] {
   const items = normalizeItems(slide.items || []);
 
-  const baseMediaUrl =
-    slide.type === 'video'
-      ? slide.thumbnailUrl || slide.mediaUrl
-      : slide.mediaUrl;
+  const baseMediaUrl = slide.mediaUrl;
 
-  const hasTextSeed =
-    slide.type === 'text' &&
-    items.some(item => item.type === 'text');
+  const hasTextSeed = slide.type === 'text' && items.some((item) => item.type === 'text');
 
-  const hasMediaSeed =
-    !!baseMediaUrl && items.some(item => item.mediaUrl === baseMediaUrl);
+  const hasMediaSeed = !!baseMediaUrl && items.some((item) => item.mediaUrl === baseMediaUrl);
 
   if (slide.type === 'text' && slide.content && !hasTextSeed) {
     const slideStyles = slide.styles as Record<string, unknown> | undefined;
@@ -340,15 +314,11 @@ export function convertSlideToItems(slide: Slide): SlideItem[] {
           fontFamily: slideStyles?.fontFamily as string | undefined,
         },
         styles: undefined,
-      }),
+      })
     );
   }
 
-  if (
-    (slide.type === 'image' || slide.type === 'video') &&
-    baseMediaUrl &&
-    !hasMediaSeed
-  ) {
+  if (slide.type === 'image' && baseMediaUrl && !hasMediaSeed) {
     items.push(
       normalizeItem({
         id: makeItemId(),
@@ -361,10 +331,10 @@ export function convertSlideToItems(slide: Slide): SlideItem[] {
         zIndex: 0,
         imageStyles: {
           ...DEFAULT_IMAGE_STYLE,
-          objectFit: (slide.styles as Record<string, unknown>)?.objectFit as ImageStyle['objectFit'] || 'contain',
+          objectFit: ((slide.styles as Record<string, unknown>)?.objectFit as ImageStyle['objectFit']) || 'contain',
         },
         styles: undefined,
-      }),
+      })
     );
   }
 

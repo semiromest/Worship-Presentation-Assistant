@@ -8,7 +8,7 @@ import type { Presentation } from '../types';
 test('Alt+9 opens the existing Settings page, not the removed autosaves page', () => {
   assert.equal(tabForShortcut('9'), 'settings');
   assert.equal(tabForShortcut('8'), 'calendar');
-  assert.equal(tabForShortcut('0'), undefined);
+  assert.equal(tabForShortcut('0'), 'editor');
 });
 
 test('saved status survives reopening and live navigation but changes with content', () => {

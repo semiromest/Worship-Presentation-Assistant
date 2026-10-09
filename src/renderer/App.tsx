@@ -12,9 +12,12 @@ import {
   Calendar,
   PanelRightOpen,
   Settings,
+  Paintbrush,
 } from 'lucide-react';
 
 import SlideEditor from './SlideEditor';
+import { ChoiceDialogHost } from './choiceDialogs';
+import { mergeEditorCommit } from './editor/editorConflicts';
 import StageDisplay from './components/StageDisplay';
 import { AnimatedPreview } from './AnimatedPreview';
 
@@ -106,11 +109,12 @@ export default function App() {
   const setPanels = useStore((s) => s.setPanels);
   const selectedPresetName = useStore((s) => s.selectedPresetName);
   const setSelectedPresetName = useStore((s) => s.setSelectedPresetName);
-  const isEditorOpen = useStore((s) => s.isEditorOpen);
-  const setIsEditorOpen = useStore((s) => s.setIsEditorOpen);
+  const editorDirty = useStore((s) => s.editorDirty);
+  const editorSessionVersion = useStore((s) => s.editorSessionVersion);
+  const [editorMounted, setEditorMounted] = useState(false);
+  useEffect(() => { if (activeTab === 'editor') setEditorMounted(true); }, [activeTab]);
   const activeColorPicker = useStore((s) => s.activeColorPicker);
   const setActiveColorPicker = useStore((s) => s.setActiveColorPicker);
-  const dispatchUndo = useStore((s) => s.dispatchUndo);
   const isRightPanelOpen = useStore((s) => s.isRightPanelOpen);
   const setIsRightPanelOpen = useStore((s) => s.setIsRightPanelOpen);
   const isSttPanelOpen = useStore((s) => s.isSttPanelOpen);
@@ -215,6 +219,7 @@ export default function App() {
         { id: 'countdown', icon: Timer, titleKey: 'nav.countdown' },
         { id: 'screen', icon: Monitor, titleKey: 'nav.screen' },
         { id: 'calendar', icon: Calendar, titleKey: 'nav.calendar' },
+        { id: 'editor', icon: Paintbrush, titleKey: 'nav.editor' },
         { id: 'settings', icon: Settings, titleKey: 'nav.settings' },
       ] as const,
     []
@@ -375,7 +380,7 @@ export default function App() {
       {/* Sidebar — navigation landmark */}
       <nav
         aria-label={t('nav.sidebarLabel')}
-        className="w-[72px] flex-shrink-0 bg-surface border-r border-white/10 flex flex-col items-center py-3 gap-1"
+        className="w-[72px] flex-shrink-0 overflow-y-auto overflow-x-hidden bg-surface border-r border-white/10 flex flex-col items-center py-3 gap-1"
       >
         {SIDEBAR_TABS.map(({ id, icon: Icon, titleKey }) => (
           <button
@@ -398,6 +403,7 @@ export default function App() {
                 transition={{ duration: uiMotionEnabled ? uiMotion.duration.standard : 0, ease: uiMotion.ease }}
               />
             )}
+            {id === 'editor' && editorDirty && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-amber-400" aria-label={t('common.editorPendingDraft')} />}
             <Icon className="relative z-10 w-5 h-5 shrink-0" aria-hidden="true" />
             <span className="relative z-10 text-[10px] font-semibold leading-tight text-white/65 max-w-[56px] truncate text-center text-balance">
               {t(titleKey)}
@@ -421,7 +427,7 @@ export default function App() {
         <main id="main-content" className="flex-1 overflow-hidden">
           {/* Screen-reader-only page title — provides h1 for every tab view */}
           <h1 className="sr-only">{t(SIDEBAR_TABS.find((tab) => tab.id === activeTab)?.titleKey ?? 'nav.slides')}</h1>
-            {activeTab !== 'bible' && <m.div
+            {activeTab !== 'bible' && activeTab !== 'editor' && <m.div
               key={activeTab}
               className="h-full"
               initial={uiMotionEnabled ? { opacity: 0, y: uiMotion.distance } : false}
@@ -561,6 +567,29 @@ export default function App() {
                 </div>
               </Suspense>
             )}
+          {(editorMounted || activeTab === 'editor') && (
+            <div className={activeTab === 'editor' ? 'h-full' : 'hidden'} aria-hidden={activeTab !== 'editor'}>
+              <SlideEditor
+                key={editorSessionVersion}
+                active={activeTab === 'editor'}
+                slide={selectedSlide ?? presentation.slides[0]}
+                deck={presentation}
+                onSave={(editedSlides) => {
+                  const current = useStore.getState();
+                  if (editedSlides.length) current.dispatchUndo({ type: 'SET',
+                    payload: mergeEditorCommit(current.presentation, editedSlides) });
+                }}
+                onOpenInSlides={(slideId) => {
+                  const current = useStore.getState();
+                  current.setSelectedSlideId(slideId);
+                  current.setSelectedSlideIds(new Set([slideId]));
+                  current.setIsRightPanelOpen(true);
+                  setActiveTab('slides');
+                }}
+                onClose={() => setActiveTab('slides')}
+              />
+            </div>
+          )}
         </main>
 
         {/* Live captions: bottom-docked console / persistent session bar (any tab) */}
@@ -589,27 +618,7 @@ export default function App() {
         ) : null}
       </div>
 
-      {/* Slide Editor Modal */}
-      {isEditorOpen && selectedSlide && (
-        <SlideEditor
-          slide={selectedSlide}
-          deck={presentation}
-          onSave={(editedSlides) => {
-            // Every slide the editor touched lands in the deck through a single
-            // undo entry, so one Ctrl+Z reverts the whole editing session.
-            const byId = new Map(editedSlides.map((edited) => [edited.id, edited] as const));
-            dispatchUndo({
-              type: 'SET',
-              payload: {
-                ...presentation,
-                slides: presentation.slides.map((s) => byId.get(s.id) ?? s),
-              },
-            });
-            setIsEditorOpen(false);
-          }}
-          onClose={() => setIsEditorOpen(false)}
-        />
-      )}
+      <ChoiceDialogHost />
 
       {/* Cheatsheet Modal */}
       <CheatsheetModal />

@@ -1,5 +1,5 @@
 import ServiceSections from './ServiceSections';
-import { memo, useMemo, useEffect, useCallback, useRef, useState } from 'react';
+import { memo, useMemo, useEffect, useLayoutEffect, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, X, Plus, ZoomIn, ZoomOut, Layers2, Lock } from 'lucide-react';
 import { useStore } from '../state/useStore';
@@ -17,6 +17,9 @@ const CONTENT_PADDING = 16;
 // Approximate card height ratio for virtual scrolling (aspect-video = 9/16 + badge + gap)
 const CARD_ASPECT = 9 / 16;
 const ROW_GAP = 12; // gap-3 = 12px
+
+// Session-only view state survives tab unmounts without entering saved decks.
+const scrollPositions = new Map<string, number>();
 
 interface SlideGridProps {
   addSlide: () => void;
@@ -103,6 +106,7 @@ export default function SlideGrid({
   const setSectionFilterId = useStore((s) => s.setSectionFilterId);
   const selectedSlideIds = useStore((s) => s.selectedSlideIds);
   const selectedSlideId = useStore((s) => s.selectedSlideId);
+  const scrollKey = `${presentation.id ?? presentation.slides[0]?.id ?? 'empty'}:${sectionsEnabled}`;
   const isProjectorWindowOpen = useStore((s) => s.isProjectorWindowOpen);
   const liveIndex = useStore((s) => s.liveIndex);
   const slideZoom = useStore((s) => s.slideZoom);
@@ -132,6 +136,7 @@ export default function SlideGrid({
   }, [presentation.slides, draggedSlideId, resetDragState]);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const restoringScrollRef = useRef(true);
   const [containerWidth, setContainerWidth] = useState(800);
 
   useEffect(() => {
@@ -178,7 +183,7 @@ export default function SlideGrid({
       if (tag === 'input' || tag === 'textarea' || tag === 'select' || el?.isContentEditable) return;
       // The slide editor is a full-screen workspace with its own zoom keys; the
       // grid zoom behind it would only change something the user cannot see.
-      if (useStore.getState().isEditorOpen) return;
+      if (useStore.getState().activeTab === 'editor') return;
       if (e.ctrlKey || e.metaKey) {
         if (e.key === '=' || e.key === '+') { e.preventDefault(); adjustZoom(ZOOM_STEP); }
         else if (e.key === '-') { e.preventDefault(); adjustZoom(-ZOOM_STEP); }
@@ -209,14 +214,14 @@ export default function SlideGrid({
   // Track previous selectedSlideId so we only scroll+focus on actual selection
   // changes, not on every zoom/layout/content update (which would steal focus
   // from the textarea or cause jarring scroll jumps during editing).
-  const prevSelectedIdRef = useRef<string | null>(null);
+  const prevSelectedIdRef = useRef<string | null>(scrollPositions.has(scrollKey) ? selectedSlideId : null);
 
   // On selection change, scroll the selected card into view (keyboard users);
   // virtualized off-screen cards may not exist in the DOM, so compute from row geometry.
   useEffect(() => {
     const idChanged = prevSelectedIdRef.current !== selectedSlideId;
     prevSelectedIdRef.current = selectedSlideId;
-    if (!idChanged) return; // ← içerik düzenleme sırasında focus'u çalma
+    if (!idChanged || restoringScrollRef.current) return; // Preserve restored viewport on return.
 
     const el = containerRef.current;
     if (!el || !selectedSlideId) return;
@@ -264,6 +269,50 @@ export default function SlideGrid({
   }, [filteredSlides, columnCount, showGhost]);
 
   const { startRow, endRow, totalHeight } = useVirtualRows(rows.length, rowHeight, containerRef);
+
+  const restoredKeyRef = useRef<string | null>(null);
+  const restoreTopRef = useRef(0);
+
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    if (restoredKeyRef.current !== scrollKey) {
+      restoredKeyRef.current = scrollKey;
+      restoreTopRef.current = scrollPositions.get(scrollKey) ?? 0;
+      restoringScrollRef.current = scrollPositions.has(scrollKey);
+      el.scrollTop = restoreTopRef.current;
+      el.dispatchEvent(new Event('scroll'));
+    }
+    if (!restoringScrollRef.current) return;
+    // Reapply after measured card geometry has replaced the initial estimate.
+    el.scrollTop = restoreTopRef.current;
+    el.dispatchEvent(new Event('scroll'));
+    let secondFrame = 0;
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => {
+        el.scrollTop = restoreTopRef.current;
+        restoringScrollRef.current = false;
+        el.dispatchEvent(new Event('scroll'));
+      });
+    });
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(secondFrame);
+    };
+  }, [scrollKey, rowHeight, totalHeight]);
+
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const remember = () => {
+      if (!restoringScrollRef.current) scrollPositions.set(scrollKey, el.scrollTop);
+    };
+    el.addEventListener('scroll', remember, { passive: true });
+    return () => {
+      remember();
+      el.removeEventListener('scroll', remember);
+    };
+  }, [scrollKey]);
 
   return (
     <div className="flex flex-col overflow-hidden h-full flex-1">

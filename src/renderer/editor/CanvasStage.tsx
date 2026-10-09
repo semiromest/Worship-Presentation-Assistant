@@ -13,21 +13,26 @@ import type { SlideItem } from '../types';
 import { cn } from '../utils';
 import { SLIDE_REFERENCE_WIDTH, SLIDE_REFERENCE_HEIGHT } from './editorUtils';
 import { CanvasItem } from './CanvasItem';
+import { usePointerGesture } from './usePointerGesture';
+import type { ItemBounds } from './canvasGeometry';
 
 interface CanvasStageProps {
   slideStyles: Record<string, unknown>;
   items: SlideItem[];
   selectedIds: Set<string>;
+  keyboardEnabled?: boolean;
   onSelect: (id: string | null, multi?: boolean) => void;
   onSelectMany: (ids: Set<string>) => void;
   onDrag: (id: string, x: number, y: number) => void;
   onDragEnd: (id: string) => void;
-  onResize: (id: string, width: number, height: number) => void;
+  onTransform: (id: string, bounds: ItemBounds) => void;
   onRotate: (id: string, rotation: number) => void;
   gridEnabled?: boolean;
   gridSize?: number;
   gridColor?: string;
   snapEnabled?: boolean;
+  lockedRatioIds?: Set<string>;
+  safeAreaEnabled?: boolean;
   /** Canvas context menu (paste variants live there). */
   onContextMenu?: (event: React.MouseEvent) => void;
   /**
@@ -49,16 +54,19 @@ export function CanvasStage({
   slideStyles,
   items,
   selectedIds,
+  keyboardEnabled = true,
   onSelect,
   onSelectMany,
   onDrag,
   onDragEnd,
-  onResize,
+  onTransform,
   onRotate,
   gridEnabled,
   gridSize = 10,
   gridColor,
   snapEnabled,
+  lockedRatioIds,
+  safeAreaEnabled,
   onContextMenu,
   onItemDragStart,
 }: CanvasStageProps) {
@@ -69,9 +77,7 @@ export function CanvasStage({
   const [zoom, setZoom] = useState(1);
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
-  const panRef = useRef({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
-  const panStart = useRef({ x: 0, y: 0, startX: 0, startY: 0 });
   const [guides, setGuides] = useState<SnapGuide[]>([]);
   const [rubberBand, setRubberBand] = useState<{
     startX: number;
@@ -83,28 +89,33 @@ export function CanvasStage({
   const [altHeld, setAltHeld] = useState(false);
 
   useEffect(() => {
-    if (!onItemDragStart) return;
+    if (!keyboardEnabled || !onItemDragStart) return;
     const sync = (event: KeyboardEvent) => setAltHeld(event.altKey);
     const clear = () => setAltHeld(false);
-    window.addEventListener('keydown', sync);
-    window.addEventListener('keyup', sync);
+    window.addEventListener('keydown', sync, true);
+    window.addEventListener('keyup', sync, true);
     window.addEventListener('blur', clear);
     return () => {
-      window.removeEventListener('keydown', sync);
-      window.removeEventListener('keyup', sync);
+      window.removeEventListener('keydown', sync, true);
+      window.removeEventListener('keyup', sync, true);
       window.removeEventListener('blur', clear);
     };
-  }, [onItemDragStart]);
-  const rubberStart = useRef({ x: 0, y: 0 });
-  const rubberActive = useRef(false);
+  }, [onItemDragStart, keyboardEnabled]);
 
   useLayoutEffect(() => {
     const el = outerRef.current;
     if (!el) return;
-    const update = () => setContainerWidth(el.offsetWidth);
+    const update = () => {
+      const host = el.parentElement;
+      if (!host || host.clientWidth === 0 || host.clientHeight === 0) return;
+      const styles = getComputedStyle(host);
+      const availableWidth = host.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight);
+      const availableHeight = host.clientHeight - parseFloat(styles.paddingTop) - parseFloat(styles.paddingBottom);
+      setContainerWidth(Math.max(1, Math.min(availableWidth, availableHeight * 16 / 9)));
+    };
     update();
     const ro = new ResizeObserver(update);
-    ro.observe(el);
+    if (el.parentElement) ro.observe(el.parentElement);
     return () => ro.disconnect();
   }, []);
 
@@ -118,129 +129,94 @@ export function CanvasStage({
       if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      setZoom(prev => clampZoom(prev + delta));
+      setZoom((prev) => clampZoom(prev + delta));
     };
     el.addEventListener('wheel', handleWheel, { passive: false });
     return () => el.removeEventListener('wheel', handleWheel);
   }, []);
 
-  // Pan with middle mouse button
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
-      e.preventDefault();
-      setIsPanning(true);
-      panStart.current = {
-        x: e.clientX,
-        y: e.clientY,
-        startX: panX,
-        startY: panY,
-      };
-      return;
-    }
-    if (e.button === 0 && !(e.target as HTMLElement).closest('[data-item]')) {
-      if (!e.shiftKey) {
-        onSelect(null);
-      }
-      rubberStart.current = { x: e.clientX, y: e.clientY };
-      setRubberBand({ startX: e.clientX, startY: e.clientY, endX: e.clientX, endY: e.clientY });
-    }
-  }, [onSelect, panX, panY]);
-
-  const panningRef = useRef(false);
-
-  useEffect(() => {
-    if (!isPanning) return;
-    panningRef.current = true;
-    panRef.current = { x: panX, y: panY };
-    const handleMove = (e: PointerEvent) => {
-      if (!panningRef.current) return;
-      const start = panStart.current;
-      panRef.current = { x: start.startX + (e.clientX - start.x), y: start.startY + (e.clientY - start.y) };
-    };
-    const handleUp = () => {
-      panningRef.current = false;
-      setIsPanning(false);
-      setPanX(panRef.current.x);
-      setPanY(panRef.current.y);
-    };
-    window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', handleUp);
-    return () => {
-      window.removeEventListener('pointermove', handleMove);
-      window.removeEventListener('pointerup', handleUp);
-    };
-  }, [isPanning, panX, panY]);
-
+  type StageGesture = { kind: 'pan' | 'select'; x: number; y: number; panX: number; panY: number };
+  const selectionEnd = useRef({ x: 0, y: 0 });
+  const actionsRef = useRef({ onDrag, onTransform, onRotate, onDragEnd, onSelect });
+  actionsRef.current = { onDrag, onTransform, onRotate, onDragEnd, onSelect };
   const itemsRef = useRef(items);
   itemsRef.current = items;
-  const onSelectManyRef = useRef(onSelectMany);
-  onSelectManyRef.current = onSelectMany;
-
-  useEffect(() => {
-    if (!rubberBand) return;
-    rubberActive.current = true;
-    const handleMove = (e: PointerEvent) => {
-      setRubberBand(prev => prev ? { ...prev, endX: e.clientX, endY: e.clientY } : null);
-    };
-    const handleUp = (e: PointerEvent) => {
-      if (!rubberActive.current) return;
-      rubberActive.current = false;
-      const startX = rubberStart.current.x;
-      const startY = rubberStart.current.y;
-      const rx = Math.min(startX, e.clientX);
-      const ry = Math.min(startY, e.clientY);
-      const rw = Math.abs(e.clientX - startX);
-      const rh = Math.abs(e.clientY - startY);
-
-      if (rw > 5 || rh > 5) {
+  const beginStage = usePointerGesture<StageGesture>(
+    (event, start) => {
+      if (start.kind === 'pan') {
+        setPanX(start.panX + event.clientX - start.x);
+        setPanY(start.panY + event.clientY - start.y);
+      } else {
+        selectionEnd.current = { x: event.clientX, y: event.clientY };
+        setRubberBand({ startX: start.x, startY: start.y, endX: event.clientX, endY: event.clientY });
+      }
+    },
+    (start, unmount) => {
+      if (start.kind === 'select' && !unmount) {
         const canvas = canvasRef.current;
         if (canvas) {
-          const canvasRect = canvas.getBoundingClientRect();
-          const hit = new Set<string>();
-          const currentItems = itemsRef.current;
-          for (const item of currentItems) {
-            const itemLeft = canvasRect.left + (item.x / 100) * canvasRect.width;
-            const itemTop = canvasRect.top + (item.y / 100) * canvasRect.height;
-            const itemRight = itemLeft + (item.width / 100) * canvasRect.width;
-            const itemBottom = itemTop + (item.height / 100) * canvasRect.height;
-
-            if (
-              itemLeft < rx + rw &&
-              itemRight > rx &&
-              itemTop < ry + rh &&
-              itemBottom > ry
-            ) {
-              hit.add(item.id);
+          const rect = canvas.getBoundingClientRect();
+          const rx = Math.min(start.x, selectionEnd.current.x);
+          const ry = Math.min(start.y, selectionEnd.current.y);
+          const rw = Math.abs(start.x - selectionEnd.current.x);
+          const rh = Math.abs(start.y - selectionEnd.current.y);
+          if (rw > 5 || rh > 5) {
+            const hit = new Set<string>();
+            for (const item of itemsRef.current) {
+              if (item.visible === false || item.locked) continue;
+              const left = rect.left + (item.x / 100) * rect.width;
+              const top = rect.top + (item.y / 100) * rect.height;
+              if (
+                left < rx + rw &&
+                left + (item.width / 100) * rect.width > rx &&
+                top < ry + rh &&
+                top + (item.height / 100) * rect.height > ry
+              )
+                hit.add(item.id);
             }
+            onSelectMany(hit);
           }
-          if (hit.size > 0) onSelectManyRef.current(hit);
         }
       }
-      setRubberBand(null);
-    };
-    window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', handleUp);
-    return () => {
-      window.removeEventListener('pointermove', handleMove);
-      window.removeEventListener('pointerup', handleUp);
-    };
-  }, [rubberBand]);
+      if (!unmount) {
+        setIsPanning(false);
+        setRubberBand(null);
+      }
+    }
+  );
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    const pan = event.button === 1 || (event.button === 0 && event.shiftKey);
+    if (!pan && (event.button !== 0 || (event.target as HTMLElement).closest('[data-item]'))) return;
+    event.preventDefault();
+    if (beginStage(event, { kind: pan ? 'pan' : 'select', x: event.clientX, y: event.clientY, panX, panY })) {
+      if (pan) setIsPanning(true);
+      else {
+        onSelect(null);
+        selectionEnd.current = { x: event.clientX, y: event.clientY };
+        setRubberBand({ startX: event.clientX, startY: event.clientY, endX: event.clientX, endY: event.clientY });
+      }
+    }
+  };
 
   const handleItemDrag = useCallback(
     (id: string, x: number, y: number) => {
       // Show snap guides
       if (snapEnabled) {
-        const draggedItem = items.find(i => i.id === id);
+        const currentItems = itemsRef.current;
+        const draggedItem = currentItems.find((i) => i.id === id);
         if (draggedItem) {
           const activeGuides: SnapGuide[] = [];
           const draggedCenter = { x: x + draggedItem.width / 2, y: y + draggedItem.height / 2 };
 
-          for (const other of items) {
-            if (other.id === id || !other.visible) continue;
-            if (Math.abs(x - other.x) > SNAP_THRESHOLD &&
-                Math.abs((x + draggedItem.width) - (other.x + other.width)) > SNAP_THRESHOLD &&
-                Math.abs(y - other.y) > SNAP_THRESHOLD &&
-                Math.abs((y + draggedItem.height) - (other.y + other.height)) > SNAP_THRESHOLD) continue;
+          for (const other of currentItems) {
+            if (other.id === id || other.visible === false) continue;
+            if (
+              Math.abs(x - other.x) > SNAP_THRESHOLD &&
+              Math.abs(x + draggedItem.width - (other.x + other.width)) > SNAP_THRESHOLD &&
+              Math.abs(y - other.y) > SNAP_THRESHOLD &&
+              Math.abs(y + draggedItem.height - (other.y + other.height)) > SNAP_THRESHOLD
+            )
+              continue;
             const otherCenter = {
               x: other.x + other.width / 2,
               y: other.y + other.height / 2,
@@ -273,25 +249,25 @@ export function CanvasStage({
           setGuides(activeGuides);
         }
       }
-      onDrag(id, x, y);
+      actionsRef.current.onDrag(id, x, y);
     },
-    [items, onDrag, snapEnabled],
+    [snapEnabled]
   );
 
-  const handleDragEnd = useCallback(
-    (id: string) => {
-      setGuides([]);
-      onDragEnd(id);
-    },
-    [onDragEnd],
-  );
+  const handleDragEnd = useCallback((id: string) => {
+    setGuides([]);
+    actionsRef.current.onDragEnd(id);
+  }, []);
 
-  const handleSelect = useCallback(
-    (id: string | null, multi?: boolean) => {
-      onSelect(id, multi);
-    },
-    [onSelect],
+  const handleSelect = useCallback((id: string | null, multi?: boolean) => {
+    actionsRef.current.onSelect(id, multi);
+  }, []);
+
+  const handleTransform = useCallback(
+    (id: string, bounds: ItemBounds) => actionsRef.current.onTransform(id, bounds),
+    []
   );
+  const handleRotate = useCallback((id: string, rotation: number) => actionsRef.current.onRotate(id, rotation), []);
 
   const bgColor = (slideStyles.backgroundColor as string) || '#000000';
   const bgImage = slideStyles.backgroundImage as string | undefined;
@@ -301,34 +277,20 @@ export function CanvasStage({
   const bgBlur = (slideStyles.backgroundBlur as number) || 0;
 
   const gridLines = useMemo(() => {
-    if (!gridEnabled || gridSize <= 0) return null;
+    if (!gridEnabled || !Number.isFinite(gridSize) || gridSize <= 0) return null;
     const lines: ReactNode[] = [];
-    const step = (gridSize / 100) * SLIDE_REFERENCE_WIDTH;
+    const gridPercent = Math.max(1, gridSize);
+    const stepX = (gridPercent / 100) * SLIDE_REFERENCE_WIDTH;
+    const stepY = (gridPercent / 100) * SLIDE_REFERENCE_HEIGHT;
     const strokeColor = gridColor || 'rgba(255,255,255,0.06)';
-    for (let i = step; i < SLIDE_REFERENCE_WIDTH; i += step) {
+    for (let i = stepX; i < SLIDE_REFERENCE_WIDTH; i += stepX) {
       lines.push(
-        <line
-          key={`v${i}`}
-          x1={i}
-          y1={0}
-          x2={i}
-          y2={SLIDE_REFERENCE_HEIGHT}
-          stroke={strokeColor}
-          strokeWidth={1}
-        />,
+        <line key={`v${i}`} x1={i} y1={0} x2={i} y2={SLIDE_REFERENCE_HEIGHT} stroke={strokeColor} strokeWidth={1} />
       );
     }
-    for (let i = step; i < SLIDE_REFERENCE_HEIGHT; i += step) {
+    for (let i = stepY; i < SLIDE_REFERENCE_HEIGHT; i += stepY) {
       lines.push(
-        <line
-          key={`h${i}`}
-          x1={0}
-          y1={i}
-          x2={SLIDE_REFERENCE_WIDTH}
-          y2={i}
-          stroke={strokeColor}
-          strokeWidth={1}
-        />,
+        <line key={`h${i}`} x1={0} y1={i} x2={SLIDE_REFERENCE_WIDTH} y2={i} stroke={strokeColor} strokeWidth={1} />
       );
     }
     return (
@@ -346,26 +308,21 @@ export function CanvasStage({
   // The onDrag/onResize/onRotate callbacks are typed to match CanvasItem's expectations
 
   return (
-    <div className="flex flex-1 items-center justify-center bg-[#0a0a0a] p-6 overflow-hidden">
+    <div className="flex min-w-0 flex-1 items-center justify-center bg-[#0a0a0a] p-3 lg:p-6 overflow-hidden">
       <div
         ref={outerRef}
-        className="relative w-full max-w-5xl select-none overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl"
-        style={{ aspectRatio: '16 / 9' }}
+        className="relative w-full max-w-5xl select-none touch-none overflow-clip rounded-2xl border border-white/10 bg-black shadow-2xl"
+        style={{ aspectRatio: '16 / 9', width: containerWidth, maxWidth: '100%' }}
       >
         <div
           ref={canvasRef}
           onPointerDown={handlePointerDown}
           onContextMenu={onContextMenu}
-          className={cn(
-            'absolute top-0 left-0',
-            isPanning ? 'cursor-grabbing' : 'cursor-default',
-          )}
+          className={cn('absolute top-0 left-0', isPanning ? 'cursor-grabbing' : 'cursor-default')}
           style={{
             width: SLIDE_REFERENCE_WIDTH,
             height: SLIDE_REFERENCE_HEIGHT,
-            transform: isPanning
-              ? `scale(${scale}) translate(${panRef.current.x / scale}px, ${panRef.current.y / scale}px)`
-              : `scale(${scale}) translate(${panX / scale}px, ${panY / scale}px)`,
+            transform: `translate(${panX}px, ${panY}px) scale(${scale})`,
             transformOrigin: 'top left',
           }}
         >
@@ -389,10 +346,10 @@ export function CanvasStage({
                 background:
                   bgGradient.type === 'linear'
                     ? `linear-gradient(${bgGradient.angle || 0}deg, ${(bgGradient.stops || [])
-                        .map(s => `${s.color} ${s.position}%`)
+                        .map((s) => `${s.color} ${s.position}%`)
                         .join(', ')})`
                     : `radial-gradient(circle, ${(bgGradient.stops || [])
-                        .map(s => `${s.color} ${s.position}%`)
+                        .map((s) => `${s.color} ${s.position}%`)
                         .join(', ')})`,
               }}
             />
@@ -400,6 +357,13 @@ export function CanvasStage({
 
           {/* Grid */}
           {gridLines}
+          {safeAreaEnabled && (
+            <div
+              aria-hidden="true"
+              className="absolute pointer-events-none border border-dashed border-amber-300/70"
+              style={{ inset: '5%', zIndex: 9998 }}
+            />
+          )}
 
           {/* Snap guides */}
           {guides.map((guide, i) => (
@@ -418,26 +382,27 @@ export function CanvasStage({
           ))}
 
           {/* Rubber band selection */}
-          {rubberBand && (() => {
-            const canvas = canvasRef.current;
-            if (!canvas) return null;
-            const canvasRect = canvas.getBoundingClientRect();
-            const rx = (Math.min(rubberBand.startX, rubberBand.endX) - canvasRect.left) / scale;
-            const ry = (Math.min(rubberBand.startY, rubberBand.endY) - canvasRect.top) / scale;
-            const rw = Math.abs(rubberBand.endX - rubberBand.startX) / scale;
-            const rh = Math.abs(rubberBand.endY - rubberBand.startY) / scale;
-            return (
-              <div
-                className="absolute pointer-events-none z-40 border border-blue-500/60 bg-blue-500/10"
-                style={{
-                  left: rx,
-                  top: ry,
-                  width: rw,
-                  height: rh,
-                }}
-              />
-            );
-          })()}
+          {rubberBand &&
+            (() => {
+              const canvas = canvasRef.current;
+              if (!canvas) return null;
+              const canvasRect = canvas.getBoundingClientRect();
+              const rx = (Math.min(rubberBand.startX, rubberBand.endX) - canvasRect.left) / scale;
+              const ry = (Math.min(rubberBand.startY, rubberBand.endY) - canvasRect.top) / scale;
+              const rw = Math.abs(rubberBand.endX - rubberBand.startX) / scale;
+              const rh = Math.abs(rubberBand.endY - rubberBand.startY) / scale;
+              return (
+                <div
+                  className="absolute pointer-events-none z-40 border border-blue-500/60 bg-blue-500/10"
+                  style={{
+                    left: rx,
+                    top: ry,
+                    width: rw,
+                    height: rh,
+                  }}
+                />
+              );
+            })()}
 
           {/* Empty state */}
           {items.length === 0 && (
@@ -449,31 +414,30 @@ export function CanvasStage({
           )}
 
           {/* Items */}
-          {items.map(item => (
+          {items.map((item) => (
             <div
               key={item.id}
               data-item
               draggable={altHeld && !item.locked && !!onItemDragStart}
               onDragStart={(event) => {
-                if (!onItemDragStart) return;
-                const dragged = selectedIds.has(item.id) && selectedIds.size > 0
-                  ? [...selectedIds]
-                  : [item.id];
+                if (!keyboardEnabled || !onItemDragStart) return;
+                const dragged = selectedIds.has(item.id) && selectedIds.size > 0 ? [...selectedIds] : [item.id];
                 onItemDragStart(event, dragged);
               }}
             >
               <CanvasItem
                 item={item}
                 isSelected={selectedIds.has(item.id)}
+                keyboardEnabled={keyboardEnabled}
                 canvasRef={canvasRef as RefObject<HTMLDivElement>}
-                onSelect={() => handleSelect(item.id, false)}
+                onSelect={handleSelect}
                 onDrag={handleItemDrag}
                 onDragEnd={handleDragEnd}
-                onResize={onResize}
-                onRotate={onRotate}
+                onTransform={handleTransform}
+                onRotate={handleRotate}
                 snapEnabled={snapEnabled}
                 gridSize={snapEnabled ? gridSize : 0}
-                zoom={zoom}
+                lockRatio={item.type === 'image' && lockedRatioIds?.has(item.id)}
               />
             </div>
           ))}
@@ -483,7 +447,8 @@ export function CanvasStage({
         <div className="absolute bottom-3 right-3 flex items-center gap-2 z-50">
           <button
             type="button"
-            onClick={() => setZoom(prev => clampZoom(prev - 0.1))}
+            aria-label={t('common.editorZoomOut')}
+            onClick={() => setZoom((prev) => clampZoom(prev - 0.1))}
             className="rounded-md bg-black/60 px-2 py-1 text-xs text-white/80 hover:bg-black/80"
           >
             -
@@ -493,14 +458,19 @@ export function CanvasStage({
           </span>
           <button
             type="button"
-            onClick={() => setZoom(prev => clampZoom(prev + 0.1))}
+            aria-label={t('common.editorZoomIn')}
+            onClick={() => setZoom((prev) => clampZoom(prev + 0.1))}
             className="rounded-md bg-black/60 px-2 py-1 text-xs text-white/80 hover:bg-black/80"
           >
             +
           </button>
           <button
             type="button"
-            onClick={() => { setZoom(1); setPanX(0); setPanY(0); }}
+            onClick={() => {
+              setZoom(1);
+              setPanX(0);
+              setPanY(0);
+            }}
             className="rounded-md bg-black/60 px-2 py-1 text-xs text-white/80 hover:bg-black/80"
           >
             {t('common.editorZoomReset')}

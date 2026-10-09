@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useReducer } from 'react';
+import { editorFilterTarget, filteredEditorSlides, isEditorEditableSlide, isVideoEditableSlide } from './slideCapabilities';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import type { Presentation, Slide, SlideItem } from '../types';
 import {
   createDraft,
@@ -71,9 +72,13 @@ export interface EditorHistoryState {
 type HistoryState = EditorHistoryState;
 
 export type EditorDeckAction =
-  | { type: 'ensure'; slide: Slide }
-  | { type: 'activate'; slide: Slide; order: string[]; modifiers?: SelectModifiers }
-  | { type: 'navigate'; order: string[]; delta?: number; edge?: 'start' | 'end'; extend?: boolean }
+  | { type: 'reset'; deck: Presentation; activeId: string }
+  | { type: 'sync'; deck: Presentation; changedIds: Set<string> }
+  | { type: 'videoPlayback'; slide: Slide; settings: NonNullable<Slide['videoPlayback']> }
+  | { type: 'videoOverlays'; slide: Slide; overlays: NonNullable<Slide['videoOverlays']>; history?: boolean }
+  | { type: 'ensure'; slide: Slide; draft?: SlideDraft }
+  | { type: 'activate'; slide: Slide; order: string[]; modifiers?: SelectModifiers; editableIds?: string[] }
+  | { type: 'navigate'; order: string[]; delta?: number; edge?: 'start' | 'end'; extend?: boolean; editableIds?: string[] }
   | { type: 'selectAll'; order: string[] }
   | { type: 'clearSlideSelection'; order: string[] }
   | { type: 'setItemSelection'; slideId: string; ids: string[] }
@@ -100,11 +105,7 @@ export type EditorDeckAction =
   | { type: 'undo' }
   | { type: 'redo' };
 
-function withDraft(
-  drafts: Map<string, SlideDraft>,
-  slideId: string,
-  draft: SlideDraft,
-): Map<string, SlideDraft> {
+function withDraft(drafts: Map<string, SlideDraft>, slideId: string, draft: SlideDraft): Map<string, SlideDraft> {
   const next = new Map(drafts);
   next.set(slideId, draft);
   return next;
@@ -116,11 +117,7 @@ function withTouched(touched: Set<string>, ids: Iterable<string>): Set<string> {
   return next;
 }
 
-function withItemSelection(
-  selection: Map<string, string[]>,
-  slideId: string,
-  ids: string[],
-): Map<string, string[]> {
+function withItemSelection(selection: Map<string, string[]>, slideId: string, ids: string[]): Map<string, string[]> {
   const next = new Map(selection);
   if (ids.length === 0) next.delete(slideId);
   else next.set(slideId, ids);
@@ -164,22 +161,50 @@ export function editorDeckReducer(state: HistoryState, action: EditorDeckAction)
   const { session } = state;
 
   switch (action.type) {
+    case 'reset': {
+      const slide = action.deck.slides.find((candidate) => candidate.id === action.activeId) ?? action.deck.slides[0];
+      const next = createEditorHistory(slide);
+      if (slide && isItemEditableSlide(slide)) {
+        const validIds = new Set(next.session.drafts.get(slide.id)!.items.map((item) => item.id));
+        const ids = (session.itemSelection.get(slide.id) ?? []).filter((id) => validIds.has(id));
+        if (ids.length) next.session.itemSelection.set(slide.id, ids);
+      }
+      return next;
+    }
+    case 'sync': {
+      const byId = new Map(action.deck.slides.map((slide) => [slide.id, slide]));
+      const sync = (value: EditorSession): EditorSession => ({
+        ...value,
+        drafts: new Map([...value.drafts].flatMap(([id, draft]) => {
+          const slide = byId.get(id);
+          if (!slide || !isEditorEditableSlide(slide)) return [];
+          return [[id, !value.touchedIds.has(id) && action.changedIds.has(id) ? createDraft(slide) : draft] as const];
+        })),
+        touchedIds: new Set([...value.touchedIds].filter((id) => { const slide = byId.get(id); return !!slide && isEditorEditableSlide(slide); })),
+        itemSelection: new Map([...value.itemSelection].filter(([id]) => byId.has(id))),
+      });
+      return { ...state, session: sync(session), past: state.past.map(sync), future: state.future.map(sync),
+        gestureBase: state.gestureBase ? sync(state.gestureBase) : null };
+    }
     case 'ensure': {
-      if (session.drafts.has(action.slide.id)) return state;
+      if (!isEditorEditableSlide(action.slide) || session.drafts.has(action.slide.id)) return state;
       // Materialising is a working-copy concern only: it must not mark the
       // slide as touched, otherwise merely visiting a slide would rewrite it.
       return {
         ...state,
         session: {
           ...session,
-          drafts: withDraft(session.drafts, action.slide.id, createDraft(action.slide)),
+          drafts: withDraft(session.drafts, action.slide.id, action.draft ?? createDraft(action.slide)),
         },
       };
     }
 
     case 'activate': {
-      const selection = clickSelect(session.selection, action.order, action.slide.id, action.modifiers);
-      const drafts = session.drafts.has(action.slide.id)
+      let selection = clickSelect(session.selection, action.order, action.slide.id, action.modifiers);
+      if (action.editableIds && action.modifiers && (action.modifiers.ctrl || action.modifiers.shift)) {
+        selection = { ...selection, selectedIds: selection.selectedIds.filter(id => action.editableIds!.includes(id)) };
+      }
+      const drafts = !isEditorEditableSlide(action.slide) || session.drafts.has(action.slide.id)
         ? session.drafts
         : withDraft(session.drafts, action.slide.id, createDraft(action.slide));
       return {
@@ -189,14 +214,19 @@ export function editorDeckReducer(state: HistoryState, action: EditorDeckAction)
     }
 
     case 'navigate': {
-      const selection = action.edge
+      let selection = action.edge
         ? selectEdge(session.selection, action.order, action.edge, action.extend)
         : moveActive(session.selection, action.order, action.delta ?? 0, action.extend);
+      if (action.editableIds && action.extend) {
+        selection = { ...selection, selectedIds: action.editableIds.includes(selection.activeId) ? selection.selectedIds.filter(id => action.editableIds!.includes(id)) : [selection.activeId] };
+      }
       return { ...state, session: { ...session, activeId: selection.activeId, selection, notice: null } };
     }
 
-    case 'selectAll':
-      return { ...state, session: { ...session, selection: selectAll(session.selection, action.order) } };
+    case 'selectAll': {
+      const selection = selectAll(session.selection, action.order);
+      return { ...state, session: { ...session, activeId: selection.activeId, selection } };
+    }
 
     case 'clearSlideSelection': {
       const selection = clearSelection(session.selection, action.order);
@@ -205,8 +235,7 @@ export function editorDeckReducer(state: HistoryState, action: EditorDeckAction)
 
     case 'setItemSelection': {
       const current = session.itemSelection.get(action.slideId) ?? [];
-      const same =
-        current.length === action.ids.length && current.every((id, i) => id === action.ids[i]);
+      const same = current.length === action.ids.length && current.every((id, i) => id === action.ids[i]);
       if (same) return state;
       return {
         ...state,
@@ -217,7 +246,20 @@ export function editorDeckReducer(state: HistoryState, action: EditorDeckAction)
       };
     }
 
+    case 'videoOverlays': {
+      if (!isVideoEditableSlide(action.slide)) return state;
+      const draft = draftFor(session, action.slide);
+      if (JSON.stringify(draft.videoOverlays ?? []) === JSON.stringify(action.overlays)) return state;
+      return replace(state, { ...session, drafts: withDraft(session.drafts, action.slide.id, { ...draft, videoOverlays: action.overlays.map(item => ({ ...item, type: 'text', textStyles: item.textStyles ? { ...item.textStyles } : undefined })) }), touchedIds: withTouched(session.touchedIds, [action.slide.id]), notice: null }, action.history ?? true);
+    }
+    case 'videoPlayback': {
+      if (!isVideoEditableSlide(action.slide)) return state;
+      const draft = draftFor(session, action.slide);
+      if (JSON.stringify(draft.videoPlayback) === JSON.stringify(action.settings)) return state;
+      return replace(state, { ...session, drafts: withDraft(session.drafts, action.slide.id, { ...draft, videoPlayback: { ...action.settings } }), touchedIds: withTouched(session.touchedIds, [action.slide.id]), notice: null }, true);
+    }
     case 'mutateSlide': {
+      if (!isItemEditableSlide(action.slide)) return state;
       const draft = draftFor(session, action.slide);
       const nextDraft = action.mutate(draft);
       if (!nextDraft || nextDraft === draft) return state;
@@ -231,11 +273,9 @@ export function editorDeckReducer(state: HistoryState, action: EditorDeckAction)
     }
 
     case 'pasteIntoActive': {
-      if (action.clipboardItems.length === 0) return state;
+      if (!isItemEditableSlide(action.slide) || action.clipboardItems.length === 0) return state;
       const draft = draftFor(session, action.slide);
-      const offset = action.exact
-        ? false
-        : isSameSlidePaste(action.sourceSlideId, action.slide.id);
+      const offset = action.exact ? false : isSameSlidePaste(action.sourceSlideId, action.slide.id);
       const { items, pastedIds } = pasteItems(draft.items, action.clipboardItems, { offset });
       const nextSession: EditorSession = {
         ...session,
@@ -248,11 +288,7 @@ export function editorDeckReducer(state: HistoryState, action: EditorDeckAction)
     }
 
     case 'bulk': {
-      if (
-        action.drafts === session.drafts &&
-        action.touched.length === 0 &&
-        !action.selection
-      ) {
+      if (action.drafts === session.drafts && action.touched.length === 0 && !action.selection) {
         return { ...state, session: { ...session, notice: action.notice } };
       }
       const nextSession: EditorSession = {
@@ -304,15 +340,15 @@ export function editorDeckReducer(state: HistoryState, action: EditorDeckAction)
   }
 }
 
-export function createEditorHistory(initialSlide: Slide): HistoryState {
+export function createEditorHistory(initialSlide?: Slide): HistoryState {
   return {
     session: {
       // The entry slide gets its working copy immediately so item ids stay
       // stable from the first frame (selection depends on them).
-      drafts: new Map([[initialSlide.id, createDraft(initialSlide)]]),
+      drafts: initialSlide && isEditorEditableSlide(initialSlide) ? new Map([[initialSlide.id, createDraft(initialSlide)]]) : new Map(),
       touchedIds: new Set(),
-      activeId: initialSlide.id,
-      selection: createSelection(initialSlide.id),
+      activeId: initialSlide?.id ?? '',
+      selection: createSelection(initialSlide?.id ?? ''),
       itemSelection: new Map(),
       notice: null,
     },
@@ -324,7 +360,8 @@ export function createEditorHistory(initialSlide: Slide): HistoryState {
 
 export interface UseEditorDeckOptions {
   deck: Presentation;
-  initialSlide: Slide;
+  initialSlide?: Slide;
+  editableOnly?: boolean;
 }
 
 /**
@@ -334,39 +371,64 @@ export interface UseEditorDeckOptions {
  * unchanged deck is never a source of truth while editing and one commit at
  * save time is all the deck history sees.
  */
-export function useEditorDeck({ deck, initialSlide }: UseEditorDeckOptions) {
+export function useEditorDeck({ deck, initialSlide, editableOnly = false }: UseEditorDeckOptions) {
   const [history, dispatch] = useReducer(editorDeckReducer, initialSlide, createEditorHistory);
   const session = history.session;
+  const bases = useRef(new Map(deck.slides.map((slide) => [slide.id, slide])));
+  const previousSlides = useRef(deck.slides);
+  useEffect(() => {
+    if (previousSlides.current === deck.slides) return;
+    const previous = new Map(previousSlides.current.map((slide) => [slide.id, slide]));
+    const changedIds = new Set(deck.slides.filter((slide) => JSON.stringify(previous.get(slide.id)) !== JSON.stringify(slide)).map((slide) => slide.id));
+    previousSlides.current = deck.slides;
+    dispatch({ type: 'sync', deck, changedIds });
+  }, [deck]);
+  // Keep the original version for any slide that can still be restored by undo.
+  const historicalTouched = new Set([session, ...history.past, ...history.future].flatMap((value) => [...value.touchedIds]));
+  for (const slide of deck.slides) {
+    if (!historicalTouched.has(slide.id)) bases.current.set(slide.id, slide);
+  }
+  const reset = useCallback((nextDeck: Presentation, nextActiveId: string) => {
+    bases.current = new Map(nextDeck.slides.map((slide) => [slide.id, slide]));
+    previousSlides.current = nextDeck.slides;
+    dispatch({ type: 'reset', deck: nextDeck, activeId: nextActiveId });
+  }, []);
 
-  const slideById = useMemo(
-    () => new Map(deck.slides.map((slide) => [slide.id, slide] as const)),
-    [deck.slides],
-  );
-  const order = useMemo(() => deck.slides.map((slide) => slide.id), [deck.slides]);
+  const slideById = useMemo(() => new Map(deck.slides.map((slide) => [slide.id, slide] as const)), [deck.slides]);
+  const editableIds = useMemo(() => deck.slides.filter(isItemEditableSlide).map(slide => slide.id), [deck.slides]);
+  const order = useMemo(() => filteredEditorSlides(deck.slides, editableOnly).map((slide) => slide.id), [deck.slides, editableOnly]);
 
   // A slide deleted while the editor is open must not leave the canvas blank.
-  const activeId = slideById.has(session.activeId) ? session.activeId : order[0] ?? '';
+  const activeId = editorFilterTarget(deck.slides, session.activeId, editableOnly)?.id ?? (slideById.has(session.activeId) ? session.activeId : deck.slides[0]?.id ?? '');
   const activeSlide = slideById.get(activeId);
   const selection = useMemo(
     () => normalizeSelection({ ...session.selection, activeId }, order),
-    [session.selection, activeId, order],
+    [session.selection, activeId, order]
   );
 
   const activeDraft = useMemo<SlideDraft | null>(
-    () => (activeSlide ? session.drafts.get(activeId) ?? createDraft(activeSlide) : null),
+    () => (activeSlide ? (session.drafts.get(activeId) ?? createDraft(activeSlide)) : null),
     // createDraft is only reached before the reducer materialises the draft.
-    [activeSlide, activeId, session.drafts],
+    [activeSlide, activeId, session.drafts]
   );
+  // Keyboard navigation and externally deleted active slides also need a stable
+  // materialized draft: legacy item IDs are generated once, before the first edit.
+  useEffect(() => {
+    if (activeSlide && session.activeId !== activeId) dispatch({ type: 'activate', slide: activeSlide, order });
+    if (activeSlide && isEditorEditableSlide(activeSlide) && activeDraft && !session.drafts.has(activeId)) {
+      dispatch({ type: 'ensure', slide: activeSlide, draft: activeDraft });
+    }
+  }, [activeSlide, activeDraft, activeId, session.activeId, session.drafts, order]);
 
   const activeItems = useMemo(() => activeDraft?.items ?? [], [activeDraft]);
   const selectedItemIds = useMemo(
     () => new Set(session.itemSelection.get(activeId) ?? []),
-    [session.itemSelection, activeId],
+    [session.itemSelection, activeId]
   );
-  const selectedItems = useMemo(
-    () => activeItems.filter((item) => selectedItemIds.has(item.id)),
-    [activeItems, selectedItemIds],
-  );
+  const selectedItems = useMemo(() => {
+    const byId = new Map(activeItems.map((item) => [item.id, item]));
+    return [...selectedItemIds].flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []));
+  }, [activeItems, selectedItemIds]);
 
   const isDirty = session.touchedIds.size > 0;
   const touchedCount = session.touchedIds.size;
@@ -375,30 +437,27 @@ export function useEditorDeck({ deck, initialSlide }: UseEditorDeckOptions) {
 
   const activateSlide = useCallback(
     (slide: Slide, modifiers?: SelectModifiers) => {
-      dispatch({ type: 'activate', slide, order, modifiers });
+      dispatch({ type: 'activate', slide, order, editableIds, modifiers: isItemEditableSlide(slide) ? modifiers : undefined });
     },
-    [order],
+    [order, editableIds]
   );
 
   const navigate = useCallback(
-    (delta: number, extend = false) => dispatch({ type: 'navigate', order, delta, extend }),
-    [order],
+    (delta: number, extend = false) => dispatch({ type: 'navigate', order, delta, extend, editableIds }),
+    [order, editableIds]
   );
 
   const jumpToEdge = useCallback(
-    (edge: 'start' | 'end', extend = false) => dispatch({ type: 'navigate', order, edge, extend }),
-    [order],
+    (edge: 'start' | 'end', extend = false) => dispatch({ type: 'navigate', order, edge, extend, editableIds }),
+    [order, editableIds]
   );
 
-  const selectEverySlide = useCallback(() => dispatch({ type: 'selectAll', order }), [order]);
-  const collapseSlideSelection = useCallback(
-    () => dispatch({ type: 'clearSlideSelection', order }),
-    [order],
-  );
+  const selectEverySlide = useCallback(() => dispatch({ type: 'selectAll', order: order.filter(id => isItemEditableSlide(slideById.get(id)!)) }), [order, slideById]);
+  const collapseSlideSelection = useCallback(() => dispatch({ type: 'clearSlideSelection', order }), [order]);
 
   const setItemSelection = useCallback(
     (ids: Set<string>) => dispatch({ type: 'setItemSelection', slideId: activeId, ids: [...ids] }),
-    [activeId],
+    [activeId]
   );
 
   // ── Editing the active slide ───────────────────────────────────────────────
@@ -408,7 +467,7 @@ export function useEditorDeck({ deck, initialSlide }: UseEditorDeckOptions) {
       if (!activeSlide) return;
       dispatch({ type: 'mutateSlide', slide: activeSlide, mutate, history });
     },
-    [activeSlide],
+    [activeSlide]
   );
 
   const updateItems = useCallback(
@@ -419,14 +478,14 @@ export function useEditorDeck({ deck, initialSlide }: UseEditorDeckOptions) {
         return { ...draft, items };
       }, options?.history ?? true);
     },
-    [mutateActive],
+    [mutateActive]
   );
 
   const setGridField = useCallback(
     (field: 'gridEnabled' | 'gridSize' | 'gridColor' | 'snapEnabled', value: boolean | number | string) => {
       mutateActive((draft) => ({ ...draft, [field]: value }), true);
     },
-    [mutateActive],
+    [mutateActive]
   );
 
   // ── Gesture batching (drag / resize / rotate / typing) ─────────────────────
@@ -437,9 +496,8 @@ export function useEditorDeck({ deck, initialSlide }: UseEditorDeckOptions) {
   // ── Clipboard ──────────────────────────────────────────────────────────────
 
   const copyItems = useCallback(
-    (items: SlideItem[]): EditorClipboard | null =>
-      activeSlide ? makeClipboard(items, activeSlide.id) : null,
-    [activeSlide],
+    (items: SlideItem[]): EditorClipboard | null => (activeSlide ? makeClipboard(items, activeSlide.id) : null),
+    [activeSlide]
   );
 
   /**
@@ -458,7 +516,7 @@ export function useEditorDeck({ deck, initialSlide }: UseEditorDeckOptions) {
         exact: options?.exact ?? false,
       });
     },
-    [activeSlide],
+    [activeSlide]
   );
 
   /** Applies clipboard items to the selected slides (active slide excluded). */
@@ -468,23 +526,18 @@ export function useEditorDeck({ deck, initialSlide }: UseEditorDeckOptions) {
       if (clipboard.items.length === 0 || targetIds.length === 0) {
         return { key: 'common.editorNothingToApply', tone: 'warn' };
       }
-      const result = applyItemsToSlides(
-        new Map(session.drafts),
-        slideById,
-        targetIds,
-        clipboard.items,
-        activeId,
-      );
+      const result = applyItemsToSlides(new Map(session.drafts), slideById, targetIds, clipboard.items, activeId);
 
       const applied = result.appliedSlideIds.length;
-      const notice: EditorNotice = applied > 0
-        ? {
-            key: 'common.editorAppliedToSlides',
-            count: applied,
-            skipped: result.skippedSlideIds.length,
-            tone: 'info',
-          }
-        : { key: 'common.editorApplySkipped', count: result.skippedSlideIds.length, tone: 'warn' };
+      const notice: EditorNotice =
+        applied > 0
+          ? {
+              key: 'common.editorAppliedToSlides',
+              count: applied,
+              skipped: result.skippedSlideIds.length,
+              tone: 'info',
+            }
+          : { key: 'common.editorApplySkipped', count: result.skippedSlideIds.length, tone: 'warn' };
 
       dispatch({
         type: 'bulk',
@@ -494,7 +547,7 @@ export function useEditorDeck({ deck, initialSlide }: UseEditorDeckOptions) {
       });
       return notice;
     },
-    [activeId, session.drafts, slideById],
+    [activeId, session.drafts, slideById]
   );
 
   /** Copies the working selection's style onto counter-parts of the other selected slides. */
@@ -510,18 +563,19 @@ export function useEditorDeck({ deck, initialSlide }: UseEditorDeckOptions) {
         slideById,
         slideIds.filter((id) => id !== activeId),
         sourceItems,
-        sourceSelected,
+        sourceSelected
       );
 
       const applied = result.appliedSlideIds.length;
-      const notice: EditorNotice = applied > 0
-        ? { key: 'common.editorStyleApplied', count: applied, tone: 'info' }
-        : { key: 'common.editorStyleUnmatched', count: result.unmatchedSlideIds.length, tone: 'warn' };
+      const notice: EditorNotice =
+        applied > 0
+          ? { key: 'common.editorStyleApplied', count: applied, tone: 'info' }
+          : { key: 'common.editorStyleUnmatched', count: result.unmatchedSlideIds.length, tone: 'warn' };
 
       dispatch({ type: 'bulk', drafts: result.drafts, touched: result.appliedSlideIds, notice });
       return notice;
     },
-    [activeId, activeItems, selectedItemIds, session.drafts, slideById],
+    [activeId, activeItems, selectedItemIds, session.drafts, slideById]
   );
 
   /**
@@ -564,18 +618,19 @@ export function useEditorDeck({ deck, initialSlide }: UseEditorDeckOptions) {
         slideById,
         slideIds.filter((id) => id !== activeId),
         clipboard.items,
-        new Set(clipboard.items.map((item) => item.id)),
+        new Set(clipboard.items.map((item) => item.id))
       );
       matched += result.appliedSlideIds.length;
 
-      const notice: EditorNotice = matched > 0
-        ? { key: 'common.editorStyleApplied', count: result.appliedSlideIds.length + touched.length, tone: 'info' }
-        : { key: 'common.editorStyleUnmatched', count: slideIds.length, tone: 'warn' };
+      const notice: EditorNotice =
+        matched > 0
+          ? { key: 'common.editorStyleApplied', count: result.appliedSlideIds.length + touched.length, tone: 'info' }
+          : { key: 'common.editorStyleUnmatched', count: slideIds.length, tone: 'warn' };
 
       dispatch({ type: 'bulk', drafts: result.drafts, touched: [...touched, ...result.appliedSlideIds], notice });
       return notice;
     },
-    [activeDraft, activeId, activeSlide, selectedItemIds, session.drafts, slideById],
+    [activeDraft, activeId, activeSlide, selectedItemIds, session.drafts, slideById]
   );
 
   /**
@@ -609,9 +664,10 @@ export function useEditorDeck({ deck, initialSlide }: UseEditorDeckOptions) {
         if (slideId === activeId) activePastedIds = pastedIds;
       }
 
-      const notice: EditorNotice = applied.length > 0
-        ? { key: 'common.editorAppliedToSlides', count: applied.length, skipped: skipped.length, tone: 'info' }
-        : { key: 'common.editorApplySkipped', count: skipped.length, tone: 'warn' };
+      const notice: EditorNotice =
+        applied.length > 0
+          ? { key: 'common.editorAppliedToSlides', count: applied.length, skipped: skipped.length, tone: 'info' }
+          : { key: 'common.editorApplySkipped', count: skipped.length, tone: 'warn' };
 
       dispatch({ type: 'bulk', drafts, touched: applied, notice });
       // Selection updates are history-free, so the paste stays one undo step.
@@ -620,7 +676,7 @@ export function useEditorDeck({ deck, initialSlide }: UseEditorDeckOptions) {
       }
       return notice;
     },
-    [activeId, session.drafts, slideById],
+    [activeId, session.drafts, slideById]
   );
 
   // ── Scope-aware edits ──────────────────────────────────────────────────────
@@ -636,10 +692,10 @@ export function useEditorDeck({ deck, initialSlide }: UseEditorDeckOptions) {
   const applyItemUpdate = useCallback(
     (
       itemId: string,
-      updates: Partial<SlideItem>,
+      updates: Partial<SlideItem> | ((item: SlideItem) => Partial<SlideItem>),
       slideIds: string[],
       scope: EditScope,
-      options?: { history?: boolean },
+      options?: { history?: boolean }
     ) => {
       if (!activeSlide || !activeDraft) return;
       if (scope === 'active' || slideIds.length <= 1) {
@@ -677,13 +733,14 @@ export function useEditorDeck({ deck, initialSlide }: UseEditorDeckOptions) {
         touched.push(slideId);
       }
 
-      const notice: EditorNotice = skipped + unmatched > 0
-        ? { key: 'common.editorScopePartial', count: touched.length, skipped: skipped + unmatched, tone: 'info' }
-        : { key: 'common.editorScopeApplied', count: touched.length, tone: 'info' };
+      const notice: EditorNotice =
+        skipped + unmatched > 0
+          ? { key: 'common.editorScopePartial', count: touched.length, skipped: skipped + unmatched, tone: 'info' }
+          : { key: 'common.editorScopeApplied', count: touched.length, tone: 'info' };
 
       dispatch({ type: 'bulk', drafts, touched, notice, history: options?.history ?? true });
     },
-    [activeDraft, activeSlide, session.drafts, slideById],
+    [activeDraft, activeSlide, session.drafts, slideById]
   );
 
   /** Applies a slide-style patch to the working slide and every selected slide. */
@@ -725,7 +782,7 @@ export function useEditorDeck({ deck, initialSlide }: UseEditorDeckOptions) {
         },
       });
     },
-    [activeSlide, session.drafts, slideById],
+    [activeSlide, session.drafts, slideById]
   );
   const setNotice = useCallback((notice: EditorNotice | null) => dispatch({ type: 'notice', notice }), []);
 
@@ -739,14 +796,14 @@ export function useEditorDeck({ deck, initialSlide }: UseEditorDeckOptions) {
   // ── Save ───────────────────────────────────────────────────────────────────
 
   /** Slides that will actually be written on save. */
-  const buildSavePayload = useCallback((): Presentation | null => {
+  const buildSavePayload = useCallback((currentDeck = deck): Presentation | null => {
     if (session.touchedIds.size === 0) return null;
     const touched = new Map<string, SlideDraft>();
     for (const id of session.touchedIds) {
       const draft = session.drafts.get(id);
       if (draft) touched.set(id, draft);
     }
-    return applyDraftsToDeck(deck, pruneDrafts(touched, deck));
+    return applyDraftsToDeck(currentDeck, pruneDrafts(touched, currentDeck));
   }, [deck, session.drafts, session.touchedIds]);
 
   return {
@@ -776,15 +833,14 @@ export function useEditorDeck({ deck, initialSlide }: UseEditorDeckOptions) {
     setItemSelection,
 
     // editing
+    updateVideoPlayback: (settings: NonNullable<Slide['videoPlayback']>) => { if (activeSlide) dispatch({ type: 'videoPlayback', slide: activeSlide, settings }); },
+    updateVideoOverlays: (overlays: NonNullable<Slide['videoOverlays']>, history = true) => { if (activeSlide) dispatch({ type: 'videoOverlays', slide: activeSlide, overlays, history }); },
     updateItems,
     setGridField,
     gestureStart,
     gestureEnd,
     normalizeActiveItems: (options?: { history?: boolean }) =>
-      mutateActive(
-        (draft) => ({ ...draft, items: normalizeItems(draft.items) }),
-        options?.history ?? true,
-      ),
+      mutateActive((draft) => ({ ...draft, items: normalizeItems(draft.items) }), options?.history ?? true),
 
     // clipboard & bulk
     copyItems,
@@ -801,6 +857,8 @@ export function useEditorDeck({ deck, initialSlide }: UseEditorDeckOptions) {
     undo,
     redo,
     buildSavePayload,
+    reset,
+    bases: bases.current,
 
     // helpers for the component
     slideById,

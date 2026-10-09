@@ -1,9 +1,16 @@
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { MediaPoster } from './MediaPoster';
+import { VideoOverlayLayer } from './VideoOverlayLayer';
+import { memo, useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Captions, ListOrdered, Monitor, Pause, Play, Video } from 'lucide-react';
-import type { Slide, SlideItem, TextStyle } from '../types';
+import { ListOrdered, Monitor, Pause, Play, Video } from 'lucide-react';
+import type { Slide, SlideItem } from '../types';
 import { getSlideDisplayContent } from '../../shared/slideContent';
+import { SlideImage } from './SlideImage';
 import { cn } from '../utils';
+import { SlideTextItem as TextItem } from './SlideTextItem';
+export { SlideTextItem as TextItem } from './SlideTextItem';
+import { SLIDE_REFERENCE_HEIGHT, SLIDE_REFERENCE_WIDTH } from '../editor/editorUtils';
+import { slidePreviewGeometry } from '../slidePreviewGeometry';
 
 /**
  * Shared slide previews.
@@ -20,86 +27,13 @@ import { cn } from '../utils';
 
 // Image item renderer
 export const ImageItem = memo(({ item }: { item: SlideItem }) => {
-  const imgStyles = item.imageStyles;
-  const cssFilter = [
-    imgStyles?.brightness !== 1 ? `brightness(${imgStyles?.brightness ?? 1})` : null,
-    imgStyles?.contrast !== 1 ? `contrast(${imgStyles?.contrast ?? 1})` : null,
-    imgStyles?.grayscale ? `grayscale(${imgStyles?.grayscale})` : null,
-    imgStyles?.sepia ? `sepia(${imgStyles?.sepia})` : null,
-    imgStyles?.blur ? `blur(${imgStyles?.blur}px)` : null,
-  ].filter(Boolean).join(' ') || undefined;
-
-  const flipTransform = [
-    imgStyles?.flipX ? 'scaleX(-1)' : '',
-    imgStyles?.flipY ? 'scaleY(-1)' : '',
-  ].filter(Boolean).join(' ');
-
-  return (
-    <img
-      src={item.mediaUrl}
-      className={cn(
-        'w-full h-full',
-        imgStyles?.objectFit === 'cover' ? 'object-cover'
-          : imgStyles?.objectFit === 'fill' ? 'object-fill'
-            : 'object-contain'
-      )}
-      style={{
-        opacity: imgStyles?.opacity ?? 1,
-        filter: cssFilter,
-        transform: flipTransform || undefined,
-      }}
-      alt="Slide content"
-      loading="lazy"
-    />
-  );
+  return <SlideImage src={item.mediaUrl} styles={item.imageStyles} alt="Slide content" lazy />;
 });
 
 ImageItem.displayName = 'ImageItem';
 
-// Text item renderer
-export const TextItem = memo(({ item }: { item: SlideItem }) => {
-  const CARD_SCALE = 0.2;
-  const styles = item.textStyles ?? {} as TextStyle;
-  const shadow = styles.textShadow;
-
-  const textShadowStyle = useMemo(() =>
-    shadow
-      ? `${shadow.color || '#000'} ${(shadow.offsetX || 0) * CARD_SCALE}px ${(shadow.offsetY || 0) * CARD_SCALE}px ${(shadow.blur || 0) * CARD_SCALE}px`
-      : undefined,
-    [shadow]);
-
-  return (
-    <div
-      className="w-full h-full overflow-hidden p-1 flex items-center justify-center"
-      style={{
-        color: styles.textColor ?? '#ffffff',
-        fontSize: `${Math.max(2, (styles.fontSize ?? 32) * CARD_SCALE)}px`,
-        backgroundColor: styles.textHighlight && styles.textHighlight !== 'transparent'
-          ? styles.textHighlight
-          : (styles.backgroundColor ?? 'transparent'),
-        lineHeight: styles.lineHeight ?? 1.2,
-        textAlign: styles.textAlign ?? 'center',
-        fontWeight: styles.fontWeight ?? 'normal',
-        fontStyle: styles.fontStyle ?? 'normal',
-        letterSpacing: styles.letterSpacing ? `${styles.letterSpacing * CARD_SCALE}px` : undefined,
-        textDecoration: styles.textDecoration || undefined,
-        textShadow: textShadowStyle,
-        WebkitTextStroke: styles.textStroke
-          ? `${(styles.textStroke.width || 0) * CARD_SCALE}px ${styles.textStroke.color}`
-          : undefined,
-        whiteSpace: 'pre-wrap',
-        fontFamily: styles.fontFamily,
-      }}
-    >
-      {item.content}
-    </div>
-  );
-});
-
-TextItem.displayName = 'TextItem';
-
 // Background video player — shows first frame, play/pause on click
-export const BackgroundVideoPlayer = memo(({ src }: { src: string }) => {
+export const BackgroundVideoPlayer = memo(({ src, previewScale = 1 }: { src: string; previewScale?: number }) => {
   const [playing, setPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -132,6 +66,10 @@ export const BackgroundVideoPlayer = memo(({ src }: { src: string }) => {
         type="button"
         onClick={toggle}
         className="absolute bottom-1.5 left-1.5 w-5 h-5 rounded-full bg-black/50 flex items-center justify-center hover:bg-black/70 transition-colors z-10"
+        style={previewScale > 0 ? {
+          left: 6 / previewScale, bottom: 6 / previewScale,
+          transform: `scale(${1 / previewScale})`, transformOrigin: 'bottom left',
+        } : undefined}
         aria-label={playing ? 'Pause' : 'Play'}
       >
         {playing ? (
@@ -147,10 +85,25 @@ export const BackgroundVideoPlayer = memo(({ src }: { src: string }) => {
 BackgroundVideoPlayer.displayName = 'BackgroundVideoPlayer';
 
 // Slide items container
-export const SlideItemsPreview = memo(({ items, slide }: {
+export const SlideItemsPreview = memo(({ items, slide, staticMedia = false, enabled = true }: {
   items: SlideItem[];
   slide: Slide;
+  staticMedia?: boolean;
+  enabled?: boolean;
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const update = (width: number, height: number) => setViewport((previous) =>
+      previous.width === width && previous.height === height ? previous : { width, height });
+    update(container.clientWidth, container.clientHeight);
+    const observer = new ResizeObserver(([entry]) => update(entry.contentRect.width, entry.contentRect.height));
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+  const geometry = slidePreviewGeometry(viewport.width, viewport.height);
   const bgColor = slide.styles?.backgroundColor ?? '#000000';
   const bgImage = slide.styles?.backgroundImage;
   const bgGradient = slide.styles?.backgroundGradient;
@@ -165,6 +118,7 @@ export const SlideItemsPreview = memo(({ items, slide }: {
       height: `${item.height}%`,
       transform: item.rotation ? `rotate(${item.rotation}deg)` : undefined,
       transformOrigin: item.rotation ? 'center center' : undefined,
+      zIndex: item.zIndex ?? 0,
       border: borderWidth > 0 ? `${borderWidth}px solid ${item.borderColor || '#ffffff'}` : undefined,
       borderRadius: item.borderRadius ? `${item.borderRadius}px` : undefined,
     };
@@ -182,36 +136,50 @@ export const SlideItemsPreview = memo(({ items, slide }: {
 
   return (
     <div
-      className="relative w-full h-full overflow-hidden"
-      style={{
-        backgroundColor: bgColor,
-        backgroundImage: gradientStyle ? `${gradientStyle}, ${bgImage ? `url(${bgImage})` : 'none'}` : (bgImage ? `url(${bgImage})` : undefined),
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        filter: bgBlur && bgBlur > 0 ? `blur(${bgBlur}px)` : undefined,
-      }}
+      ref={containerRef}
+      className="relative w-full h-full overflow-hidden bg-black"
     >
-      {/* Background video — show first frame, play on click */}
-      {slide.styles?.backgroundVideo && (
-        <BackgroundVideoPlayer src={slide.styles.backgroundVideo} />
-      )}
-      <div className="absolute inset-0" style={{
-        background: gradientStyle,
-        pointerEvents: 'none' as const,
-      }} />
-      {items.map(item => (
-        <div
-          key={item.id}
-          className="absolute overflow-hidden"
-          style={getItemStyle(item)}
-        >
-          {item.type === 'image' ? (
-            <ImageItem item={item} />
-          ) : (
-            <TextItem item={item} />
-          )}
+      <div
+        className="absolute overflow-hidden"
+        style={{
+          width: SLIDE_REFERENCE_WIDTH,
+          height: SLIDE_REFERENCE_HEIGHT,
+          left: geometry.left,
+          top: geometry.top,
+          transform: `scale(${geometry.scale})`,
+          transformOrigin: 'top left',
+          backgroundColor: bgColor,
+          backgroundImage: gradientStyle ? `${gradientStyle}, ${bgImage ? `url(${bgImage})` : 'none'}` : (bgImage ? `url(${bgImage})` : undefined),
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          filter: bgBlur && bgBlur > 0 ? `blur(${bgBlur}px)` : undefined,
+        }}
+      >
+        {/* Background video — show first frame, play on click */}
+        {slide.styles?.backgroundVideo && (
+          staticMedia ? <div className="absolute inset-0"><MediaPoster mediaUrl={slide.styles.backgroundVideo} enabled={enabled} objectFit="cover" /></div> : <BackgroundVideoPlayer src={slide.styles.backgroundVideo} previewScale={geometry.scale} />
+        )}
+        <div className="absolute inset-0" style={{
+          background: gradientStyle,
+          pointerEvents: 'none' as const,
+        }} />
+        {/* Slide layers share their own stack so they cannot cover media controls. */}
+        <div className="absolute inset-0 isolate">
+          {items.filter(item => item.visible !== false).map(item => (
+            <div
+              key={item.id}
+              className="absolute overflow-hidden"
+              style={getItemStyle(item)}
+            >
+              {item.type === 'image' ? (
+                <ImageItem item={item} />
+              ) : (
+                <TextItem item={item} />
+              )}
+            </div>
+          ))}
         </div>
-      ))}
+    </div>
     </div>
   );
 });
@@ -219,7 +187,7 @@ export const SlideItemsPreview = memo(({ items, slide }: {
 SlideItemsPreview.displayName = 'SlideItemsPreview';
 
 // Legacy (item-less) text slide preview
-export const TextSlidePreview = memo(({ slide, cardWidth = 320 }: { slide: Slide; cardWidth?: number }) => {
+export const TextSlidePreview = memo(({ slide, cardWidth = 320, staticMedia = false, enabled = true }: { slide: Slide; cardWidth?: number; staticMedia?: boolean; enabled?: boolean }) => {
   const displayContent = getSlideDisplayContent(slide);
   const bgColor = slide.styles?.backgroundColor ?? '#000000';
   const bgImage = slide.styles?.backgroundImage;
@@ -254,7 +222,7 @@ export const TextSlidePreview = memo(({ slide, cardWidth = 320 }: { slide: Slide
     >
       {/* Background video — show first frame, play on click */}
       {slide.styles?.backgroundVideo && (
-        <BackgroundVideoPlayer src={slide.styles.backgroundVideo} />
+        staticMedia ? <div className="absolute inset-0"><MediaPoster mediaUrl={slide.styles.backgroundVideo} enabled={enabled} objectFit="cover" /></div> : <BackgroundVideoPlayer src={slide.styles.backgroundVideo} />
       )}
       <div className="absolute inset-0" style={{
         background: gradientStyle,
@@ -305,6 +273,7 @@ interface SlidePreviewAnyProps {
   slide: Slide;
   /** Rendered preview width in px — used for proportional text sizing. */
   cardWidth?: number;
+  enabled?: boolean;
 }
 
 /**
@@ -312,12 +281,14 @@ interface SlidePreviewAnyProps {
  * Deliberately avoids VideoPreview / LoopVideoPreview so that scrolling a long
  * deck never queues ffmpeg thumbnail jobs or video decoding per thumbnail.
  */
-export const SlidePreviewAny = memo(({ slide, cardWidth = 320 }: SlidePreviewAnyProps) => {
+export const SlidePreviewAny = memo(({ slide, cardWidth = 320, enabled = true }: SlidePreviewAnyProps) => {
   const { t } = useTranslation();
 
-  if (slide.items && slide.items.length > 0) {
-    return <SlideItemsPreview items={slide.items} slide={slide} />;
+  if (!slide.partsMode && (slide.type === 'text' || slide.type === 'image') && slide.items && slide.items.length > 0) {
+    return <SlideItemsPreview items={slide.items} slide={slide} staticMedia enabled={enabled} />;
   }
+
+  if (slide.partsMode) return <div className="relative h-full w-full"><TextSlidePreview slide={slide} cardWidth={cardWidth} staticMedia enabled={enabled} /><span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[9px] text-white">{(slide.activePart ?? 0) + 1} / {slide.parts?.length ?? 1}</span></div>;
 
   switch (slide.type) {
     case 'image':
@@ -334,29 +305,18 @@ export const SlidePreviewAny = memo(({ slide, cardWidth = 320 }: SlidePreviewAny
       );
 
     case 'video':
-      return slide.thumbnailUrl ? (
-        <img
-          src={slide.thumbnailUrl}
-          className={cn(
-            'w-full h-full bg-black',
-            slide.styles?.objectFit === 'cover' ? 'object-cover' : 'object-contain'
-          )}
-          alt="Video thumbnail"
-          loading="lazy"
-        />
-      ) : (
-        <PlaceholderPreview icon={Video} label={t('common.slideVideo')} />
-      );
+      return <div className="relative h-full w-full"><MediaPoster mediaUrl={slide.mediaUrl} thumbnailUrl={slide.thumbnailUrl} objectFit={slide.styles?.objectFit} enabled={enabled} /><VideoOverlayLayer overlays={slide.videoOverlays} position={slide.videoPlayback?.startSeconds ?? 0} /></div>;
 
     case 'screen':
-      return <PlaceholderPreview icon={Monitor} label={t('common.slideScreenCapture')} />;
+      return slide.thumbnailUrl ? <img src={slide.thumbnailUrl} alt={t('common.slideScreenCapture')} className="h-full w-full object-contain" /> : <ScreenPreview content={slide.content} />;
 
     case 'loop': {
       const first = slide.loopItems?.[0];
       if (!first) return <PlaceholderPreview icon={ListOrdered} label={t('common.loopLabel')} />;
-      const src = first.type === 'video' ? first.thumbnailUrl : first.mediaUrl;
+      if (first.type === 'video') return <div className="relative h-full w-full"><MediaPoster mediaUrl={first.mediaUrl} thumbnailUrl={first.thumbnailUrl} objectFit="cover" enabled={enabled} /><span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[9px] text-white">{t('common.loopLabel')} · {slide.loopItems?.length}</span></div>;
+      const src = first.mediaUrl;
       return src ? (
-        <img src={src} className="w-full h-full object-cover bg-black" alt="Loop" loading="lazy" />
+        <div className="relative h-full w-full"><img src={src} className="w-full h-full object-cover bg-black" alt="Loop" loading="lazy" /><span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[9px] text-white">{t('common.loopLabel')} · {slide.loopItems?.length}</span></div>
       ) : (
         <PlaceholderPreview icon={ListOrdered} label={t('common.loopLabel')} />
       );
@@ -380,7 +340,7 @@ export const SlidePreviewAny = memo(({ slide, cardWidth = 320 }: SlidePreviewAny
             color: slide.styles?.textColor ?? '#ffffff',
           }}
         >
-          <span className="font-mono font-bold text-lg leading-none">
+          <span className="font-mono font-bold leading-none" style={{ fontSize: Math.max(12, cardWidth / 10) }}>
             {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
           </span>
         </div>
@@ -388,11 +348,11 @@ export const SlidePreviewAny = memo(({ slide, cardWidth = 320 }: SlidePreviewAny
     }
 
     case 'captions':
-      return <PlaceholderPreview icon={Captions} label={t('common.captionsSlide')} />;
+      return <TextSlidePreview slide={{ ...slide, content: t('common.editorCaptionsSample'), items: undefined, styles: slide.styles }} cardWidth={cardWidth} staticMedia enabled={enabled} />;
 
     case 'text':
     default:
-      return <TextSlidePreview slide={slide} cardWidth={cardWidth} />;
+      return <TextSlidePreview slide={{ ...slide, styles: slide.styles }} cardWidth={cardWidth} staticMedia enabled={enabled} />;
   }
 });
 

@@ -253,6 +253,26 @@ export function insertEmptySection(
   return { ...deck, sections };
 }
 
+/** Resolve a card drop using the same forward/backward ordering in both views. */
+export function slideDropDestination(deck: Presentation, selected: Set<string>, targetSlideId: string) {
+  const first = deck.slides.findIndex((slide) => selected.has(slide.id));
+  const targetIndex = deck.slides.findIndex((slide) => slide.id === targetSlideId);
+  const target = deck.slides[targetIndex];
+  if (first < 0 || !target?.sectionId || selected.has(targetSlideId)) return null;
+  const before = first < targetIndex
+    ? deck.slides.slice(targetIndex + 1).find((slide) => slide.sectionId === target.sectionId && !selected.has(slide.id))
+    : target;
+  return { sectionId: target.sectionId, beforeId: before?.id };
+}
+
+export function dropSlidesOnSlide(deck: Presentation, selected: Set<string>, targetSlideId: string): Presentation {
+  const destination = slideDropDestination(deck, selected, targetSlideId);
+  return destination
+    ? moveSlidesToSection(deck, selected, destination.sectionId,
+      destination.beforeId ? { beforeId: destination.beforeId } : 'end')
+    : deck;
+}
+
 /** Move membership and physical order atomically. beforeId must belong to target. */
 export function moveSlidesToSection(
   deck: Presentation,

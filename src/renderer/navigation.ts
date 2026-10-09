@@ -1,4 +1,4 @@
-/** Keep keyboard destinations aligned with the nine visible sidebar pages. */
+/** Keep keyboard destinations aligned with the sidebar pages (Alt+9 remains Settings). */
 export const TAB_KEYS = {
   '1': 'presentations',
   '2': 'slides',
@@ -9,6 +9,7 @@ export const TAB_KEYS = {
   '7': 'screen',
   '8': 'calendar',
   '9': 'settings',
+  '0': 'editor',
 } as const;
 
 export function tabForShortcut(key: string) {

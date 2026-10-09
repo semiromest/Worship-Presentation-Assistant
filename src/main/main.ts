@@ -1,3 +1,4 @@
+import { resolvePosterSource } from './mediaPosterSource';
 import { checkMediaResources, cacheGoogleFont } from './preparationResources';
 /**
  * Electron main process: presentation control, projector window,
@@ -1063,6 +1064,8 @@ app.whenReady().then(() => {
       if (mediaName) {
         // Phase 6 media library: userData/media/<name>, name validated above.
         filePath = path.join(mediaLibrary.dir, mediaName);
+        const mediaResponse = await serveMediaFile(`${MEDIAFILE_REF_PREFIX}${encodeURIComponent(filePath)}`, request);
+        if (mediaResponse) return mediaResponse;
       } else {
         // Arbitrary media files (folder-scanned images/videos) streamed with
         // Range support — see serveMediaFile. Works from http (dev) and
@@ -1876,7 +1879,9 @@ ipcMain.handle('read-media-folder', async (_event, folderPath: string, options?:
 
 ipcMain.handle('media:getThumbnail', async (_evt, filePath: string, maxEdge: number) => {
   try {
-    return await getOrCreateThumbnail(filePath, { maxEdge });
+    const resolved = resolvePosterSource(filePath, mediaLibrary.dir);
+    if (!resolved) return null;
+    return await getOrCreateThumbnail(resolved, { maxEdge });
   } catch {
     return null;
   }

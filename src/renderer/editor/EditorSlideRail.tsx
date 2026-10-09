@@ -1,3 +1,4 @@
+import { isEditorEditableSlide } from './slideCapabilities';
 import {
   memo,
   useCallback,
@@ -10,13 +11,25 @@ import {
   type MouseEvent,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Check, ChevronLeft, ChevronRight, ChevronsLeft, ListOrdered, Monitor, Timer, Captions, Video, X } from 'lucide-react';
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ListOrdered,
+  Monitor,
+  Timer,
+  Captions,
+  Video,
+  X,
+} from 'lucide-react';
 import type { Slide } from '../types';
 import { cn } from '../utils';
 import { SlidePreviewAny } from '../components/SlidePreview';
 import { isItemEditableSlide, type SlideDraft } from './slideDraft';
 import { isElementDrag, readElementDrag, type ElementDragPayload } from './elementDrag';
 import type { SelectModifiers } from './editorSelection';
+import { createFrameQueue } from './frameQueue';
 
 export const RAIL_WIDTH = 140;
 export const RAIL_COLLAPSED_WIDTH = 40;
@@ -31,12 +44,18 @@ const OVERSCAN = 4;
 function readOnlyIcon(slide: Slide) {
   if (slide.partsMode) return ListOrdered;
   switch (slide.type) {
-    case 'video': return Video;
-    case 'screen': return Monitor;
-    case 'loop': return ListOrdered;
-    case 'countdown': return Timer;
-    case 'captions': return Captions;
-    default: return Monitor;
+    case 'video':
+      return Video;
+    case 'screen':
+      return Monitor;
+    case 'loop':
+      return ListOrdered;
+    case 'countdown':
+      return Timer;
+    case 'captions':
+      return Captions;
+    default:
+      return Monitor;
   }
 }
 
@@ -50,6 +69,7 @@ function sameSlideInputs(prev: RailThumbProps, next: RailThumbProps): boolean {
     prev.isSelected === next.isSelected &&
     prev.isLive === next.isLive &&
     prev.isDropTarget === next.isDropTarget &&
+    prev.enabled === next.enabled &&
     prev.thumbWidth === next.thumbWidth
   );
 }
@@ -63,6 +83,7 @@ interface RailThumbProps {
   isLive: boolean;
   isDropTarget: boolean;
   thumbWidth: number;
+  enabled: boolean;
   onActivate: (slide: Slide, modifiers: SelectModifiers) => void;
   onContextMenu: (event: MouseEvent, slideId: string) => void;
   onDragOverThumb: (event: DragEvent, slideId: string) => void;
@@ -79,6 +100,7 @@ const RailThumb = memo(function RailThumb({
   isLive,
   isDropTarget,
   thumbWidth,
+  enabled,
   onActivate,
   onContextMenu,
   onDragOverThumb,
@@ -87,7 +109,7 @@ const RailThumb = memo(function RailThumb({
 }: RailThumbProps) {
   const { t } = useTranslation();
   const editable = isItemEditableSlide(slide);
-  const RowIcon = editable ? null : readOnlyIcon(slide);
+  const RowIcon = isEditorEditableSlide(slide) ? null : readOnlyIcon(slide);
 
   // The preview always reflects the editor's working copy, so applying an
   // element to many slides is visible immediately in the rail.
@@ -96,6 +118,8 @@ const RailThumb = memo(function RailThumb({
       draft
         ? {
             ...slide,
+            videoPlayback: draft.videoPlayback,
+            videoOverlays: draft.videoOverlays,
             items: draft.items,
             styles: draft.styles as Slide['styles'],
             gridEnabled: draft.gridEnabled,
@@ -104,30 +128,36 @@ const RailThumb = memo(function RailThumb({
             snapEnabled: draft.snapEnabled,
           }
         : slide,
-    [slide, draft],
+    [slide, draft]
   );
 
   return (
     <div
       role="option"
+      tabIndex={isActive ? 0 : -1}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.stopPropagation();
+        onActivate(slide, { ctrl: event.ctrlKey || event.metaKey, shift: event.shiftKey });
+      }}
       aria-selected={isSelected}
       aria-current={isActive ? 'true' : undefined}
       aria-label={t('common.editorRailSlideLabel', { number: index + 1 })}
       data-rail-slide={slide.id}
-      title={editable ? undefined : t('common.editorRailReadOnly')}
+      title={isEditorEditableSlide(slide) ? undefined : t('common.editorRailReadOnly')}
       onClick={(event) => {
-        if (!editable && !event.ctrlKey && !event.metaKey && !event.shiftKey) return;
         onActivate(slide, { ctrl: event.ctrlKey || event.metaKey, shift: event.shiftKey });
       }}
-      onContextMenu={(event) => onContextMenu(event, slide.id)}
-      onDragOver={(event) => onDragOverThumb(event, slide.id)}
+      onContextMenu={(event) => { if (editable) onContextMenu(event, slide.id); }}
+      onDragOver={(event) => { if (editable) onDragOverThumb(event, slide.id); }}
       onDragLeave={onDragLeaveThumb}
-      onDrop={(event) => onDropThumb(event, slide.id)}
+      onDrop={(event) => { if (editable) onDropThumb(event, slide.id); }}
       className={cn(
         'group relative flex cursor-pointer flex-col gap-1 rounded-lg p-1 transition-colors',
         'focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none',
         isSelected ? 'bg-blue-500/10' : 'hover:bg-white/5',
-        !editable && 'opacity-55',
+        !isEditorEditableSlide(slide) && 'border border-white/10'
       )}
     >
       <div
@@ -135,11 +165,11 @@ const RailThumb = memo(function RailThumb({
           'relative w-full overflow-hidden rounded-md border bg-black',
           isActive ? 'border-blue-500 ring-2 ring-blue-500/60' : 'border-white/10',
           isSelected && !isActive && 'border-blue-400/50',
-          isDropTarget && 'border-blue-300 ring-2 ring-blue-300/70',
+          isDropTarget && 'border-blue-300 ring-2 ring-blue-300/70'
         )}
         style={{ height: thumbWidth * THUMB_ASPECT }}
       >
-        <SlidePreviewAny slide={previewSlide} cardWidth={Math.max(120, thumbWidth * 2.6)} />
+        <SlidePreviewAny slide={previewSlide} cardWidth={thumbWidth} enabled={enabled} />
 
         {/* Selected marker: distinguishable from the active ring at a glance. */}
         {isSelected && !isActive && (
@@ -148,12 +178,7 @@ const RailThumb = memo(function RailThumb({
           </span>
         )}
 
-        {isActive && (
-          <span
-            className="absolute inset-y-0 left-0 w-[3px] rounded-r bg-blue-400"
-            aria-hidden="true"
-          />
-        )}
+        {isActive && <span className="absolute inset-y-0 left-0 w-[3px] rounded-r bg-blue-400" aria-hidden="true" />}
 
         {isLive && (
           <span
@@ -164,7 +189,7 @@ const RailThumb = memo(function RailThumb({
 
         {RowIcon && (
           <span className="absolute bottom-1 right-1 rounded bg-black/70 p-0.5 text-white/70">
-            <RowIcon className="h-3 w-3" aria-hidden="true" />
+            <RowIcon className="inline h-3 w-3" aria-hidden="true" /><span className="ml-1 text-[8px]">{t('common.editorSpecialSlide')}</span>
           </span>
         )}
 
@@ -178,7 +203,7 @@ const RailThumb = memo(function RailThumb({
       <span
         className={cn(
           'text-center text-[10px] tabular-nums leading-none',
-          isActive ? 'font-semibold text-blue-200' : 'text-white/45',
+          isActive ? 'font-semibold text-blue-200' : 'text-white/45'
         )}
       >
         {index + 1}
@@ -189,6 +214,10 @@ const RailThumb = memo(function RailThumb({
 
 export interface EditorSlideRailProps {
   slides: Slide[];
+  allSlides: Slide[];
+  enabled: boolean;
+  editableOnly: boolean;
+  onFilterChange: (value: boolean) => void;
   drafts: Map<string, SlideDraft>;
   activeId: string;
   selectedIds: string[];
@@ -212,6 +241,10 @@ export interface EditorSlideRailProps {
  */
 export default function EditorSlideRail({
   slides,
+  allSlides,
+  enabled,
+  editableOnly,
+  onFilterChange,
   drafts,
   activeId,
   selectedIds,
@@ -230,9 +263,11 @@ export default function EditorSlideRail({
   handlersRef.current = { onActivate, onOpenPasteMenu, onDropElements };
   const activate = useCallback(
     (slide: Slide, modifiers: SelectModifiers) => handlersRef.current.onActivate(slide, modifiers),
-    [],
+    []
   );
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const railOwnsFocus = useRef(false);
+  const pendingFocus = useRef(false);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewHeight, setViewHeight] = useState(600);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
@@ -247,11 +282,11 @@ export default function EditorSlideRail({
     update();
     const observer = new ResizeObserver(update);
     observer.observe(element);
-    const onScroll = () => {
-      requestAnimationFrame(() => setScrollTop(element.scrollTop));
-    };
+    const queue = createFrameQueue<number>(setScrollTop, requestAnimationFrame, cancelAnimationFrame);
+    const onScroll = () => queue.push(element.scrollTop);
     element.addEventListener('scroll', onScroll, { passive: true });
     return () => {
+      queue.cancel();
       observer.disconnect();
       element.removeEventListener('scroll', onScroll);
     };
@@ -273,13 +308,29 @@ export default function EditorSlideRail({
     previousActiveRef.current = activeId;
     const index = slides.findIndex((slide) => slide.id === activeId);
     if (index === -1) return;
+    pendingFocus.current = railOwnsFocus.current;
     const top = index * rowHeight;
     const bottom = top + rowHeight;
     if (top < element.scrollTop) element.scrollTop = top;
     else if (bottom > element.scrollTop + element.clientHeight) {
       element.scrollTop = bottom - element.clientHeight;
     }
+    setScrollTop(element.scrollTop);
+    const target = element.querySelector<HTMLElement>('[data-rail-slide="' + CSS.escape(activeId) + '"]');
+    if (pendingFocus.current && target) {
+      target.focus({ preventScroll: true });
+      pendingFocus.current = false;
+    }
   }, [activeId, slides, rowHeight]);
+
+  useLayoutEffect(() => {
+    if (!pendingFocus.current) return;
+    const target = scrollRef.current?.querySelector<HTMLElement>('[data-rail-slide="' + CSS.escape(activeId) + '"]');
+    if (target) {
+      target.focus({ preventScroll: true });
+      pendingFocus.current = false;
+    }
+  }, [activeId, startRow, endRow]);
 
   const handleContextMenu = useCallback((event: MouseEvent, slideId: string) => {
     event.preventDefault();
@@ -313,7 +364,7 @@ export default function EditorSlideRail({
     >
       <div className="flex items-center justify-between gap-1 border-b border-white/10 px-2 py-1.5">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-white/45">
-          {t('common.editorRailTitle', { count: slides.length })}
+          {t('common.editorRailTitle', { count: allSlides.length })}{editableOnly && ` · ${slides.length}`}
         </span>
         <button
           type="button"
@@ -326,6 +377,13 @@ export default function EditorSlideRail({
         </button>
       </div>
 
+      <div className="flex gap-1 border-b border-white/10 p-1">
+        {[false, true].map(value => <button type="button" key={String(value)} aria-pressed={editableOnly === value}
+          onClick={() => onFilterChange(value)} className={cn('flex-1 rounded px-1 py-2 text-[9px]', editableOnly === value ? 'bg-blue-600/30 text-blue-100' : 'text-white/60 hover:bg-white/10')}>
+          {t(value ? 'common.editorFilterEditable' : 'common.editorFilterAll')}
+        </button>)}
+      </div>
+      {slides.length === 0 && <div className="p-2 text-center text-xs text-white/60"><p>{t('common.editorNoEditableSlides')}</p><button type="button" onClick={() => onFilterChange(false)} className="mt-2 text-blue-300">{t('common.editorShowAll')}</button></div>}
       {/* Scope indicator: the user must never wonder which slides an edit hits. */}
       {activeCount > 1 ? (
         <div
@@ -368,9 +426,16 @@ export default function EditorSlideRail({
 
       <div
         ref={scrollRef}
+        onFocusCapture={() => {
+          railOwnsFocus.current = true;
+        }}
+        onBlurCapture={(event) => {
+          if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node))
+            railOwnsFocus.current = false;
+        }}
         role="listbox"
         aria-multiselectable="true"
-        aria-label={t('common.editorRailTitle', { count: slides.length })}
+        aria-label={t('common.editorRailTitle', { count: allSlides.length })}
         tabIndex={-1}
         className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
         style={{ padding: RAIL_PADDING }}
@@ -393,7 +458,8 @@ export default function EditorSlideRail({
                 <RailThumb
                   slide={slide}
                   draft={drafts.get(slide.id)}
-                  index={index}
+                  index={allSlides.findIndex(candidate => candidate.id === slide.id)}
+                  enabled={enabled}
                   isActive={slide.id === activeId}
                   isSelected={selectedSet.has(slide.id)}
                   isLive={slide.id === liveSlideId}
@@ -423,12 +489,14 @@ export default function EditorSlideRail({
           <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
         <span className="px-1 text-[10px] tabular-nums text-white/50">
-          {slides.findIndex((s) => s.id === activeId) + 1} / {slides.length}
+          {allSlides.findIndex((s) => s.id === activeId) + 1} / {allSlides.length}
         </span>
         <button
           type="button"
-          onClick={() => activate(slides[Math.min(slides.length - 1, slides.findIndex((s) => s.id === activeId) + 1)], {})}
-          disabled={slides.findIndex((s) => s.id === activeId) >= slides.length - 1}
+          onClick={() =>
+            activate(slides[Math.min(slides.length - 1, slides.findIndex((s) => s.id === activeId) + 1)], {})
+          }
+          disabled={slides.length === 0 || slides.findIndex((s) => s.id === activeId) >= slides.length - 1}
           aria-label={t('common.editorNextSlide')}
           title={t('common.editorNextSlide')}
           className="rounded-md p-1 text-white/50 transition hover:bg-white/10 hover:text-white disabled:opacity-25 disabled:hover:bg-transparent focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"

@@ -1,3 +1,6 @@
+import { RangeVideo } from './components/RangeVideo';
+import { VideoOverlayLayer } from './components/VideoOverlayLayer';
+import { SlideImage } from './components/SlideImage';
 import { loadGoogleFont, slideFonts } from './fontLoader';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Slide } from './types';
@@ -17,29 +20,6 @@ export interface LivePreviewProps {
   volume?: number;
   muted?: boolean;
   isActive?: boolean;
-}
-
-function VideoPlayer({ mediaUrl, objectFit, volume = 1, muted = false }: { mediaUrl?: string; objectFit?: string; volume?: number; muted?: boolean }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    video.volume = volume;
-    video.muted = muted;
-  }, [volume, muted]);
-
-  if (!mediaUrl) return null;
-
-  return (
-    <video
-      ref={videoRef}
-      src={mediaUrl}
-      autoPlay
-      loop
-      className={cn('w-full h-full', objectFit === 'cover' ? 'object-cover' : 'object-contain')}
-    />
-  );
 }
 
 // ─── Loop Renderer ──────────────────────────────────────────────────────────
@@ -201,6 +181,7 @@ function LoopVideoPlayer({ mediaUrl, isActive = true, preload = 'auto', volume =
 }
 
 export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = false, isActive = true }: LivePreviewProps) => {
+  const [videoPosition, setVideoPosition] = useState({ id: '', seconds: 0 });
   useEffect(() => { if (slide) slideFonts(slide).forEach(family => { void loadGoogleFont(family); }); }, [slide]);
   const outerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0, scale: 1 });
@@ -249,7 +230,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
 
   // Content layer — always 16:9 and centered
   const renderContent = () => {
-    if (slide.items?.length) {
+    if ((slide.type === 'text' || slide.type === 'image') && slide.items?.length) {
       return (
         <div
           className="relative overflow-hidden"
@@ -291,40 +272,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
                 borderRadius,
               }}
             >
-              {item.type === 'image' ? (() => {
-                const imgStyles = item.imageStyles;
-                const cssFilter = [
-                  imgStyles?.brightness !== 1 ? `brightness(${imgStyles?.brightness ?? 1})` : null,
-                  imgStyles?.contrast   !== 1 ? `contrast(${imgStyles?.contrast ?? 1})`     : null,
-                  imgStyles?.grayscale ? `grayscale(${imgStyles?.grayscale})`   : null,
-                  imgStyles?.sepia     ? `sepia(${imgStyles?.sepia})`            : null,
-                  imgStyles?.blur      ? `blur(${imgStyles?.blur}px)`             : null,
-                ].filter(Boolean).join(' ') || undefined;
-
-                const flipTransform = [
-                  imgStyles?.flipX ? 'scaleX(-1)' : '',
-                  imgStyles?.flipY ? 'scaleY(-1)' : '',
-                ].filter(Boolean).join(' ');
-
-                const cropClipPath = imgStyles?.crop
-                  ? `inset(${imgStyles.crop.y}% ${100 - imgStyles.crop.x - imgStyles.crop.width}% ${100 - imgStyles.crop.y - imgStyles.crop.height}% ${imgStyles.crop.x}%)`
-                  : undefined;
-
-                return (
-                  <div className="w-full h-full" style={{ clipPath: cropClipPath }}>
-                    <img
-                      src={item.mediaUrl}
-                      className={cn('w-full h-full', imgStyles?.objectFit === 'cover' ? 'object-cover' : 'object-contain')}
-                      style={{
-                        opacity: imgStyles?.opacity ?? 1,
-                        filter: cssFilter,
-                        transform: flipTransform || undefined,
-                      }}
-                      alt=""
-                    />
-                  </div>
-                );
-              })() : (
+              {item.type === 'image' ? <SlideImage src={item.mediaUrl} styles={item.imageStyles} /> : (
                 <div
                   className="w-full h-full overflow-hidden p-2 flex items-center justify-center"
                   style={{
@@ -409,12 +357,18 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
     if (slide.type === 'video') {
       return (
         <div className="relative overflow-hidden" style={{ width: `${width}px`, height: `${height}px` }}>
-          <VideoPlayer
-            mediaUrl={slide.mediaUrl}
-            objectFit={slide.styles?.objectFit}
+          <RangeVideo
+            key={slide.id}
+            src={slide.mediaUrl}
+            playback={slide.videoPlayback}
+            active={isActive}
+            autoplay
+            className={cn('w-full h-full', slide.styles?.objectFit === 'cover' ? 'object-cover' : 'object-contain')}
             volume={volume}
             muted={muted}
+            onPosition={slide.videoOverlays?.length ? seconds => setVideoPosition(previous => previous.id === slide.id && previous.seconds === seconds ? previous : { id: slide.id, seconds }) : undefined}
           />
+          <VideoOverlayLayer overlays={slide.videoOverlays} position={videoPosition.id === slide.id ? videoPosition.seconds : slide.videoPlayback?.startSeconds ?? 0} />
           <WatermarkOverlay slide={slide!} config={wmConfig} />
         </div>
       );

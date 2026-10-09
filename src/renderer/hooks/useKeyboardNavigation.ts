@@ -28,7 +28,6 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
     setIsBlackout,
     setSelectedSlideIds,
     setLastSelectedIndex,
-    setIsEditorOpen,
     setIsCheatsheetOpen,
     setActiveTab,
     setIsMediaMuted,
@@ -39,7 +38,6 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
     setIsBlackout: s.setIsBlackout,
     setSelectedSlideIds: s.setSelectedSlideIds,
     setLastSelectedIndex: s.setLastSelectedIndex,
-    setIsEditorOpen: s.setIsEditorOpen,
     setIsCheatsheetOpen: s.setIsCheatsheetOpen,
     setActiveTab: s.setActiveTab,
     setIsMediaMuted: s.setIsMediaMuted,
@@ -56,9 +54,10 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
       // The journal slide editor owns every key it needs while it is open:
       // deck undo/redo, slide navigation, delete/duplicate, move and Escape all
       // belong to the editor session instead of the deck.
-      const editorOpen = useStore.getState().isEditorOpen;
+      const editorOpen = useStore.getState().activeTab === 'editor';
       if (editorOpen) {
         const navKey =
+          e.key === 'Enter' ||
           e.key === 'Escape' ||
           e.key === 'Delete' ||
           e.key === 'Home' ||
@@ -142,10 +141,10 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
       } else if (e.altKey && e.key === 'ArrowDown' && state.activeTab === 'slides') {
         e.preventDefault();
         moveSelectedSlide(1);
-      } else if (e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'd' && !state.isEditorOpen && !state.isCheatsheetOpen && state.activeTab === 'slides') {
+      } else if (e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'd' && state.activeTab !== 'editor' && !state.isCheatsheetOpen && state.activeTab === 'slides') {
         e.preventDefault();
         onDuplicateSlides?.();
-      } else if (e.key === 'Delete' && !state.isEditorOpen && !state.isCheatsheetOpen && state.activeTab === 'slides' && state.selectedSlideIds.size > 0) {
+      } else if (e.key === 'Delete' && state.activeTab !== 'editor' && !state.isCheatsheetOpen && state.activeTab === 'slides' && state.selectedSlideIds.size > 0) {
         e.preventDefault();
         onDeleteSlides?.();
       } else if ((e.key === 'm' || e.key === 'M') && !state.isCheatsheetOpen) {
@@ -187,9 +186,9 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
         setIsBlackout(nextBlackout);
       } else if (e.key === 'Escape') {
         if (state.isCheatsheetOpen) return;
-        if (state.isEditorOpen) {
+        if (state.activeTab === 'editor') {
           e.preventDefault();
-          setIsEditorOpen(false);
+          setActiveTab('slides');
           return;
         }
         setSelectedSlideIds(new Set());
@@ -206,7 +205,6 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
     setIsBlackout,
     setSelectedSlideIds,
     setLastSelectedIndex,
-    setIsEditorOpen,
     setIsCheatsheetOpen,
     setActiveTab,
     setIsMediaMuted,

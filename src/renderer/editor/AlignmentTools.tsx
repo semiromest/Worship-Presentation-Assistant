@@ -1,98 +1,88 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SlideItem } from '../types';
-import { alignItems, distributeItems } from './alignmentUtils';
+import { layoutSelection, type LayoutAction } from './alignmentUtils';
 
 interface AlignmentToolsProps {
   selectedItems: SlideItem[];
   items: SlideItem[];
   onUpdateItems: (items: SlideItem[]) => void;
 }
-
 const alignButtons = [
-  { id: 'left', icon: '⊣', labelKey: 'common.editorAlignLeft' },
-  { id: 'center', icon: '⊥', labelKey: 'common.editorAlignCenterH' },
-  { id: 'right', icon: '⊢', labelKey: 'common.editorAlignRight' },
-  { id: 'top', icon: '⊤', labelKey: 'common.editorAlignTop' },
-  { id: 'middle', icon: '⊦', labelKey: 'common.editorAlignMiddle' },
-  { id: 'bottom', icon: '⊥', labelKey: 'common.editorAlignBottom' },
+  { id: 'left', icon: '⊣', label: 'editorAlignLeft' },
+  { id: 'center', icon: '↔', label: 'editorAlignCenterH' },
+  { id: 'right', icon: '⊢', label: 'editorAlignRight' },
+  { id: 'top', icon: '⊤', label: 'editorAlignTop' },
+  { id: 'middle', icon: '↕', label: 'editorAlignMiddle' },
+  { id: 'bottom', icon: '⊥', label: 'editorAlignBottom' },
 ] as const;
-
-export function AlignmentTools({
-  selectedItems,
-  items,
-  onUpdateItems,
-}: AlignmentToolsProps) {
+export function AlignmentTools({ selectedItems, items, onUpdateItems }: AlignmentToolsProps) {
   const { t } = useTranslation();
-  if (selectedItems.length < 2) return null;
-
-  const handleAlign = (type: (typeof alignButtons)[number]['id']) => {
-    const updated = alignItems(
-      items.map(i =>
-        selectedItems.some(s => s.id === i.id) ? i : i,
-      ),
-      type,
+  const [targetOverride, setTargetOverride] = useState<'slide' | 'selection' | null>(null);
+  const eligible = selectedItems.filter((item) => !item.locked && item.visible !== false);
+  const target = eligible.length < 2 ? 'slide' : (targetOverride ?? 'selection');
+  if (!eligible.length) return null;
+  const apply = (action: LayoutAction) =>
+    onUpdateItems(
+      layoutSelection(
+        items,
+        selectedItems.map((item) => item.id),
+        action,
+        target
+      )
     );
-    // Only update selected items
-    const result = items.map(item => {
-      const aligned = updated.find(u => u.id === item.id);
-      return aligned ? { ...item, x: aligned.x, y: aligned.y } : item;
-    });
-    onUpdateItems(result);
-  };
-
-  const handleDistribute = (type: 'horizontal' | 'vertical') => {
-    const selected = items.filter(i => selectedItems.some(s => s.id === i.id));
-    const distributed = distributeItems(selected, type);
-    const result = items.map(item => {
-      const d = distributed.find(di => di.id === item.id);
-      return d ? { ...item, ...d } : item;
-    });
-    onUpdateItems(result);
-  };
-
+  const buttonClass =
+    'rounded-lg border border-white/10 bg-black/20 px-2 py-2 text-xs text-white/70 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-blue-500';
   return (
-    <div className="space-y-2 rounded-2xl border border-white/10 bg-[#1a1a1a] p-3 shadow-sm">
-      <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-white/40">
-        <span>{t('common.editorAlignment')}</span>
-      </div>
-
+    <div className="space-y-3 rounded-2xl border border-white/10 bg-[#1a1a1a] p-3">
+      <h3 className="text-xs text-white/60">{t('common.editorAlignment')}</h3>
+      <p className="text-[10px] text-white/45">{t('common.editorLayoutActiveOnly')}</p>
+      <label className="flex items-center justify-between gap-2 text-xs text-white/60">
+        {t('common.editorAlignTarget')}
+        <select
+          className="rounded-lg border border-white/10 bg-[#222] p-2"
+          value={target}
+          onChange={(event) => setTargetOverride(event.target.value as 'slide' | 'selection')}
+        >
+          <option value="slide">{t('common.editorAlignToSlide')}</option>
+          <option value="selection" disabled={eligible.length < 2}>
+            {t('common.editorAlignToSelection')}
+          </option>
+        </select>
+      </label>
       <div className="grid grid-cols-6 gap-1">
-        {alignButtons.map(({ id, icon, labelKey }) => (
+        {alignButtons.map((button) => (
           <button
-            key={id}
+            key={button.id}
             type="button"
-            onClick={() => handleAlign(id)}
-            title={t(labelKey)}
-            aria-label={t(labelKey)}
-            className="flex items-center justify-center rounded-lg border border-white/10 bg-black/20 px-1.5 py-2 text-xs text-white/70 transition hover:bg-black/35 hover:text-white"
+            className={buttonClass}
+            aria-label={t('common.' + button.label)}
+            title={t('common.' + button.label)}
+            onClick={() => apply(button.id)}
           >
-            {icon}
+            {button.icon}
           </button>
         ))}
       </div>
-
-      {selectedItems.length >= 3 && (
-        <>
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-white/40 pt-1">
-            <span>{t('common.editorDistribution')}</span>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => handleDistribute('horizontal')}
-              className="flex-1 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/70 transition hover:bg-black/35"
-            >
-              {t('common.editorDistributeH')}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDistribute('vertical')}
-              className="flex-1 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/70 transition hover:bg-black/35"
-            >
-              {t('common.editorDistributeV')}
-            </button>
-          </div>
-        </>
+      {eligible.length >= 2 && (
+        <div className="grid grid-cols-2 gap-2">
+          <button className={buttonClass} onClick={() => apply('sameWidth')}>
+            {t('common.editorSameWidth')}
+          </button>
+          <button className={buttonClass} onClick={() => apply('sameHeight')}>
+            {t('common.editorSameHeight')}
+          </button>
+        </div>
+      )}
+      {eligible.length >= 3 && (
+        <div className="grid grid-cols-2 gap-2">
+          <button className={buttonClass} onClick={() => apply('distributeHorizontal')}>
+            {t('common.editorDistributeH')}
+          </button>
+          <button className={buttonClass} onClick={() => apply('distributeVertical')}>
+            {t('common.editorDistributeV')}
+          </button>
+        </div>
       )}
     </div>
   );

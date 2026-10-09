@@ -1,3 +1,4 @@
+import type { VideoPlaybackSettings } from './videoPlayback';
 // ─── Transition Types ─────────────────────────────────────────────────────────
 
 export type TransitionType =
@@ -60,6 +61,8 @@ export interface ImageStyle {
   flipX?: boolean;
   flipY?: boolean;
   crop?: { x: number; y: number; width: number; height: number };
+  /** Source-image percentage coordinates; absence preserves legacy frame clipping. */
+  cropMode?: 'source';
 }
 
 export interface GradientStyle {
@@ -123,6 +126,13 @@ export interface SlideItem {
   };
 }
 
+/** Text layer drawn during playback; timestamps refer to the original media. */
+export interface VideoTextOverlay extends SlideItem {
+  type: 'text';
+  startSeconds?: number;
+  endSeconds?: number;
+}
+
 export interface Slide {
   sectionId?: string;
   /** Compatibility snapshot for older project readers. */
@@ -143,6 +153,8 @@ export interface Slide {
   activePart?: number;
   mediaUrl?: string;
   thumbnailUrl?: string;
+  videoPlayback?: VideoPlaybackSettings;
+  videoOverlays?: VideoTextOverlay[];
   items?: SlideItem[];
   loopItems?: LoopItem[];
   group?: { id: string; title: string; part: number; parts: number; color?: string; author?: string };

@@ -1,3 +1,4 @@
+import { isEditorEditableSlide } from '../editor/slideCapabilities';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -70,7 +71,7 @@ export default function RightPanel({
   const setMediaVolume = useStore((s) => s.setMediaVolume);
   const isMediaMuted = useStore((s) => s.isMediaMuted);
   const setIsMediaMuted = useStore((s) => s.setIsMediaMuted);
-  const setIsEditorOpen = useStore((s) => s.setIsEditorOpen);
+  const openEditor = useStore((s) => s.openEditor);
   const isRightPanelOpen = useStore((s) => s.isRightPanelOpen);
   const setIsRightPanelOpen = useStore((s) => s.setIsRightPanelOpen);
   const toggleSlideLock = useStore((s) => s.toggleSlideLock);
@@ -337,12 +338,12 @@ export default function RightPanel({
                     <LockOpen className="w-3.5 h-3.5" aria-hidden="true" />
                   )}
                 </button>
-                {selectedSlide && !['countdown', 'screen', 'loop', 'captions'].includes(selectedSlide.type) && (
+                {selectedSlide && (
                   <button
-                    onClick={() => setIsEditorOpen(true)}
+                    onClick={() => selectedSlide && openEditor(selectedSlide.id)}
                     className="p-1.5 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-500/20 transition-colors"
-                    title={t('common.detailedEdit')}
-                    aria-label={t('common.detailedEdit')}
+                    title={t(isEditorEditableSlide(selectedSlide) ? 'common.detailedEdit' : 'common.editorPreview')}
+                    aria-label={t(isEditorEditableSlide(selectedSlide) ? 'common.detailedEdit' : 'common.editorPreview')}
                   >
                     <Edit3 className="w-3.5 h-3.5" aria-hidden="true" />
                   </button>
@@ -849,3 +850,4 @@ function LoopEditor({
     </div>
   );
 }
+
