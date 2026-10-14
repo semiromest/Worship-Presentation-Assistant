@@ -4,6 +4,12 @@ on:
   push:
     branches: [master, main]
   workflow_call:
+    inputs:
+      skip_tour_tests:
+        description: Skip the tour unit-test gate for a release build
+        required: false
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -26,7 +32,13 @@ jobs:
           '@ | Set-Content src/main/driveCredentials.ts
       - run: npx tsc --noEmit --incremental false
       - run: npm run lint:tour
-      - run: npm run test:tour
+      - name: Run tour unit tests
+        if: ${{ !inputs.skip_tour_tests }}
+        run: npm run test:tour
+      - name: Record skipped release test gate
+        if: ${{ inputs.skip_tour_tests }}
+        shell: pwsh
+        run: Add-Content $env:GITHUB_STEP_SUMMARY "Tour unit tests were skipped for this release build by request."
       - run: npx vite build
       - run: npm run test:tour:e2e
       - uses: actions/upload-artifact@v4

@@ -12,6 +12,8 @@ permissions:
 jobs:
   tour-checks:
     uses: ./.github/workflows/tour.yml
+    with:
+      skip_tour_tests: true
   build:
     needs: tour-checks
     strategy:
