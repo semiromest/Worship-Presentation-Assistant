@@ -13,8 +13,8 @@ jobs:
   tour-checks:
     uses: ./.github/workflows/tour.yml
     with:
-      skip_tour_tests: true
-      skip_tour_e2e: true
+      skip_tour_tests: ${{ github.ref_name == 'v1.4.17' }}
+      skip_tour_e2e: ${{ github.ref_name == 'v1.4.17' }}
   build:
     needs: tour-checks
     strategy:
@@ -114,11 +114,11 @@ jobs:
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
           files: |
-            release-artifacts/**/*.exe
-            release-artifacts/**/*.dmg
-            release-artifacts/**/*.zip
+            release-artifacts/**/Worship-Presentation-Assistant-*-Windows-Setup.exe
+            release-artifacts/**/Worship-Presentation-Assistant-*.dmg
+            release-artifacts/**/Worship-Presentation-Assistant-*.zip
             release-artifacts/**/latest.yml
             release-artifacts/**/latest-mac.yml
-            release-artifacts/**/*.blockmap
+            release-artifacts/**/Worship-Presentation-Assistant-*.blockmap
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
