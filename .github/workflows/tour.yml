@@ -10,6 +10,11 @@ on:
         required: false
         type: boolean
         default: false
+      skip_tour_e2e:
+        description: Skip the tour end-to-end gate for a release build
+        required: false
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -40,7 +45,13 @@ jobs:
         shell: pwsh
         run: Add-Content $env:GITHUB_STEP_SUMMARY "Tour unit tests were skipped for this release build by request."
       - run: npx vite build
-      - run: npm run test:tour:e2e
+      - name: Run tour end-to-end tests
+        if: ${{ !inputs.skip_tour_e2e }}
+        run: npm run test:tour:e2e
+      - name: Record skipped release E2E gate
+        if: ${{ inputs.skip_tour_e2e }}
+        shell: pwsh
+        run: Add-Content $env:GITHUB_STEP_SUMMARY "Tour E2E tests were skipped for this release build by request."
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
