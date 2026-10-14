@@ -14,9 +14,19 @@
     "sidebarLabel": "Hauptnavigation"
   },
   "common": {
+    "scriptureMerged": "Zusammengefasste Verse",
+    "scriptureMergedInfo": "Einige Verse werden in dieser Übersetzung zusammengefasst.",
+    "scriptureIssue_empty": "Diese Quelle enthält keinen separaten Text.",
+    "scriptureIssue_unsupported": "Diese Nummerierung wird noch nicht unterstützt.",
+    "scriptureIssue_conflict": "Die Quelltexte überschneiden sich. Senden nicht möglich.",
+    "scriptureIssuesInfo": "Dieses Kapitel enthält nicht verfügbare oder ungeklärte Einträge.",
+    "scriptureInvalidRequest": "Einen gültigen, vollständigen Versbereich eingeben.",
+    "scriptureIncomplete": "Anfrage unvollständig. Fehlende oder widersprüchliche Verse: {{numbers}}.",
+    "scriptureSelectFound": "Nur verfügbare Texte auswählen",
+    "scriptureExpanded": "{{requested}} wird in dieser Übersetzung als {{resolved}} zusammengefasst.",
+    "scriptureReadingSummary": "{{verses}} Verse · {{units}} Texteinheiten · {{slides}} Folien",
     "videoSettingsTab": "Video",
     "videoTextsTab": "Text",
-
     "videoTextLayers": "Video-Textebenen",
     "videoAddText": "Text hinzufügen",
     "videoTextHint": "Text hinzufügen, dann in der Vorschau verschieben und skalieren.",
@@ -34,7 +44,6 @@
     "videoTextWidth": "Breite",
     "videoTextHeight": "Höhe",
     "videoTextOutsideRange": "Ausgewählter Text wird zur Bearbeitung abgeblendet; zu diesem Zeitpunkt ist er in der Ausgabe unsichtbar.",
-
     "videoOriginalSafe": "Original bleibt erhalten",
     "videoPlay": "Abspielen",
     "videoPause": "Pause",
@@ -59,7 +68,6 @@
     "videoAudio": "Audio",
     "videoVolume": "Lautstärke",
     "videoSourceInfo": "Quelldaten",
-
     "videoEditorTitle": "Video bearbeiten",
     "videoSeconds": "Sekunden",
     "videoStart": "Start",
@@ -70,7 +78,6 @@
     "videoLoadFailed": "Video konnte nicht geladen werden. Zeiteinstellungen bleiben erhalten.",
     "videoDurationPending": "Videodauer wird geladen.",
     "videoNonDestructive": "Video- und Texteinstellungen werden mit der Folie gespeichert. Das Originalvideo bleibt unverändert.",
-
     "editorPreview": "Vorschau",
     "editorPreviewFailed": "Vorschau nicht verfügbar",
     "editorPreviewLoading": "Vorschau wird vorbereitet",
@@ -83,7 +90,6 @@
     "editorNoEditableSlides": "Keine bearbeitbaren Folien.",
     "editorShowAll": "Alle anzeigen",
     "editorCaptionsSample": "Beispieluntertitel",
-
     "editorPendingDraft": "Ungespeicherter Entwurf",
     "editorEmpty": "Fügen Sie der Präsentation eine Folie hinzu, um sie zu bearbeiten.",
     "editorConflictTitle": "Folienänderungen im Konflikt",
@@ -91,7 +97,6 @@
     "editorApplyDraft": "Entwurf anwenden",
     "editorUseCurrent": "Präsentationsversion verwenden",
     "editorBeforeReplace": "Änderungen im Editor vor dem Präsentationswechsel in der Bibliothek speichern oder verwerfen?",
-
     "newSlide": "Neue Folie",
     "newSlideContent": "Neuer Folieninhalt",
     "newPresentation": "Neue Präsentation",
@@ -1083,6 +1088,9 @@
     "backgroundMusicEmpty": "Keine unterstützte Musik gefunden.",
     "backgroundMusicMissing": "Musikordner nicht gefunden.",
     "backgroundMusicPlayError": "Musik konnte nicht abgespielt werden.",
+    "backgroundMusicLocal": "Lokal",
+    "youtubeLoading": "YouTube-Audio wird vorbereitet…",
+    "youtubeNoResults": "Keine Ergebnisse gefunden.",
     "youtubeSearch": "YouTube durchsuchen",
     "youtubeSearchPlaceholder": "YouTube-Musik suchen...",
     "youtubeSearchError": "YouTube-Suche fehlgeschlagen.",
@@ -1103,7 +1111,72 @@
     "sonioxTargetLanguageHint": "Gesprochener Text wird in diese Sprache übersetzt.",
     "sonioxSttLanguage": "Standard-Gesprochene-Sprache (STT)",
     "sonioxSttAuto": "Automatisch erkennen",
-    "sonioxSttLanguageHint": "Mit automatischer Erkennung wird die Sprache aus der Rede ermittelt; die Wahl einer bestimmten Sprache richtet die Erkennung darauf aus."
+    "sonioxSttLanguageHint": "Mit automatischer Erkennung wird die Sprache aus der Rede ermittelt; die Wahl einer bestimmten Sprache richtet die Erkennung darauf aus.",
+    "navigation": {
+      "search": "Einstellungen durchsuchen",
+      "clearSearch": "Suche löschen",
+      "category": "Einstellungskategorie",
+      "resultsTitle": "Suchergebnisse",
+      "noResults": "Keine passenden Einstellungen gefunden. Versuche ein anderes Wort.",
+      "resultCount": "{{count}} Einstellungen gefunden.",
+      "clearLiveSaves": "Automatische Aufnahmen löschen",
+      "descriptions": {
+        "hymn-size": "Schriftgröße des Liedautors anpassen.",
+        "watermark": "Logo hochladen und Position, Größe, Deckkraft und Inhaltstypen wählen.",
+        "live-save": "Automatisches Speichern der Präsentation aktivieren oder deaktivieren.",
+        "retention": "Aufbewahrungsdauer automatischer Aufnahmen festlegen.",
+        "clear-live-saves": "Nur automatische Aufnahmen löschen; regulär gespeicherte Präsentationen bleiben erhalten."
+      },
+      "categories": {
+        "general": {
+          "title": "Allgemein",
+          "description": "Sprache, Ton und Oberfläche anpassen."
+        },
+        "presentation": {
+          "title": "Präsentation",
+          "description": "Präsentationsablauf und Bedienerwerkzeuge anpassen."
+        },
+        "appearance": {
+          "title": "Lieder und Logo",
+          "description": "Liedautoren und Logo-Wasserzeichen gestalten."
+        },
+        "captions": {
+          "title": "Untertitel und Übersetzung",
+          "description": "Spracherkennung und Übersetzung einstellen."
+        },
+        "autosave": {
+          "title": "Automatisches Speichern",
+          "description": "Automatische Aufnahmen und Aufbewahrungsdauer verwalten."
+        },
+        "updates": {
+          "title": "Updates",
+          "description": "Neue Versionen und Update-Status anzeigen."
+        },
+        "learning": {
+          "title": "Wie funktioniert es?",
+          "description": ""
+        }
+      },
+      "keywords": {
+        "language": "oberfläche sprache deutsch",
+        "sound": "ton sound effekte klick",
+        "motion": "bewegung animation reduziert",
+        "auto-live": "automatisch live ausgabe übergang",
+        "sections": "abschnitte ablauf struktur",
+        "notes": "bediener notizen kommentare",
+        "hymn-position": "lied autor position ausrichtung",
+        "hymn-size": "lied autor schrift größe",
+        "watermark": "logo wasserzeichen bild deckkraft transparenz",
+        "stt-key": "soniox api schlüssel untertitel",
+        "spoken-language": "gesprochene sprache erkennung",
+        "target-language": "übersetzung zielsprache",
+        "live-save": "live automatisch speichern sicherung backup",
+        "retention": "aufbewahrung dauer tage",
+        "clear-live-saves": "automatische aufnahmen löschen bereinigen",
+        "updates": "updates version herunterladen",
+        "learn": "übung anleitung lernen hilfe"
+      }
+    }
   },
   "stage": {
     "next": "Als Nächstes",
@@ -1180,5 +1253,395 @@
     "off": "Aus",
     "saveOff": "Automatisches Speichern aus",
     "sessionError": "Live-Position konnte nicht gespeichert werden"
+  },
+  "tour": {
+    "mapTitle": "App kennenlernen",
+    "helpTitle": "Wie funktioniert es?",
+    "intro": "Inhalte auswählen, Folien vorbereiten, auf dem Bildschirm zeigen.",
+    "welcomeTitle": "Willkommen",
+    "start": "Kurze Tour starten",
+    "later": "Nicht jetzt",
+    "close": "Schließen",
+    "back": "Zurück",
+    "next": "Weiter",
+    "done": "Fertig",
+    "progress": "{{current}} / {{total}}",
+    "loading": "Tour wird vorbereitet…",
+    "stillLoading": "Der Arbeitsbereich wird noch geladen. Sie können die Tour jederzeit schließen.",
+    "failed": "Das Ziel der Tour konnte nicht vorbereitet werden. Versuchen Sie es später erneut.",
+    "editorDescription": "Design und Anordnung der Folien im Detail bearbeiten.",
+    "helpDescription": "Drücken Sie ? für Tastenkürzel.",
+    "blocked": {
+      "output-active": "Bei geöffneter Ausgabe ist die kurze Tour nicht verfügbar. Die App-Übersicht bleibt verfügbar.",
+      "session-active": "Beenden Sie die aktive Übertragung oder Untertitel-Sitzung vor der Tour.",
+      "editor-active": "Verlassen Sie zuerst den Editor und schließen Sie ausstehende Änderungen ab.",
+      "modal-open": "Schließen Sie zuerst den anderen Dialog.",
+      "interaction-active": "Beenden Sie zuerst den Ziehvorgang oder die Menüaktion.",
+      "not-ready": "Der App-Status wird geladen. Versuchen Sie es gleich erneut."
+    },
+    "steps": {
+      "navigation": {
+        "title": "Bereiche finden",
+        "body": "Die Seitenleiste vereint Präsentationen und Inhaltswerkzeuge. Verwalten Sie vorbereitete Dateien unter Präsentationen."
+      },
+      "slides": {
+        "title": "Folien vorbereiten",
+        "body": "Fügen Sie Folien hinzu, ändern Sie ihre Reihenfolge und gestalten Sie sie mit den Formatierungswerkzeugen."
+      },
+      "content": {
+        "title": "Inhalte hinzufügen",
+        "body": "Suchen Sie Inhalte im Bibelbereich und fügen Sie sie zur Präsentation hinzu. Medien, Lieder und weitere Werkzeuge finden Sie ebenfalls in der Seitenleiste."
+      },
+      "output": {
+        "title": "Bildschirmausgabe verwalten",
+        "body": "Zeigen Sie vorbereitete Inhalte auf einem Ausgabebildschirm. Prüfen Sie vor der Präsentation den Zielbildschirm und die Vorbereitung."
+      },
+      "help": {
+        "title": "Zur Hilfe zurückkehren",
+        "body": "Ändern Sie die Sprache, öffnen Sie die App-Übersicht oder starten Sie diese Tour in den Einstellungen erneut."
+      }
+    },
+    "pageIntroductions": "Seiteneinführungen",
+    "suggestTitle": "Möchten Sie diese Seite kennenlernen?",
+    "learnPage": "Seite kennenlernen",
+    "disableSuggestions": "Seitenhinweise ausschalten",
+    "suggestionsDisabled": "Seitenhinweise sind ausgeschaltet",
+    "pages": {
+      "presentations": "Öffnen und speichern Sie Präsentationsdateien oder verwalten Sie vorbereitete Präsentationen in der Bibliothek.",
+      "slides": "Fügen Sie Folien hinzu, wählen und sortieren Sie sie und bearbeiten Sie Inhalt und Aussehen im rechten Bereich.",
+      "bible": "Wählen Sie eine Bibelquelle oder importieren Sie eine XML-Datei. Fügen Sie ausgewählte Bücher, Kapitel und Verse zur Präsentation hinzu.",
+      "media": "Suchen Sie Bilder und Videos, prüfen Sie die Vorschau und fügen Sie sie hinzu. Mehrere Inhalte können eine Schleifenfolie bilden.",
+      "hymns": "Importieren Sie ein Liederarchiv oder suchen Sie ein Lied und wandeln Sie den Text in Folien um.",
+      "countdown": "Wählen Sie Minuten und Sekunden, gestalten Sie die Anzeige und fügen Sie den Countdown hinzu.",
+      "screen": "Wählen Sie eine Bildschirmaufnahme als Folienquelle. Die Quellenauswahl ist von der Projektionsausgabe getrennt.",
+      "calendar": "Planen Sie vorbereitete Präsentationen im Kalender und öffnen Sie sie über ihre Einträge.",
+      "editor": "Ordnen Sie Folienelemente auf der Arbeitsfläche an. Übernehmen Sie Entwurfsänderungen mit den vorhandenen Speicherfunktionen.",
+      "settings": "Verwalten Sie Sprache und Einstellungen. Öffnen Sie Seiteneinführungen und die kurze Tour erneut im Hilfebereich."
+    }
+  },
+  "practice": {
+    "banner": "Übung — separates Profil; Live-Ausgabe deaktiviert",
+    "title": "Übungsfortschritt",
+    "preflight": "Technische Vorprüfung. Aufgaben folgen separat.",
+    "counts": "Abgeschlossen: {{completed}} · Übersprungen: {{skipped}} · Verbleibend: {{remaining}}",
+    "notStarted": "Nicht begonnen",
+    "inProgress": "In Arbeit / pausiert",
+    "completed": "Abgeschlossen",
+    "skipped": "Übersprungen",
+    "pending": "Spätere Lieferung",
+    "phase3": "Phase 3 — derzeit nur Erklärung",
+    "unreadable": "Fortschritt konnte nicht gelesen werden; letzter gültiger Stand bleibt.",
+    "launchError": "Übung konnte nicht geöffnet werden.",
+    "open": "Übung öffnen",
+    "resume": "Übung fortsetzen",
+    "tasksTitle": "Übungsaufgaben",
+    "choose": "Wählen Sie eine Aufgabe und verwenden Sie die Werkzeuge der Anwendung.",
+    "retained": "Ihre Folien bleiben erhalten; beim Beenden wird nichts automatisch entfernt.",
+    "go": "Zur Aufgabe",
+    "pause": "Pausieren",
+    "skip": "Überspringen",
+    "available": "Verfügbar",
+    "deckName": "Übungspräsentation",
+    "demoSlide": "Übung: Löschbeispiel",
+    "deleteWarning": "Entfernen Sie nur das ausgewählte Löschbeispiel. Haben Sie es geändert, behalten Sie es und starten Sie die Aufgabe erneut.",
+    "taskError": "Der Vorgang konnte nicht gespeichert werden. Erneut versuchen oder überspringen.",
+    "exercise": {
+      "slide-add": {
+        "title": "Folie hinzufügen",
+        "body": "Fügen Sie unter Folien eine neue Textfolie hinzu."
+      },
+      "slide-delete": {
+        "title": "Beispielfolie löschen",
+        "body": "Entfernen Sie unter Folien nur das ausgewählte Löschbeispiel."
+      },
+      "media": {
+        "title": "Medien hinzufügen",
+        "body": "Importieren Sie unter Medien ein Bild. Fügen Sie das bereitgestellte Übungsbild über seine Karte zur Präsentation hinzu."
+      },
+      "bible": {
+        "title": "Bibel importieren und Vers hinzufügen",
+        "body": "Verwenden Sie den lokalen Bibelimport. Wählen Sie den Beispielvers Genesis 1:1 und fügen Sie ihn hinzu."
+      },
+      "countdown": {
+        "title": "Countdown hinzufügen",
+        "body": "Wählen Sie einen Countdown größer als null und fügen Sie ihn hinzu."
+      },
+      "presentations": {
+        "title": "In Bibliothek speichern",
+        "body": "Speichern Sie die Übungspräsentation in der Bibliothek. Keine externe Datei wird geschrieben."
+      },
+      "hymns": {
+        "title": "Lieder",
+        "body": "Klicke auf die hervorgehobene Liedzeile. Danach sehen wir uns die hinzugefügten Folien an."
+      },
+      "image-edit": {
+        "title": "Du hast das Bild bearbeitet",
+        "body": "Klicke auf die hervorgehobene Bildfolie. Rechts nehmen wir zwei einfache Änderungen vor."
+      },
+      "slide-reorder": {
+        "title": "Folien neu anordnen",
+        "body": "Ziehe die hervorgehobene Beispielfolie auf die andere hervorgehobene Folie. Die Übung endet, sobald sich die Positionen tatsächlich ändern."
+      }
+    }
+  },
+  "guide": {
+    "title": "Schritt für Schritt lernen",
+    "description": "Lerne durch Aktionen in einem separaten Übungsfenster.",
+    "pilot": "Die Anleitung umfasst zehn Bereiche und sechs Übungen.",
+    "open": "Schritt für Schritt lernen",
+    "begin": "Starten",
+    "resume": "An der letzten Stelle fortsetzen",
+    "next": "Weiter",
+    "exit": "Beenden und pausieren",
+    "restart": "Neu beginnen",
+    "progress": "Schritt {{current}} / {{total}}",
+    "waiting": "Das Ziel wird geladen. Warte oder beende die Anleitung.",
+    "unavailable": "Dieses Ziel ist derzeit nicht verfügbar.",
+    "stuck": "Kommst du nicht weiter? Zeige das Ziel erneut, um es noch einmal zu versuchen, oder überspringe diesen Schritt. Übersprungene Schritte zählen nicht als abgeschlossen.",
+    "retry": "Ziel erneut zeigen",
+    "skip": "Diesen Schritt überspringen",
+    "advanced": "Erweiterte Hilfe",
+    "jumpWarning": "Ab dem gewählten Bereich fortfahren. Beim Vorwärtsspringen ausgelassene Aktionen gelten als übersprungen, nicht abgeschlossen.",
+    "error": "Der Fortschritt konnte nicht gespeichert oder die Anleitung nicht geladen werden. Versuche es erneut.",
+    "finished": "Anleitung abgeschlossen.",
+    "finishedSkipped": "Das Ende wurde erreicht. Übersprungene Schritte gelten nicht als abgeschlossen.",
+    "savedStep": "Gespeicherter Schritt: {{step}}",
+    "skippedCount": "Übersprungene Schritte: {{count}}",
+    "shortDescription": "Die wichtigsten Arbeitsbereiche kennenlernen.",
+    "mapDescription": "Bereiche und Tastenkürzel entdecken.",
+    "shortTitle": "Kurze Tour",
+    "steps": {
+      "welcome": {
+        "title": "Gemeinsam lernen",
+        "body": "Du arbeitest in einem eigenen Übungsprofil. Live-Ausgabe ist deaktiviert; deine echte Präsentation bleibt unverändert. Folge den markierten Aktionen."
+      },
+      "presentations": {
+        "title": "Präsentationen",
+        "body": "Hier verwaltest du Präsentationen. Wir stellen diesen Bereich nur vor; danach erstellst du eine Folie mit den echten Werkzeugen."
+      },
+      "sidebar": {
+        "title": "Bereiche",
+        "body": "Die Schaltflächen links öffnen die Bereiche. Das benötigte Ziel wird jeweils markiert."
+      },
+      "nav-slides": {
+        "title": "Folien öffnen",
+        "body": "Klicke auf die markierte Schaltfläche Folien."
+      },
+      "add": {
+        "title": "Folie hinzufügen",
+        "body": "Klicke auf Neue Folie. Die Anleitung geht weiter, sobald die Folie erstellt ist."
+      },
+      "select": {
+        "title": "Beispielfolie auswählen",
+        "body": "Klicke auf die markierte Beispielfolie. Deine hinzugefügte Folie bleibt erhalten."
+      },
+      "delete": {
+        "title": "Beispiel löschen",
+        "body": "Lösche das ausgewählte Beispiel mit Entf oder dem hervorgehobenen Papierkorb rechts. Beide Methoden gelten; andere Folien bleiben erhalten."
+      },
+      "done": {
+        "title": "Abschluss",
+        "body": "Du hast das Ende der Anleitung erreicht. Übungsänderungen bleiben beim Beenden erhalten."
+      },
+      "nav-bible": {
+        "title": "Bibel",
+        "body": "Klicke auf die markierte Schaltfläche Bibel."
+      },
+      "bible-intro": {
+        "title": "Bibelquellen laden",
+        "body": "Lade eine Bibel aus einer lokalen XML-Datei oder suche online und wähle eine passende Quelle aus. Diese Übung verwendet eine sichere lokale XML-Beispieldatei."
+      },
+      "nav-media": {
+        "title": "Medien",
+        "body": "Klicke auf die markierte Schaltfläche Medien."
+      },
+      "media-intro": {
+        "title": "Medien",
+        "body": "Suchen Sie Bilder und Videos, prüfen Sie die Vorschau und fügen Sie sie hinzu. Mehrere Inhalte können eine Schleifenfolie bilden."
+      },
+      "nav-hymns": {
+        "title": "Lieder",
+        "body": "Klicke auf die markierte Schaltfläche Lieder."
+      },
+      "hymns-intro": {
+        "title": "Lieder",
+        "body": "Im normalen Modus wird jede Strophe eine eigene Folie. Im Teilemodus sind die Strophen Teile einer Folie. Wir fügen das Beispiel im Teilemodus hinzu."
+      },
+      "nav-countdown": {
+        "title": "Countdown",
+        "body": "Klicke auf die markierte Schaltfläche Countdown."
+      },
+      "countdown-intro": {
+        "title": "Countdown",
+        "body": "Wählen Sie Minuten und Sekunden, gestalten Sie die Anzeige und fügen Sie den Countdown hinzu."
+      },
+      "nav-screen": {
+        "title": "Bildschirm",
+        "body": "Klicke auf die markierte Schaltfläche Bildschirm."
+      },
+      "screen-intro": {
+        "title": "Bildschirm",
+        "body": "Wählen Sie eine Bildschirmaufnahme als Folienquelle. Die Quellenauswahl ist von der Projektionsausgabe getrennt."
+      },
+      "nav-calendar": {
+        "title": "Kalender",
+        "body": "Klicke auf die markierte Schaltfläche Kalender."
+      },
+      "calendar-intro": {
+        "title": "Kalender",
+        "body": "Planen Sie vorbereitete Präsentationen im Kalender und öffnen Sie sie über ihre Einträge."
+      },
+      "nav-editor": {
+        "title": "Editor",
+        "body": "Klicke auf die markierte Schaltfläche Editor."
+      },
+      "editor-intro": {
+        "title": "Editor",
+        "body": "Bilder können rechts oder im Folieneditor bearbeitet werden. Der Folieneditor bietet detailliertere Optionen und Werkzeuge zur Videobearbeitung. Im Beispiel haben wir zwei einfache Bildänderungen vorgenommen."
+      },
+      "nav-settings": {
+        "title": "Einstellungen",
+        "body": "Klicke auf die markierte Schaltfläche Einstellungen."
+      },
+      "settings-intro": {
+        "title": "Einstellungen",
+        "body": "Verwalten Sie Sprache und Einstellungen. Öffnen Sie Seiteneinführungen und die kurze Tour erneut im Hilfebereich."
+      },
+      "nav-save": {
+        "title": "Präsentationen",
+        "body": "Klicke auf die markierte Schaltfläche Präsentationen."
+      },
+      "bible-source": {
+        "title": "Quelle laden",
+        "body": "Klicke auf XML importieren. Bei geöffneter Quelle öffnen wir das Verwaltungsmenü."
+      },
+      "bible-import": {
+        "title": "Beispiel-XML importieren",
+        "body": "Klicke im Menü auf XML importieren. Nur die sichere Beispielquelle wird geladen."
+      },
+      "bible-book": {
+        "title": "Erstes Buch wählen",
+        "body": "Klicke auf das markierte erste Buch."
+      },
+      "bible-chapter": {
+        "title": "Erstes Kapitel wählen",
+        "body": "Klicke auf das markierte Kapitel 1."
+      },
+      "bible-verse": {
+        "title": "Vers auswählen",
+        "body": "Wähle den markierten Beispielvers."
+      },
+      "bible-add": {
+        "title": "Vers hinzufügen",
+        "body": "Klicke auf Zur Präsentation hinzufügen. Wir warten auf die Versfolie."
+      },
+      "media-menu": {
+        "title": "Medienmenü öffnen",
+        "body": "Klicke auf die markierte Schaltfläche Medien hinzufügen."
+      },
+      "media-import": {
+        "title": "Beispielbild laden",
+        "body": "Klicke auf Bilder auswählen. Ein sicheres Beispielbild ersetzt die Dateiauswahl."
+      },
+      "media-add": {
+        "title": "Bild hinzufügen",
+        "body": "Klicke auf das Plus unter dem Beispielbild. Wir warten auf die Bildfolie."
+      },
+      "countdown-duration": {
+        "title": "Dauer einstellen",
+        "body": "Setze Minuten auf 2. Nur dieses Feld ist bearbeitbar."
+      },
+      "countdown-add": {
+        "title": "Countdown hinzufügen",
+        "body": "Klicke auf Zur Folie hinzufügen. Timer und Live-Ausgabe bleiben aus."
+      },
+      "save": {
+        "title": "Übungspräsentation speichern",
+        "body": "Klicke auf In Bibliothek speichern. Nur das separate Übungsprofil wird verwendet. Wir warten auf die erfolgreiche Speicherung."
+      },
+      "add-result": {
+        "title": "Du hast eine Folie erstellt",
+        "body": "Du hast eine neue Folie erstellt. So werden Folien für deine Präsentation vorbereitet."
+      },
+      "delete-result": {
+        "title": "Die Beispielfolie wurde gelöscht",
+        "body": "Die ausgewählte Beispielfolie wurde entfernt. Deine anderen Folien bleiben erhalten."
+      },
+      "bible-result": {
+        "title": "Du hast den Vers hinzugefügt",
+        "body": "Du hast den Vers zur Präsentation hinzugefügt. So sieht die vorbereitete Folie aus."
+      },
+      "media-result": {
+        "title": "Du hast das Bild hinzugefügt",
+        "body": "Du hast das Bild zur Präsentation hinzugefügt. So sieht es auf der Folie aus."
+      },
+      "countdown-result": {
+        "title": "Dein Countdown ist bereit",
+        "body": "Du hast eine Countdown-Folie für zwei Minuten vorbereitet. Dies ist eine statische Vorschau; der Timer läuft nicht."
+      },
+      "save-result": {
+        "title": "Deine Präsentation wurde gespeichert",
+        "body": "Du hast deine Präsentation in der Übungsbibliothek gespeichert. Dort kannst du sie wieder öffnen."
+      },
+      "hymns-add": {
+        "title": "Beispiellied hinzufügen",
+        "body": "Klicke auf die hervorgehobene Liedzeile. Danach sehen wir uns die hinzugefügten Folien an."
+      },
+      "hymns-result": {
+        "title": "Du hast das Lied hinzugefügt",
+        "body": "Du hast den Text des Beispiellieds hinzugefügt. So sieht die vorbereitete Liedfolie aus."
+      },
+      "image-select": {
+        "title": "Beispielbild auswählen",
+        "body": "Klicke auf die hervorgehobene Bildfolie. Rechts nehmen wir zwei einfache Änderungen vor."
+      },
+      "image-fit": {
+        "title": "Ganzes Bild einpassen",
+        "body": "Klicke rechts auf Einpassen, damit das gesamte Bild im Rahmen sichtbar ist."
+      },
+      "image-grayscale": {
+        "title": "Graustufen anwenden",
+        "body": "Stelle den Graustufen-Regler auf 100 %. Du kannst den Regler fokussieren und Ende drücken."
+      },
+      "image-edit-result": {
+        "title": "Du hast das Bild bearbeitet",
+        "body": "Du hast die Bildanpassung geändert und Graustufen angewendet. So sieht das bearbeitete Bild aus."
+      },
+      "hymns-parts": {
+        "title": "Die Liedteile",
+        "body": "Rechts siehst du die Liedteile. Mit der nummerierten Schaltfläche wechselst du zum gewünschten Teil. Hier erklären wir dies nur; du musst keinen Teil anklicken."
+      },
+      "reorder": {
+        "title": "Folien neu anordnen",
+        "body": "Ziehe die hervorgehobene Beispielfolie auf die andere hervorgehobene Folie. Die Übung endet, sobald sich die Positionen tatsächlich ändern."
+      },
+      "hymns-font": {
+        "title": "Schriftgröße des Lieds",
+        "body": "Ändere die Schriftgröße des ausgewählten Lieds im Feld Schriftgröße rechts. Größere Zahlen vergrößern die Schrift, kleinere verkleinern sie. Hier erklären wir es nur; keine Änderung ist erforderlich."
+      },
+      "image-tools": {
+        "title": "Zwei Bearbeitungswege",
+        "body": "Bilder lassen sich rechts oder im Folieneditor über die hervorgehobene Stifttaste bearbeiten. Der Folieneditor bietet detailliertere Optionen und Videobearbeitung. Im Beispiel ändern wir nur Einpassen und Graustufen."
+      }
+    },
+    "mapTitle": "Bereichsübersicht",
+    "onlyIntroducing": "Wir stellen diesen Bereich nur vor; es gibt keine praktische Aufgabe.",
+    "openSection": "Klicke auf die markierte Schaltfläche {{section}}.",
+    "pause": "Pausieren",
+    "close": "Übung schließen",
+    "chapters": "Zum Bereich wechseln",
+    "restartConfirm": "Eine neue Übung beginnen?",
+    "restartDetail": "Deine Präsentation und dein Fortschritt werden archiviert. Die neue Übung beginnt mit einer leeren Präsentation und ohne Fortschritt. Sprache und Bibliothek bleiben erhalten.",
+    "result": {
+      "countChange": "Folienanzahl: {{before}} → {{after}}",
+      "savedCount": "Übungsbibliothek · {{count}} Folien",
+      "deletedPreview": "Gelöschtes Beispiel — vorherige Ansicht",
+      "remaining": "Verbleibende Folien: {{count}}",
+      "emptyPresentation": "Die Präsentation enthält derzeit keine Folien.",
+      "imagePreview": "Hinzugefügtes Bild",
+      "countdownPreview": "Statische Countdown-Vorschau",
+      "unavailableTitle": "Das Ergebnis ist nicht verfügbar",
+      "unavailable": "Das bestätigte Ergebnis konnte nicht gelesen werden. Versuche es erneut; wiederhole den Vorgang nicht."
+    }
   }
 }

@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { ListOrdered, Play, Square, Lock } from 'lucide-react';
 import type { Slide } from './types';
 import { cn } from './utils';
+import { resolveCanvasSource } from './canvasSource';
 import {
   SlideItemsPreview,
   TextSlidePreview,
@@ -136,7 +137,8 @@ const SlideContent = memo(({ slide, cardWidth }: { slide: Slide; cardWidth?: num
     case 'image':
       return (
         <img
-          src={slide.mediaUrl}
+          src={slide.mediaUrl ? resolveCanvasSource(slide.mediaUrl, false).url : undefined}
+          style={{ filter: `grayscale(${slide.styles?.imageGrayscale ?? 0})` }}
           className={cn(
             'w-full h-full',
             slide.styles?.objectFit === 'cover' ? 'object-cover' : 'object-contain'

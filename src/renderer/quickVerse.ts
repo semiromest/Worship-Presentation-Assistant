@@ -1,18 +1,27 @@
+import { getChapterReading, resolveReadingReference, parseVerseNumbers } from './scriptureReading';
 import { bibleRepository } from './bibleRepository';
-import { createScriptureSlides, findBookForReference, parseScriptureReference } from './scriptureModel';
+import {
+  createScriptureSlides,
+  findBookForReference,
+  parseScriptureReference,
+  formatVerseNumbers,
+} from './scriptureModel';
 
 const CHUNK_CONFIG = { maxVerses: 3, maxChars: 120, maxLines: 2 } as const;
 
 export interface QuickVerseResult {
   slides: string[];
   groupTitle: string;
+  requestedReference: string;
+  resolvedReference: string;
+  expanded: boolean;
 }
 
-export type QuickVerseError = 'no-bible' | 'invalid' | 'not-found' | 'no-verses';
+export type QuickVerseError = 'no-bible' | 'invalid' | 'not-found' | 'no-verses' | 'partial' | 'conflict';
 
 export type QuickVerseOutcome =
   | { ok: true; result: QuickVerseResult }
-  | { ok: false; error: QuickVerseError };
+  | { ok: false; error: QuickVerseError; numbers?: string };
 
 /**
  * Resolve a free-text reference (e.g. "John 3:16", "Rom 1:1-5") against the
@@ -36,28 +45,28 @@ export function resolveQuickVerse(reference: string): QuickVerseOutcome {
   if (!chapter) return { ok: false, error: 'not-found' };
 
   const verseTo = parsed.verseTo ?? parsed.verse;
-  if (parsed.verse < 1 || verseTo < parsed.verse || /[:–-]\s*$/.test(reference)) {
+  if (parsed.verse < 1 || verseTo < parsed.verse || /[:–—-]\s*$/.test(reference)) {
     return { ok: false, error: 'invalid' };
   }
-  if (!chapter.verses.some((verse) => Number(verse.number) === parsed.verse) ||
-      !chapter.verses.some((verse) => Number(verse.number) === verseTo)) {
-    return { ok: false, error: 'no-verses' };
-  }
-  const verseNumbers = chapter.verses
-    .filter((verse) => {
-      const number = Number(verse.number);
-      return number >= parsed.verse! && number <= verseTo;
-    })
-    .map((verse) => verse.number);
-  if (!verseNumbers.length) return { ok: false, error: 'no-verses' };
-
-  const slides = createScriptureSlides(book, chapter, verseNumbers, CHUNK_CONFIG);
+  const source = bibleRepository.currentSource;
+  const verseNumbers = parseVerseNumbers(parsed.verse + '-' + verseTo).map(String);
+  const resolution = resolveReadingReference(getChapterReading(book, chapter, source), verseNumbers);
+  if (resolution.status !== 'complete')
+    return {
+      ok: false,
+      error: resolution.conflicts.length ? 'conflict' : resolution.entries.length ? 'partial' : 'no-verses',
+      numbers: formatVerseNumbers(resolution.missing.map(String)),
+    };
+  const slides = createScriptureSlides(book, chapter, verseNumbers, CHUNK_CONFIG, source);
   if (!slides.length) return { ok: false, error: 'no-verses' };
 
   return {
     ok: true,
     result: {
       slides,
+      requestedReference: reference,
+      expanded: resolution.covered.some((number) => !resolution.requested.includes(number)),
+      resolvedReference: `${book.name} ${chapter.number}:${formatVerseNumbers(resolution.covered.map(String))}`,
       groupTitle: `${book.name} ${chapter.number}`,
     },
   };
@@ -66,6 +75,10 @@ export function resolveQuickVerse(reference: string): QuickVerseOutcome {
 /** Human-readable reference for a resolved quick verse, used in operator feedback. */
 export function describeQuickVerseError(error: QuickVerseError): string {
   switch (error) {
+    case 'partial':
+      return 'Incomplete verse range';
+    case 'conflict':
+      return 'Conflicting verse records';
     case 'no-bible':
       return 'No Bible loaded';
     case 'not-found':

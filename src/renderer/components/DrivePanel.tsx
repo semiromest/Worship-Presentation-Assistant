@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Cloud,
@@ -24,6 +24,7 @@ import type { DriveFile } from '../types';
 import { useStore } from '../state/useStore';
 import { confirmDialog } from '../dialogs';
 import { playSfx } from '../sfx';
+import Dialog from './Dialog';
 
 function formatDate(iso: string): string {
   try {
@@ -98,7 +99,7 @@ function SkeletonRow() {
   );
 }
 
-export default function DrivePanel() {
+export default function DrivePanel({ returnFocus }: { returnFocus?: RefObject<HTMLElement | null> }) {
   const { t } = useTranslation();
   const presentation = useStore((s) => s.presentation);
   const liveSlideId = useStore((s) => s.liveSlideId);
@@ -297,18 +298,17 @@ const [loading, setLoading] = useState(false);
     file.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
   );
 
-  if (!drivePanelOpen) return null;
-
   return (
-    <div
-      className="border-t border-white/10 bg-surface-overlay/95 backdrop-blur-xl"
-      role="region"
-      aria-label="Google Drive paneli"
+    <Dialog
+      open={drivePanelOpen}
+      onClose={() => setDrivePanelOpen(false)}
+      labelledBy="drive-dialog-title"
+      returnFocus={returnFocus}
+      className="flex flex-col w-[calc(100%-2rem)] max-w-[640px] max-h-[calc(100dvh-2rem)] overflow-hidden rounded-2xl border border-white/10 bg-surface-overlay shadow-2xl"
     >
-      <div className="px-5 py-4 space-y-4">
         {/* ── Header ── */}
-        <div className="flex items-center justify-between">
-          <h2 className="flex items-center gap-2.5 text-sm font-semibold text-white/90">
+        <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-5 py-4">
+          <h2 id="drive-dialog-title" className="flex items-center gap-2.5 text-sm font-semibold text-white/90">
             <span className="flex items-center justify-center w-7 h-7 rounded-xl bg-blue-500/15 text-blue-400" aria-hidden="true">
               <Cloud className="w-4 h-4" />
             </span>
@@ -324,7 +324,7 @@ const [loading, setLoading] = useState(false);
             <span className="hidden sm:inline">{t('common.close')}</span>
           </button>
         </div>
-
+      <div className="min-h-0 overflow-y-auto overscroll-contain px-5 py-4 space-y-4">
         {/* ── Feedback toasts ── */}
         {success && (
           <Toast message={success} type="success" onDismiss={() => setSuccess(null)} />
@@ -633,6 +633,6 @@ const [loading, setLoading] = useState(false);
           </div>
         )}
       </div>
-    </div>
+    </Dialog>
   );
 }

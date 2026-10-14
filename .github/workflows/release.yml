@@ -10,7 +10,10 @@ permissions:
   contents: write
 
 jobs:
+  tour-checks:
+    uses: ./.github/workflows/tour.yml
   build:
+    needs: tour-checks
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -61,6 +64,25 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      # Advisory for the first three releases; promotion requires explicit approval.
+      - name: Packaged Windows tour and practice smoke
+        id: packaged-smoke
+        continue-on-error: true
+        if: runner.os == 'Windows'
+        run: node node_modules/@playwright/test/cli.js test --config playwright.packaged.config.cjs
+      - name: Report advisory smoke result
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "Packaged smoke (advisory): ${{ steps.packaged-smoke.outcome }}" >> $env:GITHUB_STEP_SUMMARY
+          "Promotion to blocking requires approval after three observed releases." >> $env:GITHUB_STEP_SUMMARY
+      - name: Upload smoke diagnostics
+        if: always() && runner.os == 'Windows' && steps.packaged-smoke.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-tour-failure
+          path: test-results/packaged-tour/
 
       - name: Upload Electron artifacts
         uses: actions/upload-artifact@v4

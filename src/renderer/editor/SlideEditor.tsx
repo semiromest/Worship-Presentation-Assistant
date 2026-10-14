@@ -1,3 +1,4 @@
+import { isHelpActive } from '../components/Tour/tourController';
 import { newVideoOverlay } from '../videoOverlays';
 import VideoEditor from './VideoEditor';
 import { editorFilterTarget, filteredEditorSlides, isEditorEditableSlide, isVideoEditableSlide } from './slideCapabilities';
@@ -276,6 +277,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
   useEffect(() => {
     if (!active || (!showHelp && !showTemplates)) return;
     const keydown = (event: KeyboardEvent) => {
+      if (isHelpActive()) return;
       if (event.key !== 'Escape') return;
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -381,15 +383,18 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
 
   // Live drag frames skip history; the session records one entry per gesture,
   // and only once the gesture actually changes something.
+  const editorRootRef = useRef<HTMLElement | null>(null);
   const gestureActiveRef = useRef(false);
   const beginGesture = useCallback(() => {
     if (gestureActiveRef.current) return;
     gestureActiveRef.current = true;
+    if (editorRootRef.current) editorRootRef.current.dataset.editorInteracting = 'true';
     session.gestureStart();
   }, [session]);
   const endGesture = useCallback(() => {
     if (!gestureActiveRef.current) return;
     gestureActiveRef.current = false;
+    if (editorRootRef.current) delete editorRootRef.current.dataset.editorInteracting;
     session.gestureEnd();
   }, [session]);
 
@@ -917,7 +922,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
   );
 
   return (
-    <section aria-labelledby="slide-editor-title" className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface-base">
+    <section ref={editorRootRef} aria-labelledby="slide-editor-title" className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface-base">
       <div
         className="flex h-full min-h-0 w-full flex-col"
         onKeyDown={(event) => {
@@ -1576,7 +1581,8 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                                   { history: false }
                                 );
                               }}
-                              className="max-h-60 min-h-[7rem] w-full resize-y rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none transition focus:border-blue-500"
+                              rows={10}
+                              className="max-h-[50vh] min-h-[14rem] w-full resize-y rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm leading-relaxed outline-none transition focus:border-blue-500"
                             />
                             {effectiveScope === 'selected' && multiSlide && (
                               <span className="block text-[10px] text-amber-200/80">

@@ -1,3 +1,4 @@
+import { usePractice } from './hooks/usePractice';
 import { useState, useCallback, useRef, useMemo, useEffect, memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -461,7 +462,7 @@ function useThumbnail(type: MediaKind, filePath: string): string | undefined {
       return;
     }
     if (type === 'image' && getExtension(filePath) === 'svg') {
-      setUrl(toFileUrl(filePath));
+      setUrl(window.electronAPI ? toMediaStreamUrl(filePath) : toFileUrl(filePath));
       return;
     }
     const controller = new AbortController();
@@ -754,6 +755,7 @@ const MediaCard = memo(function MediaCard({
             onAdd(item, thumbUrl);
           }}
           className="w-7 h-7 flex items-center justify-center rounded border border-white/[0.13] bg-white/[0.06] text-white/55 hover:bg-amber-500 hover:text-white hover:border-transparent transition-colors shrink-0"
+          data-guide-anchor={item.name === 'practice-image.svg' ? 'media-add' : undefined}
           title={t('common.mediaAddToSlide')}
           aria-label={t('common.mediaAddToSlide')}
         >
@@ -873,7 +875,9 @@ const DropItem = memo(function DropItem({
   title,
   desc,
   onClick,
+  guideAnchor,
 }: {
+  guideAnchor?: string;
   icon: ReactNode;
   title: string;
   desc: string;
@@ -883,6 +887,7 @@ const DropItem = memo(function DropItem({
     <button
       type="button"
       onClick={onClick}
+      data-guide-anchor={guideAnchor}
       className="w-full flex items-center gap-2.5 p-2.5 rounded-lg hover:bg-white/[0.06] transition-colors text-left outline-none"
     >
       <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-white/[0.06] text-white/85 shrink-0">
@@ -910,10 +915,19 @@ export default function MediaLoopTab({
   onAddLoopToPresentation,
 }: MediaLoopTabProps) {
   const { t } = useTranslation();
+  const practice = usePractice();
+  const [imageImported,setImageImported] = useState(false);
   const [activeSub, setActiveSub] = useState<'media' | 'loop'>('media');
 
   const mediaItems = useStore((s) => s.mediaItems);
   const setMediaItems = useStore((s) => s.setMediaItems);
+  useEffect(() => {
+    if (!practice || useStore.getState().mediaItems.length) return;
+    try { const saved = JSON.parse(localStorage.getItem('wpa.practice.sampleMedia') ?? '[]');
+      if (Array.isArray(saved)) setMediaItems(saved.filter(item => item?.type === 'image' && item.name === 'practice-image.svg' && typeof item.path === 'string' && typeof item.id === 'string').slice(0,1));
+    } catch { /* Reimport the practice sample if storage is unavailable. */ }
+  }, [practice,setMediaItems]);
+  useEffect(() => { if (practice) { try { localStorage.setItem('wpa.practice.sampleMedia', JSON.stringify(mediaItems.filter(item => item.name === 'practice-image.svg'))); } catch { /* Workspace outcomes remain authoritative. */ } } }, [practice,mediaItems]);
   const loopItems = useStore((s) => s.loopItems);
   const setLoopItems = useStore((s) => s.setLoopItems);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -1162,7 +1176,7 @@ export default function MediaLoopTab({
   }, []);
 
   return (
-    <div className="flex flex-col h-full bg-[#181818] text-white overflow-hidden">
+    <div data-guide-state={JSON.stringify({ mediaMenu: menuOpen, imageReady: mediaItems.some(item => item.name === 'practice-image.svg'), imageImported })} className="flex flex-col h-full bg-[#181818] text-white overflow-hidden">
       <div className="shrink-0 px-3 pt-3 pb-2 border-b border-white/[0.07]">
         <div
           role="tablist"
@@ -1271,6 +1285,7 @@ export default function MediaLoopTab({
             </div>
             <div ref={menuRef} className="relative">
               <button
+                data-guide-anchor="media-menu"
                 onClick={() => setMenuOpen((v) => !v)}
                 className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] text-[11px] font-bold uppercase tracking-wider transition-all"
               >
@@ -1280,11 +1295,12 @@ export default function MediaLoopTab({
                 <div className="absolute right-0 top-[calc(100%+6px)] w-[280px] z-20 p-1.5 rounded-xl border border-white/10 bg-[#141414]/[0.98] shadow-2xl shadow-black/50 backdrop-blur-xl">
                   <DropItem
                     icon={<ImageIcon size={14} />}
+                    guideAnchor="media-import"
                     title={t('common.mediaSelectImages')}
                     desc={t('common.mediaSelectImagesDesc')}
                     onClick={() => {
                       setMenuOpen(false);
-                      importFiles('image');
+                      void importFiles('image').then(() => setImageImported(true));
                     }}
                   />
                   <DropItem

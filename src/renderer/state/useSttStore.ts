@@ -1,3 +1,4 @@
+import { markTourReady } from './useTourStore';
 import type { CaptionSnapshot } from '../../shared/captions';
 import { create } from 'zustand';
 import type { SttErrorCode, SttSessionConfig, SttSessionStatus, SttStatus, SttToken } from '../../shared/stt';
@@ -391,6 +392,7 @@ export async function refreshSttStatus(): Promise<void> {
     if (snapshot) {
       useSttStore.getState().setStatusSnapshot(snapshot);
       if (snapshot.captions) useSttStore.getState().setCaptions(snapshot.captions);
+      markTourReady('stt');
     }
   } catch {
     // Electron API unavailable (e.g. plain web preview) — keep current state.

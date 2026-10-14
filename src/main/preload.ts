@@ -48,6 +48,23 @@ function wrapApi(api: Record<string, AnyFn>): Record<string, AnyFn> {
 }
 
 contextBridge.exposeInMainWorld('electronAPI', wrapApi({
+  onPracticeWorkspaceChanged: (callback: (value: any) => void) => {
+    const listener = (_event: any, value: any) => callback(value);
+    ipcRenderer.on('practice:workspace-changed', listener);
+    return () => ipcRenderer.removeListener('practice:workspace-changed', listener);
+  },
+  controlPracticeGuide: (id: string, step: string, action: string, input: unknown, label: string, destination?: string) => ipcRenderer.invoke('practice:guide', id, step, action, input, label, destination),
+  resumePracticeExercise: (id: string, deck: unknown) => ipcRenderer.invoke('practice:workspace:resume', id, deck),
+  readPracticeWorkspace: (deck: unknown) => ipcRenderer.invoke('practice:workspace:read', deck),
+  startPracticeExercise: (exercise: string, deck: unknown, label: string) => ipcRenderer.invoke('practice:workspace:start', exercise, deck, label),
+  observePracticeWorkspace: (id: string | null, deck: unknown) => ipcRenderer.invoke('practice:workspace:observe', id, deck),
+  pausePracticeExercise: (id: string, skip = false) => ipcRenderer.invoke('practice:workspace:pause', id, skip),
+  getPracticeInfo: () => ipcRenderer.invoke('practice:info'),
+  getPracticeProgress: () => ipcRenderer.invoke('practice:progress'),
+  openPractice: () => ipcRenderer.invoke('practice:open'),
+  closePractice: (id?:string) => ipcRenderer.invoke('practice:close',id),
+  onPracticeCloseRequested: (callback:()=>void) => { const listener=()=>callback();ipcRenderer.on('practice:close-request',listener);void ipcRenderer.invoke('practice:ready').catch(()=>{});return ()=>ipcRenderer.removeListener('practice:close-request',listener); },
+  getTourProfileInfo: () => ipcRenderer.invoke('tour:profile'),
   // ... invoke calls (saveFile, openFile, etc.) unchanged ...
   saveFile: (content: string) => ipcRenderer.invoke('save-file', content),
   openFile: () => ipcRenderer.invoke('open-file'),
@@ -117,6 +134,9 @@ contextBridge.exposeInMainWorld('electronAPI', wrapApi({
   getScreenSources: () => ipcRenderer.invoke('get-screen-sources'),
   captureScreenSource: (sourceId: string) => ipcRenderer.invoke('capture-screen-source', sourceId),
   selectAudioFolder: () => ipcRenderer.invoke('select-audio-folder'),
+  youtubeMusicSearch: (query: string) => ipcRenderer.invoke('youtube-music:search', query),
+  youtubeMusicPlay: (id: string) => ipcRenderer.invoke('youtube-music:play', id),
+  youtubeMusicStop: (streamId?: string) => ipcRenderer.invoke('youtube-music:stop', streamId),
   readAudioFolder: (folderPath: string, recursive = true) => ipcRenderer.invoke('read-audio-folder', folderPath, recursive),
   selectAudioFile: () => ipcRenderer.invoke('select-audio-file'),
   notifyProjectorReady: (displayId?: string) => ipcRenderer.send('projector-ready', displayId),

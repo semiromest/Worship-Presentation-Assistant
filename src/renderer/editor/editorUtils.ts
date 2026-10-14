@@ -296,10 +296,12 @@ export function convertSlideToItems(slide: Slide): SlideItem[] {
         id: makeItemId(),
         type: 'text',
         content: slide.content,
-        x: 10,
-        y: 20,
-        width: 80,
-        height: 30,
+        // A legacy text slide represents full-slide content, not a caption.
+        // Leave comfortable margins while giving multiline verses room to wrap.
+        x: 8,
+        y: 10,
+        width: 84,
+        height: 80,
         zIndex: 0,
         textStyles: {
           fontSize: (slideStyles?.fontSize as number) ?? 48,

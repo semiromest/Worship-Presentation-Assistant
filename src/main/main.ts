@@ -1,4 +1,13 @@
+import { launchMode, restricted, practiceProfile, systemTempRoot } from './isolatedLaunch';
+import { restrictPracticeSession } from './practiceSession';
+import { setPracticeControl } from './practicePolicy';
+import { createProgressStore } from './practiceProgress';
+import { createPracticeWorkspace, readPracticeSavedPreset } from './practiceWorkspace';
+import { resetFile, recoverPracticeReset } from './practiceReset';
+import { spawn } from 'node:child_process';
+import { inspectTourProfile, isTourProfileSender } from './tourProfile';
 import { resolvePosterSource } from './mediaPosterSource';
+import { YouTubeMusicService } from './youtubeMusicService';
 import { checkMediaResources, cacheGoogleFont } from './preparationResources';
 /**
  * Electron main process: presentation control, projector window,
@@ -38,7 +47,7 @@ import {
   setPublicTunnelStatusListener,
 } from './cloudflareTunnelService';
 import { initPerfMonitor, mainPerf, recordWs } from './perfMonitor';
-import { createPresetStore } from './presetStore';
+import { createPresetStore, isLiveSavePresetName } from './presetStore';
 import { localResourceUrlToPath, isZip, mediaRefToName } from '../shared/mediaTree';
 import { getMediaLibrary } from './mediaLibrary';
 import { getOrCreateThumbnail, thumbRefToPath, pruneThumbnailCache } from './mediaThumbnails';
@@ -88,12 +97,22 @@ const AUDIO_EXTS = new Set(['.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a', '.w
 process.env.DIST = DIST;
 process.env.VITE_PUBLIC = VITE_PUBLIC;
 
+// Start profile inspection before any Chromium session/window is initialized.
+const tourProfile = inspectTourProfile(app.getPath('userData'));
+const progressStore = createProgressStore(practiceProfile);
+const practiceWorkspace = createPracticeWorkspace(practiceProfile, progressStore);
+
 // Phase 0 perf monitor — MUST run before any ipcMain handler is registered.
 initPerfMonitor();
 
 // Window references
 
 let win: BrowserWindow | null = null;
+let youtubeMusicService = new YouTubeMusicService();
+let closingPractice = false;
+let practiceRendererReady=false;
+let practiceClosePending=false;
+let practiceWorkspaceReady=false;
 
 type ProjectorEntry = {
   displayId: string;
@@ -552,6 +571,10 @@ function attachQuitConfirm(window: BrowserWindow): void {
 }
 
 function createWindow(): void {
+  youtubeMusicService.dispose();
+  youtubeMusicService = new YouTubeMusicService();
+  const musicForWindow = youtubeMusicService;
+  if(restricted){practiceRendererReady=false;practiceClosePending=false;practiceWorkspaceReady=false;}
   win = new BrowserWindow({
     icon: ICON_PATH,
     width: 1200,
@@ -560,7 +583,7 @@ function createWindow(): void {
     minHeight: 600,
     fullscreenable: true,
     autoHideMenuBar: true,
-    title: 'Worship Presentation Assistant - Control Panel',
+    title: restricted ? 'Worship Presentation Assistant — PRACTICE' : 'Worship Presentation Assistant - Control Panel',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -569,6 +592,10 @@ function createWindow(): void {
     },
   });
 
+  setPracticeControl(win.webContents);
+  if (restricted) restrictPracticeSession(win.webContents, DIST);
+  if(restricted)win.webContents.on('did-start-navigation',(_event,_url,inPlace,mainFrame)=>{if(mainFrame&&!inPlace){practiceRendererReady=false;practiceWorkspaceReady=false;}});
+  if (restricted) win.on('page-title-updated', event => event.preventDefault());
   Menu.setApplicationMenu(null);
 
   process.env.VITE_DEV_SERVER_URL
@@ -577,19 +604,29 @@ function createWindow(): void {
 
   win.maximize();
 
-  attachQuitConfirm(win);
+  if (restricted) win.on('close', event => { if(!closingPractice){event.preventDefault();if(practiceRendererReady)win?.webContents.send('practice:close-request');else practiceClosePending=true;} });
+  else attachQuitConfirm(win);
 
   win.webContents.once('did-finish-load', refreshRendererLanguage);
 
+  const controlWindow = win;
+  controlWindow.once('closed', () => musicForWindow.dispose());
+  if (restricted) controlWindow.webContents.on('render-process-gone', (_event, details) => {
+    if (closingPractice || details.reason === 'clean-exit' || controlWindow.isDestroyed()) return;
+    // Keep a window alive so window-all-closed cannot quit during recovery.
+    createWindow();
+    controlWindow.destroy();
+  });
   win.on('closed', () => {
     for (const entry of projectorWindows.values()) {
       if (!entry.window.isDestroyed()) entry.window.close();
     }
-    win = null;
+    if (win === controlWindow) win = null;
   });
 }
 
 function createProjectorWindow(requestedDisplayId?: string, initialData?: any): boolean {
+  if (restricted) return false;
   const display = getRawDisplay(requestedDisplayId);
   if (!display) return false;
 
@@ -1029,6 +1066,7 @@ async function serveMediaFile(url: string, request: Request): Promise<Response |
 // flow; the app never uses the camera) and, on macOS, additionally request the
 // OS consent via systemPreferences.askForMediaAccess so the mic actually opens.
 function setupMediaPermissionHandlers(): void {
+  if (restricted) return;
   const ses = session.defaultSession;
 
   ses.setPermissionRequestHandler((_webContents, permission, callback) => {
@@ -1052,9 +1090,20 @@ function setupMediaPermissionHandlers(): void {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  if (restricted) await recoverPracticeReset(practiceProfile);
+  await tourProfile;
   setupMediaPermissionHandlers();
   protocol.handle('local-resource', async (request) => {
+    if (restricted) {
+      try {
+        const media = mediaRefToName(request.url);
+        const target = thumbRefToPath(request.url) ?? (media ? path.join(mediaLibrary.dir, media) :
+          request.url.startsWith(MEDIAFILE_REF_PREFIX) ? decodeURIComponent(request.url.slice(MEDIAFILE_REF_PREFIX.length)) : localResourceUrlToPath(request.url));
+        const relative = path.relative(app.getPath('userData'), path.resolve(target));
+        if (relative.startsWith('..') || path.isAbsolute(relative)) return new Response('Forbidden', { status: 403 });
+      } catch { return new Response('Forbidden', { status: 403 }); }
+    }
     let filePath: string;
     const thumbPath = thumbRefToPath(request.url);
     if (thumbPath) {
@@ -1108,13 +1157,14 @@ app.whenReady().then(() => {
     }
   });
   createWindow();
-  if (win) initUpdater(win);
+  if (win && !restricted) initUpdater(win);
+  if (restricted) ipcMain.handle('updater:get-info', () => ({ version: app.getVersion(), updaterActive: false }));
   attachDisplayWatch();
-  createRemoteServer();
+  if (!restricted) createRemoteServer();
   setPublicTunnelStatusListener((next) => win?.webContents.send('public-tunnel:status', next));
   setClientCountListener((count) => win?.webContents.send('share:client-count', count));
   setScreenShareClientCountListener((count) => win?.webContents.send('screen-share:client-count', count));
-  registerSttIpc();
+  if (!restricted) registerSttIpc();
   void pruneThumbnailCache();
 });
 
@@ -1126,6 +1176,7 @@ app.on('activate', () => {
 });
 
 app.on('will-quit', () => {
+  youtubeMusicService.dispose();
   cleanupTempDir();
   if (shareNetworkTimer) clearInterval(shareNetworkTimer);
   disposeShare();
@@ -1268,7 +1319,16 @@ ipcMain.handle(
 ipcMain.handle('load-presets', (_, retentionMs?: number) => presetStore.readPresets(retentionMs));
 
 ipcMain.handle('save-preset', async (_, preset: { name: string; presentation: unknown; retentionMs?: number }) => {
-  return presetStore.savePreset(preset);
+  const practiceSessionId = practiceWorkspace.sessionId();
+  if (restricted && !isLiveSavePresetName(preset.name)) await practiceWorkspace.prepareSave(practiceSessionId, preset);
+  const saved = await presetStore.savePreset(preset);
+  if (restricted && !isLiveSavePresetName(preset.name)) {
+    const record = saved.find(item => item.name === preset.name);
+    const workspace = await practiceWorkspace.saved(preset.presentation, practiceSessionId, record);
+    if (workspace) win?.webContents.send('practice:workspace-changed', { sessionId: practiceSessionId, workspace });
+  }
+
+  return saved;
 });
 
 ipcMain.handle('delete-preset', async (_, name: string, retentionMs?: number) => {
@@ -1280,6 +1340,77 @@ ipcMain.handle('rename-preset', async (_, oldName: string, newName: string, rete
 });
 
 // IPC: displays and projector outputs
+
+for (const action of ['read', 'start', 'observe', 'pause', 'resume'] as const) {
+  ipcMain.handle('practice:workspace:' + action, async(event, ...args) => {
+    if (!restricted || !isTourProfileSender(event.sender, event.senderFrame, win?.webContents ?? null)) throw new Error('Unauthorized practice workspace');
+    if (action === 'read') {
+      let value=await practiceWorkspace.read(args[0]);
+      if(value.guide.step==='save' && value.active?.saveIntent) {
+        // A failed write may leave the normal store's cache ahead of disk.
+        // Recovery reads the one atomic record without store cache or GC.
+        const record=await readPracticeSavedPreset(app.getPath('userData'),value.active.saveIntent.name);
+        value=await practiceWorkspace.recoverSaved(record?[record]:[]) ?? value;
+      }
+      if(event.sender===win?.webContents)practiceWorkspaceReady=true;return value;
+    }
+    if (action === 'start') return practiceWorkspace.start(args[0], args[1], args[2]);
+    if (action === 'resume') return practiceWorkspace.resume(args[0], args[1]);
+    if (action === 'observe') return practiceWorkspace.observe(args[0], args[1]);
+    return practiceWorkspace.pause(args[0], args[1] === true);
+  });
+}
+ipcMain.handle('practice:guide', (event, ...args) => {
+  if (!restricted || !isTourProfileSender(event.sender, event.senderFrame, win?.webContents ?? null)) throw new Error('Unauthorized guide');
+  return practiceWorkspace.guide(args[0], args[1], args[2], args[3], args[4], args[5]);
+});
+ipcMain.handle('practice:info', () => ({ mode: launchMode }));
+ipcMain.handle('practice:ready',event=>{
+  if(!restricted || !isTourProfileSender(event.sender,event.senderFrame,win?.webContents??null))throw new Error('Unauthorized readiness');
+  practiceRendererReady=true;
+  if(practiceClosePending){practiceClosePending=false;setImmediate(()=>win?.webContents.send('practice:close-request'));}
+});
+ipcMain.handle('practice:close', async(event,id?:string)=>{
+  if(!restricted || !isTourProfileSender(event.sender,event.senderFrame,win?.webContents??null))throw new Error('Unauthorized practice close');
+  if(id)await practiceWorkspace.closeReady(id);
+  else if(practiceWorkspaceReady)throw new Error('Save the current practice before closing');
+  closingPractice=true;setImmediate(()=>{win?.destroy();app.quit();});return {ok:true};
+});
+ipcMain.handle('practice:progress', async event => {
+  if (!isTourProfileSender(event.sender, event.senderFrame, win?.webContents ?? null)) throw new Error('Unauthorized sender');
+  const result = await progressStore.read();
+  if (!result.ok) return result;
+  try {
+    try { await fs.access(resetFile(practiceProfile)); throw new Error('Restart pending'); }catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;}
+    const summary=await practiceWorkspace.summaryRun();const confirm=await progressStore.read();
+    if(!confirm.ok || confirm.progress.revision!==result.progress.revision || result.progress.runId!==summary.runId)throw new Error('Progress changed');
+    try { await fs.access(resetFile(practiceProfile)); throw new Error('Restart pending'); }catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;}
+    return { ...result, guide:summary.guide };
+  }
+  catch { return { ok: false, error: 'unreadable' }; }
+});
+ipcMain.handle('practice:open', async event => {
+  if (restricted || !isTourProfileSender(event.sender, event.senderFrame, win?.webContents ?? null)) throw new Error('Unauthorized sender');
+  const env = { ...process.env };
+  delete env.ELECTRON_RUN_AS_NODE;
+  env.TEMP = systemTempRoot;
+  env.TMP = systemTempRoot;
+  env.TMPDIR = systemTempRoot;
+  if (app.isPackaged) delete env.VITE_DEV_SERVER_URL;
+  const args = app.isPackaged ? ['--wpa-practice'] : [app.getAppPath(), '--wpa-practice'];
+  const child = spawn(process.execPath, args, { env, stdio: 'ignore', windowsHide: true });
+  await new Promise<void>((resolve, reject) => { child.once('spawn', resolve); child.once('error', reject); });
+  return { ok: true };
+});
+ipcMain.handle('practice:set-status', (event, task, status) => {
+  if (!restricted || !isTourProfileSender(event.sender, event.senderFrame, win?.webContents ?? null)) throw new Error('Unauthorized sender');
+  return progressStore.setStatus(task, status);
+});
+ipcMain.handle('tour:profile', event => {
+  if (restricted) return { profileKind: 'existing' };
+  if (!isTourProfileSender(event.sender, event.senderFrame, win?.webContents ?? null)) throw new Error('Unauthorized tour profile request');
+  return tourProfile;
+});
 
 ipcMain.handle('get-displays', () => getDisplayInfos());
 ipcMain.handle('get-projector-outputs', () => getProjectorOutputStatus());
@@ -1703,6 +1834,10 @@ ipcMain.handle('send-remote-notice', (_, notice: { text?: string; tone?: 'ok' | 
 // IPC: media / import
 
 ipcMain.handle('import-bible-xml', async (_, filePath?: string) => {
+  if (restricted) {
+    if (filePath && path.resolve(filePath) !== path.join(app.getPath('userData'), 'practice-assets', 'practice-bible.xml')) throw new Error('Only the practice sample is available');
+    return practiceWorkspace.sampleBible(!filePath);
+  }
   let selected = filePath;
   if (selected) {
     try {
@@ -1776,6 +1911,7 @@ ipcMain.handle('delete-bible-data', async (_, filePath: string) => {
 });
 
 ipcMain.handle('select-media-file', async (_, type: 'image' | 'video') => {
+  if (restricted) return type === 'image' ? practiceWorkspace.sampleMedia() : null;
   const filters =
     type === 'image'
       ? [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp'] }]
@@ -1786,6 +1922,7 @@ ipcMain.handle('select-media-file', async (_, type: 'image' | 'video') => {
 });
 
 ipcMain.handle('select-media-files-all', async () => {
+  if (restricted) return [await practiceWorkspace.sampleMedia()];
   const filters = [
     { name: 'Media', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'mp4', 'webm', 'mov', 'mkv', 'avi'] },
   ];
@@ -1836,6 +1973,19 @@ ipcMain.handle('select-media-folder', async () => {
 
 */
 
+function isMusicControl(event: Electron.IpcMainInvokeEvent): boolean {
+  return !restricted && !!win && !win.isDestroyed() && event.sender === win.webContents &&
+    event.senderFrame === win.webContents.mainFrame;
+}
+ipcMain.handle('youtube-music:search', (event, query: unknown) => isMusicControl(event)
+  ? youtubeMusicService.search(query) : { ok: false, error: 'unavailable' });
+ipcMain.handle('youtube-music:play', (event, id: unknown) => isMusicControl(event)
+  ? youtubeMusicService.play(id) : { ok: false, error: 'unavailable' });
+ipcMain.handle('youtube-music:stop', (event, streamId?: unknown) => {
+  if (isMusicControl(event) && (streamId === undefined || typeof streamId === 'string'))
+    youtubeMusicService.stop(streamId);
+});
+
 ipcMain.handle('select-audio-folder', async () => {
   const result = await dialog.showOpenDialog({
     defaultPath: lastDialogDir,
@@ -1878,6 +2028,7 @@ ipcMain.handle('read-media-folder', async (_event, folderPath: string, options?:
 });
 
 ipcMain.handle('media:getThumbnail', async (_evt, filePath: string, maxEdge: number) => {
+  if (restricted && path.resolve(filePath) !== practiceWorkspace.mediaPath) throw new Error('Only the practice image is available');
   try {
     const resolved = resolvePosterSource(filePath, mediaLibrary.dir);
     if (!resolved) return null;

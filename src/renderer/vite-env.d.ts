@@ -7,6 +7,19 @@ declare global {
   interface Window {
     electronAPI: {
       [x: string]: any;
+      onPracticeWorkspaceChanged: (callback: (value: { sessionId: string; workspace: import('../shared/practice').PracticeWorkspace }) => void) => () => void;
+      controlPracticeGuide: (id: string, step: import('../shared/practice').GuideStep, action: string, input: import('../shared/practice').GuideObservation, label: string, destination?: import('../shared/practice').GuideStep) => Promise<import('../shared/practice').PracticeWorkspace>;
+      resumePracticeExercise: (id: string, deck: unknown) => Promise<import('../shared/practice').PracticeWorkspace>;
+      readPracticeWorkspace: (deck: unknown) => Promise<import('../shared/practice').PracticeWorkspace>;
+      closePractice: (id?:string) => Promise<{ok:true}>;
+      onPracticeCloseRequested: (callback:()=>void) => ()=>void;
+      startPracticeExercise: (exercise: string, deck: unknown, label: string) => Promise<import('../shared/practice').PracticeWorkspace>;
+      observePracticeWorkspace: (id: string | null, deck: unknown) => Promise<import('../shared/practice').PracticeWorkspace>;
+      pausePracticeExercise: (id: string, skip?: boolean) => Promise<import('../shared/practice').PracticeWorkspace>;
+      getPracticeInfo: () => Promise<{ mode: 'normal' | 'practice' | 'smoke' }>;
+      getPracticeProgress: () => Promise<import('../shared/practice').ProgressRead>;
+      openPractice: () => Promise<{ ok: boolean }>;
+      getTourProfileInfo: () => Promise<{ profileKind: 'new' | 'existing' | 'unknown' }>;
       saveFile: (content: string) => Promise<string>;
       openFile: () => Promise<{ content: string; path: string }>;
       loadPresets: (retentionMs?: number) => Promise<any[]>;
@@ -129,6 +142,9 @@ declare global {
       onShareNetworkChanged: (callback: (data: { url: string }) => void) => () => void;
 
       selectAudioFolder: () => Promise<string | null>;
+      youtubeMusicSearch: (query: string) => Promise<import('../shared/youtubeMusic').YouTubeSearchResponse>;
+      youtubeMusicPlay: (id: string) => Promise<import('../shared/youtubeMusic').YouTubePlayResponse>;
+      youtubeMusicStop: (streamId?: string) => Promise<void>;
       readAudioFolder: (folderPath: string, recursive?: boolean) => Promise<{ paths: string[]; missing: boolean } | null>;
       selectAudioFile: () => Promise<string | null>;
 

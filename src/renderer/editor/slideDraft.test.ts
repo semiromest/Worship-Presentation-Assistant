@@ -65,6 +65,27 @@ const slide = (overrides: Partial<Slide> = {}): Slide => ({
 
 const deck = (slides: Slide[]): Presentation => ({ id: 'deck', name: 'Deck', slides });
 
+test('opening a multiline legacy text slide creates a roomy editable text area', () => {
+  const base = slide({ content: 'Yaratılış 23:5–6\n\n5–6. Hititler, Efendim, bizi dinle diye yanıtladılar.\nUzun ayet metni.' });
+  const draft = createDraft(base);
+  const text = draft.items.find(item => item.type === 'text')!;
+  assert.equal(text.content, base.content);
+  assert.equal(text.width, 84);
+  assert.equal(text.height, 80);
+  assert.equal(text.y + text.height, 90);
+  assert.equal(text.textStyles?.fontSize, 42);
+  assert.equal(base.items, undefined);
+});
+
+test('opening an already designed text slide preserves its custom text box', () => {
+  const item = textItem({ x: 12, y: 24, width: 60, height: 32 });
+  const draft = createDraft(slide({ items: [item] }));
+  assert.equal(draft.items.length, 1);
+  assert.equal(draft.items[0].height, 32);
+  assert.equal(draft.items[0].width, 60);
+  assert.equal(draft.items[0].y, 24);
+});
+
 // ─── Clipboard fidelity ───────────────────────────────────────────────────────
 
 test('pasting into another slide keeps position, size, style, font and animation', () => {

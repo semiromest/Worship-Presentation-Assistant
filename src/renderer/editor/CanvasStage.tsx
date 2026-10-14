@@ -1,3 +1,4 @@
+import { isHelpActive } from '../components/Tour/tourController';
 import {
   useCallback,
   useEffect,
@@ -90,7 +91,7 @@ export function CanvasStage({
 
   useEffect(() => {
     if (!keyboardEnabled || !onItemDragStart) return;
-    const sync = (event: KeyboardEvent) => setAltHeld(event.altKey);
+    const sync = (event: KeyboardEvent) => { if (!isHelpActive()) setAltHeld(event.altKey); };
     const clear = () => setAltHeld(false);
     window.addEventListener('keydown', sync, true);
     window.addEventListener('keyup', sync, true);

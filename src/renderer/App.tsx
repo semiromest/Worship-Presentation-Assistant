@@ -65,6 +65,8 @@ import LiveCaptionsConsole from './components/LiveCaptionsConsole';
 import LiveCaptionsSessionBar from './components/LiveCaptionsSessionBar';
 import Toast from './components/Toast';
 
+import { registerTourAnchor, notifyPageVisit } from './components/Tour/tourController';
+
 export default function App() {
   const { t, i18n } = useTranslation();
 
@@ -376,16 +378,17 @@ export default function App() {
 
   // ─── Main UI ──────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-screen bg-surface-base text-white overflow-hidden">
+    <div data-app-shell className="flex h-full bg-surface-base text-white overflow-hidden">
       {/* Sidebar — navigation landmark */}
-      <nav
+      <nav ref={element => registerTourAnchor('sidebar', element)}
         aria-label={t('nav.sidebarLabel')}
         className="w-[72px] flex-shrink-0 overflow-y-auto overflow-x-hidden bg-surface border-r border-white/10 flex flex-col items-center py-3 gap-1"
       >
         {SIDEBAR_TABS.map(({ id, icon: Icon, titleKey }) => (
           <button
             key={id}
-            onClick={() => setActiveTab(id as any)}
+            data-guide-anchor={`nav-${id}`}
+            onClick={() => { setActiveTab(id as any); notifyPageVisit(id); }}
             title={t(titleKey)}
             aria-label={t(titleKey)}
             aria-current={activeTab === id ? 'page' : undefined}
@@ -443,7 +446,7 @@ export default function App() {
               }
             >
           {activeTab === 'presentations' && (
-            <div className="h-full">
+            <div ref={element => registerTourAnchor('page-presentations', element)} className="h-full">
               <PresentationsTab
                 presentation={presentation}
                 presets={presets}
@@ -460,7 +463,7 @@ export default function App() {
           )}
 
           {activeTab === 'slides' && (
-            <div className="h-full">
+            <div ref={element => { registerTourAnchor('slides', element); registerTourAnchor('page-slides', element); }} className="h-full">
               <div className="h-full flex flex-col lg:flex-row">
                 <div className="flex-1 min-w-0 overflow-hidden">
                   <SlideGrid
@@ -514,7 +517,7 @@ export default function App() {
           )}
 
           {activeTab === 'media' && (
-            <div className="h-full">
+            <div ref={element => registerTourAnchor('page-media', element)} className="h-full">
               <MediaLoopTab
                 onAddMediaToPresentation={handleMediaAdd}
                 onAddAllMediaToPresentation={handleAddAllMedia}
@@ -523,22 +526,22 @@ export default function App() {
             </div>
           )}
           {activeTab === 'hymns' && (
-            <div className="h-full">
+            <div ref={element => registerTourAnchor('page-hymns', element)} className="h-full">
               <HymnsTab onAddHymnToPresentation={handleHymnAdd} />
             </div>
           )}
           {activeTab === 'countdown' && (
-            <div className="h-full">
+            <div ref={element => registerTourAnchor('page-countdown', element)} className="h-full">
               <CountdownTab onAddCountdownToPresentation={handleAddCountdownToPresentation} />
             </div>
           )}
           {activeTab === 'screen' && (
-            <div className="h-full">
+            <div ref={element => registerTourAnchor('page-screen', element)} className="h-full">
               <ScreenCaptureTab onAddScreenToPresentation={handleScreenAdd} />
             </div>
           )}
           {activeTab === 'calendar' && (
-            <div className="h-full">
+            <div ref={element => registerTourAnchor('page-calendar', element)} className="h-full">
               <CalendarTab
                 savedPresentationNames={savedPresentationNames}
                 onOpenPresentation={openSavedPresentationByName}
@@ -546,7 +549,7 @@ export default function App() {
             </div>
           )}
           {activeTab === 'settings' && (
-            <div className="h-full">
+            <div ref={element => registerTourAnchor('page-settings', element)} className="h-full">
               <SettingsTab />
             </div>
           )}
@@ -562,13 +565,13 @@ export default function App() {
                   ) : null
                 }
               >
-                <div className={activeTab === 'bible' ? 'h-full' : 'hidden'} aria-hidden={activeTab !== 'bible'}>
+                <div ref={element => registerTourAnchor('page-bible', element)} className={activeTab === 'bible' ? 'h-full' : 'hidden'} aria-hidden={activeTab !== 'bible'}>
                   <ScriptureBrowser active={activeTab === 'bible'} onSendToLive={handleSendToLive} />
                 </div>
               </Suspense>
             )}
           {(editorMounted || activeTab === 'editor') && (
-            <div className={activeTab === 'editor' ? 'h-full' : 'hidden'} aria-hidden={activeTab !== 'editor'}>
+            <div ref={element => registerTourAnchor('page-editor', element)} className={activeTab === 'editor' ? 'h-full' : 'hidden'} aria-hidden={activeTab !== 'editor'}>
               <SlideEditor
                 key={editorSessionVersion}
                 active={activeTab === 'editor'}
@@ -617,6 +620,7 @@ export default function App() {
           <LiveCaptionsSessionBar onStop={sttStop} onExpand={() => setIsSttPanelOpen(true)} />
         ) : null}
       </div>
+
 
       <ChoiceDialogHost />
 

@@ -2,6 +2,7 @@ import { memo } from 'react';
 import type { ImageStyle } from '../types';
 import { useImageSize } from '../hooks/useImageSize';
 import { normalizeCrop } from '../imageGeometry';
+import { resolveCanvasSource } from '../canvasSource';
 
 /** All image-item surfaces share crop, fit, flip, and filters. */
 export const SlideImage = memo(function SlideImage({
@@ -15,6 +16,7 @@ export const SlideImage = memo(function SlideImage({
   alt?: string;
   lazy?: boolean;
 }) {
+  src = src ? resolveCanvasSource(src, false).url : undefined;
   const source = styles.cropMode === 'source' && !!styles.crop;
   const size = useImageSize(source ? src : undefined);
   const crop = normalizeCrop(styles.crop);

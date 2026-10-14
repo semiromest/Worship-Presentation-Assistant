@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Image as ImageIcon, X, FlipHorizontal, FlipVertical, Layers, ChevronDown } from 'lucide-react';
 import { useStore } from '../state/useStore';
+import { resolveCanvasSource } from '../canvasSource';
 import { cn } from '../utils';
 import type { Slide } from '../types';
 
@@ -26,7 +27,7 @@ export default function ImageSlideEditor({
   const setPanels = useStore((s) => s.setPanels);
 
   const styles = (selectedSlide.styles || {}) as Record<string, any>;
-  const imageUrl = selectedSlide.mediaUrl;
+  const imageUrl = selectedSlide.mediaUrl ? resolveCanvasSource(selectedSlide.mediaUrl, false).url : undefined;
 
   const update = (partial: Partial<Slide['styles']>) => updateSlideStyles(partial);
 
@@ -82,6 +83,7 @@ export default function ImageSlideEditor({
           {fitOptions.map((opt) => (
             <button
               key={opt.value}
+              data-guide-anchor={opt.value === 'contain' ? 'image-fit' : undefined}
               onClick={() => update({ objectFit: opt.value })}
               className={cn(
                 'flex-1 px-2 py-1.5 rounded-lg text-[10px] font-semibold border transition-[background-color,border-color]',
@@ -179,6 +181,7 @@ export default function ImageSlideEditor({
           min={0}
           max={1}
           step={0.05}
+          data-guide-anchor="image-grayscale"
           value={styles.imageGrayscale ?? 0}
           onChange={(e) => update({ imageGrayscale: parseFloat(e.target.value) })}
           aria-label={t('common.editorGrayscale')}

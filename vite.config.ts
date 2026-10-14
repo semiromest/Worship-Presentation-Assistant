@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import path from 'node:path';
 import react from '@vitejs/plugin-react';
 import electron from 'vite-plugin-electron/simple';
+import { build as bundleBrowser } from 'esbuild';
 
 export default defineConfig({
   plugins: [
@@ -10,6 +11,16 @@ export default defineConfig({
       main: {
         entry: 'src/main/main.ts',
         vite: {
+          plugins: [{
+            name: 'youtube-token-browser',
+            async buildStart() {
+              const result = await bundleBrowser({
+                entryPoints: [path.join(__dirname, 'src/main/youtubeTokenBrowser.ts')],
+                bundle: true, format: 'iife', platform: 'browser', minify: true, write: false,
+              });
+              this.emitFile({ type: 'asset', fileName: 'youtube-token.js', source: result.outputFiles[0].text });
+            },
+          }],
           build: {
             target: 'node20',         // main process runs on Node.js
             minify: 'esbuild',

@@ -1,9 +1,11 @@
+import type { BibleSourceDescriptor } from './bibleRepository';
+import { getChapterReading } from './scriptureReading';
 import type { BibleData } from './bibleParser';
 
 export interface VerseLocation {
   bookIndex: number;
   chapterIndex: number;
-  verseIndex: number;
+  entryId: string;
 }
 
 export type BibleSearchIndex = Map<string, VerseLocation[]>;
@@ -15,12 +17,18 @@ export type BibleSearchIndex = Map<string, VerseLocation[]>;
  */
 export function createBibleSearchIndexer(
   bible: BibleData,
-  tokenize: (text: string) => string[]
+  tokenize: (text: string) => string[],
+  source?: BibleSourceDescriptor | null
 ): { index: BibleSearchIndex; step: (maxVerses?: number) => boolean } {
   const index: BibleSearchIndex = new Map();
   let bookIndex = 0;
   let chapterIndex = 0;
   let verseIndex = 0;
+  let currentText = '';
+  // Prepare the first chapter's reading view before the bounded indexing steps.
+  // Subsequent real chapters are small and are prepared when the cursor enters them.
+  const firstBook = bible.books[0];
+  if (firstBook?.chapters[0]) getChapterReading(firstBook, firstBook.chapters[0], source);
 
   const nextVerse = (): VerseLocation | null => {
     while (bookIndex < bible.books.length) {
@@ -33,13 +41,15 @@ export function createBibleSearchIndexer(
       }
 
       const chapter = book.chapters[chapterIndex];
-      if (verseIndex >= chapter.verses.length) {
+      const reading = getChapterReading(book, chapter, source);
+      if (verseIndex >= reading.available.length) {
         chapterIndex += 1;
         verseIndex = 0;
         continue;
       }
 
-      const location = { bookIndex, chapterIndex, verseIndex };
+      const location = { bookIndex, chapterIndex, entryId: reading.available[verseIndex].id };
+      currentText = reading.available[verseIndex].text;
       verseIndex += 1;
       return location;
     }
@@ -55,8 +65,7 @@ export function createBibleSearchIndexer(
         const location = nextVerse();
         if (!location) return true;
 
-        const verse = bible.books[location.bookIndex].chapters[location.chapterIndex].verses[location.verseIndex];
-        const words = new Set(tokenize(verse.text));
+        const words = new Set(tokenize(currentText));
         for (const word of words) {
           if (word.length < 2) continue;
           const entries = index.get(word);

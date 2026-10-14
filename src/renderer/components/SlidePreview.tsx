@@ -6,6 +6,7 @@ import { ListOrdered, Monitor, Pause, Play, Video } from 'lucide-react';
 import type { Slide, SlideItem } from '../types';
 import { getSlideDisplayContent } from '../../shared/slideContent';
 import { SlideImage } from './SlideImage';
+import { resolveCanvasSource } from '../canvasSource';
 import { cn } from '../utils';
 import { SlideTextItem as TextItem } from './SlideTextItem';
 export { SlideTextItem as TextItem } from './SlideTextItem';
@@ -294,7 +295,8 @@ export const SlidePreviewAny = memo(({ slide, cardWidth = 320, enabled = true }:
     case 'image':
       return (
         <img
-          src={slide.mediaUrl}
+          src={slide.mediaUrl ? resolveCanvasSource(slide.mediaUrl, false).url : undefined}
+          style={{ filter: `grayscale(${slide.styles?.imageGrayscale ?? 0})` }}
           className={cn(
             'w-full h-full bg-black',
             slide.styles?.objectFit === 'cover' ? 'object-cover' : 'object-contain'

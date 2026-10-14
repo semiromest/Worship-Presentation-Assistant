@@ -1,3 +1,4 @@
+import { usePractice } from '../hooks/usePractice';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../state/useStore';
 import { useShallow } from 'zustand/shallow';
@@ -88,6 +89,7 @@ async function generateThumbnailHybrid(slide: Slide, status?: ThumbnailStatus): 
 }
 
 export function useProjectorSync() {
+  const practice = usePractice();
   const {
     presentation,
     liveSlideId,
@@ -270,6 +272,7 @@ export function useProjectorSync() {
   const [thumbRetryTick, setThumbRetryTick] = useState(0);
 
   useEffect(() => {
+    if (practice) return;
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     const CACHE_MAX = 100;
@@ -412,9 +415,10 @@ export function useProjectorSync() {
       cancelled = true;
       if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [throttledPresentation.slides, liveIndex, thumbRetryTick]);
+  }, [practice, throttledPresentation.slides, liveIndex, thumbRetryTick]);
 
   useEffect(() => {
+    if (practice) return;
     const slides = throttledPresentation.slides;
     const liveSlide = slides[liveIndex];
     if (!liveSlide) return;
@@ -423,7 +427,7 @@ export function useProjectorSync() {
     if (cached?.url) {
       window.electronAPI?.sendSlidePreview?.(cached.url);
     }
-  }, [liveIndex, throttledPresentation.slides]);
+  }, [practice, liveIndex, throttledPresentation.slides]);
 
   // Per-slide metadata for phones. Recomputed ONLY when the deck changes,
   // never on navigation — the map over all slides + IPC + main-side
@@ -451,7 +455,7 @@ export function useProjectorSync() {
     // window also runs this hook, and its own store keeps isProjectorWindowOpen
     // false (projector mode never flips it), so its status broadcast used to
     // clobber the control's correct isProjectorOpen=true on phones.
-    if (IS_PROJECTOR_MODE) return;
+    if (IS_PROJECTOR_MODE || practice) return;
     const remoteTransition = TRANSITION_MAP[transitionType as TransitionType] ?? 'fade';
     const liveSlide = presentation.slides[liveIndex];
 
@@ -469,6 +473,7 @@ export function useProjectorSync() {
     });
   }, [
     presentation.slides,
+    practice,
     slidePreviews,
     liveIndex,
     isBlackout,

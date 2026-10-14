@@ -17,6 +17,8 @@ export function usePointerGesture<T>(
     if (disposeRef.current) return false;
     const pointerId = event.pointerId;
     const target = event.currentTarget;
+    const previousMarker = target.dataset.editorPointerActive;
+    target.dataset.editorPointerActive = 'true';
     const finishCallback = callbacks.current.onFinish;
     const moveCallback = callbacks.current.onMove;
     const controller = createPointerSession<T, PointerEvent>(
@@ -33,6 +35,8 @@ export function usePointerGesture<T>(
     const move = (sample: PointerEvent) => controller.move(sample);
     const finish = (sample: Event) => controller.finish(sample instanceof PointerEvent ? sample : undefined);
     const detach = () => {
+      if (previousMarker === undefined) delete target.dataset.editorPointerActive;
+      else target.dataset.editorPointerActive = previousMarker;
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', finish);
       window.removeEventListener('pointercancel', finish);

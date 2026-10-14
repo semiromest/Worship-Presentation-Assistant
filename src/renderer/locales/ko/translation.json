@@ -14,9 +14,19 @@
     "sidebarLabel": "메인 메뉴"
   },
   "common": {
+    "scriptureMerged": "합쳐진 절",
+    "scriptureMergedInfo": "이 번역에서는 일부 절이 함께 제공됩니다.",
+    "scriptureIssue_empty": "이 자료에는 별도의 본문이 없습니다.",
+    "scriptureIssue_unsupported": "이 번호 형식은 아직 지원하지 않습니다.",
+    "scriptureIssue_conflict": "본문의 절 범위가 겹칩니다. 전송할 수 없습니다.",
+    "scriptureIssuesInfo": "이 장에는 본문이 없거나 확인되지 않은 항목이 있습니다.",
+    "scriptureInvalidRequest": "유효한 전체 절 범위를 입력하세요.",
+    "scriptureIncomplete": "요청이 불완전합니다. 없거나 충돌하는 절: {{numbers}}.",
+    "scriptureSelectFound": "사용 가능한 본문만 선택",
+    "scriptureExpanded": "이 번역에서 {{requested}}절은 {{resolved}}절로 함께 제공됩니다.",
+    "scriptureReadingSummary": "{{verses}}절 · 본문 {{units}}개 · 슬라이드 {{slides}}개",
     "videoSettingsTab": "영상",
     "videoTextsTab": "텍스트",
-
     "videoTextLayers": "영상 텍스트 레이어",
     "videoAddText": "텍스트 추가",
     "videoTextHint": "텍스트를 추가한 후 미리보기에서 이동하고 크기를 조절하세요.",
@@ -34,7 +44,6 @@
     "videoTextWidth": "너비",
     "videoTextHeight": "높이",
     "videoTextOutsideRange": "선택한 텍스트는 편집을 위해 흐리게 표시되며 현재 출력에는 나타나지 않습니다.",
-
     "videoOriginalSafe": "원본 유지",
     "videoPlay": "재생",
     "videoPause": "일시 정지",
@@ -59,7 +68,6 @@
     "videoAudio": "오디오",
     "videoVolume": "음량",
     "videoSourceInfo": "원본 정보",
-
     "videoEditorTitle": "동영상 편집",
     "videoSeconds": "초",
     "videoStart": "시작",
@@ -70,7 +78,6 @@
     "videoLoadFailed": "동영상을 불러올 수 없습니다. 시간 설정은 유지됩니다.",
     "videoDurationPending": "동영상 길이를 기다리는 중입니다.",
     "videoNonDestructive": "영상 및 텍스트 설정은 슬라이드에 저장됩니다. 원본 영상은 변경되지 않습니다.",
-
     "editorPreview": "미리보기",
     "editorPreviewFailed": "미리보기를 만들 수 없습니다",
     "editorPreviewLoading": "미리보기 준비 중",
@@ -83,7 +90,6 @@
     "editorNoEditableSlides": "편집 가능한 슬라이드가 없습니다.",
     "editorShowAll": "전체 표시",
     "editorCaptionsSample": "자막 예시",
-
     "editorPendingDraft": "저장하지 않은 초안",
     "editorEmpty": "편집을 시작하려면 프레젠테이션에 슬라이드를 추가하세요.",
     "editorConflictTitle": "슬라이드 변경 충돌",
@@ -91,7 +97,6 @@
     "editorApplyDraft": "초안 적용",
     "editorUseCurrent": "프레젠테이션 버전 사용",
     "editorBeforeReplace": "다른 프레젠테이션으로 전환하기 전에 편집기 변경 사항을 라이브러리에 저장하거나 버릴까요?",
-
     "newSlide": "새 슬라이드",
     "newSlideContent": "새 슬라이드 내용",
     "newPresentation": "새 프레젠테이션",
@@ -1081,6 +1086,9 @@
     "backgroundMusicEmpty": "지원되는 음악을 찾지 못했습니다.",
     "backgroundMusicMissing": "음악 폴더를 찾지 못했습니다.",
     "backgroundMusicPlayError": "음악을 재생할 수 없습니다.",
+    "backgroundMusicLocal": "로컬",
+    "youtubeLoading": "YouTube 오디오 준비 중…",
+    "youtubeNoResults": "검색 결과가 없습니다.",
     "youtubeSearch": "YouTube 검색",
     "youtubeSearchPlaceholder": "YouTube 음악 검색...",
     "youtubeSearchError": "YouTube 검색에 실패했습니다.",
@@ -1101,7 +1109,72 @@
     "sonioxTargetLanguageHint": "말한 내용이 이 언어로 번역됩니다.",
     "sonioxSttLanguage": "기본 사용 언어 (STT)",
     "sonioxSttAuto": "자동 감지",
-    "sonioxSttLanguageHint": "자동 감지를 사용하면 말에서 언어를 감지하며, 특정 언어를 선택하면 인식이 그 언어로 유도됩니다."
+    "sonioxSttLanguageHint": "자동 감지를 사용하면 말에서 언어를 감지하며, 특정 언어를 선택하면 인식이 그 언어로 유도됩니다.",
+    "navigation": {
+      "search": "설정 검색",
+      "clearSearch": "검색 지우기",
+      "category": "설정 카테고리",
+      "resultsTitle": "검색 결과",
+      "noResults": "일치하는 설정이 없습니다. 다른 단어로 검색해 보세요.",
+      "resultCount": "설정 {{count}}개를 찾았습니다.",
+      "clearLiveSaves": "자동 저장 기록 지우기",
+      "descriptions": {
+        "hymn-size": "찬송 저자 글자 크기를 조절하세요.",
+        "watermark": "로고를 업로드하고 위치, 크기, 불투명도 및 적용할 콘텐츠를 선택하세요.",
+        "live-save": "프레젠테이션 자동 저장을 켜거나 끄세요.",
+        "retention": "자동 저장 기록의 보관 기간을 선택하세요.",
+        "clear-live-saves": "자동 저장 기록만 지웁니다. 일반 저장 프레젠테이션은 유지됩니다."
+      },
+      "categories": {
+        "general": {
+          "title": "일반",
+          "description": "언어, 소리 및 화면 설정을 변경하세요."
+        },
+        "presentation": {
+          "title": "프레젠테이션",
+          "description": "진행 방식과 운영자 도구를 설정하세요."
+        },
+        "appearance": {
+          "title": "찬송과 로고",
+          "description": "찬송 저자 표시와 로고 워터마크를 설정하세요."
+        },
+        "captions": {
+          "title": "자막과 번역",
+          "description": "음성 인식 및 번역 설정을 변경하세요."
+        },
+        "autosave": {
+          "title": "자동 저장",
+          "description": "자동 저장 기록과 보관 기간을 관리하세요."
+        },
+        "updates": {
+          "title": "업데이트",
+          "description": "새 버전과 업데이트 상태를 확인하세요."
+        },
+        "learning": {
+          "title": "사용 방법",
+          "description": ""
+        }
+      },
+      "keywords": {
+        "language": "화면 언어 한국어",
+        "sound": "소리 효과 클릭 알림",
+        "motion": "동작 애니메이션 줄이기",
+        "auto-live": "자동 라이브 출력 전환",
+        "sections": "구역 순서 구성",
+        "notes": "운영자 메모 노트",
+        "hymn-position": "찬송 저자 위치 정렬",
+        "hymn-size": "찬송 저자 글자 글꼴 크기",
+        "watermark": "로고 워터마크 이미지 불투명도 투명도",
+        "stt-key": "소니옥스 soniox api 키 자막",
+        "spoken-language": "음성 인식 감지 언어",
+        "target-language": "번역 대상 언어",
+        "live-save": "라이브 자동 저장 백업",
+        "retention": "보관 기간 일 백업",
+        "clear-live-saves": "자동 저장 삭제 지우기",
+        "updates": "업데이트 버전 다운로드",
+        "learn": "연습 가이드 배우기 도움말 사용법"
+      }
+    }
   },
   "stage": {
     "next": "다음",
@@ -1178,5 +1251,395 @@
     "off": "꺼짐",
     "saveOff": "자동 저장 꺼짐",
     "sessionError": "송출 위치를 저장하지 못했습니다"
+  },
+  "tour": {
+    "mapTitle": "앱 알아보기",
+    "helpTitle": "사용 방법",
+    "intro": "콘텐츠를 선택하고 슬라이드를 준비한 다음 화면에 표시하세요.",
+    "welcomeTitle": "환영합니다",
+    "start": "간단한 둘러보기 시작",
+    "later": "나중에",
+    "close": "닫기",
+    "back": "이전",
+    "next": "다음",
+    "done": "완료",
+    "progress": "{{current}} / {{total}}",
+    "loading": "둘러보기를 준비하는 중…",
+    "stillLoading": "작업 공간을 아직 불러오고 있습니다. 언제든 둘러보기를 닫을 수 있습니다.",
+    "failed": "둘러보기 대상을 준비하지 못했습니다. 나중에 다시 시도하세요.",
+    "editorDescription": "슬라이드 디자인과 배치를 자세히 편집합니다.",
+    "helpDescription": "키보드 단축키는 ? 키를 누르세요.",
+    "blocked": {
+      "output-active": "출력 화면이 열려 있으면 둘러보기를 시작할 수 없습니다. 앱 안내 지도는 사용할 수 있습니다.",
+      "session-active": "활성 공유 또는 자막 세션을 종료한 후 둘러보기를 시작하세요.",
+      "editor-active": "먼저 편집기를 나가고 대기 중인 편집을 완료하세요.",
+      "modal-open": "먼저 다른 대화 상자를 닫으세요.",
+      "interaction-active": "먼저 드래그 또는 메뉴 작업을 완료하세요.",
+      "not-ready": "앱 상태를 불러오는 중입니다. 잠시 후 다시 시도하세요."
+    },
+    "steps": {
+      "navigation": {
+        "title": "각 영역 살펴보기",
+        "body": "사이드바에는 프레젠테이션과 콘텐츠 도구가 모여 있습니다. 프레젠테이션 영역에서 준비한 파일을 관리하세요."
+      },
+      "slides": {
+        "title": "슬라이드 준비하기",
+        "body": "슬라이드를 추가하고 순서를 정리한 다음 서식 도구로 모양을 준비하세요."
+      },
+      "content": {
+        "title": "콘텐츠 추가하기",
+        "body": "성경 영역에서 콘텐츠를 찾아 프레젠테이션에 추가하세요. 미디어, 찬송가 및 기타 콘텐츠 도구도 사이드바에 있습니다."
+      },
+      "output": {
+        "title": "화면 출력 관리하기",
+        "body": "준비한 콘텐츠를 출력 화면에 표시하세요. 발표 전에 대상 화면과 준비 점검을 확인하세요."
+      },
+      "help": {
+        "title": "도움말 다시 열기",
+        "body": "설정에서 언어를 변경하거나 앱 안내 지도를 열고 둘러보기를 다시 시작할 수 있습니다."
+      }
+    },
+    "pageIntroductions": "페이지 안내",
+    "suggestTitle": "이 페이지를 살펴볼까요?",
+    "learnPage": "페이지 살펴보기",
+    "disableSuggestions": "페이지 제안 끄기",
+    "suggestionsDisabled": "페이지 제안이 꺼져 있습니다",
+    "pages": {
+      "presentations": "프레젠테이션 파일을 열고 저장하거나 라이브러리에서 준비한 프레젠테이션을 관리하세요.",
+      "slides": "슬라이드를 추가하고 선택 및 정렬한 다음 오른쪽 패널에서 내용과 모양을 편집하세요.",
+      "bible": "성경 소스를 선택하거나 XML 파일을 가져오세요. 책, 장, 절을 선택하여 프레젠테이션에 추가하세요.",
+      "media": "이미지와 비디오를 찾아 미리 보고 추가하세요. 여러 항목을 반복 슬라이드로 구성할 수 있습니다.",
+      "hymns": "찬송가 모음을 가져오거나 찬송가를 찾아 가사를 슬라이드로 변환하세요.",
+      "countdown": "분과 초를 선택하고 표시 모양을 준비한 다음 카운트다운을 추가하세요.",
+      "screen": "화면 캡처 소스를 선택하여 슬라이드에 추가하세요. 소스 선택은 출력 화면을 여는 것과 다릅니다.",
+      "calendar": "캘린더에서 준비한 프레젠테이션을 예약하고 항목에서 다시 여세요.",
+      "editor": "디자인 캔버스에서 슬라이드 요소를 배치하세요. 기존 저장 기능으로 대기 중인 초안 변경을 적용하세요.",
+      "settings": "언어와 앱 설정을 관리하세요. 도움말에서 페이지 안내와 간단한 둘러보기를 다시 열 수 있습니다."
+    }
+  },
+  "practice": {
+    "banner": "연습 — 별도 프로필, 실시간 출력 비활성화",
+    "title": "연습 진행 상태",
+    "preflight": "기술 사전 검증입니다. 과제는 별도로 제공됩니다.",
+    "counts": "완료: {{completed}} · 건너뜀: {{skipped}} · 남음: {{remaining}}",
+    "notStarted": "시작 전",
+    "inProgress": "진행 중 / 일시 중지",
+    "completed": "완료",
+    "skipped": "건너뜀",
+    "pending": "추후 제공",
+    "phase3": "3단계 — 현재 설명만 제공",
+    "unreadable": "진행 상태를 읽지 못했습니다. 마지막 유효 상태를 유지합니다.",
+    "launchError": "연습을 열지 못했습니다.",
+    "open": "연습 열기",
+    "resume": "연습 계속",
+    "tasksTitle": "연습 과제",
+    "choose": "과제를 선택하고 앱의 도구로 직접 수행하세요.",
+    "retained": "슬라이드는 유지됩니다. 종료 시 자동으로 삭제하지 않습니다.",
+    "go": "과제로 이동",
+    "pause": "일시 중지",
+    "skip": "건너뛰기",
+    "available": "사용 가능",
+    "deckName": "연습 프레젠테이션",
+    "demoSlide": "연습: 삭제 예제",
+    "deleteWarning": "선택된 삭제 예제만 제거하세요. 내용을 수정했다면 보존하고 과제를 다시 시작하세요.",
+    "taskError": "작업을 저장하지 못했습니다. 다시 시도하거나 건너뛰세요.",
+    "exercise": {
+      "slide-add": {
+        "title": "슬라이드 추가",
+        "body": "슬라이드 페이지에서 텍스트 슬라이드를 추가하세요."
+      },
+      "slide-delete": {
+        "title": "예제 슬라이드 삭제",
+        "body": "선택된 삭제 예제만 제거하고 다른 슬라이드는 유지하세요."
+      },
+      "media": {
+        "title": "미디어 추가",
+        "body": "미디어에서 이미지를 가져오세요. 제공된 연습 이미지 카드에서 프레젠테이션에 추가하세요."
+      },
+      "bible": {
+        "title": "성경 가져오기와 구절 추가",
+        "body": "로컬 성경 가져오기를 사용하세요. 예제 창세기 1:1을 선택하고 프레젠테이션에 추가하세요."
+      },
+      "countdown": {
+        "title": "카운트다운 추가",
+        "body": "0보다 큰 시간을 선택하고 카운트다운을 추가하세요."
+      },
+      "presentations": {
+        "title": "라이브러리에 저장",
+        "body": "연습 프레젠테이션을 라이브러리에 저장하세요. 외부 파일에는 쓰지 않습니다."
+      },
+      "hymns": {
+        "title": "찬송가",
+        "body": "강조된 예제 찬송 행을 클릭하세요. 가사가 추가되면 결과를 함께 확인해요."
+      },
+      "image-edit": {
+        "title": "이미지를 편집했어요",
+        "body": "강조된 이미지 슬라이드를 클릭하세요. 오른쪽 편집기에서 두 가지 간단한 수정을 해요."
+      },
+      "slide-reorder": {
+        "title": "슬라이드 순서 변경",
+        "body": "강조된 예제 슬라이드를 다른 강조된 슬라이드 위로 끌어 놓으세요. 실제 순서가 바뀌면 이 연습이 끝나요."
+      }
+    }
+  },
+  "guide": {
+    "title": "단계별로 배우기",
+    "description": "별도의 연습 창에서 직접 작업하며 배웁니다.",
+    "pilot": "안내는 10개 섹션과 6개 실습을 다룹니다.",
+    "open": "단계별로 배우기",
+    "begin": "시작",
+    "resume": "이어서 진행",
+    "next": "계속",
+    "exit": "나가기 및 일시 중지",
+    "restart": "처음부터 시작",
+    "progress": "{{current}} / {{total}} 단계",
+    "waiting": "대상을 준비하고 있습니다. 기다리거나 나갈 수 있습니다.",
+    "unavailable": "현재 이 대상을 사용할 수 없습니다.",
+    "stuck": "막히셨나요? 대상을 다시 표시하여 재시도하거나 이 단계를 건너뛸 수 있습니다. 건너뛴 단계는 완료로 처리되지 않습니다.",
+    "retry": "대상 다시 보기",
+    "skip": "이 단계 건너뛰기",
+    "advanced": "고급 도움말",
+    "jumpWarning": "선택한 섹션부터 계속합니다. 앞으로 이동하며 건너뛴 작업은 완료가 아닌 건너뜀으로 기록됩니다.",
+    "error": "진행 상황을 저장하거나 안내를 불러오지 못했습니다. 다시 시도하세요.",
+    "finished": "안내를 완료했습니다.",
+    "finishedSkipped": "마지막에 도착했습니다. 건너뛴 단계는 완료로 처리되지 않습니다.",
+    "savedStep": "저장된 단계: {{step}}",
+    "skippedCount": "건너뛴 단계: {{count}}",
+    "shortDescription": "주요 작업 영역을 빠르게 알아봅니다.",
+    "mapDescription": "섹션과 단축키를 살펴봅니다.",
+    "shortTitle": "빠른 둘러보기",
+    "steps": {
+      "welcome": {
+        "title": "함께 배워 봅시다",
+        "body": "별도의 연습 프로필을 사용합니다. 실시간 출력은 꺼져 있으며 실제 프레젠테이션은 변경되지 않습니다. 강조된 작업을 순서대로 수행하세요."
+      },
+      "presentations": {
+        "title": "프레젠테이션",
+        "body": "여기서 프레젠테이션을 관리합니다. 이 섹션은 소개만 합니다. 다음에는 실제 도구로 슬라이드를 만듭니다."
+      },
+      "sidebar": {
+        "title": "섹션 탐색",
+        "body": "왼쪽 버튼으로 섹션을 엽니다. 단계마다 필요한 영역을 강조합니다."
+      },
+      "nav-slides": {
+        "title": "슬라이드 열기",
+        "body": "강조된 슬라이드 버튼을 클릭하세요."
+      },
+      "add": {
+        "title": "새 슬라이드 추가",
+        "body": "강조된 새 슬라이드 추가 버튼을 클릭하세요. 슬라이드가 생성되면 다음 단계로 이동합니다."
+      },
+      "select": {
+        "title": "예제 슬라이드 선택",
+        "body": "강조된 예제 슬라이드를 클릭하세요. 직접 추가한 슬라이드는 유지됩니다."
+      },
+      "delete": {
+        "title": "예제 삭제",
+        "body": "Delete 키 또는 오른쪽에 강조된 휴지통으로 선택한 예제를 삭제하세요. 두 방법 모두 인정되며 다른 슬라이드는 보존돼요."
+      },
+      "done": {
+        "title": "완료",
+        "body": "안내의 끝에 도달했습니다. 종료해도 연습 변경 사항은 유지됩니다."
+      },
+      "nav-bible": {
+        "title": "성경",
+        "body": "강조된 성경 버튼을 클릭하세요."
+      },
+      "bible-intro": {
+        "title": "성경 자료 불러오기",
+        "body": "로컬 XML 파일에서 성경을 불러오거나 온라인으로 검색해 적절한 자료를 선택하고 추가하여 사용할 수 있어요. 이번 연습은 안전한 로컬 예제 XML을 사용해요."
+      },
+      "nav-media": {
+        "title": "미디어",
+        "body": "강조된 미디어 버튼을 클릭하세요."
+      },
+      "media-intro": {
+        "title": "미디어",
+        "body": "이미지와 비디오를 찾아 미리 보고 추가하세요. 여러 항목을 반복 슬라이드로 구성할 수 있습니다."
+      },
+      "nav-hymns": {
+        "title": "찬송가",
+        "body": "강조된 찬송가 버튼을 클릭하세요."
+      },
+      "hymns-intro": {
+        "title": "찬송가",
+        "body": "일반 모드에서는 각 절이 별도 슬라이드가 돼요. 부분 모드에서는 한 슬라이드에 여러 절이 들어가요. 예제는 부분 모드로 추가해요."
+      },
+      "nav-countdown": {
+        "title": "카운트다운",
+        "body": "강조된 카운트다운 버튼을 클릭하세요."
+      },
+      "countdown-intro": {
+        "title": "카운트다운",
+        "body": "분과 초를 선택하고 표시 모양을 준비한 다음 카운트다운을 추가하세요."
+      },
+      "nav-screen": {
+        "title": "화면",
+        "body": "강조된 화면 버튼을 클릭하세요."
+      },
+      "screen-intro": {
+        "title": "화면",
+        "body": "화면 캡처 소스를 선택하여 슬라이드에 추가하세요. 소스 선택은 출력 화면을 여는 것과 다릅니다."
+      },
+      "nav-calendar": {
+        "title": "캘린더",
+        "body": "강조된 캘린더 버튼을 클릭하세요."
+      },
+      "calendar-intro": {
+        "title": "캘린더",
+        "body": "캘린더에서 준비한 프레젠테이션을 예약하고 항목에서 다시 여세요."
+      },
+      "nav-editor": {
+        "title": "편집기",
+        "body": "강조된 편집기 버튼을 클릭하세요."
+      },
+      "editor-intro": {
+        "title": "편집기",
+        "body": "이미지는 오른쪽 패널이나 슬라이드 편집기에서 수정할 수 있어요. 슬라이드 편집기는 자세한 옵션과 동영상 편집 도구를 제공해요. 이번 예제에서는 두 가지 간단한 수정을 했어요."
+      },
+      "nav-settings": {
+        "title": "설정",
+        "body": "강조된 설정 버튼을 클릭하세요."
+      },
+      "settings-intro": {
+        "title": "설정",
+        "body": "언어와 앱 설정을 관리하세요. 도움말에서 페이지 안내와 간단한 둘러보기를 다시 열 수 있습니다."
+      },
+      "nav-save": {
+        "title": "프레젠테이션",
+        "body": "강조된 프레젠테이션 버튼을 클릭하세요."
+      },
+      "bible-source": {
+        "title": "소스 불러오기",
+        "body": "XML 가져오기를 클릭하세요. 소스가 이미 열려 있으면 관리 메뉴를 엽니다."
+      },
+      "bible-import": {
+        "title": "예제 XML 가져오기",
+        "body": "메뉴의 XML 가져오기를 클릭하세요. 안전한 예제 소스만 불러옵니다."
+      },
+      "bible-book": {
+        "title": "첫 책 선택",
+        "body": "강조된 첫 번째 책을 클릭하세요."
+      },
+      "bible-chapter": {
+        "title": "첫 장 선택",
+        "body": "강조된 1장 버튼을 클릭하세요."
+      },
+      "bible-verse": {
+        "title": "구절 선택",
+        "body": "강조된 예제 구절을 선택하세요."
+      },
+      "bible-add": {
+        "title": "구절 추가",
+        "body": "프레젠테이션에 추가를 클릭하세요. 구절 슬라이드가 생성될 때까지 기다립니다."
+      },
+      "media-menu": {
+        "title": "미디어 메뉴 열기",
+        "body": "강조된 미디어 추가 버튼을 클릭하세요."
+      },
+      "media-import": {
+        "title": "예제 이미지 불러오기",
+        "body": "이미지 선택을 클릭하세요. 실제 파일 선택 대신 안전한 예제 이미지를 사용합니다."
+      },
+      "media-add": {
+        "title": "이미지 추가",
+        "body": "예제 이미지 아래의 더하기 버튼을 클릭하세요. 이미지 슬라이드를 기다립니다."
+      },
+      "countdown-duration": {
+        "title": "시간 설정",
+        "body": "분을 2로 설정하세요. 이 필드만 편집할 수 있습니다."
+      },
+      "countdown-add": {
+        "title": "카운트다운 추가",
+        "body": "슬라이드에 추가를 클릭하세요. 타이머와 실시간 출력은 시작하지 않습니다."
+      },
+      "save": {
+        "title": "연습 저장",
+        "body": "라이브러리에 저장을 클릭하세요. 별도의 연습 프로필에만 저장되며 성공 결과를 기다립니다."
+      },
+      "add-result": {
+        "title": "슬라이드를 만들었어요",
+        "body": "새 슬라이드를 만들었어요. 프레젠테이션의 슬라이드는 이렇게 준비해요."
+      },
+      "delete-result": {
+        "title": "예제 슬라이드가 삭제되었어요",
+        "body": "선택한 예제 슬라이드를 삭제했어요. 다른 슬라이드는 그대로 보존돼요."
+      },
+      "bible-result": {
+        "title": "성경 구절을 추가했어요",
+        "body": "성경 구절을 프레젠테이션에 추가했어요. 준비된 슬라이드는 이렇게 보여요."
+      },
+      "media-result": {
+        "title": "이미지를 추가했어요",
+        "body": "이미지를 프레젠테이션에 추가했어요. 슬라이드에서는 이렇게 보여요."
+      },
+      "countdown-result": {
+        "title": "카운트다운이 준비되었어요",
+        "body": "2분 카운트다운 슬라이드를 준비했어요. 정적인 미리보기이며 타이머는 시작되지 않았어요."
+      },
+      "save-result": {
+        "title": "프레젠테이션을 저장했어요",
+        "body": "연습 라이브러리에 프레젠테이션을 저장했어요. 그곳에서 다시 열 수 있어요."
+      },
+      "hymns-add": {
+        "title": "예제 찬송 추가하기",
+        "body": "강조된 예제 찬송 행을 클릭하세요. 가사가 추가되면 결과를 함께 확인해요."
+      },
+      "hymns-result": {
+        "title": "찬송을 추가했어요",
+        "body": "예제 찬송의 가사를 프레젠테이션에 추가했어요. 준비된 찬송 슬라이드는 이렇게 보여요."
+      },
+      "image-select": {
+        "title": "예제 이미지 선택",
+        "body": "강조된 이미지 슬라이드를 클릭하세요. 오른쪽 편집기에서 두 가지 간단한 수정을 해요."
+      },
+      "image-fit": {
+        "title": "이미지 전체 맞추기",
+        "body": "오른쪽 편집기에서 맞추기를 클릭해 이미지 전체가 프레임 안에 보이게 하세요."
+      },
+      "image-grayscale": {
+        "title": "회색조 적용",
+        "body": "회색조 슬라이더를 100%로 설정하세요. 슬라이더에 초점을 맞추고 End 키를 눌러도 돼요."
+      },
+      "image-edit-result": {
+        "title": "이미지를 편집했어요",
+        "body": "이미지 맞춤을 변경하고 회색조를 적용했어요. 편집된 이미지는 이렇게 보여요."
+      },
+      "hymns-parts": {
+        "title": "찬송의 부분",
+        "body": "오른쪽 패널에 찬송의 부분이 표시돼요. 원하는 부분의 번호 버튼을 클릭하면 그 부분으로 이동해요. 여기서는 설명만 하므로 클릭할 필요는 없어요."
+      },
+      "reorder": {
+        "title": "슬라이드 순서 변경",
+        "body": "강조된 예제 슬라이드를 다른 강조된 슬라이드 위로 끌어 놓으세요. 실제 순서가 바뀌면 이 연습이 끝나요."
+      },
+      "hymns-font": {
+        "title": "찬송 글자 크기 변경",
+        "body": "오른쪽 글자 크기 입력란에서 선택한 찬송의 글자 크기를 바꿀 수 있어요. 숫자가 클수록 글자가 커져요. 여기서는 설명만 하므로 변경할 필요는 없어요."
+      },
+      "image-tools": {
+        "title": "두 가지 편집 방법",
+        "body": "이미지는 오른쪽 패널 또는 강조된 연필 버튼으로 여는 슬라이드 편집기에서 수정할 수 있어요. 슬라이드 편집기는 자세한 옵션과 동영상 편집도 제공해요. 예제는 맞춤과 회색조만 변경해요."
+      }
+    },
+    "mapTitle": "섹션 지도",
+    "onlyIntroducing": "이 섹션은 소개만 합니다. 실습 과제는 없습니다.",
+    "openSection": "강조된 {{section}} 버튼을 클릭하세요.",
+    "pause": "일시 중지",
+    "close": "연습 닫기",
+    "chapters": "섹션으로 이동",
+    "restartConfirm": "새 연습을 시작할까요?",
+    "restartDetail": "현재 프레젠테이션과 진행 상황은 보관됩니다. 새 연습은 빈 프레젠테이션과 초기 진행 상태로 시작합니다. 언어와 라이브러리는 유지됩니다.",
+    "result": {
+      "countChange": "슬라이드 수: {{before}} → {{after}}",
+      "savedCount": "연습 라이브러리 · 슬라이드 {{count}}개",
+      "deletedPreview": "삭제된 예제 — 이전 모습",
+      "remaining": "남은 슬라이드: {{count}}개",
+      "emptyPresentation": "현재 프레젠테이션에 슬라이드가 없어요.",
+      "imagePreview": "추가한 이미지",
+      "countdownPreview": "정적 카운트다운 미리보기",
+      "unavailableTitle": "결과를 표시할 수 없어요",
+      "unavailable": "확인된 결과를 읽을 수 없어요. 다시 시도하세요. 작업을 반복할 필요는 없어요."
+    }
   }
 }

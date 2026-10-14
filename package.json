@@ -1,6 +1,6 @@
 {
   "name": "worship-presentation-assistant",
-  "version": "1.4.13",
+  "version": "1.4.14",
   "main": "dist-electron/main.js",
   "description": "Worship Presentation Assistant - Simple Worship Presentation App",
   "author": "IPCA",
@@ -20,7 +20,12 @@
     "test:canvas": "tsx --test src/renderer/canvasSource.test.ts",
     "test:editor": "tsx --test src/renderer/videoOverlays.test.ts src/renderer/editor/videoTimeline.test.ts src/renderer/videoPlayback.test.ts src/renderer/editor/videoDraft.test.ts src/main/mediaPosterSource.test.ts src/renderer/editor/slideCapabilities.test.ts src/renderer/components/mediaPosterQueue.test.ts src/renderer/editor/editorSelection.test.ts src/renderer/editor/slideDraft.test.ts src/renderer/editor/elementDrag.test.ts src/renderer/editor/useEditorDeck.test.ts src/renderer/editor/editorDeckCommit.test.ts src/renderer/editor/editorWorkspace.test.ts src/renderer/slidePreviewGeometry.test.ts src/renderer/editor/canvasGeometry.test.ts src/renderer/editor/pointerSession.test.ts src/renderer/editor/colors.test.ts src/renderer/imageGeometry.test.ts src/renderer/editor/imageLayout.test.ts",
     "test:zoom": "tsx --test src/renderer/__tests__/slideGridZoom.test.ts",
-    "smoke:worker": "electron perf/worker-smoke.cjs"
+    "smoke:worker": "electron perf/worker-smoke.cjs",
+    "test:tour": "tsx --test src/renderer/components/Tour/tour.test.ts src/main/tourProfile.test.ts && node --test scripts/check-tour-capture.test.cjs && tsx --test src/main/launchPolicy.test.ts src/main/practiceProgress.test.ts && tsx --test src/main/practiceWorkspace.test.ts src/main/practiceResult.test.ts",
+    "test:tour:e2e": "playwright test",
+    "lint:tour": "eslint \"src/renderer/components/Tour/**/*.{ts,tsx}\" src/renderer/state/useTourStore.ts src/main/tourProfile.ts src/main/tourProfile.test.ts src/main/isolatedLaunch.ts --max-warnings 0 scripts/check-tour-capture.cjs scripts/check-tour-capture.test.cjs tests/tour/packaged.spec.cjs playwright.packaged.config.cjs src/main/launchPolicy.ts src/main/launchPolicy.test.ts src/main/practicePolicy.ts src/main/practiceProgress.ts src/main/practiceProgress.test.ts src/shared/practice.ts src/renderer/components/PracticePanel.tsx src/renderer/hooks/usePractice.ts src/main/practiceSession.ts src/main/practiceWorkspace.ts src/main/practiceWorkspace.test.ts src/renderer/components/PracticeRunner.tsx src/renderer/components/PracticeSpotlight.tsx src/renderer/components/Tour/guideBoundary.ts tests/tour/guide-spike.tsx tests/tour/guided.spec.cjs tests/tour/guide-flow.cjs src/renderer/ScriptureBrowser.tsx src/renderer/MediaLoopTab.tsx src/renderer/CountdownTab.tsx src/renderer/PresentationsTab.tsx src/main/practiceReset.ts src/shared/practiceMerge.ts src/renderer/components/SettingsTab.tsx src/renderer/components/CheatsheetModal.tsx src/renderer/components/PracticeResult.tsx src/main/practiceResult.test.ts",
+    "test:tour:packaged": "playwright test --config playwright.packaged.config.cjs",
+    "test:tour:isolation": "playwright test --config playwright.packaged.config.cjs --grep \"practice gate\""
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -29,9 +34,11 @@
     "@napi-rs/canvas": "^1.0.8",
     "@soniox/node": "^2.3.0",
     "adm-zip": "^0.6.0",
+    "bgutils-js": "^4.0.3",
     "bufferutil": "^4.1.0",
     "clsx": "^2.1.0",
     "electron-updater": "6.8.9",
+    "googlevideo": "^4.1.1",
     "i18next": "^26.3.1",
     "i18next-browser-languagedetector": "^8.2.1",
     "lucide-react": "^0.363.0",
@@ -43,14 +50,17 @@
     "react-colorful": "^5.6.1",
     "react-dom": "^18.2.0",
     "react-i18next": "^17.0.8",
+    "react-joyride": "3.2.0",
     "sharp": "^0.35.4",
     "tailwind-merge": "^2.2.2",
     "uisfx": "^0.4.0",
     "utf-8-validate": "^6.0.6",
     "ws": "^8.13.0",
+    "youtubei.js": "^18.1.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.0",
     "@types/adm-zip": "^0.5.8",
     "@types/node": "^20.19.39",
     "@types/qrcode": "^1.5.6",

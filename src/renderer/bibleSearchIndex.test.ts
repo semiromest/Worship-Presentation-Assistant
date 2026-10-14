@@ -1,3 +1,4 @@
+import { getChapterReading } from './scriptureReading';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { BibleData } from './bibleParser';
@@ -28,13 +29,25 @@ test('Bible search indexer yields between bounded chunks and keeps unique verse 
   const indexer = createBibleSearchIndexer(bible, (text) => text.toLowerCase().split(/\s+/));
 
   assert.equal(indexer.step(1), false);
-  assert.deepEqual(indexer.index.get('grace'), [{ bookIndex: 0, chapterIndex: 0, verseIndex: 0 }]);
+  assert.deepEqual(indexer.index.get('grace'), [
+    {
+      bookIndex: 0,
+      chapterIndex: 0,
+      entryId: getChapterReading(bible.books[0], bible.books[0].chapters[0]).available[0].id,
+    },
+  ]);
 
   assert.equal(indexer.step(1), false);
   assert.equal(indexer.index.get('grace')?.length, 2);
 
   assert.equal(indexer.step(10), true);
-  assert.deepEqual(indexer.index.get('hope'), [{ bookIndex: 0, chapterIndex: 0, verseIndex: 2 }]);
+  assert.deepEqual(indexer.index.get('hope'), [
+    {
+      bookIndex: 0,
+      chapterIndex: 0,
+      entryId: getChapterReading(bible.books[0], bible.books[0].chapters[0]).available[2].id,
+    },
+  ]);
 });
 
 test('31,000 verses are indexed in batches no larger than 160 verses', () => {
@@ -72,5 +85,11 @@ test('31,000 verses are indexed in batches no larger than 160 verses', () => {
   assert.equal(steps, Math.ceil(31_000 / 160));
   assert.ok(longestBatchMs < 50, `expected every indexing batch below 50 ms, saw ${longestBatchMs.toFixed(1)} ms`);
   assert.equal(indexer.index.get('shared')?.length, 31_000);
-  assert.deepEqual(indexer.index.get('unique30999'), [{ bookIndex: 0, chapterIndex: 0, verseIndex: 30_999 }]);
+  assert.deepEqual(indexer.index.get('unique30999'), [
+    {
+      bookIndex: 0,
+      chapterIndex: 0,
+      entryId: getChapterReading(syntheticBible.books[0], syntheticBible.books[0].chapters[0]).available[30_999].id,
+    },
+  ]);
 });

@@ -1,3 +1,5 @@
+import { usePractice } from '../hooks/usePractice';
+import { markTourReady } from '../state/useTourStore';
 import { useCallback, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
 import { useStore } from '../state/useStore';
@@ -55,6 +57,7 @@ function buildSnapshot(s: SttState): ShareSnapshot {
  * control window runs this hook; the projector window is a no-op.
  */
 export function useShare(): { startShare: () => Promise<void>; stopShare: () => Promise<void> } {
+  const practice = usePractice();
   const setShareActive = useStore((s) => s.setShareActive);
   const setShareUrl = useStore((s) => s.setShareUrl);
   const setShareQr = useStore((s) => s.setShareQr);
@@ -70,11 +73,11 @@ export function useShare(): { startShare: () => Promise<void>; stopShare: () => 
       activeRef.current = s.shareActive;
     });
     return unsub;
-  }, []);
+  }, [practice]);
 
   // STT state → normalized snapshot → main process.
   useEffect(() => {
-    if (IS_PROJECTOR_MODE) return;
+    if (IS_PROJECTOR_MODE || practice) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const publish = () => {
       if (!activeRef.current || timer) return;
@@ -91,7 +94,7 @@ export function useShare(): { startShare: () => Promise<void>; stopShare: () => 
 
   // Main → renderer events: client count, network change, status re-hydration.
   useEffect(() => {
-    if (IS_PROJECTOR_MODE) return;
+    if (IS_PROJECTOR_MODE || practice) return;
 
     const offCount = window.electronAPI?.onShareClientCount?.((count) => {
       setShareClientCount(count);
@@ -107,20 +110,22 @@ export function useShare(): { startShare: () => Promise<void>; stopShare: () => 
 
     // Re-hydrate after a control-window reload while a broadcast is running.
     void window.electronAPI?.shareGetStatus?.().then((status) => {
-      if (!status?.active) return;
+      if (!status) return;
+      if (!status.active) { markTourReady('share'); return; }
       setShareActive(true);
       setShareUrl(status.url);
       setShareClientCount(status.clientCount);
       QRCode.toDataURL(status.url)
         .then(setShareQr)
         .catch(() => setShareQr(null));
+      markTourReady('share');
     });
 
     return () => {
       offCount?.();
       offNetwork?.();
     };
-  }, [setShareActive, setShareUrl, setShareQr, setShareClientCount, setShareNetworkChanged]);
+  }, [practice, setShareActive, setShareUrl, setShareQr, setShareClientCount, setShareNetworkChanged]);
 
   const startShare = useCallback(async () => {
     try {

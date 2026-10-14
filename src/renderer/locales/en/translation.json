@@ -15,9 +15,19 @@
     "sidebarLabel": "Main Navigation"
   },
   "common": {
+    "scriptureMerged": "Combined verses",
+    "scriptureMergedInfo": "Some verses are combined in this translation.",
+    "scriptureIssue_empty": "No separate text is provided in this source.",
+    "scriptureIssue_unsupported": "This numbering is not supported yet.",
+    "scriptureIssue_conflict": "Source records overlap in this verse range. Cannot send.",
+    "scriptureIssuesInfo": "This chapter contains unavailable or unresolved records.",
+    "scriptureInvalidRequest": "Enter a valid, complete verse range.",
+    "scriptureIncomplete": "Request incomplete. Missing or conflicting verses: {{numbers}}.",
+    "scriptureSelectFound": "Select only available text",
+    "scriptureExpanded": "{{requested}} is provided together as {{resolved}} in this translation.",
+    "scriptureReadingSummary": "{{verses}} verses · {{units}} text units · {{slides}} slides",
     "videoSettingsTab": "Video",
     "videoTextsTab": "Text",
-
     "videoTextLayers": "Video text layers",
     "videoAddText": "Add text",
     "videoTextHint": "Add text, then drag and resize it in the preview.",
@@ -35,7 +45,6 @@
     "videoTextWidth": "Width",
     "videoTextHeight": "Height",
     "videoTextOutsideRange": "Selected text is dimmed for editing; it is hidden in the output at this time.",
-
     "videoOriginalSafe": "Original preserved",
     "videoPlay": "Play",
     "videoPause": "Pause",
@@ -60,7 +69,6 @@
     "videoAudio": "Audio",
     "videoVolume": "Volume",
     "videoSourceInfo": "Source information",
-
     "videoEditorTitle": "Video Editing",
     "videoSeconds": "seconds",
     "videoStart": "Start",
@@ -71,7 +79,6 @@
     "videoLoadFailed": "Video could not be loaded. Timing settings are preserved.",
     "videoDurationPending": "Waiting for video duration.",
     "videoNonDestructive": "Video and text settings are saved with the slide. The original video stays unchanged.",
-
     "editorPreview": "Preview",
     "editorPreviewFailed": "Preview unavailable",
     "editorPreviewLoading": "Preparing preview",
@@ -84,7 +91,6 @@
     "editorNoEditableSlides": "No editable slides.",
     "editorShowAll": "Show all",
     "editorCaptionsSample": "Sample captions",
-
     "editorPendingDraft": "Unsaved draft",
     "editorEmpty": "Add a slide to the presentation to start editing.",
     "editorConflictTitle": "Conflicting slide changes",
@@ -92,7 +98,6 @@
     "editorApplyDraft": "Apply draft",
     "editorUseCurrent": "Use presentation version",
     "editorBeforeReplace": "Save your editor changes to the presentation library or discard them before switching presentations?",
-
     "newSlide": "New Slide",
     "newSlideContent": "New Slide Content",
     "newPresentation": "New Presentation",
@@ -1096,6 +1101,9 @@
     "backgroundMusicEmpty": "No supported music found in this folder.",
     "backgroundMusicMissing": "Music folder not found.",
     "backgroundMusicPlayError": "Could not play the music.",
+    "backgroundMusicLocal": "Local",
+    "youtubeLoading": "Preparing YouTube audio…",
+    "youtubeNoResults": "No results found.",
     "youtubeSearch": "Search YouTube",
     "youtubeSearchPlaceholder": "Search YouTube music...",
     "youtubeSearchError": "YouTube search failed.",
@@ -1116,7 +1124,72 @@
     "sonioxTargetLanguageHint": "Spoken text is translated into this language.",
     "sonioxSttLanguage": "Default spoken language (STT)",
     "sonioxSttAuto": "Auto-detect",
-    "sonioxSttLanguageHint": "With auto-detect the language is detected from speech; picking a specific language biases recognition toward it."
+    "sonioxSttLanguageHint": "With auto-detect the language is detected from speech; picking a specific language biases recognition toward it.",
+    "navigation": {
+      "search": "Search settings",
+      "clearSearch": "Clear search",
+      "category": "Settings category",
+      "resultsTitle": "Search results",
+      "noResults": "No matching settings found. Try another word.",
+      "resultCount": "{{count}} settings found.",
+      "clearLiveSaves": "Clear automatic saves",
+      "descriptions": {
+        "hymn-size": "Adjust the hymn author text size.",
+        "watermark": "Upload a logo and choose its position, size, opacity and content types.",
+        "live-save": "Enable or disable automatic presentation saves.",
+        "retention": "Choose how long automatic saves are kept.",
+        "clear-live-saves": "Clear automatic saves only; regular saved presentations are preserved."
+      },
+      "categories": {
+        "general": {
+          "title": "General",
+          "description": "Adjust language, sound and interface preferences."
+        },
+        "presentation": {
+          "title": "Presentation",
+          "description": "Adjust presentation behavior and operator tools."
+        },
+        "appearance": {
+          "title": "Hymns and logo",
+          "description": "Adjust hymn author appearance and the logo watermark."
+        },
+        "captions": {
+          "title": "Captions and translation",
+          "description": "Adjust speech recognition and translation preferences."
+        },
+        "autosave": {
+          "title": "Automatic saves",
+          "description": "Manage automatic saves and their retention period."
+        },
+        "updates": {
+          "title": "Updates",
+          "description": "Review new versions and update status."
+        },
+        "learning": {
+          "title": "How to Use?",
+          "description": ""
+        }
+      },
+      "keywords": {
+        "language": "interface language english",
+        "sound": "sound effects notification click",
+        "motion": "motion animation reduced",
+        "auto-live": "automatic live output transition",
+        "sections": "sections service order organization",
+        "notes": "operator notes comments",
+        "hymn-position": "hymn author position alignment",
+        "hymn-size": "hymn author font text size",
+        "watermark": "logo watermark image opacity transparency",
+        "stt-key": "soniox api key captions speech",
+        "spoken-language": "spoken detection recognition language",
+        "target-language": "translation target language",
+        "live-save": "live save automatic backup autosave",
+        "retention": "retention period days backup",
+        "clear-live-saves": "automatic save clear delete backup",
+        "updates": "updates version download",
+        "learn": "practice guide learn help tutorial"
+      }
+    }
   },
   "stage": {
     "next": "Up Next",
@@ -1244,5 +1317,395 @@
     "off": "Off",
     "saveOff": "Autosave off",
     "sessionError": "Live position could not be saved"
+  },
+  "tour": {
+    "mapTitle": "Discover the app",
+    "helpTitle": "How to Use?",
+    "intro": "Choose content, prepare slides, present on screen.",
+    "welcomeTitle": "Welcome",
+    "start": "Start short tour",
+    "later": "Not now",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "done": "Finish",
+    "progress": "{{current}} / {{total}}",
+    "loading": "Preparing the tour…",
+    "stillLoading": "The workspace is still loading. You can close the tour at any time.",
+    "failed": "The tour target could not be prepared. Please try again later.",
+    "editorDescription": "Edit slide design and layout in detail.",
+    "helpDescription": "Press ? for keyboard shortcuts.",
+    "blocked": {
+      "output-active": "The short tour is unavailable while an output is open. You can use the app map.",
+      "session-active": "Finish the active sharing or captions session before starting the tour.",
+      "editor-active": "Leave the editor and finish pending edits first.",
+      "modal-open": "Close the other dialog first.",
+      "interaction-active": "Finish the drag or open menu interaction first.",
+      "not-ready": "App status is loading. Please try again shortly."
+    },
+    "steps": {
+      "navigation": {
+        "title": "Find your way around",
+        "body": "The sidebar brings presentations and content tools together. Manage prepared files in Presentations."
+      },
+      "slides": {
+        "title": "Prepare your slides",
+        "body": "Add slides, arrange their order, and prepare their appearance with the formatting tools."
+      },
+      "content": {
+        "title": "Add content to your presentation",
+        "body": "Find content in the Bible section and add it to your presentation. Media, hymns and other content tools are also in the sidebar."
+      },
+      "output": {
+        "title": "Manage screen output",
+        "body": "Show prepared content on a screen output. Review the destination screen and preparation checks before presenting."
+      },
+      "help": {
+        "title": "Return to help",
+        "body": "Change the language, open the app map or restart this tour from Settings."
+      }
+    },
+    "pageIntroductions": "Page introductions",
+    "suggestTitle": "Would you like to explore this page?",
+    "learnPage": "Explore page",
+    "disableSuggestions": "Turn off page suggestions",
+    "suggestionsDisabled": "Page suggestions are off",
+    "pages": {
+      "presentations": "Open presentations from files, save them, or manage prepared presentations in the library.",
+      "slides": "Add slides, select and reorder them, then edit content and appearance in the right panel.",
+      "bible": "Choose a Bible source or import an XML file. Select a book, chapter and verses to add content to your presentation.",
+      "media": "Find and preview images and videos, then add them to your presentation. Combine several items into a loop slide.",
+      "hymns": "Import a hymn archive or find a hymn, then turn its lyrics into presentation slides.",
+      "countdown": "Choose minutes and seconds, prepare the appearance, and add a countdown to your presentation.",
+      "screen": "Choose a screen capture source and add it as a slide. Selecting a source is different from opening a projection output.",
+      "calendar": "Schedule prepared presentations on the calendar and reopen them from their entries.",
+      "editor": "Arrange slide elements on the design canvas. Apply pending draft changes with the existing save controls.",
+      "settings": "Manage language and app preferences. Reopen page introductions and the short tour from Help."
+    }
+  },
+  "practice": {
+    "banner": "Practice — separate profile; live output disabled",
+    "title": "Practice progress",
+    "preflight": "Technical preflight only. Tasks will be delivered separately.",
+    "counts": "Completed: {{completed}} · Skipped: {{skipped}} · Remaining: {{remaining}}",
+    "notStarted": "Not started",
+    "inProgress": "In progress / paused",
+    "completed": "Completed",
+    "skipped": "Skipped",
+    "pending": "Later delivery",
+    "phase3": "Phase 3 — read-only for now",
+    "unreadable": "Progress could not be read; last valid state retained.",
+    "launchError": "Practice could not be opened.",
+    "open": "Open practice",
+    "resume": "Resume practice",
+    "tasksTitle": "Practice tasks",
+    "choose": "Choose a task and use the application tools to perform it.",
+    "retained": "Your slides are retained; exiting never cleans them up automatically.",
+    "go": "Go to task",
+    "pause": "Pause",
+    "skip": "Skip",
+    "available": "Available",
+    "deckName": "Practice presentation",
+    "demoSlide": "Practice: deletion sample",
+    "deleteWarning": "Remove only the selected deletion sample. If you changed it, keep it and restart the task.",
+    "taskError": "The operation could not be recorded. Retry or skip the task.",
+    "exercise": {
+      "slide-add": {
+        "title": "Add a slide",
+        "body": "Add a new text slide in Slides."
+      },
+      "slide-delete": {
+        "title": "Delete the sample slide",
+        "body": "Remove the selected deletion sample in Slides. Keep your other slides."
+      },
+      "media": {
+        "title": "Add media",
+        "body": "Import an image in Media. The practice image is supplied; use its card to add it to the presentation."
+      },
+      "bible": {
+        "title": "Import Bible and add a verse",
+        "body": "Use local import in Bible. Select the sample Genesis 1:1 and add it to the presentation."
+      },
+      "countdown": {
+        "title": "Add a countdown",
+        "body": "Choose a duration greater than zero in Countdown and add it to the presentation."
+      },
+      "presentations": {
+        "title": "Save to library",
+        "body": "Save the practice presentation to the library in Presentations. No external file is written."
+      },
+      "hymns": {
+        "title": "Hymns",
+        "body": "Click the highlighted sample hymn row. Once its lyrics are added, we will inspect the result."
+      },
+      "image-edit": {
+        "title": "You edited the image",
+        "body": "Click the highlighted image slide. We will make two simple changes in the editor panel on the right."
+      },
+      "slide-reorder": {
+        "title": "Reorder the slides",
+        "body": "Drag the highlighted sample slide onto the other highlighted slide. This single exercise finishes when their positions actually change."
+      }
+    }
+  },
+  "guide": {
+    "title": "Learn step by step",
+    "description": "Learn by performing actions in a separate practice window.",
+    "pilot": "The guide covers ten sections and six exercises.",
+    "open": "Learn step by step",
+    "begin": "Start",
+    "resume": "Continue where you left off",
+    "next": "Continue",
+    "exit": "Exit and pause",
+    "restart": "Start over",
+    "progress": "Step {{current}} / {{total}}",
+    "waiting": "The target is loading. Wait or exit at any time.",
+    "unavailable": "This target is currently unavailable.",
+    "stuck": "Stuck? Show the target again to retry, or skip this step. A skipped step is not counted as completed.",
+    "retry": "Show the target again",
+    "skip": "Skip this step",
+    "advanced": "Advanced help",
+    "jumpWarning": "Continue from the selected section. Unperformed actions bypassed by moving forward are skipped, not completed.",
+    "error": "Progress could not be saved or the guide could not load. Retry; success has not been recorded.",
+    "finished": "You completed the guide.",
+    "finishedSkipped": "You reached the end. Skipped steps are not completed.",
+    "savedStep": "Saved step: {{step}}",
+    "skippedCount": "Skipped steps: {{count}}",
+    "shortDescription": "Quickly discover the main work areas.",
+    "mapDescription": "Explore sections and shortcuts.",
+    "shortTitle": "Quick tour",
+    "steps": {
+      "welcome": {
+        "title": "Let’s learn together",
+        "body": "You will work in a separate practice profile. Live output is disabled and your real presentation stays unchanged. Follow the highlighted actions in order."
+      },
+      "presentations": {
+        "title": "Presentations",
+        "body": "Manage your presentations here. We are only introducing this section; next you will create a slide with the real tools."
+      },
+      "sidebar": {
+        "title": "Section navigation",
+        "body": "The buttons on the left open the application sections. We will highlight the area you need at each step."
+      },
+      "nav-slides": {
+        "title": "Open Slides",
+        "body": "Click the highlighted Slides button."
+      },
+      "add": {
+        "title": "Add a new slide",
+        "body": "Click the highlighted Add New Slide button. The guide advances when the slide exists."
+      },
+      "select": {
+        "title": "Select the sample slide",
+        "body": "Click the highlighted sample slide. Select only this sample; your added slide will be retained."
+      },
+      "delete": {
+        "title": "Delete the sample",
+        "body": "Delete the selected sample with Delete or the highlighted trash icon on the right. Either method is accepted; the other slides are retained."
+      },
+      "done": {
+        "title": "Finished",
+        "body": "You reached the end of the guide. Practice changes are retained on exit."
+      },
+      "nav-bible": {
+        "title": "Bible",
+        "body": "Click the highlighted Bible button."
+      },
+      "bible-intro": {
+        "title": "Load Bible sources",
+        "body": "Load a Bible from a local XML file, or search online and select a suitable source to add and use it. This practice uses a safe local sample XML."
+      },
+      "nav-media": {
+        "title": "Media",
+        "body": "Click the highlighted Media button."
+      },
+      "media-intro": {
+        "title": "Media",
+        "body": "Find and preview images and videos, then add them to your presentation. Combine several items into a loop slide."
+      },
+      "nav-hymns": {
+        "title": "Hymns",
+        "body": "Click the highlighted Hymns button."
+      },
+      "hymns-intro": {
+        "title": "Hymns",
+        "body": "In normal mode each stanza becomes a separate slide. In parts mode the stanzas are parts of one slide. We will add our sample in parts mode."
+      },
+      "nav-countdown": {
+        "title": "Countdown",
+        "body": "Click the highlighted Countdown button."
+      },
+      "countdown-intro": {
+        "title": "Countdown",
+        "body": "Choose minutes and seconds, prepare the appearance, and add a countdown to your presentation."
+      },
+      "nav-screen": {
+        "title": "Screen",
+        "body": "Click the highlighted Screen button."
+      },
+      "screen-intro": {
+        "title": "Screen",
+        "body": "Choose a screen capture source and add it as a slide. Selecting a source is different from opening a projection output."
+      },
+      "nav-calendar": {
+        "title": "Calendar",
+        "body": "Click the highlighted Calendar button."
+      },
+      "calendar-intro": {
+        "title": "Calendar",
+        "body": "Schedule prepared presentations on the calendar and reopen them from their entries."
+      },
+      "nav-editor": {
+        "title": "Editor",
+        "body": "Click the highlighted Editor button."
+      },
+      "editor-intro": {
+        "title": "Editor",
+        "body": "Images can be edited in the right panel or the Slide Editor. The Slide Editor offers more detailed options and video editing tools. We made two simple image edits in our example."
+      },
+      "nav-settings": {
+        "title": "Settings",
+        "body": "Click the highlighted Settings button."
+      },
+      "settings-intro": {
+        "title": "Settings",
+        "body": "Manage language and app preferences. Reopen page introductions and the short tour from Help."
+      },
+      "nav-save": {
+        "title": "Presentations",
+        "body": "Click the highlighted Presentations button."
+      },
+      "bible-source": {
+        "title": "Load a source",
+        "body": "Click Import XML. If a source is already open, we will open its management menu."
+      },
+      "bible-import": {
+        "title": "Import the sample XML",
+        "body": "Click Import XML in the menu. Only the safe sample source is loaded."
+      },
+      "bible-book": {
+        "title": "Choose the first book",
+        "body": "Click the highlighted first book."
+      },
+      "bible-chapter": {
+        "title": "Choose chapter one",
+        "body": "Click the highlighted Chapter 1 button."
+      },
+      "bible-verse": {
+        "title": "Select the verse",
+        "body": "Select the highlighted sample verse."
+      },
+      "bible-add": {
+        "title": "Add the verse",
+        "body": "Click Add to presentation. We will wait for the verse slide to exist."
+      },
+      "media-menu": {
+        "title": "Open the media menu",
+        "body": "Click the highlighted Add Media button."
+      },
+      "media-import": {
+        "title": "Load the sample image",
+        "body": "Click Select Images. A safe sample image is used instead of a real file picker."
+      },
+      "media-add": {
+        "title": "Add the image",
+        "body": "Click the plus button below the sample image. We will wait for the image slide."
+      },
+      "countdown-duration": {
+        "title": "Set the duration",
+        "body": "Set Minutes to 2. Only this field can be edited."
+      },
+      "countdown-add": {
+        "title": "Add the countdown",
+        "body": "Click Add to Slide. We will not start the timer or live output."
+      },
+      "save": {
+        "title": "Save the practice presentation",
+        "body": "Click Save to Library. Saving uses only the separate practice profile. We will wait for a successful result."
+      },
+      "add-result": {
+        "title": "You created a slide",
+        "body": "You created a new slide. This is how slides are prepared in your presentation."
+      },
+      "delete-result": {
+        "title": "The sample slide was deleted",
+        "body": "The selected sample was removed. Your other slides are retained."
+      },
+      "bible-result": {
+        "title": "You added the verse",
+        "body": "You added the verse to your presentation. This is what the prepared slide looks like."
+      },
+      "media-result": {
+        "title": "You added the image",
+        "body": "You added the image to your presentation. This is how it looks on the slide."
+      },
+      "countdown-result": {
+        "title": "Your countdown is ready",
+        "body": "You prepared a two-minute countdown slide. This is a static preview; the timer has not started."
+      },
+      "save-result": {
+        "title": "Your presentation was saved",
+        "body": "You saved your presentation in the practice library. You can reopen it there."
+      },
+      "hymns-add": {
+        "title": "Add the sample hymn",
+        "body": "Click the highlighted sample hymn row. Once its lyrics are added, we will inspect the result."
+      },
+      "hymns-result": {
+        "title": "You added the hymn",
+        "body": "You added the sample hymn lyrics to your presentation. This is what the prepared hymn slide looks like."
+      },
+      "image-select": {
+        "title": "Select the sample image",
+        "body": "Click the highlighted image slide. We will make two simple changes in the editor panel on the right."
+      },
+      "image-fit": {
+        "title": "Fit the whole image",
+        "body": "Click Contain in the editor on the right so the whole image fits inside its frame."
+      },
+      "image-grayscale": {
+        "title": "Apply grayscale",
+        "body": "Set the Grayscale slider to 100%. You can focus the slider and press End."
+      },
+      "image-edit-result": {
+        "title": "You edited the image",
+        "body": "You changed the image fit and applied grayscale. This is what the edited image looks like."
+      },
+      "hymns-parts": {
+        "title": "The hymn parts",
+        "body": "The panel on the right shows the hymn parts. Click the numbered button of the desired part to switch to it. This is an explanation only; you do not need to click a part."
+      },
+      "reorder": {
+        "title": "Reorder the slides",
+        "body": "Drag the highlighted sample slide onto the other highlighted slide. This single exercise finishes when their positions actually change."
+      },
+      "hymns-font": {
+        "title": "Change the hymn font size",
+        "body": "Change the selected hymn font size in the Font size field on the right. Larger numbers make the text larger; smaller numbers make it smaller. This is an explanation only; no change is required."
+      },
+      "image-tools": {
+        "title": "Two ways to edit",
+        "body": "Images can be edited in the right panel or in the Slide Editor opened by the highlighted pencil button. The Slide Editor offers more detailed options and also supports video editing. We will only change fit and grayscale on this sample."
+      }
+    },
+    "mapTitle": "Section map",
+    "onlyIntroducing": "We are only introducing this section; there is no practical task.",
+    "openSection": "Click the highlighted {{section}} button.",
+    "pause": "Pause",
+    "close": "Close practice",
+    "chapters": "Go to section",
+    "restartConfirm": "Start a new practice?",
+    "restartDetail": "Your current presentation and progress will be archived. The new practice starts with a clean presentation and no progress. Your language and library remain.",
+    "result": {
+      "countChange": "Slide count: {{before}} → {{after}}",
+      "savedCount": "Practice library · {{count}} slides",
+      "deletedPreview": "Deleted sample — its previous appearance",
+      "remaining": "Remaining slides: {{count}}",
+      "emptyPresentation": "There are currently no slides in the presentation.",
+      "imagePreview": "Added image",
+      "countdownPreview": "Static countdown preview",
+      "unavailableTitle": "The result is unavailable",
+      "unavailable": "The verified result could not be read. Retry; you do not need to repeat the operation."
+    }
   }
 }

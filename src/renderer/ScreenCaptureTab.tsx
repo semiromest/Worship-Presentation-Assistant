@@ -1,3 +1,4 @@
+import { usePractice } from './hooks/usePractice';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Monitor, RefreshCw, Plus, Play, Square } from 'lucide-react';
@@ -440,7 +441,7 @@ function ControlButtons({
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
-export default function ScreenCaptureTab({ onAddScreenToPresentation }: ScreenCaptureTabProps) {
+function ActiveScreenCaptureTab({ onAddScreenToPresentation }: ScreenCaptureTabProps) {
   const { t } = useTranslation();
   const { sources, isLoading, error, fetchSources } = useScreenSources();
   const { selectedId, selectedSource, selectSource, clearSelection } = useSourceSelection(sources);
@@ -510,4 +511,10 @@ export default function ScreenCaptureTab({ onAddScreenToPresentation }: ScreenCa
       />
     </div>
   );
+}
+
+export default function ScreenCaptureTab(props: ScreenCaptureTabProps) {
+  const practice = usePractice();
+  const { t } = useTranslation();
+  return practice ? <p className="p-6" data-testid="practice-screen-explanation">{t('practice.phase3')}</p> : <ActiveScreenCaptureTab {...props} />;
 }

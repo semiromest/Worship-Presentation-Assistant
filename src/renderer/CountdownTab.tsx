@@ -1,3 +1,4 @@
+import { usePractice } from './hooks/usePractice';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Play, Pause, RotateCcw, PlusSquare } from 'lucide-react';
@@ -48,8 +49,12 @@ const clamp = (value: number, min: number, max: number) =>
 
 export default function CountdownTab({ onAddCountdownToPresentation }: CountdownTabProps) {
   const { t } = useTranslation();
+  const practice = usePractice();
   const [minutes, setMinutes] = useState(5);
   const [seconds, setSeconds] = useState(0);
+  useEffect(() => { if (!practice) return; let live=true;
+    void window.electronAPI.readPracticeWorkspace(null).then(value => { if (live && ['countdown-duration','countdown-add'].includes(value.guide.step) && value.guide.ui?.minutes === 2) setMinutes(2); }).catch(() => {});
+    return () => { live=false; }; }, [practice]);
   const [timeLeft, setTimeLeft] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
@@ -133,7 +138,7 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
   const displayTime = hasStarted ? timeLeft : minutes * 60 + seconds;
 
   return (
-    <div className="p-6 space-y-6">
+    <div data-guide-state={JSON.stringify({ minutes })} className="p-6 space-y-6">
       <h2 className="text-2xl font-bold text-white">{t('common.countdownTitle')}</h2>
 
       <div className="bg-white/10 rounded-lg p-6 space-y-4">
@@ -145,6 +150,7 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
               <div key={key}>
                 <label htmlFor={`countdown-${key}`} className="block text-sm font-medium text-white mb-1">{isMin ? t('common.countdownMinutes') : t('common.countdownSeconds')}</label>
                 <input
+                  data-guide-anchor={isMin ? 'countdown-duration' : undefined}
                   id={`countdown-${key}`}
                   aria-describedby="countdown-range-hint"
                   type="number"
@@ -207,6 +213,7 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
           </button>
 
           <button
+            data-guide-anchor="countdown-add"
             onClick={() => onAddCountdownToPresentation?.(minutes, seconds, selectedTheme.styles)}
             disabled={minutes === 0 && seconds === 0}
             className="flex items-center space-x-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition-colors"

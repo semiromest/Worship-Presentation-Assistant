@@ -72,6 +72,7 @@ const GhostSlide = memo(({ onClick, zoom }: { onClick: () => void; zoom: number 
   return (
     <button
       type="button"
+      data-guide-anchor="add-slide"
       onClick={onClick}
       aria-label={t('common.addNewSlide')}
       aria-describedby="add-slide-hint"
@@ -434,7 +435,7 @@ export default function SlideGrid({
       </div>
 
       {/* Virtual scroll container */}
-      <div ref={containerRef} className="flex-1 overflow-y-auto p-4" role="list" aria-label={t('common.slideList')}>
+      <div ref={containerRef} data-guide-scroll className="flex-1 overflow-y-auto p-4" role="list" aria-label={t('common.slideList')}>
         <div aria-live="polite">
           {!sectionsEnabled && filteredSlides.length === 0 && searchQuery ? (
             <div className="h-64 flex flex-col items-center justify-center text-center opacity-30 space-y-4">

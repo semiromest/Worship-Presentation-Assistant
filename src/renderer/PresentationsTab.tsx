@@ -323,6 +323,7 @@ export default function PresentationsTab({
   const setPresentationName = useStore((s) => s.setPresentationName);
   const setDrivePanelOpen = useStore((s) => s.setDrivePanelOpen);
   const drivePanelOpen = useStore((s) => s.drivePanelOpen);
+  const driveButtonRef = useRef<HTMLButtonElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
   const [isAutosaveOpen, setIsAutosaveOpen] = useState(false);
@@ -675,7 +676,7 @@ export default function PresentationsTab({
               <button type="button" onClick={() => setActiveTab('slides')} className={BTN_SECONDARY}>
                 <Pencil className="w-4 h-4" aria-hidden="true" />{t('library.continueEditing')}
               </button>
-              <button type="button" onClick={saveCurrentPreset} disabled={isSaving}
+              <button data-guide-anchor="save" type="button" onClick={saveCurrentPreset} disabled={isSaving}
                 className={`${BTN_BASE} px-5 bg-blue-600 hover:bg-blue-500 text-white shadow-sm`}>
                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Save className="w-4 h-4" aria-hidden="true" />}
                 {isSaving ? t('common.saving') : t('library.save')}
@@ -706,7 +707,7 @@ export default function PresentationsTab({
             <button type="button" onClick={() => setIsAutosaveOpen(true)} aria-haspopup="dialog" className={BTN_SECONDARY}>
               <DatabaseBackup className="w-4 h-4" aria-hidden="true" />{t('nav.autosaves')}
             </button>
-            <button type="button" onClick={() => setDrivePanelOpen(!drivePanelOpen)} aria-pressed={drivePanelOpen} className={BTN_SECONDARY}>
+            <button ref={driveButtonRef} type="button" onClick={() => setDrivePanelOpen(true)} aria-haspopup="dialog" aria-expanded={drivePanelOpen} className={BTN_SECONDARY}>
               <Cloud className="w-4 h-4" aria-hidden="true" />Google Drive
             </button>
           </div>
@@ -1002,7 +1003,7 @@ export default function PresentationsTab({
           )}
         </div>
       </div>
-      <DrivePanel />
+      <DrivePanel returnFocus={driveButtonRef} />
     </div>
   );
 }

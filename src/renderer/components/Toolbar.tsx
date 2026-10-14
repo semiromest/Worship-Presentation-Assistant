@@ -1,3 +1,5 @@
+import { usePractice } from '../hooks/usePractice';
+import { registerTourAnchor } from './Tour/tourController';
 import OutputStatus from './OutputStatus';
 import { useTranslation } from 'react-i18next';
 import {
@@ -47,6 +49,7 @@ export default function Toolbar({
   closeOutput,
 }: ToolbarProps) {
   const { t } = useTranslation();
+  const practice = usePractice();
 
   const presentation = useStore((s) => s.presentation);
   const undoState = useStore((s) => s.undoState);
@@ -123,7 +126,7 @@ export default function Toolbar({
   );
 
   return (
-    <div className="shrink-0"><header className="h-14 bg-surface-raised border-b border-white/10 flex items-center justify-between px-6 flex-shrink-0">
+    <div className="shrink-0"><header ref={element => registerTourAnchor('toolbar', element)} className="h-14 bg-surface-raised border-b border-white/10 flex items-center justify-between px-6 flex-shrink-0">
       <div className="flex items-center gap-2 min-w-0">
         {editingName ? (
           <input
@@ -185,6 +188,7 @@ export default function Toolbar({
       <div className="flex items-center gap-2">
         <div className="w-px h-6 bg-white/10 mx-1" />
 
+        {!practice && <>
         {/* Live Captions console (labeled; reflects the running session) */}
         <button
           type="button"
@@ -245,6 +249,7 @@ export default function Toolbar({
 
         <div className="w-px h-6 bg-white/10 mx-1" />
 
+        </>}
         <button
           onClick={() => dispatchUndo({ type: 'UNDO' })}
           disabled={undoState.past.length === 0}
@@ -337,7 +342,7 @@ export default function Toolbar({
 
         <div className="w-px h-6 bg-white/10 mx-1" />
 
-        <button
+        {!practice && <button
           onClick={startLive}
           aria-label={isProjectorWindowOpen ? t('common.stopBroadcast') : t('common.startBroadcast')}
           className={cn(
@@ -358,7 +363,7 @@ export default function Toolbar({
               <span className="truncate">{t('common.startBroadcast').toUpperCase()}</span>
             </>
           )}
-        </button>
+        </button>}
 
         <div className="w-px h-6 bg-white/10 mx-1" />
 

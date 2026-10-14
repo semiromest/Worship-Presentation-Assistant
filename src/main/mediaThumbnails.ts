@@ -149,11 +149,7 @@ function getThumbDir(): string {
 }
 
 function cacheKey(filePath: string, size: number, mtimeMs: number, maxEdge: number): string {
-  return crypto
-    .createHash('sha1')
-    .update(`${filePath}:${size}:${mtimeMs}:${maxEdge}`)
-    .digest('hex')
-    .slice(0, 20);
+  return crypto.createHash('sha1').update(`${filePath}:${size}:${mtimeMs}:${maxEdge}`).digest('hex').slice(0, 20);
 }
 
 /** True for `local-resource://thumbs/<name>` refs. */
@@ -169,54 +165,56 @@ export function thumbRefToPath(url: string): string | null {
 //   1. The ffmpeg-static npm package bundled with the app (if installed)
 //   2. The system ffmpeg on PATH
 // Returns null if neither is found.
-function findFfmpeg(): string | null {
-  // 1. ffmpeg-static (optional npm dep)
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const p = require('ffmpeg-static') as string | null;
-    if (p) return p;
-  } catch {
-    /* not installed */
-  }
-  // 2. System PATH
-  const candidates =
-    process.platform === 'win32' ? ['ffmpeg.exe', 'ffmpeg'] : ['ffmpeg'];
-  for (const name of candidates) {
+let ffmpegDiscovery: Promise<string | null> | undefined;
+function findFfmpeg(): Promise<string | null> {
+  return (ffmpegDiscovery ??= (async () => {
     try {
-      // Synchronous check: resolvePathSync is not available, so we try
-      // spawnSync with a cheap flag to confirm it exists.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { spawnSync } = require('node:child_process') as typeof import('node:child_process');
-      const r = spawnSync(name, ['-version'], { timeout: 3000 });
-      if (r.status === 0 || r.status === 1) return name; // 1 on some builds
+      const bundled = require('ffmpeg-static') as string | null;
+      if (bundled) return bundled;
     } catch {
-      /* keep trying */
+      /* optional dependency */
     }
-  }
-  return null;
+    const candidates = process.platform === 'win32' ? ['ffmpeg.exe', 'ffmpeg'] : ['ffmpeg'];
+    for (const name of candidates) {
+      const found = await new Promise<boolean>((resolve) => {
+        execFile(name, ['-version'], { timeout: 3000, windowsHide: true }, (error) => {
+          resolve(!error || error.code === 1);
+        });
+      });
+      if (found) return name;
+    }
+    return null;
+  })());
 }
-
 // Get video duration in seconds via ffprobe / ffmpeg itself.
 function getVideoDuration(ffmpegPath: string, videoPath: string): Promise<number> {
   return new Promise((resolve) => {
     // Try ffprobe first (same dir as ffmpeg)
     const dir = path.dirname(ffmpegPath);
-    const probeNames = process.platform === 'win32'
-      ? [path.join(dir, 'ffprobe.exe'), 'ffprobe.exe', 'ffprobe']
-      : [path.join(dir, 'ffprobe'), 'ffprobe'];
+    const probeNames =
+      process.platform === 'win32'
+        ? [path.join(dir, 'ffprobe.exe'), 'ffprobe.exe', 'ffprobe']
+        : [path.join(dir, 'ffprobe'), 'ffprobe'];
 
     const tryNext = (idx: number) => {
-      if (idx >= probeNames.length) { resolve(0); return; }
-      execFile(probeNames[idx], [
-        '-v', 'error',
-        '-show_entries', 'format=duration',
-        '-of', 'default=noprint_wrappers=1:nokey=1',
-        videoPath,
-      ], { timeout: 5000 }, (err, stdout) => {
-        if (err) { tryNext(idx + 1); return; }
-        const d = parseFloat(stdout.trim());
-        resolve(Number.isFinite(d) && d > 0 ? d : 0);
-      });
+      if (idx >= probeNames.length) {
+        resolve(0);
+        return;
+      }
+      execFile(
+        probeNames[idx],
+        ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', videoPath],
+        { timeout: 5000, windowsHide: true },
+        (err, stdout) => {
+          if (err) {
+            tryNext(idx + 1);
+            return;
+          }
+          const d = parseFloat(stdout.trim());
+          resolve(Number.isFinite(d) && d > 0 ? d : 0);
+        }
+      );
     };
     tryNext(0);
   });
@@ -229,9 +227,9 @@ function getVideoDuration(ffmpegPath: string, videoPath: string): Promise<number
 async function generateVideoThumbnailBytes(
   sourcePath: string,
   maxEdge: number,
-  tempDir: string,
+  tempDir: string
 ): Promise<{ data: Buffer; ext: string } | null> {
-  const ffmpegPath = findFfmpeg();
+  const ffmpegPath = await findFfmpeg();
   if (!ffmpegPath) return null;
 
   // Get duration so we can seek to a good frame
@@ -241,52 +239,65 @@ async function generateVideoThumbnailBytes(
   // For very short clips (<2s), seek to a small but non-zero timestamp
   if (seekSec <= 0 && duration > 0) seekSec = Math.min(0.1, duration);
 
-  const tempFile = path.join(tempDir, `vthumb-${process.pid}-${Date.now()}.jpg`);
+  const tempFile = path.join(tempDir, `vthumb-${crypto.randomUUID()}.jpg`);
 
-  const args = [
-    '-ss', String(seekSec),
-    '-i', sourcePath,
-    '-vframes', '1',
-    '-vf', `scale='if(gt(iw,ih),${maxEdge},-2)':'if(gt(iw,ih),-2,${maxEdge})'`,
-    '-q:v', '3',
-    '-y',
-    tempFile,
-  ];
-
-  const ok = await new Promise<boolean>((resolve) => {
-    execFile(ffmpegPath, args, { timeout: 15000 }, (err) => {
-      resolve(!err);
-    });
-  });
-
-  if (!ok) {
-    // Retry at frame 0 (no -ss) — handles files with no seekable index
-    const args0 = [
-      '-i', sourcePath,
-      '-vframes', '1',
-      '-vf', `scale='if(gt(iw,ih),${maxEdge},-2)':'if(gt(iw,ih),-2,${maxEdge})'`,
-      '-q:v', '3',
+  try {
+    const args = [
+      '-ss',
+      String(seekSec),
+      '-i',
+      sourcePath,
+      '-vframes',
+      '1',
+      '-vf',
+      `scale='if(gt(iw,ih),${maxEdge},-2)':'if(gt(iw,ih),-2,${maxEdge})'`,
+      '-q:v',
+      '3',
       '-y',
       tempFile,
     ];
-    const ok0 = await new Promise<boolean>((resolve) => {
-      execFile(ffmpegPath, args0, { timeout: 15000 }, (err) => resolve(!err));
-    });
-    if (!ok0) return null;
-  }
 
-  try {
-    const data = await fs.readFile(tempFile);
-    await fs.rm(tempFile, { force: true });
-    return { data, ext: '.jpg' };
-  } catch {
-    return null;
+    const ok = await new Promise<boolean>((resolve) => {
+      execFile(ffmpegPath, args, { timeout: 15000, windowsHide: true }, (err) => {
+        resolve(!err);
+      });
+    });
+
+    if (!ok) {
+      // Retry at frame 0 (no -ss) — handles files with no seekable index
+      const args0 = [
+        '-i',
+        sourcePath,
+        '-vframes',
+        '1',
+        '-vf',
+        `scale='if(gt(iw,ih),${maxEdge},-2)':'if(gt(iw,ih),-2,${maxEdge})'`,
+        '-q:v',
+        '3',
+        '-y',
+        tempFile,
+      ];
+      const ok0 = await new Promise<boolean>((resolve) => {
+        execFile(ffmpegPath, args0, { timeout: 15000, windowsHide: true }, (err) => resolve(!err));
+      });
+      if (!ok0) return null;
+    }
+
+    try {
+      const data = await fs.readFile(tempFile);
+
+      return { data, ext: '.jpg' };
+    } catch {
+      return null;
+    }
+  } finally {
+    await fs.rm(tempFile, { force: true }).catch(() => {});
   }
 }
 
 async function generateThumbnailBytes(
   sourcePath: string,
-  maxEdge: number,
+  maxEdge: number
 ): Promise<{ data: Buffer; ext: string } | null> {
   const sharp = loadSharp();
   if (sharp) {
@@ -325,6 +336,7 @@ async function generateThumbnailBytes(
   // covers common raster formats elsewhere — best-effort fallback only.
   if (process.platform !== 'linux') {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { nativeImage } = require('electron') as typeof import('electron');
       if (typeof nativeImage.createThumbnailFromPath === 'function') {
         const img = await nativeImage.createThumbnailFromPath(sourcePath, {
@@ -336,9 +348,7 @@ async function generateThumbnailBytes(
         }
       }
     } catch (err) {
-      console.warn(
-        `[thumbnails] nativeImage fallback failed for ${sourcePath}: ${(err as Error)?.message ?? err}`,
-      );
+      console.warn(`[thumbnails] nativeImage fallback failed for ${sourcePath}: ${(err as Error)?.message ?? err}`);
     }
   }
 
@@ -352,10 +362,9 @@ async function generateThumbnailBytes(
  * absent/failed, nativeImage absent/unsupported) — never throws, so a bad
  * or unreadable file just means "no thumbnail today", not a crashed scan.
  */
-export async function getOrCreateThumbnail(
-  filePath: string,
-  opts?: { maxEdge?: number },
-): Promise<string | null> {
+const inFlight = new Map<string, Promise<string | null>>();
+
+export async function getOrCreateThumbnail(filePath: string, opts?: { maxEdge?: number }): Promise<string | null> {
   const maxEdge = opts?.maxEdge ?? DEFAULT_MAX_EDGE;
 
   let stat;
@@ -366,67 +375,53 @@ export async function getOrCreateThumbnail(
   }
 
   const key = cacheKey(filePath, stat.size, stat.mtimeMs, maxEdge);
+  const pending = inFlight.get(key);
+  if (pending) return pending;
   const dir = getThumbDir();
-
-  // Fast path: already generated under either possible extension. No
-  // concurrency slot consumed, no re-encode — this is the common case once
-  // a folder has been browsed once.
-  for (const ext of ['.webp', '.png']) {
-    const candidate = path.join(dir, `${key}${ext}`);
-    try {
-      await fs.access(candidate);
-      return `${THUMB_REF_PREFIX}${key}${ext}`;
-    } catch {
-      /* keep looking */
+  const findCached = async (): Promise<string | null> => {
+    for (const ext of ['.webp', '.png', '.jpg']) {
+      try {
+        await fs.access(path.join(dir, `${key}${ext}`));
+        return `${THUMB_REF_PREFIX}${key}${ext}`;
+      } catch {
+        /* try next extension */
+      }
     }
-  }
-
-  return schedule(async () => {
-    const dir = getThumbDir();
-    await fs.mkdir(dir, { recursive: true });
-
-    // Video files: use ffmpeg to extract a frame, skip the sharp/nativeImage path
-    const ext = path.extname(filePath).toLowerCase();
-    if (VIDEO_EXTS.has(ext)) {
-      const result = await generateVideoThumbnailBytes(filePath, maxEdge, dir);
+    return null;
+  };
+  const work = (async () => {
+    const cached = await findCached();
+    if (cached) return cached;
+    return schedule(async () => {
+      const cached = await findCached();
+      if (cached) return cached;
+      await fs.mkdir(dir, { recursive: true });
+      const result = VIDEO_EXTS.has(path.extname(filePath).toLowerCase())
+        ? await generateVideoThumbnailBytes(filePath, maxEdge, dir)
+        : await generateThumbnailBytes(filePath, maxEdge);
       if (!result) return null;
-
       const destName = `${key}${result.ext}`;
       const dest = path.join(dir, destName);
-      const temp = `${dest}.${process.pid}.${Date.now()}.tmp`;
+      const temp = `${dest}.${crypto.randomUUID()}.tmp`;
       try {
         await fs.writeFile(temp, result.data);
         await fs.rename(temp, dest);
         return `${THUMB_REF_PREFIX}${destName}`;
-      } catch (err) {
-        try { await fs.rm(temp, { force: true }); } catch { /* best-effort */ }
-        console.warn(`[thumbnails] video write failed for ${filePath}: ${(err as Error)?.message ?? err}`);
-        return null;
+      } finally {
+        await fs.rm(temp, { force: true }).catch(() => {});
       }
-    }
-
-    const result = await generateThumbnailBytes(filePath, maxEdge);
-    if (!result) return null;
-
-    const destName = `${key}${result.ext}`;
-    const dest = path.join(dir, destName);
-    const temp = `${dest}.${process.pid}.${Date.now()}.tmp`;
-    try {
-      await fs.writeFile(temp, result.data);
-      await fs.rename(temp, dest); // atomic swap — never serve a half-written thumbnail
-      return `${THUMB_REF_PREFIX}${destName}`;
-    } catch (err) {
-      try {
-        await fs.rm(temp, { force: true });
-      } catch {
-        /* best-effort cleanup */
-      }
-      console.warn(`[thumbnails] write failed for ${filePath}: ${(err as Error)?.message ?? err}`);
-      return null;
-    }
+    });
+  })().catch((error: unknown) => {
+    console.warn(`[thumbnails] generation failed for ${filePath}: ${String(error)}`);
+    return null;
   });
+  inFlight.set(key, work);
+  try {
+    return await work;
+  } finally {
+    if (inFlight.get(key) === work) inFlight.delete(key);
+  }
 }
-
 /**
  * Deletes cached thumbnails untouched for longer than `maxAgeMs` (default
  * 30 days). Safe to call on every app start — cheap when the cache is
@@ -446,7 +441,7 @@ export async function pruneThumbnailCache(maxAgeMs = 30 * 24 * 60 * 60 * 1000): 
 
   const now = Date.now();
   await Promise.all(
-    entries.map(async name => {
+    entries.map(async (name) => {
       const p = path.join(dir, name);
       try {
         const st = await fs.stat(p);
@@ -454,6 +449,6 @@ export async function pruneThumbnailCache(maxAgeMs = 30 * 24 * 60 * 60 * 1000): 
       } catch {
         /* ignore races with concurrent writers */
       }
-    }),
+    })
   );
 }

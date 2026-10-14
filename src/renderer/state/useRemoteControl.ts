@@ -1,3 +1,6 @@
+import { usePractice } from '../hooks/usePractice';
+import { markTourReady } from './useTourStore';
+import { finishTour, isHelpActive } from '../components/Tour/tourController';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import QRCode from 'qrcode';
@@ -31,6 +34,7 @@ const REMOTE_ACTIONS = {
 } as const;
 
 export function useRemoteControl() {
+  const practice = usePractice();
   const { t } = useTranslation();
   const {
     setLiveIndex,
@@ -168,6 +172,7 @@ export function useRemoteControl() {
 
     // Remote URL al
     const fetchRemoteUrl = async () => {
+      if (practice) return;
       const url = await window.electronAPI?.getRemoteUrl?.();
       const info = await window.electronAPI?.getRemoteDebug?.();
       if (info?.remoteServerUrl) setRemoteDebug(info);
@@ -186,6 +191,7 @@ export function useRemoteControl() {
     // Remote action listener
     const removeListener = window.electronAPI?.onRemoteAction?.(async (data: any) => {
       if (!data?.action) return;
+      if (isHelpActive()) finishTour('interrupted');
 
       const state = useStore.getState();
       const slides = state.presentation.slides;
@@ -287,7 +293,11 @@ export function useRemoteControl() {
           }
           const outcome = resolveQuickVerse(reference);
           if (!outcome.ok) {
-            notice(describeQuickVerseError(outcome.error), 'error');
+            notice(outcome.error === 'partial'
+              ? t('common.scriptureIncomplete', { numbers: outcome.numbers })
+              : outcome.error === 'conflict'
+                ? t('common.scriptureIssue_conflict') + ' ' + (outcome.numbers ?? '')
+                : describeQuickVerseError(outcome.error) + (outcome.numbers ? ': ' + outcome.numbers : ''), 'error');
             break;
           }
           // Broadcast lock: never move the pinned live output; still append so
@@ -323,7 +333,11 @@ export function useRemoteControl() {
           }
           playSfx('success');
           notice(
-            goLive && !locked ? `Live: ${outcome.result.groupTitle}` : `Added: ${outcome.result.groupTitle}`,
+              (goLive && !locked ? `Live: ${outcome.result.resolvedReference}` : `Added: ${outcome.result.resolvedReference}`) +
+                (outcome.result.expanded ? ' ' + t('common.scriptureExpanded', {
+                  requested: outcome.result.requestedReference,
+                  resolved: outcome.result.resolvedReference,
+                }) : ''),
             'ok',
           );
           break;
@@ -396,6 +410,7 @@ export function useRemoteControl() {
   });
   removeOutputStatusListener = window.electronAPI?.onProjectorOutputStatus?.((outputs) => {
     setProjectorOutputStatus(Array.isArray(outputs) ? outputs : []);
+    if (Array.isArray(outputs)) markTourReady('outputs');
   });
 
   void window.electronAPI?.getDisplays?.().then((displays) => {
@@ -410,7 +425,7 @@ export function useRemoteControl() {
     }
   });
   void window.electronAPI?.getProjectorOutputs?.().then((outputs) => {
-    if (Array.isArray(outputs)) setProjectorOutputStatus(outputs);
+    if (Array.isArray(outputs)) { setProjectorOutputStatus(outputs); markTourReady('outputs'); }
   });
 
   removeProjectorClosed = window.electronAPI?.onProjectorClosed?.((data) => {

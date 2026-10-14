@@ -1,3 +1,4 @@
+import { setComponentInert } from './Tour/guideBoundary';
 import { isEditorEditableSlide } from '../editor/slideCapabilities';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -86,8 +87,7 @@ export default function RightPanel({
   useEffect(() => {
     const panel = panelRef.current;
     if (!panel) return;
-    if (isRightPanelOpen) panel.removeAttribute('inert');
-    else panel.setAttribute('inert', '');
+    setComponentInert(panel, !isRightPanelOpen);
   }, [isRightPanelOpen]);
 
   const transitionType = presentation.transition?.type ?? DEFAULT__TRANSITION.type;
@@ -340,6 +340,7 @@ export default function RightPanel({
                 </button>
                 {selectedSlide && (
                   <button
+                    data-guide-anchor="image-tools"
                     onClick={() => selectedSlide && openEditor(selectedSlide.id)}
                     className="p-1.5 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-500/20 transition-colors"
                     title={t(isEditorEditableSlide(selectedSlide) ? 'common.detailedEdit' : 'common.editorPreview')}
@@ -365,6 +366,7 @@ export default function RightPanel({
                   <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
                 </button>
                 <button
+                  data-guide-anchor="delete-slide"
                   onClick={() => removeSlide(selectedSlide.id)}
                   disabled={selectedSlideLocked}
                   title={selectedSlideLocked ? t('common.slideLockActiveHint') : t('common.delete')}

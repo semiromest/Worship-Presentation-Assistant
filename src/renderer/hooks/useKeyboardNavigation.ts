@@ -1,3 +1,4 @@
+import { notifyPageVisit } from '../components/Tour/tourController';
 import { moveSectionSlidesOneStep } from '../../shared/sectionModel';
 import { useShallow } from 'zustand/react/shallow';
 import { useEffect } from 'react';
@@ -95,6 +96,7 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
       if (e.altKey && !e.ctrlKey && !e.metaKey && destination) {
         e.preventDefault();
         setActiveTab(destination);
+        notifyPageVisit(destination);
         return;
       }
 

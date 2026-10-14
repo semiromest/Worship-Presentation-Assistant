@@ -14,9 +14,19 @@
     "sidebarLabel": "Navegación principal"
   },
   "common": {
+    "scriptureMerged": "Versículos combinados",
+    "scriptureMergedInfo": "Algunos versículos están combinados en esta traducción.",
+    "scriptureIssue_empty": "Esta fuente no proporciona un texto separado.",
+    "scriptureIssue_unsupported": "Esta numeración aún no es compatible.",
+    "scriptureIssue_conflict": "Los registros se superponen. No se pueden enviar.",
+    "scriptureIssuesInfo": "Este capítulo contiene registros no disponibles o sin resolver.",
+    "scriptureInvalidRequest": "Introduce un intervalo válido y completo.",
+    "scriptureIncomplete": "Solicitud incompleta. Versículos faltantes o en conflicto: {{numbers}}.",
+    "scriptureSelectFound": "Seleccionar solo el texto disponible",
+    "scriptureExpanded": "{{requested}} se presenta junto como {{resolved}} en esta traducción.",
+    "scriptureReadingSummary": "{{verses}} versículos · {{units}} unidades de texto · {{slides}} diapositivas",
     "videoSettingsTab": "Vídeo",
     "videoTextsTab": "Texto",
-
     "videoTextLayers": "Textos sobre el vídeo",
     "videoAddText": "Añadir texto",
     "videoTextHint": "Añade texto y arrástralo o cambia su tamaño en la vista previa.",
@@ -34,7 +44,6 @@
     "videoTextWidth": "Ancho",
     "videoTextHeight": "Alto",
     "videoTextOutsideRange": "El texto seleccionado aparece atenuado para editarlo; no se muestra en la salida en este momento.",
-
     "videoOriginalSafe": "Original conservado",
     "videoPlay": "Reproducir",
     "videoPause": "Pausar",
@@ -59,7 +68,6 @@
     "videoAudio": "Audio",
     "videoVolume": "Volumen",
     "videoSourceInfo": "Información del archivo",
-
     "videoEditorTitle": "Editar video",
     "videoSeconds": "segundos",
     "videoStart": "Inicio",
@@ -70,7 +78,6 @@
     "videoLoadFailed": "No se pudo cargar el video. Se conservan los tiempos.",
     "videoDurationPending": "Esperando la duración del video.",
     "videoNonDestructive": "Los ajustes de vídeo y texto se guardan con la diapositiva. El vídeo original se conserva.",
-
     "editorPreview": "Vista previa",
     "editorPreviewFailed": "Vista previa no disponible",
     "editorPreviewLoading": "Preparando vista previa",
@@ -83,7 +90,6 @@
     "editorNoEditableSlides": "No hay diapositivas editables.",
     "editorShowAll": "Mostrar todas",
     "editorCaptionsSample": "Subtítulos de ejemplo",
-
     "editorPendingDraft": "Borrador sin guardar",
     "editorEmpty": "Añade una diapositiva a la presentación para empezar a editar.",
     "editorConflictTitle": "Cambios de diapositivas en conflicto",
@@ -91,7 +97,6 @@
     "editorApplyDraft": "Aplicar borrador",
     "editorUseCurrent": "Usar versión de la presentación",
     "editorBeforeReplace": "¿Guardar los cambios del editor en la biblioteca de presentaciones o descartarlos antes de cambiar de presentación?",
-
     "newSlide": "Nueva diapositiva",
     "newSlideContent": "Nuevo contenido de diapositiva",
     "newPresentation": "Nueva presentación",
@@ -1083,6 +1088,9 @@
     "backgroundMusicEmpty": "No se encontró música compatible.",
     "backgroundMusicMissing": "No se encontró la carpeta de música.",
     "backgroundMusicPlayError": "No se pudo reproducir la música.",
+    "backgroundMusicLocal": "Local",
+    "youtubeLoading": "Preparando audio de YouTube…",
+    "youtubeNoResults": "No se encontraron resultados.",
     "youtubeSearch": "Buscar en YouTube",
     "youtubeSearchPlaceholder": "Buscar música en YouTube...",
     "youtubeSearchError": "La búsqueda de YouTube falló.",
@@ -1103,7 +1111,72 @@
     "sonioxTargetLanguageHint": "El texto hablado se traduce a este idioma.",
     "sonioxSttLanguage": "Idioma hablado predeterminado (STT)",
     "sonioxSttAuto": "Detección automática",
-    "sonioxSttLanguageHint": "Con la detección automática el idioma se detecta del habla; elegir un idioma concreto orienta el reconocimiento hacia él."
+    "sonioxSttLanguageHint": "Con la detección automática el idioma se detecta del habla; elegir un idioma concreto orienta el reconocimiento hacia él.",
+    "navigation": {
+      "search": "Buscar ajustes",
+      "clearSearch": "Borrar búsqueda",
+      "category": "Categoría de ajustes",
+      "resultsTitle": "Resultados de búsqueda",
+      "noResults": "No se encontraron ajustes. Prueba otra palabra.",
+      "resultCount": "Se encontraron {{count}} ajustes.",
+      "clearLiveSaves": "Borrar guardados automáticos",
+      "descriptions": {
+        "hymn-size": "Ajusta el tamaño del texto del autor del himno.",
+        "watermark": "Carga un logotipo y elige posición, tamaño, opacidad y tipos de contenido.",
+        "live-save": "Activa o desactiva el guardado automático de la presentación.",
+        "retention": "Elige cuánto tiempo conservar los guardados automáticos.",
+        "clear-live-saves": "Borra solo los guardados automáticos; las presentaciones guardadas normalmente se conservan."
+      },
+      "categories": {
+        "general": {
+          "title": "General",
+          "description": "Configura el idioma, el sonido y la interfaz."
+        },
+        "presentation": {
+          "title": "Presentación",
+          "description": "Configura el comportamiento y las herramientas del operador."
+        },
+        "appearance": {
+          "title": "Himnos y logotipo",
+          "description": "Configura el autor del himno y la marca de agua."
+        },
+        "captions": {
+          "title": "Subtítulos y traducción",
+          "description": "Configura el reconocimiento de voz y la traducción."
+        },
+        "autosave": {
+          "title": "Guardado automático",
+          "description": "Administra los guardados automáticos y su conservación."
+        },
+        "updates": {
+          "title": "Actualizaciones",
+          "description": "Consulta nuevas versiones y el estado de actualización."
+        },
+        "learning": {
+          "title": "¿Cómo se usa?",
+          "description": ""
+        }
+      },
+      "keywords": {
+        "language": "interfaz idioma español",
+        "sound": "sonido efectos clic",
+        "motion": "movimiento animación reducida",
+        "auto-live": "automático directo salida transición",
+        "sections": "secciones orden organización",
+        "notes": "operador notas comentarios",
+        "hymn-position": "himno autor posición alineación",
+        "hymn-size": "himno autor fuente tamaño texto",
+        "watermark": "logotipo marca agua imagen opacidad transparencia",
+        "stt-key": "soniox api clave subtítulos",
+        "spoken-language": "idioma hablado reconocimiento detección",
+        "target-language": "traducción idioma destino",
+        "live-save": "guardado automático copia seguridad",
+        "retention": "conservación plazo días",
+        "clear-live-saves": "guardados automáticos borrar limpiar",
+        "updates": "actualizaciones versión descargar",
+        "learn": "práctica guía aprender ayuda tutorial"
+      }
+    }
   },
   "stage": {
     "next": "Siguiente",
@@ -1180,5 +1253,395 @@
     "off": "Desactivado",
     "saveOff": "Guardado automático desactivado",
     "sessionError": "No se guardó la posición en directo"
+  },
+  "tour": {
+    "mapTitle": "Conoce la aplicación",
+    "helpTitle": "¿Cómo se usa?",
+    "intro": "Elige contenido, prepara diapositivas y presenta en pantalla.",
+    "welcomeTitle": "Bienvenido",
+    "start": "Iniciar recorrido breve",
+    "later": "Ahora no",
+    "close": "Cerrar",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "done": "Finalizar",
+    "progress": "{{current}} / {{total}}",
+    "loading": "Preparando el recorrido…",
+    "stillLoading": "El espacio de trabajo sigue cargando. Puedes cerrar el recorrido cuando quieras.",
+    "failed": "No se pudo preparar el destino del recorrido. Inténtalo más tarde.",
+    "editorDescription": "Edita el diseño y la distribución de las diapositivas en detalle.",
+    "helpDescription": "Pulsa ? para ver los atajos de teclado.",
+    "blocked": {
+      "output-active": "El recorrido no está disponible con una salida abierta. Puedes usar el mapa de la aplicación.",
+      "session-active": "Finaliza la sesión activa de transmisión o subtítulos antes del recorrido.",
+      "editor-active": "Sal del editor y termina los cambios pendientes primero.",
+      "modal-open": "Cierra primero el otro diálogo.",
+      "interaction-active": "Termina primero el arrastre o la acción del menú.",
+      "not-ready": "El estado de la aplicación está cargando. Inténtalo de nuevo en breve."
+    },
+    "steps": {
+      "navigation": {
+        "title": "Encuentra las secciones",
+        "body": "La barra lateral reúne presentaciones y herramientas de contenido. Gestiona los archivos preparados en Presentaciones."
+      },
+      "slides": {
+        "title": "Prepara las diapositivas",
+        "body": "Añade diapositivas, organiza su orden y prepara su aspecto con las herramientas de formato."
+      },
+      "content": {
+        "title": "Añade contenido",
+        "body": "Busca contenido en la sección Biblia y añádelo a tu presentación. Los medios, himnos y otras herramientas están también en la barra lateral."
+      },
+      "output": {
+        "title": "Gestiona la salida de pantalla",
+        "body": "Muestra el contenido preparado en una pantalla de salida. Revisa la pantalla de destino y las comprobaciones antes de presentar."
+      },
+      "help": {
+        "title": "Vuelve a la ayuda",
+        "body": "Cambia el idioma, abre el mapa o reinicia este recorrido desde Ajustes."
+      }
+    },
+    "pageIntroductions": "Introducciones de páginas",
+    "suggestTitle": "¿Quieres conocer esta página?",
+    "learnPage": "Conocer la página",
+    "disableSuggestions": "Desactivar sugerencias de páginas",
+    "suggestionsDisabled": "Sugerencias de páginas desactivadas",
+    "pages": {
+      "presentations": "Abre y guarda archivos de presentación o gestiona las presentaciones preparadas en la biblioteca.",
+      "slides": "Añade, selecciona y ordena diapositivas; edita su contenido y aspecto en el panel derecho.",
+      "bible": "Elige una fuente de la Biblia o importa un archivo XML. Selecciona libro, capítulo y versículos para añadir contenido.",
+      "media": "Busca y previsualiza imágenes y vídeos antes de añadirlos. Combina varios elementos en una diapositiva en bucle.",
+      "hymns": "Importa un archivo de himnos o busca un himno y convierte su letra en diapositivas.",
+      "countdown": "Elige minutos y segundos, prepara el aspecto y añade la cuenta atrás a la presentación.",
+      "screen": "Elige una fuente de captura de pantalla para una diapositiva. Seleccionar la fuente es distinto de abrir una salida de proyección.",
+      "calendar": "Programa presentaciones preparadas en el calendario y vuelve a abrirlas desde sus entradas.",
+      "editor": "Organiza los elementos de la diapositiva en el lienzo. Aplica los cambios pendientes con los controles de guardado existentes.",
+      "settings": "Gestiona el idioma y las preferencias. Vuelve a abrir las introducciones y el recorrido breve desde Ayuda."
+    }
+  },
+  "practice": {
+    "banner": "Práctica — perfil separado; salida en directo desactivada",
+    "title": "Progreso de práctica",
+    "preflight": "Verificación técnica. Las tareas llegarán por separado.",
+    "counts": "Completadas: {{completed}} · Omitidas: {{skipped}} · Restantes: {{remaining}}",
+    "notStarted": "Sin iniciar",
+    "inProgress": "En curso / pausada",
+    "completed": "Completada",
+    "skipped": "Omitida",
+    "pending": "Entrega posterior",
+    "phase3": "Fase 3 — solo explicación por ahora",
+    "unreadable": "No se pudo leer el progreso; se conserva el último estado válido.",
+    "launchError": "No se pudo abrir la práctica.",
+    "open": "Abrir práctica",
+    "resume": "Continuar práctica",
+    "tasksTitle": "Tareas de práctica",
+    "choose": "Elige una tarea y realiza la operación con las herramientas de la aplicación.",
+    "retained": "Tus diapositivas se conservan; al salir no se borran automáticamente.",
+    "go": "Ir a la tarea",
+    "pause": "Pausar",
+    "skip": "Omitir",
+    "available": "Disponible",
+    "deckName": "Presentación de práctica",
+    "demoSlide": "Práctica: ejemplo para borrar",
+    "deleteWarning": "Borra solo el ejemplo seleccionado. Si lo modificaste, consérvalo y reinicia la tarea.",
+    "taskError": "No se pudo registrar la operación. Reintenta u omite la tarea.",
+    "exercise": {
+      "slide-add": {
+        "title": "Añadir diapositiva",
+        "body": "Añade una diapositiva de texto en Diapositivas."
+      },
+      "slide-delete": {
+        "title": "Borrar diapositiva de ejemplo",
+        "body": "Borra solo el ejemplo seleccionado en Diapositivas."
+      },
+      "media": {
+        "title": "Añadir medios",
+        "body": "Importa una imagen en Medios. Añade la imagen de práctica desde su tarjeta."
+      },
+      "bible": {
+        "title": "Importar Biblia y añadir versículo",
+        "body": "Usa la importación local. Selecciona el ejemplo Génesis 1:1 y añádelo a la presentación."
+      },
+      "countdown": {
+        "title": "Añadir cuenta atrás",
+        "body": "Elige una duración mayor que cero y añádela a la presentación."
+      },
+      "presentations": {
+        "title": "Guardar en biblioteca",
+        "body": "Guarda la presentación de práctica en la biblioteca. No se escribe ningún archivo externo."
+      },
+      "hymns": {
+        "title": "Himnos",
+        "body": "Haz clic en la fila resaltada del himno. Veremos el resultado cuando se añada la letra."
+      },
+      "image-edit": {
+        "title": "Editaste la imagen",
+        "body": "Haz clic en la diapositiva resaltada. Haremos dos cambios sencillos en el editor de la derecha."
+      },
+      "slide-reorder": {
+        "title": "Reordena las diapositivas",
+        "body": "Arrastra la diapositiva de ejemplo resaltada sobre la otra diapositiva resaltada. El ejercicio termina cuando sus posiciones cambian realmente."
+      }
+    }
+  },
+  "guide": {
+    "title": "Aprende paso a paso",
+    "description": "Aprende realizando acciones en una ventana de práctica separada.",
+    "pilot": "La guía cubre diez secciones y seis ejercicios.",
+    "open": "Aprende paso a paso",
+    "begin": "Empezar",
+    "resume": "Continuar donde lo dejaste",
+    "next": "Continuar",
+    "exit": "Salir y pausar",
+    "restart": "Empezar de nuevo",
+    "progress": "Paso {{current}} / {{total}}",
+    "waiting": "El objetivo se está cargando. Puedes esperar o salir.",
+    "unavailable": "Este objetivo no está disponible.",
+    "stuck": "¿Te has atascado? Vuelve a mostrar el objetivo para intentarlo de nuevo o salta este paso. Un paso omitido no cuenta como completado.",
+    "retry": "Mostrar el objetivo otra vez",
+    "skip": "Omitir este paso",
+    "advanced": "Ayuda avanzada",
+    "jumpWarning": "Continúa desde la sección elegida. Las acciones omitidas al avanzar se marcan como saltadas, no completadas.",
+    "error": "No se pudo guardar el progreso o cargar la guía. Inténtalo otra vez.",
+    "finished": "Completaste la guía.",
+    "finishedSkipped": "Llegaste al final. Los pasos omitidos no están completados.",
+    "savedStep": "Paso guardado: {{step}}",
+    "skippedCount": "Pasos omitidos: {{count}}",
+    "shortDescription": "Conoce rápidamente las áreas principales.",
+    "mapDescription": "Explora las secciones y los atajos.",
+    "shortTitle": "Recorrido breve",
+    "steps": {
+      "welcome": {
+        "title": "Aprendamos juntos",
+        "body": "Trabajarás en un perfil de práctica separado. La salida en vivo está desactivada y tu presentación real no cambia. Sigue las acciones resaltadas."
+      },
+      "presentations": {
+        "title": "Presentaciones",
+        "body": "Aquí gestionas tus presentaciones. Solo presentamos esta sección; después crearás una diapositiva con las herramientas reales."
+      },
+      "sidebar": {
+        "title": "Secciones",
+        "body": "Los botones de la izquierda abren las secciones. Resaltaremos el área necesaria en cada paso."
+      },
+      "nav-slides": {
+        "title": "Abrir Diapositivas",
+        "body": "Haz clic en el botón Diapositivas resaltado."
+      },
+      "add": {
+        "title": "Añadir una diapositiva",
+        "body": "Haz clic en Añadir nueva diapositiva. La guía avanza cuando la diapositiva existe."
+      },
+      "select": {
+        "title": "Seleccionar el ejemplo",
+        "body": "Haz clic en la diapositiva de ejemplo resaltada. La diapositiva que añadiste se conservará."
+      },
+      "delete": {
+        "title": "Elimina el ejemplo",
+        "body": "Elimina el ejemplo seleccionado con Supr o la papelera resaltada del panel derecho. Se acepta cualquiera de los métodos; las demás diapositivas se conservan."
+      },
+      "done": {
+        "title": "Final",
+        "body": "Has llegado al final de la guía. Los cambios de práctica se conservan al salir."
+      },
+      "nav-bible": {
+        "title": "Biblia",
+        "body": "Haz clic en el botón Biblia resaltado."
+      },
+      "bible-intro": {
+        "title": "Carga fuentes bíblicas",
+        "body": "Carga una Biblia desde un archivo XML local o busca en línea y selecciona una fuente adecuada para añadirla y utilizarla. Esta práctica usa un XML local de ejemplo seguro."
+      },
+      "nav-media": {
+        "title": "Medios",
+        "body": "Haz clic en el botón Medios resaltado."
+      },
+      "media-intro": {
+        "title": "Medios",
+        "body": "Busca y previsualiza imágenes y vídeos antes de añadirlos. Combina varios elementos en una diapositiva en bucle."
+      },
+      "nav-hymns": {
+        "title": "Himnos",
+        "body": "Haz clic en el botón Himnos resaltado."
+      },
+      "hymns-intro": {
+        "title": "Himnos",
+        "body": "En modo normal, cada estrofa es una diapositiva distinta. En modo de partes, las estrofas son partes de una sola diapositiva. Añadiremos el ejemplo en modo de partes."
+      },
+      "nav-countdown": {
+        "title": "Cuenta atrás",
+        "body": "Haz clic en el botón Cuenta atrás resaltado."
+      },
+      "countdown-intro": {
+        "title": "Cuenta atrás",
+        "body": "Elige minutos y segundos, prepara el aspecto y añade la cuenta atrás a la presentación."
+      },
+      "nav-screen": {
+        "title": "Pantalla",
+        "body": "Haz clic en el botón Pantalla resaltado."
+      },
+      "screen-intro": {
+        "title": "Pantalla",
+        "body": "Elige una fuente de captura de pantalla para una diapositiva. Seleccionar la fuente es distinto de abrir una salida de proyección."
+      },
+      "nav-calendar": {
+        "title": "Calendario",
+        "body": "Haz clic en el botón Calendario resaltado."
+      },
+      "calendar-intro": {
+        "title": "Calendario",
+        "body": "Programa presentaciones preparadas en el calendario y vuelve a abrirlas desde sus entradas."
+      },
+      "nav-editor": {
+        "title": "Editor",
+        "body": "Haz clic en el botón Editor resaltado."
+      },
+      "editor-intro": {
+        "title": "Editor",
+        "body": "Puedes editar imágenes desde el panel derecho o el Editor de diapositivas, que ofrece opciones más detalladas y herramientas de vídeo. En nuestro ejemplo hicimos dos cambios sencillos."
+      },
+      "nav-settings": {
+        "title": "Ajustes",
+        "body": "Haz clic en el botón Ajustes resaltado."
+      },
+      "settings-intro": {
+        "title": "Ajustes",
+        "body": "Gestiona el idioma y las preferencias. Vuelve a abrir las introducciones y el recorrido breve desde Ayuda."
+      },
+      "nav-save": {
+        "title": "Presentaciones",
+        "body": "Haz clic en el botón Presentaciones resaltado."
+      },
+      "bible-source": {
+        "title": "Cargar una fuente",
+        "body": "Haz clic en Importar XML. Si ya hay una fuente, abriremos su menú de gestión."
+      },
+      "bible-import": {
+        "title": "Importar XML de ejemplo",
+        "body": "Haz clic en Importar XML en el menú. Solo se carga la fuente de ejemplo segura."
+      },
+      "bible-book": {
+        "title": "Elegir el primer libro",
+        "body": "Haz clic en el primer libro resaltado."
+      },
+      "bible-chapter": {
+        "title": "Elegir el primer capítulo",
+        "body": "Haz clic en el Capítulo 1 resaltado."
+      },
+      "bible-verse": {
+        "title": "Seleccionar el versículo",
+        "body": "Selecciona el versículo de ejemplo resaltado."
+      },
+      "bible-add": {
+        "title": "Añadir el versículo",
+        "body": "Haz clic en Añadir a la presentación. Esperaremos a que exista la diapositiva."
+      },
+      "media-menu": {
+        "title": "Abrir el menú de medios",
+        "body": "Haz clic en Añadir medios resaltado."
+      },
+      "media-import": {
+        "title": "Cargar la imagen de ejemplo",
+        "body": "Haz clic en Seleccionar imágenes. Se usa una imagen segura en lugar del selector de archivos."
+      },
+      "media-add": {
+        "title": "Añadir la imagen",
+        "body": "Haz clic en el botón más bajo la imagen de ejemplo. Esperaremos a la diapositiva."
+      },
+      "countdown-duration": {
+        "title": "Ajustar la duración",
+        "body": "Establece Minutos en 2. Solo puedes editar este campo."
+      },
+      "countdown-add": {
+        "title": "Añadir la cuenta atrás",
+        "body": "Haz clic en Añadir a diapositiva. No iniciaremos el temporizador ni la salida en vivo."
+      },
+      "save": {
+        "title": "Guardar la práctica",
+        "body": "Haz clic en Guardar en biblioteca. Solo se utiliza el perfil de práctica separado. Esperaremos el resultado correcto."
+      },
+      "add-result": {
+        "title": "Creaste una diapositiva",
+        "body": "Creaste una nueva diapositiva. Así se preparan las diapositivas de tu presentación."
+      },
+      "delete-result": {
+        "title": "Se eliminó la diapositiva de ejemplo",
+        "body": "Se eliminó el ejemplo seleccionado. Las demás diapositivas se conservan."
+      },
+      "bible-result": {
+        "title": "Añadiste el versículo",
+        "body": "Añadiste el versículo a tu presentación. Así se ve la diapositiva preparada."
+      },
+      "media-result": {
+        "title": "Añadiste la imagen",
+        "body": "Añadiste la imagen a tu presentación. Así se ve en la diapositiva."
+      },
+      "countdown-result": {
+        "title": "Tu cuenta regresiva está lista",
+        "body": "Preparaste una diapositiva de cuenta regresiva de dos minutos. Es una vista previa estática; el temporizador no ha comenzado."
+      },
+      "save-result": {
+        "title": "Se guardó tu presentación",
+        "body": "Guardaste tu presentación en la biblioteca de práctica. Puedes volver a abrirla desde allí."
+      },
+      "hymns-add": {
+        "title": "Añade el himno de ejemplo",
+        "body": "Haz clic en la fila resaltada del himno. Veremos el resultado cuando se añada la letra."
+      },
+      "hymns-result": {
+        "title": "Añadiste el himno",
+        "body": "Añadiste la letra del himno de ejemplo a la presentación. Así se ve la diapositiva preparada."
+      },
+      "image-select": {
+        "title": "Selecciona la imagen de ejemplo",
+        "body": "Haz clic en la diapositiva resaltada. Haremos dos cambios sencillos en el editor de la derecha."
+      },
+      "image-fit": {
+        "title": "Ajusta toda la imagen",
+        "body": "Haz clic en Contener en el editor para que toda la imagen quepa en su marco."
+      },
+      "image-grayscale": {
+        "title": "Aplica escala de grises",
+        "body": "Pon el control de escala de grises al 100 %. Puedes enfocarlo y pulsar Fin."
+      },
+      "image-edit-result": {
+        "title": "Editaste la imagen",
+        "body": "Cambiaste el ajuste y aplicaste escala de grises. Así se ve la imagen editada."
+      },
+      "hymns-parts": {
+        "title": "Las partes del himno",
+        "body": "El panel derecho muestra las partes del himno. Haz clic en el botón numerado de la parte deseada para cambiar a ella. Aquí solo lo explicamos; no necesitas hacer clic."
+      },
+      "reorder": {
+        "title": "Reordena las diapositivas",
+        "body": "Arrastra la diapositiva de ejemplo resaltada sobre la otra diapositiva resaltada. El ejercicio termina cuando sus posiciones cambian realmente."
+      },
+      "hymns-font": {
+        "title": "Tamaño de letra del himno",
+        "body": "Cambia el tamaño de letra del himno seleccionado en el campo Tamaño de letra de la derecha. Un número mayor agranda el texto; uno menor lo reduce. Aquí solo lo explicamos; no debes cambiarlo."
+      },
+      "image-tools": {
+        "title": "Dos formas de editar",
+        "body": "Puedes editar imágenes en el panel derecho o en el Editor de diapositivas mediante el lápiz resaltado. Este editor ofrece más opciones y edición de vídeo. En el ejemplo solo cambiaremos el ajuste y la escala de grises."
+      }
+    },
+    "mapTitle": "Mapa de secciones",
+    "onlyIntroducing": "Solo presentamos esta sección; no hay tarea práctica.",
+    "openSection": "Haz clic en el botón {{section}} resaltado.",
+    "pause": "Pausar",
+    "close": "Cerrar práctica",
+    "chapters": "Ir a una sección",
+    "restartConfirm": "¿Empezar una práctica nueva?",
+    "restartDetail": "Tu presentación y progreso se archivarán. La práctica nueva empieza con una presentación vacía y sin progreso. El idioma y la biblioteca se conservan.",
+    "result": {
+      "countChange": "Diapositivas: {{before}} → {{after}}",
+      "savedCount": "Biblioteca de práctica · {{count}} diapositivas",
+      "deletedPreview": "Ejemplo eliminado — apariencia anterior",
+      "remaining": "Diapositivas restantes: {{count}}",
+      "emptyPresentation": "Actualmente no hay diapositivas en la presentación.",
+      "imagePreview": "Imagen añadida",
+      "countdownPreview": "Vista previa estática de la cuenta regresiva",
+      "unavailableTitle": "El resultado no está disponible",
+      "unavailable": "No se pudo leer el resultado verificado. Reintenta; no necesitas repetir la operación."
+    }
   }
 }

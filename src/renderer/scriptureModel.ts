@@ -1,4 +1,6 @@
-import type { BibleBook, Chapter, Verse } from './bibleParser';
+import type { BibleSourceDescriptor } from './bibleRepository';
+import { getChapterReading, resolveReadingReference, parseVerseNumbers, type ReadingEntry } from './scriptureReading';
+import type { BibleBook, Chapter } from './bibleParser';
 
 export interface ParsedScriptureReference {
   book: string;
@@ -61,7 +63,7 @@ export function parseScriptureReference(input: string): ParsedScriptureReference
   const value = input.trim();
   if (!value) return null;
 
-  const patterns = [/^(.+?)\s+(\d+):(\d*)(?:[-–](\d*))?$/, /^(.+?)\s+(\d+)$/, /^(.+?)$/];
+  const patterns = [/^(.+?)\s+(\d+):(\d*)(?:[-–—](\d*))?$/, /^(.+?)\s+(\d+)$/, /^(.+?)$/];
   for (const pattern of patterns) {
     const match = value.match(pattern);
     if (!match) continue;
@@ -108,9 +110,7 @@ export function splitBibleTestaments(books: BibleBook[]): { oldTestament: BibleB
 }
 
 export function formatVerseNumbers(numbers: Iterable<string>): string {
-  const sorted = [...new Set([...numbers].map((number) => Number.parseInt(number, 10)).filter(Number.isFinite))].sort(
-    (a, b) => a - b
-  );
+  const sorted = [...new Set([...numbers].flatMap(parseVerseNumbers))].sort((a, b) => a - b);
   if (sorted.length === 0) return '';
 
   const ranges: string[] = [];
@@ -133,15 +133,14 @@ export function createScriptureSlides(
   book: BibleBook,
   chapter: Chapter,
   verseNumbers: Iterable<string>,
-  config: { maxVerses: number; maxChars: number; maxLines: number }
+  config: { maxVerses: number; maxChars: number; maxLines: number },
+  source?: BibleSourceDescriptor | null
 ): string[] {
-  const wanted = new Set(verseNumbers);
-  const verses = chapter.verses
-    .filter((verse) => wanted.has(verse.number))
-    .sort((a, b) => Number.parseInt(a.number, 10) - Number.parseInt(b.number, 10));
-
-  const chunks: Verse[][] = [];
-  let current: Verse[] = [];
+  const resolution = resolveReadingReference(getChapterReading(book, chapter, source), verseNumbers);
+  if (resolution.status !== 'complete') return [];
+  const verses = resolution.entries;
+  const chunks: ReadingEntry[][] = [];
+  let current: ReadingEntry[] = [];
   let currentChars = 0;
   for (const verse of verses) {
     const line = `${verse.number}. ${verse.text}`;
@@ -160,7 +159,7 @@ export function createScriptureSlides(
   if (current.length) chunks.push(current);
 
   return chunks.map((chunk) => {
-    const reference = `${book.name} ${chapter.number}:${formatVerseNumbers(chunk.map((verse) => verse.number))}`;
+    const reference = `${book.name} ${chapter.number}:${formatVerseNumbers(chunk.flatMap((verse) => verse.numbers.map(String)))}`;
     return `${reference}\n\n${chunk.map((verse) => `${verse.number}. ${verse.text}`).join('\n\n')}`;
   });
 }
@@ -168,7 +167,8 @@ export function createScriptureSlides(
 export function buildReferenceSuggestions(
   books: BibleBook[],
   query: string,
-  recents: RecentScriptureReference[]
+  recents: RecentScriptureReference[],
+  source?: BibleSourceDescriptor | null
 ): ReferenceSuggestion[] {
   const normalized = normalizeScriptureText(query.trim());
   if (!normalized) {
@@ -202,19 +202,17 @@ export function buildReferenceSuggestions(
       const chapter = book.chapters.find((candidate) => Number.parseInt(candidate.number, 10) === parsed.chapter);
       if (chapter) {
         const verseNumbers =
-          parsed.verse != null
-            ? chapter.verses
-                .filter((verse) => {
-                  const number = Number.parseInt(verse.number, 10);
-                  return number >= parsed.verse! && number <= (parsed.verseTo ?? parsed.verse!);
-                })
-                .map((verse) => verse.number)
+          parsed.verse != null && (parsed.verseTo ?? parsed.verse) >= parsed.verse
+            ? parseVerseNumbers(String(parsed.verse) + '-' + String(parsed.verseTo ?? parsed.verse)).map(String)
             : [];
+        const resolution = resolveReadingReference(getChapterReading(book, chapter, source), verseNumbers);
         const suffix = verseNumbers.length ? `:${formatVerseNumbers(verseNumbers)}` : '';
         items.unshift({
           id: `reference:${book.number}:${chapter.number}:${suffix}`,
           label: `${book.name} ${chapter.number}${suffix}`,
-          detail: verseNumbers.length ? `${verseNumbers.length}` : `${chapter.verses.length}`,
+          detail: verseNumbers.length
+            ? `${resolution.covered.length}/${resolution.requested.length}`
+            : `${getChapterReading(book, chapter, source).available.length}`,
           book,
           chapter,
           verseNumbers,

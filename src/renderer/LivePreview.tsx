@@ -6,6 +6,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Slide } from './types';
 import { getSlideDisplayContent } from '../shared/slideContent';
 import { cn } from './utils';
+import { resolveCanvasSource } from './canvasSource';
 import { SLIDE_REFERENCE_WIDTH, ANIM_MAP } from './constants';
 import CountdownRenderer from './CountdownRenderer';
 import ScreenCaptureRenderer from './ScreenCaptureRenderer';
@@ -340,7 +341,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
       return (
         <div className="relative overflow-hidden" style={{ width: `${width}px`, height: `${height}px` }}>
           <img
-            src={slide.mediaUrl}
+            src={slide.mediaUrl ? resolveCanvasSource(slide.mediaUrl, false).url : undefined}
             className={cn('w-full h-full', objectFitClass)}
             style={{
               opacity: s.opacity ?? 1,

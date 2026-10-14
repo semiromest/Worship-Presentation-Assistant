@@ -1,3 +1,5 @@
+import { practiceHymns } from '../shared/practice';
+import { usePractice } from './hooks/usePractice';
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Music, Plus, Search, Trash2, FolderUp, CheckSquare, Pencil, X, ListOrdered, Cloud, Link2, CheckCircle, UserRound } from 'lucide-react';
@@ -251,8 +253,11 @@ function useVirtualList(items: Hymn[], containerRef: React.RefObject<HTMLDivElem
 // ─── Main component ───────────────────────────────────────────────────────
 
 export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
-  const { t } = useTranslation();
-  const [hymns, setHymns]               = useState<Hymn[]>([]);
+  const { t, i18n } = useTranslation();
+  const practice = usePractice();
+  const language = (i18n.resolvedLanguage ?? i18n.language).split('-')[0] as keyof typeof practiceHymns;
+  const sample = practice ? practiceHymns[language] ?? practiceHymns.en : practiceHymns.en;
+  const [hymns, setHymns] = useState<Hymn[]>(() => practice ? [sample] : []);
   const [searchTerm, setSearchTerm]     = useState('');
   const [searchInLyrics, setSearchInLyrics] = useState(false);
   const debouncedSearch                 = useDebounce(searchTerm, 200);
@@ -264,6 +269,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
   const [editingHymn, setEditingHymn] = useState<Hymn | null>(null);
   const [editForm, setEditForm] = useState({ title: '', lyrics: '', author: '' });
   const [partsModeEnabled, setPartsModeEnabled] = useState(() => {
+    if (practice) return true;
     try {
       const v = localStorage.getItem('hymnsPartsModeEnabled');
       return v === null ? true : v === '1';
@@ -340,6 +346,11 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
   }, []);
 
   useEffect(() => {
+    if (practice) {
+      const cached = loadCachedHymns('__online__') ?? [];
+      setHymns(previous => [sample, ...mergeImportedHymns(previous, cached).filter(hymn => !hymn.id.startsWith('practice-hymn-'))]);
+      return;
+    }
     const path = localStorage.getItem('defaultHymnArchivePath');
     if (path) {
       handleBulkImport(path);
@@ -348,7 +359,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
       const cached = loadCachedHymns('__online__');
       if (cached) setHymns(cached);
     }
-  }, [handleBulkImport]);
+  }, [handleBulkImport, practice, sample]);
 
   // ─── Add new hymn ────────────────────────────────────────────────────
 
@@ -700,8 +711,8 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
                 key={hymn.id}
                 hymn={hymn}
                 top={(start + i) * ITEM_H}
-                onSelect={(h) => { onAddHymnToPresentation({ ...h, showAuthorOnSlides }, partsModeEnabled); }}
-                onDoubleClick={(h) => { onAddHymnToPresentation({ ...h, showAuthorOnSlides }, partsModeEnabled, true); }}
+                onSelect={(h) => { onAddHymnToPresentation({ ...h, showAuthorOnSlides }, practice && h.id.startsWith('practice-hymn-') ? true : partsModeEnabled); }}
+                onDoubleClick={practice ? undefined : (h) => { onAddHymnToPresentation({ ...h, showAuthorOnSlides }, partsModeEnabled, true); }}
                 onEdit={openEditModal}
                 onRemove={removeHymn}
               />
@@ -833,6 +844,7 @@ const HymnRow = memo(({ hymn, top, onSelect, onDoubleClick, onEdit, onRemove }: 
       role="button"
       tabIndex={0}
       aria-label={`${hymn.title}${hymn.author ? ` — ${hymn.author}` : ''}: ${hymn.lyrics?.substring(0, 60)}`}
+      data-guide-anchor={hymn.id.startsWith('practice-hymn-') ? 'hymns-add' : undefined}
       onClick={() => onSelect(hymn)}
       onDoubleClick={() => onDoubleClick?.(hymn)}
       onKeyDown={(e) => {
@@ -854,6 +866,7 @@ const HymnRow = memo(({ hymn, top, onSelect, onDoubleClick, onEdit, onRemove }: 
 
       <div className="flex items-center gap-1 shrink-0">
         <button
+          disabled={hymn.id.startsWith('practice-hymn-')}
           onClick={e => { e.stopPropagation(); onEdit(hymn); }}
           className="text-white/40 hover:text-white/70"
           title={t('common.hymnsEdit')}
@@ -862,6 +875,7 @@ const HymnRow = memo(({ hymn, top, onSelect, onDoubleClick, onEdit, onRemove }: 
           <Pencil className="w-4 h-4" aria-hidden="true" />
         </button>
         <button
+          disabled={hymn.id.startsWith('practice-hymn-')}
           onClick={e => { e.stopPropagation(); onRemove(hymn.id); }}
           className="text-red-400 hover:text-red-300"
           aria-label={t('common.delete')}

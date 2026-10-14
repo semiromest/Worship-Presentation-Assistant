@@ -15,9 +15,19 @@
     "sidebarLabel": "Ana Navigasyon"
   },
   "common": {
+    "scriptureMerged": "Birleşik ayetler",
+    "scriptureMergedInfo": "Bu çeviride bazı ayetler birlikte verilmiştir.",
+    "scriptureIssue_empty": "Bu kaynakta ayrı metin sağlanmamış.",
+    "scriptureIssue_unsupported": "Bu numaralandırma henüz desteklenmiyor.",
+    "scriptureIssue_conflict": "Bu ayet kapsamındaki kaynak kayıtları çakışıyor. Gönderilemez.",
+    "scriptureIssuesInfo": "Bu bölümde ayrı metni sağlanmamış veya çözümlenemeyen kayıtlar var.",
+    "scriptureInvalidRequest": "Geçerli ve tamamlanmış bir ayet aralığı girin.",
+    "scriptureIncomplete": "İstek tam karşılanamadı. Eksik veya çakışan ayetler: {{numbers}}.",
+    "scriptureSelectFound": "Yalnızca bulunanları seç",
+    "scriptureExpanded": "{{requested}} bu çeviride {{resolved}} birlikte verilmiştir.",
+    "scriptureReadingSummary": "{{verses}} ayet · {{units}} metin birimi · {{slides}} slayt",
     "videoSettingsTab": "Video",
     "videoTextsTab": "Yazılar",
-
     "videoTextLayers": "Video üzerindeki yazılar",
     "videoAddText": "Yazı ekle",
     "videoTextHint": "Yazı ekleyin; önizlemede sürükleyip boyutlandırın.",
@@ -35,7 +45,6 @@
     "videoTextWidth": "Genişlik",
     "videoTextHeight": "Yükseklik",
     "videoTextOutsideRange": "Seçili yazı düzenleme için soluk gösteriliyor; bu anda yayında görünmez.",
-
     "videoOriginalSafe": "Orijinal korunur",
     "videoPlay": "Oynat",
     "videoPause": "Duraklat",
@@ -60,7 +69,6 @@
     "videoAudio": "Ses",
     "videoVolume": "Ses düzeyi",
     "videoSourceInfo": "Kaynak bilgisi",
-
     "videoEditorTitle": "Video Düzenleme",
     "videoSeconds": "saniye",
     "videoStart": "Başlangıç",
@@ -71,7 +79,6 @@
     "videoLoadFailed": "Video yüklenemedi. Zaman ayarları değiştirilmedi.",
     "videoDurationPending": "Video süresi bekleniyor.",
     "videoNonDestructive": "Slaytın video ve yazı ayarları kaydedilir. Orijinal video değiştirilmez.",
-
     "editorPreview": "Önizle",
     "editorPreviewFailed": "Önizleme oluşturulamadı",
     "editorPreviewLoading": "Önizleme hazırlanıyor",
@@ -84,7 +91,6 @@
     "editorNoEditableSlides": "Düzenlenebilir slayt yok.",
     "editorShowAll": "Tümünü göster",
     "editorCaptionsSample": "Altyazı örneği",
-
     "editorPendingDraft": "Kaydedilmemiş taslak",
     "editorEmpty": "Düzenlemek için sunuya bir slayt ekleyin.",
     "editorConflictTitle": "Slayt değişiklikleri çakışıyor",
@@ -92,7 +98,6 @@
     "editorApplyDraft": "Taslağı uygula",
     "editorUseCurrent": "Sunudaki sürümü kullan",
     "editorBeforeReplace": "Başka bir sunuya geçmeden önce editördeki değişiklikleri kütüphaneye kaydetmek veya vazgeçmek ister misiniz?",
-
     "newSlide": "Yeni Slayt",
     "newSlideContent": "Yeni Slayt İçeriği",
     "newPresentation": "Yeni Sunum",
@@ -1094,6 +1099,9 @@
     "backgroundMusicEmpty": "Bu klasörde desteklenen müzik bulunamadı.",
     "backgroundMusicMissing": "Müzik klasörü bulunamadı.",
     "backgroundMusicPlayError": "Müzik oynatılamadı.",
+    "backgroundMusicLocal": "Yerel",
+    "youtubeLoading": "YouTube müziği hazırlanıyor…",
+    "youtubeNoResults": "Sonuç bulunamadı.",
     "youtubeSearch": "YouTube'da ara",
     "youtubeSearchPlaceholder": "YouTube müziği ara...",
     "youtubeSearchError": "YouTube araması başarısız oldu.",
@@ -1114,7 +1122,72 @@
     "sonioxTargetLanguageHint": "Konuşulan metin bu dile çevrilir.",
     "sonioxSttLanguage": "Varsayılan konuşulan dil (STT)",
     "sonioxSttAuto": "Otomatik algıla",
-    "sonioxSttLanguageHint": "Otomatik algılama açıkken dil konuşmadan algılanır; belirli bir dil seçerseniz tanıma o dile yönlendirilir."
+    "sonioxSttLanguageHint": "Otomatik algılama açıkken dil konuşmadan algılanır; belirli bir dil seçerseniz tanıma o dile yönlendirilir.",
+    "navigation": {
+      "search": "Ayarlarda ara",
+      "clearSearch": "Aramayı temizle",
+      "category": "Ayar kategorisi",
+      "resultsTitle": "Arama sonuçları",
+      "noResults": "Eşleşen ayar bulunamadı. Farklı bir sözcük deneyin.",
+      "resultCount": "{{count}} ayar bulundu.",
+      "clearLiveSaves": "Otomatik kayıtları temizle",
+      "descriptions": {
+        "hymn-size": "İlahi yazarının yazı boyutunu ayarlayın.",
+        "watermark": "Logo yükleyin; konum, boyut, opaklık ve uygulanacağı içerikleri seçin.",
+        "live-save": "Sunumunuzun otomatik kaydedilmesini açın veya kapatın.",
+        "retention": "Otomatik kayıtların ne kadar süre saklanacağını seçin.",
+        "clear-live-saves": "Yalnızca otomatik kayıtları temizleyin; normal sunum kayıtları korunur."
+      },
+      "categories": {
+        "general": {
+          "title": "Genel",
+          "description": "Dil, ses ve arayüz tercihlerini düzenleyin."
+        },
+        "presentation": {
+          "title": "Sunum",
+          "description": "Sunum akışını ve operatör araçlarını düzenleyin."
+        },
+        "appearance": {
+          "title": "İlahi ve logo",
+          "description": "İlahi yazarının görünümünü ve logo filigranını ayarlayın."
+        },
+        "captions": {
+          "title": "Altyazı ve çeviri",
+          "description": "Konuşma tanıma ve çeviri tercihlerini düzenleyin."
+        },
+        "autosave": {
+          "title": "Otomatik kayıt",
+          "description": "Otomatik kayıtları ve saklama süresini yönetin."
+        },
+        "updates": {
+          "title": "Güncellemeler",
+          "description": "Yeni sürümleri ve güncelleme durumunu inceleyin."
+        },
+        "learning": {
+          "title": "Nasıl Kullanılır?",
+          "description": ""
+        }
+      },
+      "keywords": {
+        "language": "arayüz dil türkçe english",
+        "sound": "ses efekt bildirim tıklama",
+        "motion": "hareket animasyon azaltılmış",
+        "auto-live": "otomatik canlı yayın geçiş",
+        "sections": "bölüm servis düzen akış",
+        "notes": "operatör not açıklama",
+        "hymn-position": "ilahi yazar konum hizalama",
+        "hymn-size": "ilahi yazar yazı font boyut",
+        "watermark": "logo filigran resim opaklık şeffaflık",
+        "stt-key": "soniox api anahtar altyazı ses",
+        "spoken-language": "konuşma algılama tanıma dil",
+        "target-language": "çeviri hedef dil tercüme",
+        "live-save": "canlı kayıt otomatik yedek autosave",
+        "retention": "saklama süre gün yedek",
+        "clear-live-saves": "otomatik kayıt temizle sil yedek",
+        "updates": "güncelleme sürüm indir",
+        "learn": "alıştırma rehber öğren yardım nasıl kullanılır"
+      }
+    }
   },
   "stage": {
     "next": "Sırada",
@@ -1240,5 +1313,395 @@
     "off": "Kapalı",
     "saveOff": "Otomatik kayıt kapalı",
     "sessionError": "Canlı konum kaydedilemedi"
+  },
+  "tour": {
+    "mapTitle": "Uygulamayı Tanı",
+    "helpTitle": "Nasıl Kullanılır?",
+    "intro": "İçerik seç, slayt hazırla, ekrana gönder.",
+    "welcomeTitle": "Hoş geldiniz",
+    "start": "Kısa turu başlat",
+    "later": "Şimdi değil",
+    "close": "Kapat",
+    "back": "Geri",
+    "next": "İleri",
+    "done": "Bitir",
+    "progress": "{{current}} / {{total}}",
+    "loading": "Tur hazırlanıyor…",
+    "stillLoading": "Çalışma alanı hâlâ hazırlanıyor. İsterseniz turu kapatabilirsiniz.",
+    "failed": "Turun hedefi hazırlanamadı. Daha sonra tekrar deneyin.",
+    "editorDescription": "Slaytların tasarımını ve düzenini ayrıntılı olarak düzenleyin.",
+    "helpDescription": "Klavye kısayolları için ? tuşunu kullanın.",
+    "blocked": {
+      "output-active": "Çıktı açıkken kısa tur kullanılamaz. Bölüm haritasını kullanabilirsiniz.",
+      "session-active": "Aktif yayın veya altyazı oturumu bittikten sonra turu başlatın.",
+      "editor-active": "Önce editörden çıkın ve bekleyen düzenlemeleri tamamlayın.",
+      "modal-open": "Önce açık iletişim kutusunu kapatın.",
+      "interaction-active": "Önce sürükleme veya açık menü işlemini tamamlayın.",
+      "not-ready": "Uygulama durumu hazırlanıyor. Biraz sonra tekrar deneyin."
+    },
+    "steps": {
+      "navigation": {
+        "title": "Bölümler arasında gezinin",
+        "body": "Sol şerit sunumlarınızı ve içerik araçlarını bir arada tutar. Sunumlar bölümünde hazırladığınız dosyaları yönetebilirsiniz."
+      },
+      "slides": {
+        "title": "Slaytları hazırlayın",
+        "body": "Slayt ekleyin, sıralamayı düzenleyin ve biçimlendirme araçlarıyla görünümünü hazırlayın."
+      },
+      "content": {
+        "title": "İçeriği sunuma ekleyin",
+        "body": "İncil bölümünde istediğiniz içeriği bulun ve sunuma ekleyin. Medya, ilahiler ve diğer içerik araçları da sol şeritte bulunur."
+      },
+      "output": {
+        "title": "Ekran çıktısını yönetin",
+        "body": "Hazırladığınız içeriği ekran çıktısında gösterin. Yayına başlamadan önce hedef ekranı ve hazırlık kontrolünü gözden geçirin."
+      },
+      "help": {
+        "title": "Yardıma geri dönün",
+        "body": "Ayarlar bölümünden dili değiştirebilir, bölüm haritasını açabilir ve bu turu yeniden başlatabilirsiniz."
+      }
+    },
+    "pageIntroductions": "Sayfa tanıtımları",
+    "suggestTitle": "Bu sayfayı tanıyalım mı?",
+    "learnPage": "Sayfayı tanı",
+    "disableSuggestions": "Sayfa önerilerini kapat",
+    "suggestionsDisabled": "Sayfa önerileri kapalı",
+    "pages": {
+      "presentations": "Sunumlarınızı dosyadan açın, kaydedin veya hazırladığınız sunumları kütüphaneden yönetin.",
+      "slides": "Yeni slayt ekleyin, slaytları seçip sıralayın ve sağ panelde içerik ile görünümünü düzenleyin.",
+      "bible": "Bir İncil kaynağı seçin veya XML dosyası yükleyin. Kitap, bölüm ve ayet seçerek içeriği sunuma ekleyebilirsiniz.",
+      "media": "Görsel ve videoları bulun, önizleyin ve sunuma ekleyin. Birden fazla içerikle döngü slaytı hazırlayabilirsiniz.",
+      "hymns": "İlahi arşivinizi yükleyin veya ilahi bulun. Sözleri sunum slaytlarına dönüştürebilirsiniz.",
+      "countdown": "Dakika ve saniyeyi seçin, görünümü hazırlayın ve geri sayımı sunuma ekleyin.",
+      "screen": "Ekran yakalama kaynağını seçerek içeriğini slayta ekleyin. Kaynak seçimi, projeksiyon çıktısını açmaktan farklıdır.",
+      "calendar": "Hazırladığınız sunumları takvimde planlayın ve ilgili kayıttan yeniden açın.",
+      "editor": "Slayt öğelerini tasarım alanında düzenleyin. Bekleyen taslak değişikliklerini mevcut kaydetme araçlarıyla uygulayın.",
+      "settings": "Dil ve uygulama tercihlerini yönetin. Yardım bölümünden sayfa tanıtımlarını ve kısa turu yeniden açabilirsiniz."
+    }
+  },
+  "practice": {
+    "banner": "Alıştırma — ayrı profil; canlı çıktı kapalı",
+    "title": "Alıştırma ilerlemesi",
+    "preflight": "Teknik ön doğrulama. Görevler ayrı teslimde eklenecek.",
+    "counts": "Tamamlanan: {{completed}} · Atlanan: {{skipped}} · Kalan: {{remaining}}",
+    "notStarted": "Başlanmadı",
+    "inProgress": "Devam ediyor / duraklatıldı",
+    "completed": "Tamamlandı",
+    "skipped": "Atlandı",
+    "pending": "Sonraki teslim",
+    "phase3": "Faz 3 — şimdilik salt okunur",
+    "unreadable": "İlerleme okunamadı; son geçerli durum korundu.",
+    "launchError": "Alıştırma açılamadı.",
+    "open": "Alıştırmayı aç",
+    "resume": "Alıştırmaya devam et",
+    "tasksTitle": "Alıştırma görevleri",
+    "choose": "Bir görev seçin. İşlemleri uygulamanın gerçek araçlarıyla yapın.",
+    "retained": "Slaytlarınız korunur; çıkışta otomatik temizleme yapılmaz.",
+    "go": "Göreve git",
+    "pause": "Duraklat",
+    "skip": "Atla",
+    "available": "Hazır",
+    "deckName": "Alıştırma sunumu",
+    "demoSlide": "Alıştırma: silme örneği",
+    "deleteWarning": "Yalnızca seçili silme örneğini kaldırın. İçeriğini değiştirdiyseniz onu koruyun ve görevi yeniden başlatın.",
+    "taskError": "İşlem kaydedilemedi. Tekrar deneyebilir veya görevi atlayabilirsiniz.",
+    "exercise": {
+      "slide-add": {
+        "title": "Slayt ekle",
+        "body": "Slaytlar bölümünde yeni bir metin slaytı ekleyin."
+      },
+      "slide-delete": {
+        "title": "Örnek slaytı sil",
+        "body": "Slaytlar bölümünde seçilmiş silme örneğini kaldırın. Diğer slaytlarınızı koruyun."
+      },
+      "media": {
+        "title": "Medya ekle",
+        "body": "Medya bölümünde resim importunu açın. Alıştırma resmi yüklenir; kartın sunuma ekleme komutunu kullanın."
+      },
+      "bible": {
+        "title": "İncil import et ve ayet ekle",
+        "body": "İncil bölümünde yerel importu kullanın. Örnek Genesis 1:1 ayetini seçip sunuma ekleyin."
+      },
+      "countdown": {
+        "title": "Geri sayım ekle",
+        "body": "Geri Sayım bölümünde sıfırdan büyük bir süre seçip sunuma ekleyin."
+      },
+      "presentations": {
+        "title": "Kütüphaneye kaydet",
+        "body": "Sunumlar bölümünde Alıştırma sunumunu kütüphaneye kaydedin. Gerçek dosyaya yazılmaz."
+      },
+      "hymns": {
+        "title": "İlahiler",
+        "body": "Aydınlatılan örnek ilahi satırına tıkla. Sözleri sunumuna eklenince sonucu birlikte göreceğiz."
+      },
+      "image-edit": {
+        "title": "Görselini düzenledin",
+        "body": "Aydınlatılan görsel slaytına tıkla. Sağdaki editör panelinde iki basit düzenleme yapacağız."
+      },
+      "slide-reorder": {
+        "title": "Slaytları yeniden sırala",
+        "body": "Aydınlatılan örnek slaytı diğer aydınlatılan slaytın üzerine sürükleyip bırak. Yerleri gerçekten değiştiğinde bu tek alıştırma tamamlanır."
+      }
+    }
+  },
+  "guide": {
+    "title": "Adım adım öğren",
+    "description": "Ayrı alıştırma penceresinde işlemleri yaparak öğren.",
+    "pilot": "Rehber on bölümü ve altı alıştırmayı kapsar.",
+    "open": "Adım Adım Öğren",
+    "begin": "Başla",
+    "resume": "Kaldığın yerden devam et",
+    "next": "Devam",
+    "exit": "Çık ve duraklat",
+    "restart": "Baştan başla",
+    "progress": "Adım {{current}} / {{total}}",
+    "waiting": "Hedef hazırlanıyor. Biraz bekleyebilirsin veya çıkabilirsin.",
+    "unavailable": "Bu hedef şu anda kullanılamıyor.",
+    "stuck": "Takıldın mı? Hedefi yeniden göstererek tekrar deneyebilir veya bu adımı atlayabilirsin. Atlanan adım tamamlanmış sayılmaz.",
+    "retry": "Hedefi yeniden göster",
+    "skip": "Bu adımı atla",
+    "advanced": "Gelişmiş yardım",
+    "jumpWarning": "Seçtiğin bölümden devam edebilirsin. İlerideki bir bölüme geçersen aradaki yapılmayan işlemler atlandı olarak kaydedilir; tamamlanmış sayılmaz.",
+    "error": "İlerleme kaydedilemedi veya rehber hazırlanamadı. Tekrar dene; başarı kaydedilmiş sayılmaz.",
+    "finished": "Rehberi tamamladın.",
+    "finishedSkipped": "Rehberin sonuna geldin. Atlanan adımlar tamamlandı sayılmadı.",
+    "savedStep": "Kaldığın adım: {{step}}",
+    "skippedCount": "Atlanan adım: {{count}}",
+    "shortDescription": "Temel çalışma alanlarını hızlıca tanı.",
+    "mapDescription": "Bölümleri ve kısayolları incele.",
+    "shortTitle": "Kısa tur",
+    "steps": {
+      "welcome": {
+        "title": "Birlikte öğrenelim",
+        "body": "Ayrı alıştırma profilinde çalışacaksın. Canlı çıktı kapalı; gerçek sunumun değişmez. Başladıktan sonra gösterilen işlemleri sırayla yap."
+      },
+      "presentations": {
+        "title": "Sunumlar",
+        "body": "Bu bölümde sunumlarını yönetirsin. Şimdi yalnızca bölümü tanıyoruz; birazdan gerçek araçlarla bir slayt oluşturacağız."
+      },
+      "sidebar": {
+        "title": "Bölüm düzeni",
+        "body": "Sol taraftaki düğmeler uygulamanın bölümlerini açar. Her adımda kullanacağın alanı aydınlatacağız."
+      },
+      "nav-slides": {
+        "title": "Slaytlar bölümünü aç",
+        "body": "Aydınlatılan Slaytlar düğmesine tıkla."
+      },
+      "add": {
+        "title": "Yeni slayt ekle",
+        "body": "Aydınlatılan Yeni Slayt düğmesine tıkla. Slayt oluştuğunda rehber ilerleyecek."
+      },
+      "select": {
+        "title": "Örnek slaytı seç",
+        "body": "Aydınlatılan örnek slayta tıkla. Yalnızca bu örneği seçeceğiz; eklediğin slayt korunacak."
+      },
+      "delete": {
+        "title": "Örneği sil",
+        "body": "Seçili örneği Delete tuşuyla veya sağ panelde aydınlatılan çöp kutusu simgesiyle silebilirsin. İki yöntem de kabul edilir; diğer slaytlar korunur."
+      },
+      "done": {
+        "title": "Bitiş",
+        "body": "Rehberin sonuna geldin. Alıştırma değişikliklerin çıkışta korunur."
+      },
+      "nav-bible": {
+        "title": "İncil",
+        "body": "Aydınlatılan İncil düğmesine tıkla."
+      },
+      "bible-intro": {
+        "title": "İncil kaynaklarını yükleme",
+        "body": "İncil’i yerel bir XML dosyasından yükleyebilir veya çevrimiçi arayıp uygun kaynağı seçerek ekleyip kullanabilirsin. Bu alıştırmada güvenli, yerel örnek XML kullanıyoruz."
+      },
+      "nav-media": {
+        "title": "Medya",
+        "body": "Aydınlatılan Medya düğmesine tıkla."
+      },
+      "media-intro": {
+        "title": "Medya",
+        "body": "Görsel ve videoları bulun, önizleyin ve sunuma ekleyin. Birden fazla içerikle döngü slaytı hazırlayabilirsiniz."
+      },
+      "nav-hymns": {
+        "title": "İlahiler",
+        "body": "Aydınlatılan İlahiler düğmesine tıkla."
+      },
+      "hymns-intro": {
+        "title": "İlahiler",
+        "body": "Normal modda her kıta ayrı slayt olur. Parça modunda kıtalar tek slaytın parçalarıdır. Örneğimizi parça modunda ekleyeceğiz."
+      },
+      "nav-countdown": {
+        "title": "Geri Sayım",
+        "body": "Aydınlatılan Geri Sayım düğmesine tıkla."
+      },
+      "countdown-intro": {
+        "title": "Geri Sayım",
+        "body": "Dakika ve saniyeyi seçin, görünümü hazırlayın ve geri sayımı sunuma ekleyin."
+      },
+      "nav-screen": {
+        "title": "Ekran",
+        "body": "Aydınlatılan Ekran düğmesine tıkla."
+      },
+      "screen-intro": {
+        "title": "Ekran",
+        "body": "Ekran yakalama kaynağını seçerek içeriğini slayta ekleyin. Kaynak seçimi, projeksiyon çıktısını açmaktan farklıdır."
+      },
+      "nav-calendar": {
+        "title": "Takvim",
+        "body": "Aydınlatılan Takvim düğmesine tıkla."
+      },
+      "calendar-intro": {
+        "title": "Takvim",
+        "body": "Hazırladığınız sunumları takvimde planlayın ve ilgili kayıttan yeniden açın."
+      },
+      "nav-editor": {
+        "title": "Editör",
+        "body": "Aydınlatılan Editör düğmesine tıkla."
+      },
+      "editor-intro": {
+        "title": "Editör",
+        "body": "Resimler sağ panelden veya Slayt Editör’den düzenlenebilir. Slayt Editör daha ayrıntılı düzenleme seçenekleri ve video düzenleme araçları sunar. Örneğimizde iki basit resim düzenlemesi yaptık."
+      },
+      "nav-settings": {
+        "title": "Ayarlar",
+        "body": "Aydınlatılan Ayarlar düğmesine tıkla."
+      },
+      "settings-intro": {
+        "title": "Ayarlar",
+        "body": "Dil ve uygulama tercihlerini yönetin. Yardım bölümünden sayfa tanıtımlarını ve kısa turu yeniden açabilirsiniz."
+      },
+      "nav-save": {
+        "title": "Sunumlar",
+        "body": "Aydınlatılan Sunumlar düğmesine tıkla."
+      },
+      "bible-source": {
+        "title": "Kaynak yükle",
+        "body": "XML İçe Aktar düğmesine tıkla. Kaynak zaten açıksa yönetim menüsünü açacağız."
+      },
+      "bible-import": {
+        "title": "Örnek XML’i içe aktar",
+        "body": "Menüdeki XML İçe Aktar öğesine tıkla. Yalnızca güvenli örnek kaynak yüklenir."
+      },
+      "bible-book": {
+        "title": "İlk kitabı seç",
+        "body": "Aydınlatılan ilk kitaba tıkla."
+      },
+      "bible-chapter": {
+        "title": "İlk bölümü seç",
+        "body": "Aydınlatılan 1. bölüm düğmesine tıkla."
+      },
+      "bible-verse": {
+        "title": "Ayeti seç",
+        "body": "Aydınlatılan örnek ayeti seç."
+      },
+      "bible-add": {
+        "title": "Ayeti sunuma ekle",
+        "body": "Sunuma Ekle düğmesine tıkla. Ayet slaytı oluşunca ilerleyeceğiz."
+      },
+      "media-menu": {
+        "title": "Medya menüsünü aç",
+        "body": "Aydınlatılan Medya Ekle düğmesine tıkla."
+      },
+      "media-import": {
+        "title": "Örnek resmi yükle",
+        "body": "Resim Seç düğmesine tıkla. Gerçek dosya seçicisi yerine güvenli örnek resim kullanılır."
+      },
+      "media-add": {
+        "title": "Resmi slayta ekle",
+        "body": "Örnek resmin altındaki artı düğmesine tıkla. Resim slaytını bekleyeceğiz."
+      },
+      "countdown-duration": {
+        "title": "Süreyi ayarla",
+        "body": "Dakika alanını 2 yap. Yalnızca bu alanı düzenleyebilirsin."
+      },
+      "countdown-add": {
+        "title": "Geri sayımı ekle",
+        "body": "Slayta Ekle düğmesine tıkla. Zamanlayıcıyı veya canlı çıktıyı başlatmayacağız."
+      },
+      "save": {
+        "title": "Alıştırmayı kütüphaneye kaydet",
+        "body": "Kütüphaneye Kaydet düğmesine tıkla. Kayıt yalnızca ayrı alıştırma profilinde yapılır. Başarı sonucunu bekleyeceğiz."
+      },
+      "add-result": {
+        "title": "Slaytını oluşturdun",
+        "body": "Yeni bir slayt oluşturdun. Sunumundaki slaytlar bu şekilde hazırlanır."
+      },
+      "delete-result": {
+        "title": "Örnek slayt silindi",
+        "body": "Seçtiğin örnek slayt kaldırıldı; diğer slaytların korunuyor."
+      },
+      "bible-result": {
+        "title": "Ayeti sunumuna ekledin",
+        "body": "Ayeti sunumuna ekledin. Hazırlanan slayt böyle görünüyor."
+      },
+      "media-result": {
+        "title": "Görselini ekledin",
+        "body": "Görseli sunumuna ekledin. Slayt üzerinde böyle görünüyor."
+      },
+      "countdown-result": {
+        "title": "Geri sayım hazır",
+        "body": "İki dakikalık geri sayım slaytını hazırladın. Bu sabit bir önizlemedir; sayaç başlamadı."
+      },
+      "save-result": {
+        "title": "Sunumun kaydedildi",
+        "body": "Sunumunu alıştırma kitaplığına kaydettin; buradan tekrar açabilirsin."
+      },
+      "hymns-add": {
+        "title": "Örnek ilahiyi ekle",
+        "body": "Aydınlatılan örnek ilahi satırına tıkla. Sözleri sunumuna eklenince sonucu birlikte göreceğiz."
+      },
+      "hymns-result": {
+        "title": "İlahini ekledin",
+        "body": "Örnek ilahinin sözlerini sunumuna ekledin. Hazırlanan ilahi slaytı böyle görünüyor."
+      },
+      "image-select": {
+        "title": "Örnek görseli seç",
+        "body": "Aydınlatılan görsel slaytına tıkla. Sağdaki editör panelinde iki basit düzenleme yapacağız."
+      },
+      "image-fit": {
+        "title": "Görseli çerçeveye sığdır",
+        "body": "Sağdaki editörde İçine sığdır düğmesine tıkla. Görselin tamamı çerçevede görünsün."
+      },
+      "image-grayscale": {
+        "title": "Gri tonlamayı uygula",
+        "body": "Gri tonlama kaydırıcısını %100 yap. Kaydırıcıya odaklanıp End (Son) tuşuna da basabilirsin."
+      },
+      "image-edit-result": {
+        "title": "Görselini düzenledin",
+        "body": "Görselin sığdırmasını değiştirdin ve gri tonlama uyguladın. Düzenlenen görsel böyle görünüyor."
+      },
+      "hymns-parts": {
+        "title": "İlahinin parçaları",
+        "body": "Sağdaki panel ilahinin parçalarını gösterir. İstenen parçanın numaralı düğmesine tıklayarak o parçaya geçebilirsin. Burada yalnızca inceliyoruz; parçaya tıklaman gerekmiyor."
+      },
+      "reorder": {
+        "title": "Slaytları yeniden sırala",
+        "body": "Aydınlatılan örnek slaytı diğer aydınlatılan slaytın üzerine sürükleyip bırak. Yerleri gerçekten değiştiğinde bu tek alıştırma tamamlanır."
+      },
+      "hymns-font": {
+        "title": "İlahinin yazı boyutu",
+        "body": "Seçili ilahinin yazı boyutunu sağdaki Yazı boyutu alanından değiştirebilirsin. Daha büyük sayı yazıyı büyütür, daha küçük sayı küçültür. Bu adım açıklamadır; değişiklik yapman gerekmiyor."
+      },
+      "image-tools": {
+        "title": "İki düzenleme yolu",
+        "body": "Resimler sağ panelden ve aydınlatılan kalem düğmesinin açtığı Slayt Editör’den düzenlenebilir. Slayt Editör daha ayrıntılı seçenekler sunar; video düzenleme işlemleri de bu panelden yapılabilir. Örnek resimde yalnızca sığdırma ve gri tonlama yapacağız."
+      }
+    },
+    "mapTitle": "Bölüm haritası",
+    "onlyIntroducing": "Bu bölümde yalnızca tanıtım yapıyoruz; uygulamalı görev yok.",
+    "openSection": "Aydınlatılan {{section}} düğmesine tıkla.",
+    "pause": "Duraklat",
+    "close": "Alıştırmayı kapat",
+    "chapters": "Bölüme geç",
+    "restartConfirm": "Yeni bir alıştırmaya başlamak istiyor musun?",
+    "restartDetail": "Mevcut sunumun ve ilerlemen arşivde korunacak. Yeni alıştırma temiz bir sunum ve sıfır ilerlemeyle başlayacak; dil tercihin ve kitaplık kayıtların korunacak.",
+    "result": {
+      "countChange": "Slayt sayısı: {{before}} → {{after}}",
+      "savedCount": "Alıştırma kitaplığı · {{count}} slayt",
+      "deletedPreview": "Silinen örnek — önceki görünümü",
+      "remaining": "Kalan slaytlar: {{count}}",
+      "emptyPresentation": "Sunumda şu anda slayt yok.",
+      "imagePreview": "Eklenen görsel",
+      "countdownPreview": "Sabit geri sayım önizlemesi",
+      "unavailableTitle": "Sonuç şu anda gösterilemiyor",
+      "unavailable": "Doğrulanmış sonuç kaydı okunamadı. Tekrar dene; işlemi yeniden yapmana gerek yok."
+    }
   }
 }

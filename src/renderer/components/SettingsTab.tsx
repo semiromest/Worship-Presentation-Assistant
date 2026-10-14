@@ -1,6 +1,8 @@
-import { useMemo, useState, useEffect } from 'react';
+import { PracticePanel } from './PracticePanel';
+import { registerTourAnchor } from './Tour/tourController';
+import { useMemo, useState, useEffect, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Globe, Zap, Settings2, Save, Trash2, DatabaseBackup, Volume2, Mic, KeyRound, Languages, Check, Loader2, Music, Sparkles } from 'lucide-react';
+import { Globe, Zap, Settings2, Save, Trash2, DatabaseBackup, Volume2, Mic, KeyRound, Languages, Check, Loader2, Music, Sparkles, Search, X, ChevronRight, BookOpen, Monitor, RefreshCw } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { useUpdaterStore } from '../state/useUpdaterStore';
 import { WatermarkSettingsPanel } from './WatermarkSettingsPanel';
@@ -9,9 +11,57 @@ import { AUTO_STT_LANGUAGE, STT_LANGUAGES } from '../../shared/stt';
 import { cn } from '../utils';
 import { DEFAULT_LIVE_SAVE_RETENTION_MS, isLiveSavePreset, LIVE_SAVE_RETENTION_OPTIONS, getLiveSaveRetention } from '../hooks/useLiveSave';
 import SettingSwitch from './SettingSwitch';
+import { settingsCategories, settingsItems, normalizeSettingsSearch, type SettingsCategoryId, type SettingsItemId } from './settingsNavigation';
+import './SettingsTab.css';
+
+// Navigation is session-only; it never changes a saved presentation or user setting.
+let lastSettingsCategory: SettingsCategoryId = 'general';
+const CATEGORY_ICONS = { general: Settings2, presentation: Monitor, appearance: Music, captions: Mic, autosave: DatabaseBackup, updates: RefreshCw, learning: BookOpen };
+
 
 export default function SettingsTab() {
+
   const { t, i18n } = useTranslation();
+  const [category, setCategory] = useState<SettingsCategoryId>(() => lastSettingsCategory);
+  const [query, setQuery] = useState('');
+  const [focusItem, setFocusItem] = useState<SettingsItemId | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const normalizedQuery = normalizeSettingsSearch(query);
+  const searchResults = settingsItems.filter(item => {
+    const copy = [t(item.titleKey), t(item.descriptionKey), t(`settings.navigation.categories.${item.category}.title`), t(`settings.navigation.keywords.${item.id}`)];
+    const haystack = normalizeSettingsSearch(copy.join(' '));
+    return normalizedQuery.split(/\s+/).every(word => haystack.includes(word));
+  });
+
+  const chooseCategory = (next: SettingsCategoryId) => {
+    lastSettingsCategory = next;
+    setCategory(next);
+    setQuery('');
+    setFocusItem(null);
+  };
+  const clearSearch = () => { setQuery(''); searchRef.current?.focus(); };
+  const openSearchResult = (item: typeof settingsItems[number]) => {
+    chooseCategory(item.category);
+    setFocusItem(item.id);
+  };
+  useEffect(() => { contentRef.current?.scrollTo({ top: 0 }); }, [category, normalizedQuery]);
+  useEffect(() => {
+    if (!focusItem || normalizedQuery) return;
+    const frame = requestAnimationFrame(() => {
+      const item = settingsItems.find(entry => entry.id === focusItem);
+      const root = contentRef.current?.querySelector<HTMLElement>(`#settings-item-${focusItem}`);
+      if (!root || !item) return;
+      root.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+      const explicit = 'focusSelector' in item ? root.querySelector<HTMLElement>(item.focusSelector) : null;
+      const control = explicit ?? [...root.querySelectorAll<HTMLElement>('button:not(:disabled), select:not(:disabled), input:not(:disabled):not([type="file"]), summary, [tabindex="0"]')]
+        .find(element => element.getClientRects().length > 0);
+      (control ?? root).focus({ preventScroll: true });
+      setFocusItem(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusItem, normalizedQuery, category]);
+
   const sectionsEnabled = useStore(s => s.serviceSectionsEnabled);
   const setSectionsEnabled = useStore(s => s.setServiceSectionsEnabled);
   const operatorNotesEnabled = useStore((s) => s.operatorNotesEnabled);
@@ -103,21 +153,14 @@ export default function SettingsTab() {
     setPresets(next);
   };
 
-  return (
-    <div className="h-full overflow-y-auto">
-      <div className="max-w-2xl mx-auto p-6 space-y-5">
-        <h2 className="text-lg font-bold flex items-center gap-2">
-          <Settings2 className="w-5 h-5 text-blue-400" aria-hidden="true" />
-          {t('nav.settings')}
-        </h2>
-
-        {/* Language */}
-        <section className="rounded-xl border border-white/10 bg-surface-raised p-4 space-y-3" aria-label={t('settings.language')}>
+  const categoryContent: Record<SettingsCategoryId, ReactNode> = {
+    general: <>
+        <section id="settings-item-language" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4 space-y-3" aria-label={t('settings.language')}>
           <div className="flex items-center gap-2">
             <Globe className="w-4 h-4 text-white/60 shrink-0" aria-hidden="true" />
             <div>
               <h3 className="text-sm font-semibold">{t('settings.language')}</h3>
-              <p className="text-[11px] text-white/45">{t('settings.languageDesc')}</p>
+              <p className="text-sm leading-relaxed text-white/60">{t('settings.languageDesc')}</p>
             </div>
           </div>
           <select
@@ -134,54 +177,26 @@ export default function SettingsTab() {
           </select>
         </section>
 
-        {/* Auto Go-Live */}
-        <section className="rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('common.autoGoLive')}>
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2 min-w-0">
-              <Zap className={cn('w-4 h-4 shrink-0', autoGoLive ? 'text-emerald-300' : 'text-white/35')} aria-hidden="true" />
-              <div className="min-w-0">
-                <h3 className="text-sm font-semibold">{t('common.autoGoLive')}</h3>
-                <p className="text-[11px] text-white/45">{t('common.autoGoLiveHint')}</p>
-              </div>
-            </div>
-            <SettingSwitch checked={autoGoLive} onCheckedChange={setAutoGoLive} label={t('common.autoGoLive')} />
-          </div>
-        </section>
-
-        <section className="rounded-xl border border-white/10 bg-surface-raised p-4 flex items-center justify-between gap-4">
-          <div><h3 className="text-sm font-semibold">{t('sections.title')}</h3><p className="text-[11px] text-white/45">{t('sections.description')}</p></div>
-          <SettingSwitch checked={sectionsEnabled} onCheckedChange={setSectionsEnabled} label={t('sections.title')} />
-        </section>
-        <section className="rounded-xl border border-white/10 bg-surface-raised p-4 flex items-center justify-between gap-4" aria-label={t('common.operatorNotes')}>
-          <div>
-            <h3 className="text-sm font-semibold">{t('common.operatorNotes')}</h3>
-            <p className="text-[11px] text-white/45">{t('settings.operatorNotesDesc')}</p>
-          </div>
-          <SettingSwitch checked={operatorNotesEnabled} onCheckedChange={setOperatorNotesEnabled} label={t('common.operatorNotes')} />
-        </section>
-
-        {/* Sound Effects */}
-        <section className="rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.soundEffects')}>
-          <div className="flex items-center justify-between gap-4">
+        <section id="settings-item-sound" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.soundEffects')}>
+          <div className="settings-row flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 min-w-0">
               <Volume2 className={cn('w-4 h-4 shrink-0', uiSfxEnabled ? 'text-emerald-300' : 'text-white/35')} aria-hidden="true" />
               <div className="min-w-0">
                 <h3 className="text-sm font-semibold">{t('settings.soundEffects')}</h3>
-                <p className="text-[11px] text-white/45">{t('settings.soundEffectsDesc')}</p>
+                <p className="text-sm leading-relaxed text-white/60">{t('settings.soundEffectsDesc')}</p>
               </div>
             </div>
             <SettingSwitch checked={uiSfxEnabled} onCheckedChange={setUiSfxEnabled} label={t('settings.soundEffects')} />
           </div>
         </section>
 
-        {/* Purposeful UI motion */}
-        <section className="rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.uiMotion')}>
-          <div className="flex items-center justify-between gap-4">
+        <section id="settings-item-motion" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.uiMotion')}>
+          <div className="settings-row flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 min-w-0">
               <Sparkles className={cn('w-4 h-4 shrink-0', uiMotionEnabled ? 'text-violet-300' : 'text-white/35')} aria-hidden="true" />
               <div className="min-w-0">
                 <h3 className="text-sm font-semibold">{t('settings.uiMotion')}</h3>
-                <p className="text-[11px] text-white/45">{t('settings.uiMotionDesc')}</p>
+                <p className="text-sm leading-relaxed text-white/60">{t('settings.uiMotionDesc')}</p>
               </div>
             </div>
             <SettingSwitch
@@ -191,15 +206,99 @@ export default function SettingsTab() {
               activeClassName="bg-violet-500"
             />
           </div>
+        </section></>,
+    presentation: <>
+        <section id="settings-item-auto-live" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('common.autoGoLive')}>
+          <div className="settings-row flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 min-w-0">
+              <Zap className={cn('w-4 h-4 shrink-0', autoGoLive ? 'text-emerald-300' : 'text-white/35')} aria-hidden="true" />
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold">{t('common.autoGoLive')}</h3>
+                <p className="text-sm leading-relaxed text-white/60">{t('common.autoGoLiveHint')}</p>
+              </div>
+            </div>
+            <SettingSwitch checked={autoGoLive} onCheckedChange={setAutoGoLive} label={t('common.autoGoLive')} />
+          </div>
         </section>
 
-        {/* Soniox Real-time Captions & Translation */}
-        <section className="rounded-xl border border-white/10 bg-surface-raised p-4 space-y-4" aria-label={t('settings.soniox')}>
+        <section id="settings-item-sections" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4 settings-row flex items-center justify-between gap-4">
+          <div><h3 className="text-sm font-semibold">{t('sections.title')}</h3><p className="text-sm leading-relaxed text-white/60">{t('sections.description')}</p></div>
+          <SettingSwitch checked={sectionsEnabled} onCheckedChange={setSectionsEnabled} label={t('sections.title')} />
+        </section>
+
+        <section id="settings-item-notes" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4 settings-row flex items-center justify-between gap-4" aria-label={t('common.operatorNotes')}>
+          <div>
+            <h3 className="text-sm font-semibold">{t('common.operatorNotes')}</h3>
+            <p className="text-sm leading-relaxed text-white/60">{t('settings.operatorNotesDesc')}</p>
+          </div>
+          <SettingSwitch checked={operatorNotesEnabled} onCheckedChange={setOperatorNotesEnabled} label={t('common.operatorNotes')} />
+        </section></>,
+    appearance: <>
+        <section id="settings-item-hymn-position" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4 space-y-4" aria-label={t('common.hymnsAuthorPosition')}>
+          <div className="flex items-center gap-2">
+            <Music className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
+            <div>
+              <h3 className="text-sm font-semibold">{t('common.hymnsAuthorPosition')}</h3>
+              <p className="text-sm leading-relaxed text-white/60">{t('common.hymnsAuthorPositionDesc')}</p>
+            </div>
+          </div>
+
+          {/* Position select */}
+          <select
+            value={hymnAuthorPosition}
+            onChange={(e) => {
+              const v = e.target.value;
+              setHymnAuthorPosition(v);
+              try { localStorage.setItem('hymnAuthorPosition', v); } catch { /* storage unavailable */ }
+            }}
+            aria-label={t('common.hymnsAuthorPosition')}
+            className="w-full sm:w-auto bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/40 transition-colors"
+          >
+            <option value="bottom-left"   className="bg-surface-overlay">{t('common.hymnsAuthorPosBottomLeft')}</option>
+            <option value="bottom-center" className="bg-surface-overlay">{t('common.hymnsAuthorPosBottomCenter')}</option>
+            <option value="bottom-right"  className="bg-surface-overlay">{t('common.hymnsAuthorPosBottomRight')}</option>
+            <option value="top-left"      className="bg-surface-overlay">{t('common.hymnsAuthorPosTopLeft')}</option>
+            <option value="top-center"    className="bg-surface-overlay">{t('common.hymnsAuthorPosTopCenter')}</option>
+            <option value="top-right"     className="bg-surface-overlay">{t('common.hymnsAuthorPosTopRight')}</option>
+          </select>
+
+          {/* Size slider */}
+          <div id="settings-item-hymn-size" tabIndex={-1} className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label htmlFor="hymn-author-size" className="text-xs text-white/65">
+                {t('common.hymnsAuthorSize')}
+              </label>
+              <span className="text-[11px] font-mono text-amber-300">{hymnAuthorSize}%</span>
+            </div>
+            <input
+              id="hymn-author-size"
+              type="range"
+              min={10}
+              max={60}
+              step={1}
+              value={hymnAuthorSize}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setHymnAuthorSize(v);
+                try { localStorage.setItem('hymnAuthorSize', String(v)); } catch { /* storage unavailable */ }
+              }}
+              aria-label={t('common.hymnsAuthorSize')}
+              className="w-full h-1.5 accent-amber-400 cursor-pointer"
+            />
+            <div className="flex justify-between text-[10px] text-white/25">
+              <span>10%</span>
+              <span>60%</span>
+            </div>
+          </div>
+        </section>
+
+        <div id="settings-item-watermark" tabIndex={-1}><WatermarkSettingsPanel /></div></>,
+    captions: <section className="rounded-xl border border-white/10 bg-surface-raised p-4 space-y-4" aria-label={t('settings.soniox')}>
           <div className="flex items-center gap-2">
             <Mic className="w-4 h-4 text-blue-400 shrink-0" aria-hidden="true" />
             <div>
               <h3 className="text-sm font-semibold">{t('settings.soniox')}</h3>
-              <p className="text-[11px] text-white/45">{t('settings.sonioxDesc')}</p>
+              <p className="text-sm leading-relaxed text-white/60">{t('settings.sonioxDesc')}</p>
             </div>
           </div>
 
@@ -224,15 +323,15 @@ export default function SettingsTab() {
               </>
             )}
             {sttKeyHint && (
-              <span className="ml-auto font-mono text-[10px] text-white/40" title={sttKeyHint}>
+              <span className="ml-auto font-mono text-xs leading-5 text-white/55" title={sttKeyHint}>
                 {sttKeyHint}
               </span>
             )}
           </div>
 
           {/* API key input (password, write-only) */}
-          <div className="space-y-1.5">
-            <label htmlFor="soniox-api-key" className="block text-[11px] text-white/55">
+          <div id="settings-item-stt-key" tabIndex={-1} className="space-y-1.5">
+            <label htmlFor="soniox-api-key" className="block text-xs text-white/65">
               {t('settings.sonioxApiKey')}
             </label>
             <div className="flex gap-2">
@@ -265,13 +364,13 @@ export default function SettingsTab() {
                 {apiKeyState === 'saved' ? t('common.saved') : t('common.save')}
               </button>
             </div>
-            <p className="text-[10px] text-white/40">{t('settings.sonioxApiKeyHint')}</p>
+            <p className="text-xs leading-5 text-white/55">{t('settings.sonioxApiKeyHint')}</p>
             {keyError && <p className="text-[11px] text-red-400">{keyError}</p>}
           </div>
 
           {/* Default spoken language (STT recognition) */}
-          <div className="space-y-1.5">
-            <label htmlFor="soniox-stt-language" className="block text-[11px] text-white/55">
+          <div id="settings-item-spoken-language" tabIndex={-1} className="space-y-1.5">
+            <label htmlFor="soniox-stt-language" className="block text-xs text-white/65">
               {t('settings.sonioxSttLanguage')}
             </label>
             <div className="flex items-center gap-2">
@@ -293,12 +392,12 @@ export default function SettingsTab() {
                 ))}
               </select>
             </div>
-            <p className="text-[10px] text-white/40">{t('settings.sonioxSttLanguageHint')}</p>
+            <p className="text-xs leading-5 text-white/55">{t('settings.sonioxSttLanguageHint')}</p>
           </div>
 
           {/* Translation target language */}
-          <div className="space-y-1.5">
-            <label htmlFor="translation-target-language" className="block text-[11px] text-white/55">
+          <div id="settings-item-target-language" tabIndex={-1} className="space-y-1.5">
+            <label htmlFor="soniox-target-language" className="block text-xs text-white/65">
               {t('settings.sonioxTargetLanguage')}
             </label>
             <div className="flex items-center gap-2">
@@ -317,19 +416,17 @@ export default function SettingsTab() {
                 ))}
               </select>
             </div>
-            <p className="text-[10px] text-white/40">{t('settings.sonioxTargetLanguageHint')}</p>
+            <p className="text-xs leading-5 text-white/55">{t('settings.sonioxTargetLanguageHint')}</p>
           </div>
-        </section>
-
-        {/* Live Save */}
-        <section className="rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.liveSave')}>
-          <div className="flex items-center justify-between gap-4">
+        </section>,
+    autosave: <section id="settings-item-live-save" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.liveSave')}>
+          <div className="settings-row flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 min-w-0">
               <Save className={cn('w-4 h-4 shrink-0', liveSaveEnabled ? 'text-emerald-300' : 'text-white/35')} aria-hidden="true" />
               <div className="min-w-0">
                 <h3 className="text-sm font-semibold">{t('settings.liveSave')}</h3>
                 {liveSaveEnabled && liveSaveLastSaved && (
-                  <p className="text-[11px] text-white/45 flex items-center gap-1.5">
+                  <p className="text-sm leading-relaxed text-white/60 flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" aria-hidden="true" />
                     {t('settings.liveSaveLastSaved', { time: new Date(liveSaveLastSaved).toLocaleTimeString() })}
                   </p>
@@ -355,7 +452,7 @@ export default function SettingsTab() {
             </button>
           </div>
 
-          <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+          <div id="settings-item-retention" tabIndex={-1} className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
             <div className="flex items-center gap-2 text-emerald-100/90 text-[11px] font-medium uppercase tracking-[0.12em]">
               <DatabaseBackup className="w-3.5 h-3.5" aria-hidden="true" />
               <span>{t('settings.liveSaveRetention')}</span>
@@ -374,9 +471,9 @@ export default function SettingsTab() {
             </select>
           </div>
 
-          <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[11px] text-emerald-100/80">
+          <div id="settings-item-clear-live-saves" tabIndex={-1} className="mt-5 border-t border-white/10 pt-4 text-sm text-white/65">
             {latestLiveSave ? (
-              <div className="flex items-center justify-between gap-3">
+              <div className="settings-row flex items-center justify-between gap-3">
                 <span>
                   {t('settings.liveSaveLastSaved', {
                     time: new Date(latestLiveSave.createdAt).toLocaleString('tr-TR', {
@@ -394,21 +491,19 @@ export default function SettingsTab() {
                   className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-medium text-white/75 hover:bg-white/10 transition-colors"
                 >
                   <Trash2 className="w-3 h-3" aria-hidden="true" />
-                  {t('common.deletePreset')}
+                  {t('settings.navigation.clearLiveSaves')}
                 </button>
               </div>
             ) : (
               <span>{t('settings.liveSaveEmpty')}</span>
             )}
           </div>
-        </section>
-
-        {/* Updates */}
-        <section className="rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.updates')}>
-          <div className="flex items-center justify-between gap-4">
+        </section>,
+    updates: <section id="settings-item-updates" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.updates')}>
+          <div className="settings-row flex items-center justify-between gap-4">
             <div className="min-w-0">
               <h3 className="text-sm font-semibold">{t('settings.updates')}</h3>
-              <p className="text-[11px] text-white/45">{t('settings.updatesDesc')}</p>
+              <p className="text-sm leading-relaxed text-white/60">{t('settings.updatesDesc')}</p>
             </div>
             <button
               onClick={() => setIsUpdatesOpen(true)}
@@ -424,69 +519,61 @@ export default function SettingsTab() {
               )}
             </button>
           </div>
-        </section>
+        </section>,
+    learning: <section id="settings-item-learn" tabIndex={-1} ref={element => registerTourAnchor('help', element)} className="rounded-xl border border-white/10 bg-surface-raised p-4 space-y-3">
+          <PracticePanel />
+        </section>,
+  };
 
-        {/* Hymn author position & size */}
-        <section className="rounded-xl border border-white/10 bg-surface-raised p-4 space-y-4" aria-label={t('common.hymnsAuthorPosition')}>
-          <div className="flex items-center gap-2">
-            <Music className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
-            <div>
-              <h3 className="text-sm font-semibold">{t('common.hymnsAuthorPosition')}</h3>
-              <p className="text-[11px] text-white/45">{t('common.hymnsAuthorPositionDesc')}</p>
-            </div>
+  return (
+    <div className="settings-workspace flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+      <header className="shrink-0 border-b border-white/10 bg-surface px-4 py-4">
+        <div className="settings-header-layout mx-auto max-w-6xl">
+          <h2 className="flex items-center gap-2 text-xl font-bold"><Settings2 className="h-5 w-5 text-blue-400" aria-hidden="true" />{t('nav.settings')}</h2>
+          <div className="settings-search relative min-w-0">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/45" aria-hidden="true" />
+            <input ref={searchRef} type="search" value={query} onChange={event => setQuery(event.target.value)}
+              onKeyDown={event => { if (event.key === 'Escape' && query) { event.preventDefault(); event.stopPropagation(); clearSearch(); } }}
+              aria-label={t('settings.navigation.search')} placeholder={t('settings.navigation.search')}
+              className="w-full rounded-xl border border-white/15 bg-white/5 py-2.5 pl-10 pr-11 text-sm outline-none placeholder:text-white/40 focus-visible:border-blue-400" />
+            {query && <button type="button" onClick={clearSearch} aria-label={t('settings.navigation.clearSearch')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-white/60 hover:bg-white/10 hover:text-white"><X className="h-4 w-4" aria-hidden="true" /></button>}
           </div>
-
-          {/* Position select */}
-          <select
-            value={hymnAuthorPosition}
-            onChange={(e) => {
-              const v = e.target.value;
-              setHymnAuthorPosition(v);
-              try { localStorage.setItem('hymnAuthorPosition', v); } catch { /* storage unavailable */ }
-            }}
-            aria-label={t('common.hymnsAuthorPosition')}
-            className="w-full sm:w-auto bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/40 transition-colors"
-          >
-            <option value="bottom-left"   className="bg-surface-overlay">{t('common.hymnsAuthorPosBottomLeft')}</option>
-            <option value="bottom-center" className="bg-surface-overlay">{t('common.hymnsAuthorPosBottomCenter')}</option>
-            <option value="bottom-right"  className="bg-surface-overlay">{t('common.hymnsAuthorPosBottomRight')}</option>
-            <option value="top-left"      className="bg-surface-overlay">{t('common.hymnsAuthorPosTopLeft')}</option>
-            <option value="top-center"    className="bg-surface-overlay">{t('common.hymnsAuthorPosTopCenter')}</option>
-            <option value="top-right"     className="bg-surface-overlay">{t('common.hymnsAuthorPosTopRight')}</option>
+        </div>
+        <div className="settings-category-select mt-3">
+          <label htmlFor="settings-category" className="sr-only">{t('settings.navigation.category')}</label>
+          <select id="settings-category" value={category} onChange={event => chooseCategory(event.target.value as SettingsCategoryId)} className="w-full rounded-lg border border-white/15 bg-surface-overlay px-3 py-2.5 text-sm">
+            {settingsCategories.map(id => <option key={id} value={id}>{t(`settings.navigation.categories.${id}.title`)}</option>)}
           </select>
-
-          {/* Size slider */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label htmlFor="hymn-author-size" className="text-[11px] text-white/55">
-                {t('common.hymnsAuthorSize')}
-              </label>
-              <span className="text-[11px] font-mono text-amber-300">{hymnAuthorSize}%</span>
-            </div>
-            <input
-              id="hymn-author-size"
-              type="range"
-              min={10}
-              max={60}
-              step={1}
-              value={hymnAuthorSize}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                setHymnAuthorSize(v);
-                try { localStorage.setItem('hymnAuthorSize', String(v)); } catch { /* storage unavailable */ }
-              }}
-              aria-label={t('common.hymnsAuthorSize')}
-              className="w-full h-1.5 accent-amber-400 cursor-pointer"
-            />
-            <div className="flex justify-between text-[10px] text-white/25">
-              <span>10%</span>
-              <span>60%</span>
-            </div>
+        </div>
+      </header>
+      <div className="settings-layout-grid min-h-0 flex-1">
+        <nav className="settings-category-sidebar overflow-y-auto border-r border-white/10 bg-surface p-3" aria-label={t('settings.navigation.category')}>
+          <div className="space-y-1">{settingsCategories.map(id => {
+            const Icon = CATEGORY_ICONS[id];
+            return <button key={id} type="button" aria-current={category === id ? 'page' : undefined} aria-controls={`settings-panel-${id}`} onClick={() => chooseCategory(id)}
+              className={cn('flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left text-sm font-medium', category === id ? 'border-blue-400/25 bg-blue-500/15 text-blue-200' : 'border-transparent text-white/65 hover:bg-white/5 hover:text-white')}>
+              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="min-w-0 break-words">{t(`settings.navigation.categories.${id}.title`)}</span>
+            </button>;
+          })}</div>
+        </nav>
+        <div ref={contentRef} className="min-h-0 min-w-0 overflow-y-auto overflow-x-hidden p-4">
+          <div hidden={!normalizedQuery} className="mx-auto max-w-4xl space-y-3">
+            <h3 className="text-lg font-semibold">{t('settings.navigation.resultsTitle')}</h3>
+            {searchResults.map(item => <button key={item.id} type="button" onClick={() => openSearchResult(item)} className="flex w-full items-center gap-4 rounded-xl border border-white/10 bg-surface-raised p-4 text-left hover:border-blue-400/50 hover:bg-blue-500/5">
+              <span className="min-w-0 flex-1"><span className="text-xs font-medium text-blue-300">{t(`settings.navigation.categories.${item.category}.title`)}</span>
+                <span className="mt-1 block font-semibold">{t(item.titleKey)}</span><span className="mt-1 block text-sm leading-relaxed text-white/60">{t(item.descriptionKey)}</span>
+              </span><ChevronRight className="h-4 w-4 shrink-0 text-white/40" aria-hidden="true" />
+            </button>)}
+            {!searchResults.length && <div className="rounded-xl border border-dashed border-white/15 p-6 text-center"><p className="text-sm text-white/65">{t('settings.navigation.noResults')}</p><button type="button" onClick={clearSearch} className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-500">{t('settings.navigation.clearSearch')}</button></div>}
           </div>
-        </section>
-
-        {/* Logo filigran */}
-        <WatermarkSettingsPanel />
+          <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{normalizedQuery ? t('settings.navigation.resultCount', { count: searchResults.length }) : ''}</p>
+          {settingsCategories.map(id => <section key={id} id={`settings-panel-${id}`} hidden={!!normalizedQuery || id !== category} aria-labelledby={`settings-title-${id}`} className="mx-auto max-w-4xl space-y-4">
+            <div><h3 id={`settings-title-${id}`} className="text-lg font-bold">{t(`settings.navigation.categories.${id}.title`)}</h3>
+              {id !== 'learning' && <p className="mt-1 text-sm leading-relaxed text-white/60">{t(`settings.navigation.categories.${id}.description`)}</p>}
+            </div>
+            {categoryContent[id]}
+          </section>)}
+        </div>
       </div>
     </div>
   );

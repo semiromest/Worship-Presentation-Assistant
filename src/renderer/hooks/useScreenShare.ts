@@ -1,3 +1,5 @@
+import { usePractice } from '../hooks/usePractice';
+import { markTourReady } from '../state/useTourStore';
 import { useCallback, useEffect } from 'react';
 import QRCode from 'qrcode';
 import { useStore } from '../state/useStore';
@@ -18,6 +20,7 @@ export function useScreenShare(): {
   startShare: () => Promise<{ ok: boolean; url?: string; error?: string }>;
   stopShare: () => Promise<void>;
 } {
+  const practice = usePractice();
   const setScreenShareActive = useStore((s) => s.setScreenShareActive);
   const setScreenShareUrl = useStore((s) => s.setScreenShareUrl);
   const setScreenShareQr = useStore((s) => s.setScreenShareQr);
@@ -26,7 +29,7 @@ export function useScreenShare(): {
 
   // Main → renderer events: client count, network change, status re-hydration.
   useEffect(() => {
-    if (IS_PROJECTOR_MODE) return;
+    if (IS_PROJECTOR_MODE || practice) return;
 
     const offCount = window.electronAPI?.onScreenShareClientCount?.((count) => {
       setScreenShareClientCount(count);
@@ -42,20 +45,22 @@ export function useScreenShare(): {
 
     // Re-hydrate after a control-window reload while a broadcast is running.
     void window.electronAPI?.screenShareGetStatus?.().then((status) => {
-      if (!status?.active) return;
+      if (!status) return;
+      if (!status.active) { markTourReady('screenShare'); return; }
       setScreenShareActive(true);
       setScreenShareUrl(status.url);
       setScreenShareClientCount(status.clientCount);
       QRCode.toDataURL(status.url)
         .then(setScreenShareQr)
         .catch(() => setScreenShareQr(null));
+      markTourReady('screenShare');
     });
 
     return () => {
       offCount?.();
       offNetwork?.();
     };
-  }, [setScreenShareActive, setScreenShareUrl, setScreenShareQr, setScreenShareClientCount, setScreenShareNetworkChanged]);
+  }, [practice, setScreenShareActive, setScreenShareUrl, setScreenShareQr, setScreenShareClientCount, setScreenShareNetworkChanged]);
 
   const startShare = useCallback(async () => {
     const res = await window.electronAPI?.screenShareStart?.();

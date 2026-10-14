@@ -1,0 +1,66 @@
+.settings-workspace {
+  container: settings / inline-size;
+}
+
+.settings-header-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.settings-layout-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.settings-category-sidebar {
+  display: none;
+}
+
+.settings-workspace [hidden] {
+  display: none !important;
+}
+
+.settings-workspace .settings-row {
+  flex-wrap: wrap;
+}
+
+.settings-workspace :is(button, input, select, summary):focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 3px;
+}
+
+@container settings (min-width: 840px) {
+  .settings-header-layout {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .settings-search {
+    width: min(420px, 50%);
+  }
+
+  .settings-layout-grid {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+
+  .settings-category-sidebar {
+    display: block;
+  }
+
+  .settings-category-select {
+    display: none;
+  }
+}
+
+@container settings (max-width: 439px) {
+  .settings-workspace .settings-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .settings-row > :is(button, .base-setting-switch) {
+    align-self: flex-start;
+  }
+}

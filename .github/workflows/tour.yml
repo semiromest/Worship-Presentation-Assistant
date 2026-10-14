@@ -1,0 +1,36 @@
+name: Tour checks
+on:
+  pull_request:
+  push:
+    branches: [master, main]
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  tour:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build-only Drive credentials
+        shell: pwsh
+        run: |
+          @'
+          export const DRIVE_CREDENTIALS = { clientId: '', clientSecret: '', scopes: ['https://www.googleapis.com/auth/drive.file'], redirectPort: 0 };
+          '@ | Set-Content src/main/driveCredentials.ts
+      - run: npx tsc --noEmit --incremental false
+      - run: npm run lint:tour
+      - run: npm run test:tour
+      - run: npx vite build
+      - run: npm run test:tour:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: tour-failure
+          path: test-results/

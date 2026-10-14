@@ -1,3 +1,13 @@
+import { usePractice } from './hooks/usePractice';
+import { isGuideActive } from './components/Tour/guideBoundary';
+import { registerTourAnchor } from './components/Tour/tourController';
+import {
+  getChapterReading,
+  resolveReadingReference,
+  selectedReadingNumbers,
+  type ReadingEntry,
+  type ReferenceResolution,
+} from './scriptureReading';
 import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Menu } from '@base-ui/react/menu';
 import type { GetResourcesItem } from '@gracious.tech/fetch-client';
@@ -22,7 +32,7 @@ import {
   X,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { BibleBook, BibleData, Chapter, Verse } from './bibleParser';
+import type { BibleBook, BibleData, Chapter } from './bibleParser';
 import { parseBibleXMLAsync } from './bibleParser';
 import { bibleRepository, type BibleSourceDescriptor } from './bibleRepository';
 import { fixBibleBookNames, BOOK_NAMES_BY_LANGUAGE } from './bibleBookNames';
@@ -69,7 +79,7 @@ interface DirectoryItem {
   data: BibleInfo | HelloAoTranslation | GetResourcesItem | GetBibleTranslation;
 }
 const CHUNK_CONFIG = { maxVerses: 3, maxChars: 120, maxLines: 2 } as const;
-const indexCache = new WeakMap<BibleData, BibleSearchIndex>();
+const indexCache = new WeakMap<BibleData, Map<string, BibleSearchIndex>>();
 const PROVIDERS: ProviderFilter[] = ['all', 'getbible', 'github', 'helloao', 'fetchbible'];
 const PROVIDER_LABELS: Record<ProviderFilter, string> = {
   all: 'All',
@@ -90,6 +100,7 @@ const BookRow = memo(({ book, active, onClick }: { book: BibleBook; active: bool
   <button
     type="button"
     onClick={onClick}
+    data-guide-anchor={book.number === '1' ? 'bible-book' : undefined}
     aria-current={active ? 'true' : undefined}
     className={cn(
       'group flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[13px] transition-colors',
@@ -109,49 +120,86 @@ const VerseRow = memo(
     onToggle,
     label,
   }: {
-    verse: Verse;
+    verse: ReadingEntry;
     selected: boolean;
     onToggle: (number: string, range: boolean) => void;
     label: string;
-  }) => (
-    <button
-      id={`scripture-verse-${verse.number}`}
-      type="button"
-      aria-pressed={selected}
-      aria-label={`${label} ${verse.number}: ${verse.text}`}
-      onClick={(event) => onToggle(verse.number, event.shiftKey)}
-      className={cn(
-        'group flex w-full items-start gap-4 rounded-2xl border px-4 py-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70',
-        selected
-          ? 'border-blue-500/30 bg-blue-500/10'
-          : 'border-transparent bg-zinc-900/35 hover:border-zinc-700 hover:bg-zinc-800/55'
-      )}
-    >
-      <span
+  }) => {
+    const { t } = useTranslation();
+    return (
+      <button
+        data-guide-anchor={verse.number === '1' ? 'bible-verse' : undefined}
+        id={`scripture-verse-${verse.id}`}
+        type="button"
+        disabled={Boolean(verse.issue)}
+        aria-pressed={selected}
+        aria-label={`${label} ${verse.number}: ${verse.text} ${verse.issue ? t('common.scriptureIssue_' + verse.issue) : ''}`}
+        onClick={(event) => onToggle(verse.id, event.shiftKey)}
         className={cn(
-          'mt-0.5 flex h-7 min-w-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold',
-          selected ? 'bg-blue-500 text-white' : 'bg-zinc-800 text-zinc-400'
+          'group flex w-full items-start gap-4 rounded-2xl border px-4 py-3.5 disabled:cursor-default disabled:opacity-70 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70',
+          selected
+            ? 'border-blue-500/30 bg-blue-500/10'
+            : 'border-transparent bg-zinc-900/35 hover:border-zinc-700 hover:bg-zinc-800/55'
         )}
       >
-        {selected ? <Check className="h-3.5 w-3.5" /> : verse.number}
-      </span>
-      <span className={cn('text-[14px] leading-6', selected ? 'font-medium text-zinc-100' : 'text-zinc-300')}>
-        {verse.text}
-      </span>
-    </button>
-  )
+        <span
+          className={cn(
+            'mt-0.5 flex h-7 min-w-7 px-2 gap-1 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold',
+            selected ? 'bg-blue-500 text-white' : 'bg-zinc-800 text-zinc-400'
+          )}
+        >
+          {verse.number}
+          {selected && <Check className="h-3.5 w-3.5" />}
+        </span>
+        <span className={cn('text-[14px] leading-6', selected ? 'font-medium text-zinc-100' : 'text-zinc-300')}>
+          {verse.text}
+          {verse.evidence && <span className="block text-xs text-blue-300/70">{t('common.scriptureMerged')}</span>}
+          {verse.issue && (
+            <span className="block text-xs text-amber-300/80">{t('common.scriptureIssue_' + verse.issue)}</span>
+          )}
+        </span>
+      </button>
+    );
+  }
 );
 VerseRow.displayName = 'VerseRow';
 
 export default function ScriptureBrowser({ onSendToLive, active = true }: ScriptureBrowserProps) {
   const { t, i18n } = useTranslation();
+  const practice = usePractice();
+  const [practiceImported, setPracticeImported] = useState(false);
+  const [chapterChosen, setChapterChosen] = useState(false);
+  const [sourceMenu, setSourceMenu] = useState(false);
   const uiMotionEnabled = useUiMotionEnabled();
   const [bible, setBible] = useState<BibleData | null>(() => bibleRepository.currentBible);
   const [restoring, setRestoring] = useState(!bibleRepository.currentBible);
-  const [source, setSource] = useState<BibleSourceDescriptor | null>(null);
+  const [source, setSource] = useState<BibleSourceDescriptor | null>(() => bibleRepository.currentSource);
   const [book, setBook] = useState<BibleBook | null>(null);
   const [chapter, setChapter] = useState<Chapter | null>(null);
   const [verses, setVerses] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!practice || !bible || bible.name !== 'Practice Sample') return;
+    let live = true;
+    void window.electronAPI.readPracticeWorkspace(null).then(value => {
+      if (!live || !value.guide.step.startsWith('bible-') || !value.active?.importedBible) return;
+      setPracticeImported(true); const ui = value.guide.ui;
+      if (ui?.book === 1) { const restored = bible.books.find(item => item.number === '1'); if (restored) {
+        setBook(restored); if (ui.chapter === 1) { const c = restored.chapters.find(item => item.number === '1'); if (c) {
+          setChapter(c); setChapterChosen(!!ui.chapterChosen);
+          if (ui.verse) setVerses(new Set(getChapterReading(restored,c,bibleRepository.currentSource).available.map(entry => entry.id)));
+        } }
+      } }
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [practice,bible]);
+  const [requestResolution, setRequestResolution] = useState<ReferenceResolution | null>(null);
+  const [invalidRequest, setInvalidRequest] = useState(false);
+  const reading = useMemo(
+    () => (book && chapter ? getChapterReading(book, chapter, source) : null),
+    [book, chapter, source]
+  );
+  const selectedNumbers = useMemo(() => (reading ? selectedReadingNumbers(reading, verses) : []), [reading, verses]);
+  const sendBlocked = invalidRequest || Boolean(requestResolution && requestResolution.status !== 'complete');
   const anchor = useRef<string | null>(null);
   const [scrollVerse, setScrollVerse] = useState<string | null>(null);
   const [mode, setMode] = useState<SearchMode>('reference');
@@ -206,13 +254,14 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
       setIndexing(false);
       return;
     }
-    const cached = indexCache.get(bible);
+    const indexScope = JSON.stringify(source);
+    const cached = indexCache.get(bible)?.get(indexScope);
     if (cached) {
       setIndex(cached);
       setIndexing(false);
       return;
     }
-    const builder = createBibleSearchIndexer(bible, tokenizeScriptureText);
+    const builder = createBibleSearchIndexer(bible, tokenizeScriptureText, source);
     let cancelled = false,
       idle: number | null = null,
       timer: number | null = null;
@@ -221,7 +270,9 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
     const run = () => {
       if (cancelled) return;
       if (builder.step(160)) {
-        indexCache.set(bible, builder.index);
+        const scopes = indexCache.get(bible) ?? new Map<string, BibleSearchIndex>();
+        scopes.set(indexScope, builder.index);
+        indexCache.set(bible, scopes);
         setIndex(builder.index);
         setIndexing(false);
       } else schedule();
@@ -236,7 +287,7 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
       if (idle != null) window.cancelIdleCallback?.(idle);
       if (timer != null) clearTimeout(timer);
     };
-  }, [bible]);
+  }, [bible, source]);
 
   useEffect(() => {
     if (!scrollVerse || !chapter) return;
@@ -280,93 +331,134 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
       return;
     }
     const parsed = parseScriptureReference(query);
-    if (!parsed) return;
+    if (!parsed) {
+      automaticSelectionKey.current = '';
+      setInvalidRequest(true);
+      setRequestResolution(null);
+      return;
+    }
     const nextBook = findBookForReference(bible.books, parsed.book);
-    if (!nextBook) return;
+    if (!nextBook) {
+      automaticSelectionKey.current = '';
+      setInvalidRequest(true);
+      setRequestResolution(null);
+      return;
+    }
     const requestedChapter =
       parsed.chapter == null
         ? (nextBook.chapters[0] ?? null)
         : (nextBook.chapters.find((item) => Number(item.number) === parsed.chapter) ?? null);
     const nextChapter = requestedChapter ?? nextBook.chapters[0] ?? null;
-    const selected =
+    const resolution =
       requestedChapter && parsed.verse != null
-        ? requestedChapter.verses
-            .filter(
-              (item) => Number(item.number) >= parsed.verse! && Number(item.number) <= (parsed.verseTo ?? parsed.verse!)
-            )
-            .map((item) => item.number)
-        : [];
-    const selectionKey = `${nextBook.number}:${nextChapter?.number ?? ''}:${selected.join(',')}`;
+        ? resolveReadingReference(getChapterReading(nextBook, requestedChapter, source), [
+            parsed.verse + '-' + (parsed.verseTo ?? parsed.verse),
+          ])
+        : null;
+    const selected = resolution?.entries.map((entry) => entry.id) ?? [];
+    const selectionKey = `${nextBook.number}:${nextChapter?.number ?? ''}:${selected.join(',')}:${query}`;
     if (automaticSelectionKey.current === selectionKey) return;
     automaticSelectionKey.current = selectionKey;
+    setRequestResolution(resolution);
+    setInvalidRequest(
+      (parsed.chapter != null && !requestedChapter) ||
+        (parsed.verse != null &&
+          (!resolution?.requested.length ||
+            (parsed.verseTo ?? parsed.verse) < parsed.verse ||
+            /[:–—-]\s*$/.test(query)))
+    );
     setBook(nextBook);
     setChapter(nextChapter);
     setVerses(new Set(selected));
     anchor.current = selected.at(-1) ?? null;
-    if (selected[0]) setScrollVerse(selected[0]);
-  }, [bible, mode, query]);
+    const target =
+      selected[0] ??
+      (requestedChapter && resolution
+        ? getChapterReading(nextBook, requestedChapter, source).entries.find((entry) =>
+            entry.numbers.some((n) => resolution.requested.includes(n))
+          )?.id
+        : undefined);
+    if (target) setScrollVerse(target);
+  }, [bible, mode, query, source]);
   const results = useMemo(() => {
     if (mode !== 'content' || !bible || !index || deferredQuery.trim().length < 2) return [];
     const words = tokenizeScriptureText(deferredQuery).filter((word) => word.length > 1);
     const lists = words.map((word) => index.get(word) ?? []);
     if (!lists.length || lists.some((list) => !list.length)) return [];
     const sets = lists.map(
-      (list) => new Set(list.map((item) => `${item.bookIndex}:${item.chapterIndex}:${item.verseIndex}`))
+      (list) => new Set(list.map((item) => `${item.bookIndex}:${item.chapterIndex}:${item.entryId}`))
     );
     const smallest = lists.reduce((best, list, i) => (list.length < lists[best].length ? i : best), 0);
-    const found: Array<{ book: BibleBook; chapter: Chapter; verse: Verse }> = [];
+    const found: Array<{ book: BibleBook; chapter: Chapter; verse: ReadingEntry }> = [];
     for (const ref of lists[smallest]) {
-      const key = `${ref.bookIndex}:${ref.chapterIndex}:${ref.verseIndex}`;
+      const key = `${ref.bookIndex}:${ref.chapterIndex}:${ref.entryId}`;
       if (!sets.every((set) => set.has(key))) continue;
       const b = bible.books[ref.bookIndex],
         c = b?.chapters[ref.chapterIndex],
-        verse = c?.verses[ref.verseIndex];
+        verse =
+          b && c ? getChapterReading(b, c, source).available.find((entry) => entry.id === ref.entryId) : undefined;
       if (!b || !c || !verse) continue;
       found.push({ book: b, chapter: c, verse });
       if (found.length === 50) break;
     }
     return found;
-  }, [bible, deferredQuery, index, mode]);
+  }, [bible, deferredQuery, index, mode, source]);
   const slides = useMemo(
-    () => (book && chapter && verses.size ? createScriptureSlides(book, chapter, verses, CHUNK_CONFIG) : []),
-    [book, chapter, verses]
+    () =>
+      book && chapter && verses.size ? createScriptureSlides(book, chapter, selectedNumbers, CHUNK_CONFIG, source) : [],
+    [book, chapter, verses, source, selectedNumbers]
   );
   const reference =
-    book && chapter && verses.size ? `${book.name} ${chapter.number}:${formatVerseNumbers(verses)}` : '';
+    book && chapter && verses.size ? `${book.name} ${chapter.number}:${formatVerseNumbers(selectedNumbers)}` : '';
 
   const chooseBook = useCallback((next: BibleBook) => {
     setBook(next);
     setChapter(next.chapters[0] ?? null);
     setVerses(new Set());
+    setRequestResolution(null);
+    setInvalidRequest(false);
     anchor.current = null;
   }, []);
-  const chooseSuggestion = useCallback((item: ReferenceSuggestion) => {
-    const nextChapter = item.chapter ?? item.book.chapters[0] ?? null;
-    setBook(item.book);
-    setChapter(nextChapter);
-    setVerses(new Set(item.verseNumbers ?? []));
-    anchor.current = item.verseNumbers?.at(-1) ?? null;
-    setQuery(item.label);
-    if (item.verseNumbers?.[0]) setScrollVerse(item.verseNumbers[0]);
-  }, []);
-  const chooseResult = useCallback((result: { book: BibleBook; chapter: Chapter; verse: Verse }) => {
+  const chooseSuggestion = useCallback(
+    (item: ReferenceSuggestion) => {
+      const nextChapter = item.chapter ?? item.book.chapters[0] ?? null;
+      setBook(item.book);
+      setChapter(nextChapter);
+      const resolved = nextChapter
+        ? resolveReadingReference(getChapterReading(item.book, nextChapter, source), item.verseNumbers ?? [])
+        : null;
+      const ids = resolved?.entries.map((entry) => entry.id) ?? [];
+      setVerses(new Set(ids));
+      setRequestResolution(item.verseNumbers?.length ? resolved : null);
+      anchor.current = ids.at(-1) ?? null;
+      setInvalidRequest(false);
+      setQuery(item.kind === 'recent' ? '' : item.label);
+      if (ids[0]) setScrollVerse(ids[0]);
+    },
+    [source]
+  );
+  const chooseResult = useCallback((result: { book: BibleBook; chapter: Chapter; verse: ReadingEntry }) => {
     setMode('reference');
     setQuery('');
     setBook(result.book);
     setChapter(result.chapter);
-    setVerses(new Set([result.verse.number]));
-    anchor.current = result.verse.number;
-    setScrollVerse(result.verse.number);
+    setVerses(new Set([result.verse.id]));
+    setRequestResolution(null);
+    setInvalidRequest(false);
+    anchor.current = result.verse.id;
+    setScrollVerse(result.verse.id);
   }, []);
   const toggleVerse = useCallback(
     (number: string, range: boolean) => {
-      if (!chapter) return;
+      if (!reading) return;
+      setRequestResolution(null);
+      setInvalidRequest(false);
       setVerses((previous) => {
         if (range && anchor.current) {
-          const a = chapter.verses.findIndex((item) => item.number === anchor.current),
-            b = chapter.verses.findIndex((item) => item.number === number);
+          const a = reading.available.findIndex((item) => item.id === anchor.current),
+            b = reading.available.findIndex((item) => item.id === number);
           if (a >= 0 && b >= 0)
-            return new Set(chapter.verses.slice(Math.min(a, b), Math.max(a, b) + 1).map((item) => item.number));
+            return new Set(reading.available.slice(Math.min(a, b), Math.max(a, b) + 1).map((item) => item.id));
         }
         const next = new Set(previous);
         if (next.has(number)) next.delete(number);
@@ -375,17 +467,19 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
         return next;
       });
     },
-    [chapter]
+    [reading]
   );
   const send = useCallback(
     (goLive: boolean) => {
-      if (!book || !chapter || !slides.length) return;
+      if (!book || !chapter || !slides.length || sendBlocked) return;
       onSendToLive(slides.length === 1 ? slides[0] : slides, { groupTitle: `${book.name} ${chapter.number}`, goLive });
-      setRecents(saveRecentScriptureReference(sourceId, { book, chapter, verseNumbers: [...verses] }));
+      setRecents(saveRecentScriptureReference(sourceId, { book, chapter, verseNumbers: selectedNumbers }));
       setVerses(new Set());
+      setRequestResolution(null);
+      setInvalidRequest(false);
       anchor.current = null;
     },
-    [book, chapter, onSendToLive, slides, sourceId, verses]
+    [book, chapter, onSendToLive, slides, sourceId, selectedNumbers, sendBlocked]
   );
 
   const applyBible = useCallback((data: BibleData, descriptor: BibleSourceDescriptor) => {
@@ -397,13 +491,17 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
     setChapter(null);
     setVerses(new Set());
     setQuery('');
+    setRequestResolution(null);
+    setInvalidRequest(false);
     setError(null);
   }, []);
   const importXml = useCallback(async () => {
     try {
       const data = await bibleRepository.importLocal();
-      if (data)
+      if (data) {
         applyBible(data, bibleRepository.currentSource ?? { type: 'local', id: data.name, format: data.format });
+        setPracticeImported(true); setChapterChosen(false);
+      }
     } catch {
       setError(t('common.scriptureParseError'));
     }
@@ -735,7 +833,7 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
     );
   if (!bible)
     return (
-      <div className="relative grid h-full place-items-center overflow-hidden bg-[#09090b] p-8">
+      <div ref={element => registerTourAnchor('bible', element)} className="relative grid h-full place-items-center overflow-hidden bg-[#09090b] p-8">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_25%,rgba(59,130,246,0.1),transparent_42%)]" />
         <div className="relative w-full max-w-lg rounded-[32px] border border-white/10 bg-zinc-900/70 p-8 text-center shadow-2xl">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-300">
@@ -755,6 +853,7 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
             </button>
             <button
               type="button"
+              data-guide-anchor="bible-source"
               onClick={() => void importXml()}
               className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-sm font-semibold hover:bg-zinc-700"
             >
@@ -772,14 +871,17 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
   const next =
     book && chapterIndex >= 0 && chapterIndex < book.chapters.length - 1 ? book.chapters[chapterIndex + 1] : null;
   const setCurrentChapter = (nextChapter: Chapter) => {
+    setChapterChosen(true);
     setChapter(nextChapter);
     setVerses(new Set());
+    setRequestResolution(null);
+    setInvalidRequest(false);
     anchor.current = null;
   };
 
   return (
-    <div className="flex h-full overflow-hidden bg-[#09090b] text-white">
-      <aside className="flex w-[300px] shrink-0 flex-col border-r border-white/10 bg-[#0c0c0f]">
+    <div ref={element => registerTourAnchor('bible', element)} data-guide-state={JSON.stringify({ bibleReady: practiceImported && bible.name === 'Practice Sample', book: Number(book?.number ?? 0), chapter: Number(chapter?.number ?? 0), chapterChosen, verse: book?.number === '1' && chapter?.number === '1' && selectedNumbers.includes('1'), sourceMenu })} className="flex h-full overflow-hidden bg-[#09090b] text-white">
+      <aside className="flex w-[200px] lg:w-[300px] shrink-0 flex-col border-r border-white/10 bg-[#0c0c0f]">
         <div className="border-b border-white/10 p-4">
           <div className="mb-4 flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-300">
@@ -791,8 +893,9 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
                 {t('common.scriptureTitle')}
               </p>
             </div>
-            <Menu.Root>
+            <Menu.Root open={sourceMenu} onOpenChange={(open, details) => { if (!open && isGuideActive() && details.reason === 'focus-out') return; setSourceMenu(open); }}>
               <Menu.Trigger
+                data-guide-anchor="bible-source"
                 aria-label={t('common.scriptureManage')}
                 className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-white/5 hover:text-white"
               >
@@ -805,7 +908,7 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
                       <Globe2 className="h-4 w-4" />
                       {t('common.scriptureChooseOnline')}
                     </Menu.Item>
-                    <Menu.Item onClick={() => void importXml()} className="menu-item">
+                    <Menu.Item data-guide-anchor="bible-import" onClick={() => void importXml()} className="menu-item">
                       <FileUp className="h-4 w-4" />
                       {t('common.scriptureImportXml')}
                     </Menu.Item>
@@ -961,7 +1064,7 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
                   key={item.number}
                   book={item}
                   active={book?.number === item.number}
-                  onClick={() => chooseBook(item)}
+                  onClick={() => { setChapterChosen(false); chooseBook(item); }}
                 />
               ))}
             </div>
@@ -982,7 +1085,7 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
         </div>
       </aside>
       {mode === 'reference' && book && (
-        <aside className="flex w-[176px] shrink-0 flex-col border-r border-white/10 bg-[#0a0a0d]">
+        <aside className="flex w-[112px] lg:w-[176px] shrink-0 flex-col border-r border-white/10 bg-[#0a0a0d]">
           <div className="border-b border-white/10 px-4 py-4">
             <p className="truncate text-sm font-semibold text-zinc-200">{book.name}</p>
             <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-600">
@@ -990,10 +1093,11 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
             </p>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-3 custom-scrollbar">
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
               {book.chapters.map((item) => (
                 <button
                   key={item.number}
+                  data-guide-anchor={item.number === '1' ? 'bible-chapter' : undefined}
                   type="button"
                   aria-current={chapter?.number === item.number ? 'true' : undefined}
                   aria-label={t('common.scriptureChapterNumber', { number: item.number })}
@@ -1059,7 +1163,11 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
                 <h2 className="truncate text-lg font-semibold">
                   {book.name} <span className="text-zinc-500">{chapter.number}</span>
                 </h2>
-                <p className="text-xs text-zinc-500">{t('common.scriptureVerses', { count: chapter.verses.length })}</p>
+                <p className="text-xs text-zinc-500">
+                  {t('common.scriptureVerses', {
+                    count: reading ? new Set(reading.available.flatMap((entry) => entry.numbers)).size : 0,
+                  })}
+                </p>
               </div>
               <button
                 type="button"
@@ -1081,25 +1189,65 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
               </button>
               <button
                 type="button"
-                onClick={() =>
+                onClick={() => {
+                  setRequestResolution(null);
+                  setInvalidRequest(false);
                   setVerses(
-                    verses.size === chapter.verses.length
+                    verses.size === reading?.available.length
                       ? new Set()
-                      : new Set(chapter.verses.map((item) => item.number))
-                  )
-                }
+                      : new Set(reading?.available.map((item) => item.id))
+                  );
+                }}
                 className="rounded-xl border border-zinc-800 px-3 py-2 text-xs text-zinc-400 hover:bg-zinc-800"
               >
-                {verses.size === chapter.verses.length ? t('common.scriptureClear') : t('common.scriptureSelectAll')}
+                {verses.size === reading?.available.length
+                  ? t('common.scriptureClear')
+                  : t('common.scriptureSelectAll')}
               </button>
             </header>
+            {reading?.entries.some((entry) => entry.evidence) && (
+              <p className="px-5 py-2 text-xs text-blue-300/80">{t('common.scriptureMergedInfo')}</p>
+            )}
+            {reading?.entries.some((entry) => entry.issue) && (
+              <p className="px-5 py-2 text-xs text-amber-300/80">{t('common.scriptureIssuesInfo')}</p>
+            )}
+            {(invalidRequest || (requestResolution && requestResolution.status !== 'complete')) && (
+              <div role="status" className="px-5 py-2 text-xs text-amber-300">
+                {invalidRequest
+                  ? t('common.scriptureInvalidRequest')
+                  : t('common.scriptureIncomplete', {
+                      numbers: formatVerseNumbers(requestResolution!.missing.map(String)),
+                    })}
+                {!invalidRequest && requestResolution?.entries.length ? (
+                  <button
+                    type="button"
+                    className="ml-3 underline"
+                    onClick={() => {
+                      setRequestResolution(null);
+                      setInvalidRequest(false);
+                    }}
+                  >
+                    {t('common.scriptureSelectFound')}
+                  </button>
+                ) : null}
+              </div>
+            )}
+            {requestResolution?.status === 'complete' &&
+              requestResolution.covered.length > requestResolution.requested.length && (
+                <p role="status" className="px-5 py-2 text-xs text-blue-300">
+                  {t('common.scriptureExpanded', {
+                    requested: formatVerseNumbers(requestResolution.requested.map(String)),
+                    resolved: formatVerseNumbers(requestResolution.covered.map(String)),
+                  })}
+                </p>
+              )}
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 pb-28 custom-scrollbar">
               <div className="mx-auto max-w-4xl space-y-2">
-                {chapter.verses.map((item) => (
+                {reading?.entries.map((item) => (
                   <VerseRow
-                    key={item.number}
+                    key={item.id}
                     verse={item}
-                    selected={verses.has(item.number)}
+                    selected={verses.has(item.id)}
                     onToggle={toggleVerse}
                     label={t('common.scriptureVerseLabel')}
                   />
@@ -1107,25 +1255,40 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
               </div>
             </div>
             <div
-              aria-hidden={verses.size === 0}
+              hidden={verses.size === 0}
               className={cn(
                 'absolute inset-x-0 bottom-0 border-t border-white/10 bg-zinc-950/95 px-5 py-4 backdrop-blur-xl transition-transform',
                 uiMotionEnabled ? 'duration-200' : 'duration-0',
                 verses.size ? 'translate-y-0' : 'translate-y-full'
               )}
             >
-              <div className="mx-auto flex max-w-4xl items-center gap-4">
-                <div className="min-w-0 flex-1">
+              <div className="mx-auto flex flex-wrap max-w-4xl items-center gap-3">
+                <div className="min-w-[160px] flex-1">
                   <p className="truncate text-sm font-semibold">{reference}</p>
                   <p className="text-xs text-zinc-500">
-                    {t('common.scriptureSelectionSummary', { verses: verses.size, slides: slides.length })}
+                    {t('common.scriptureReadingSummary', {
+                      verses: selectedNumbers.length,
+                      units: verses.size,
+                      slides: slides.length,
+                    })}
                   </p>
                 </div>
-                <button type="button" disabled={!verses.size} onClick={() => send(false)} className="action-primary">
+                <button
+                  type="button"
+                  disabled={!verses.size || sendBlocked || !slides.length}
+                  data-guide-anchor="bible-add"
+                  onClick={() => send(false)}
+                  className="action-primary"
+                >
                   <Send className="h-4 w-4" />
                   {t('common.scriptureAddToPresentationShort')}
                 </button>
-                <button type="button" disabled={!verses.size} onClick={() => send(true)} className="action-live">
+                <button
+                  type="button"
+                  disabled={!verses.size || sendBlocked}
+                  onClick={() => send(true)}
+                  className="action-live"
+                >
                   <Radio className="h-4 w-4" />
                   {t('common.scriptureGoLiveNow')}
                 </button>
@@ -1143,7 +1306,7 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
               <div className="mt-8 w-full max-w-xl text-left">
                 <p className="book-heading">{t('common.scriptureRecent')}</p>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {buildReferenceSuggestions(bible.books, '', recents).map((item) => (
+                  {buildReferenceSuggestions(bible.books, '', recents, source).map((item) => (
                     <button
                       key={item.id}
                       type="button"

@@ -1,3 +1,4 @@
+import { isHelpActive } from '../components/Tour/tourController';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ClipboardPaste, Copy, Layers, MousePointerClick, Paintbrush } from 'lucide-react';
@@ -75,6 +76,7 @@ export default function EditorPasteMenu({
   useEffect(() => {
     if (!context) return;
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isHelpActive()) return;
       if (event.key === 'Escape') {
         event.stopPropagation();
         onClose();

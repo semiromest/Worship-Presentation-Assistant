@@ -1,10 +1,12 @@
-import type { ReactNode } from 'react';
+import { useLayoutEffect, type ReactNode, type RefObject } from 'react';
+import { finishTour, isHelpActive } from './Tour/tourController';
 import { Dialog as BaseDialog } from '@base-ui/react/dialog';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../utils';
 
 export interface DialogProps {
   open: boolean;
+  onboardingSurface?: boolean;
   onClose: () => void;
   labelledBy?: string;
   describedBy?: string;
@@ -13,10 +15,12 @@ export interface DialogProps {
   overlayClassName?: string;
   closeOnEscape?: boolean;
   closeOnOverlayClick?: boolean;
+  returnFocus?: RefObject<HTMLElement | null>;
 }
 
 export default function Dialog({
   open,
+  onboardingSurface = false,
   onClose,
   labelledBy,
   describedBy,
@@ -25,8 +29,10 @@ export default function Dialog({
   overlayClassName,
   closeOnEscape = true,
   closeOnOverlayClick = true,
+  returnFocus,
 }: DialogProps) {
   const { t } = useTranslation();
+  useLayoutEffect(() => { if (open && !onboardingSurface && isHelpActive()) finishTour('interrupted'); }, [open, onboardingSurface]);
 
   return (
     <BaseDialog.Root
@@ -49,6 +55,8 @@ export default function Dialog({
           )}
         />
         <BaseDialog.Popup
+          data-tour-surface={onboardingSurface ? '' : undefined}
+          finalFocus={returnFocus}
           aria-labelledby={labelledBy}
           aria-describedby={describedBy}
           className={cn('base-dialog-popup fixed left-1/2 top-1/2 z-[51]', className)}

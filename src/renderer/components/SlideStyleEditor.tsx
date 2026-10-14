@@ -67,7 +67,7 @@ export default function SlideStyleEditor({
     <>
       {/* Parts Editor */}
       {parts.length > 0 && (
-        <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+        <div data-guide-anchor="hymns-parts" className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
               {t('common.partsMode')}
@@ -134,6 +134,7 @@ export default function SlideStyleEditor({
           <div className="relative">
             <input
               id="slide-font-size"
+              data-guide-anchor="hymns-font"
               type="number"
               value={selectedSlide.styles?.fontSize ?? 48}
               onChange={(e) => updateSlideStyles({ fontSize: parseInt(e.target.value) || 48 })}

@@ -1,9 +1,13 @@
+import { usePractice } from '../hooks/usePractice';
 import { useTranslation } from 'react-i18next';
+import { useState } from 'react';
 import { useStore } from '../state/useStore';
 import Dialog from './Dialog';
 
 export default function CheatsheetModal() {
   const { t } = useTranslation();
+  const practice=usePractice();
+  const [error,setError]=useState(false);
   const isCheatsheetOpen = useStore((s) => s.isCheatsheetOpen);
   const setIsCheatsheetOpen = useStore((s) => s.setIsCheatsheetOpen);
   const isMediaMuted = useStore((s) => s.isMediaMuted);
@@ -15,6 +19,11 @@ export default function CheatsheetModal() {
       labelledBy="cheatsheet-title"
       className="bg-surface-overlay border border-white/10 rounded-2xl p-6 max-w-2xl w-full mx-4 shadow-2xl max-h-[85vh] overflow-y-auto"
     >
+      {!practice && <button data-testid="cheatsheet-practice" className="mb-4 rounded-lg px-4 py-2 bg-blue-600 focus-visible:ring-2 focus-visible:ring-blue-400" onClick={() => {
+        setIsCheatsheetOpen(false);
+        void window.electronAPI.openPractice().catch(()=>setError(true));
+      }}>{t('guide.title')}</button>}
+      {error && <p role="alert">{t('practice.launchError')}</p>}
       <div className="flex items-center justify-between mb-4">
         <h2 id="cheatsheet-title" className="text-lg font-bold">
           {t('common.cheatsheet.title')}

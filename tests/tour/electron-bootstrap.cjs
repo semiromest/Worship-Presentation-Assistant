@@ -1,0 +1,14 @@
+const { app } = require('electron');
+const path = require('node:path');
+if (!process.env.WPA_TEST_PROFILE) throw new Error('Missing isolated test profile');
+const fs = require('node:fs');
+const sessionPath = path.join(process.env.WPA_TEST_PROFILE, 'sessions');
+const tempPath = path.join(process.env.WPA_TEST_PROFILE, 'runtime');
+fs.mkdirSync(sessionPath, { recursive: true });
+fs.mkdirSync(tempPath, { recursive: true });
+app.setPath('userData', process.env.WPA_TEST_PROFILE);
+app.setPath('sessionData', sessionPath);
+app.setPath('temp', tempPath);
+process.env.TEMP = tempPath;
+process.env.TMP = tempPath;
+require(path.resolve(__dirname, '../../dist-electron/main.js'));
