@@ -1,4 +1,6 @@
 import { HexColorPicker } from 'react-colorful';
+import { GradientButton } from './GradientGenerator';
+import { applyGeneratedBackground } from '../gradientBackground';
 import { useTranslation } from 'react-i18next';
 import { Image as ImageIcon, Video, X, Layers, ChevronDown, AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd } from 'lucide-react';
 import { useStore } from '../state/useStore';
@@ -38,6 +40,8 @@ export default function SlideStyleEditor({
   const setActiveColorPicker = useStore((s) => s.setActiveColorPicker);
   const panels = useStore((s) => s.panels);
   const setPanels = useStore((s) => s.setPanels);
+  const gradientSlides = useStore(s => s.presentation.slides);
+  const gradientSelection = useStore(s => s.selectedSlideIds);
 
   const parts = selectedSlide.parts ?? [];
   const activePart = getActivePartIndex(selectedSlide);
@@ -403,6 +407,12 @@ export default function SlideStyleEditor({
           </button>
         )}
       </div>
+
+      <GradientButton slides={gradientSlides} activeId={selectedSlide.id} selectedIds={[...gradientSelection]}
+        onApply={(ids, image, recipe, groupDefault) => {
+          const current = useStore.getState();
+          current.dispatchUndo({ type: 'SET', payload: applyGeneratedBackground(current.presentation, ids, image, recipe, groupDefault) });
+        }} />
 
       {/* Apply to All Dropdown */}
       <div className="relative apply-styles-dropdown">

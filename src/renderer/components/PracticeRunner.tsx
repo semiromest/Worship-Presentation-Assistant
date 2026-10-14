@@ -36,6 +36,7 @@ function findGuideTarget(step: GuideStep, sample?: string, peer?: string): HTMLE
     case 'presentations': return getTourAnchor('page-presentations');
     case 'sidebar': return getTourAnchor('sidebar');
     case 'delete': return anchor('delete-slide');
+    case 'editor-select': return peer ? document.querySelector<HTMLElement>(`[data-editor-item-id="${CSS.escape(peer)}"]`) : null;
     case 'image-tools': return anchor('image-tools');
     case 'reorder': {
       const card = sample ? document.querySelector<HTMLElement>(`[data-slide-id="${CSS.escape(sample)}"]`) : null;
@@ -113,6 +114,11 @@ export default function PracticeRunner({ resetView }: { resetView: () => void })
       applying.current = true;
       try { useStore.getState().dispatchUndo({ type: reset ? 'RESET' : 'SET', payload: value.deck }); }
       finally { applying.current = false; } // dispatch fırlatsa bile mağaza aboneliği sonsuza dek kilitli kalmaz
+    }
+    if (value.active?.exercise === 'canvas-edit' && value.active.target) {
+      applying.current = true;
+      try { const state = useStore.getState(); if (state.selectedSlideId !== value.active.target) { state.setSelectedSlideId(value.active.target); state.setSelectedSlideIds(new Set([value.active.target])); } }
+      finally { applying.current = false; }
     }
     if (previous?.guide.step !== value.guide.step && (value.guide.step === 'image-select' || value.guide.step === 'select' && previous?.guide.step === 'reorder')) {
       useStore.getState().setActiveTab('slides');
@@ -361,10 +367,8 @@ export default function PracticeRunner({ resetView }: { resetView: () => void })
       {step && <div aria-hidden="true" className="h-1.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-sky-500" style={{ width: `${stepNumber / visibleGuideSteps.length * 100}%` }} /></div>}
     </header>
     {step && <>
-      <h3 id="guide-step-title" aria-live={resultStep ? 'polite' : undefined} className={resultStep && !resultUnavailable ? 'text-xl font-bold leading-snug text-emerald-700' : 'text-xl font-bold leading-snug text-slate-900'}>{t(resultUnavailable ? 'guide.result.unavailableTitle' : step.endsWith('-intro') ? `nav.${guideTab(step)}` : `guide.steps.${step}.title`)}</h3>
-      <p id="guide-step-body" className="text-sm leading-6 text-slate-600">{resultUnavailable ? t('guide.result.unavailable') : step.startsWith('nav-')
-        ? t('guide.openSection', { section: t(`nav.${step === 'nav-save' ? 'presentations' : step.slice(4)}`) })
-        : t(step.endsWith('-intro') && !['hymns-intro','bible-intro','editor-intro'].includes(step) ? `tour.pages.${guideTab(step)}` : `guide.steps.${step}.body`)}</p>
+      <h3 id="guide-step-title" aria-live={resultStep ? 'polite' : undefined} className={resultStep && !resultUnavailable ? 'text-xl font-bold leading-snug text-emerald-700' : 'text-xl font-bold leading-snug text-slate-900'}>{t(resultUnavailable ? 'guide.result.unavailableTitle' : `guide.steps.${step}.title`)}</h3>
+      <p id="guide-step-body" className="whitespace-pre-line text-sm leading-6 text-slate-600">{t(resultUnavailable ? 'guide.result.unavailable' : `guide.steps.${step}.body`)}</p>
       {INTRO_ONLY.has(step) && <p className="text-sm leading-6 text-slate-600">{t('guide.onlyIntroducing')}</p>}
       {active && !previewFailed && isGuideResultStep(step) && workspace?.guide.result && <PracticeResult step={step} result={workspace.guide.result} />}
     </>}

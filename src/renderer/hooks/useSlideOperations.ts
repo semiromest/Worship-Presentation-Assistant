@@ -5,6 +5,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../state/useStore';
 import type { Slide, Preset, TransitionType, LoopItem } from '../types';
+import { backgroundPatch, inheritGeneratedBackgrounds } from '../gradientBackground';
 import { DEFAULT_STYLES, DEFAULT__TRANSITION } from '../constants';
 import { makeSlideId, toFileUrl } from '../utils';
 import { guardEditorReplacement } from '../editor/editorSessionGuard';
@@ -20,8 +21,9 @@ export const createSlide = (type: Slide['type'], overrides: Partial<Slide> = {})
   id: makeSlideId(),
   type,
   content: '',
-  styles: { ...DEFAULT_STYLES },
   ...overrides,
+  styles: { ...(overrides.styles ?? DEFAULT_STYLES), backgroundExplicit: overrides.styles?.backgroundExplicit ??
+    !!(overrides.styles?.backgroundColor || overrides.styles?.backgroundImage || overrides.styles?.backgroundVideo || overrides.styles?.backgroundGradient) },
 });
 
 const HYMN_COLORS = [
@@ -158,7 +160,7 @@ export function useSlideOperations() {
         ...presentation,
         slides: presentation.slides.map((s) =>
           targetIds.has(s.id)
-            ? { ...s, styles: { ...DEFAULT_STYLES, ...s.styles, ...styles } }
+            ? { ...s, styles: backgroundPatch({ ...DEFAULT_STYLES, ...s.styles }, styles ?? {}) as Slide['styles'] }
             : s
         ),
       },
@@ -220,6 +222,9 @@ export function useSlideOperations() {
     }
 
     if (Object.keys(toApply).length === 0) return;
+    if ('backgroundImage' in toApply && sel.styles.generatedBackground) {
+      toApply.generatedBackground = sel.styles.generatedBackground;
+    }
 
     dispatchUndo({
       type: 'SET',
@@ -228,9 +233,7 @@ export function useSlideOperations() {
         slides: presentation.slides.map((s) => ({
           ...s,
           styles: {
-            ...DEFAULT_STYLES,
-            ...s.styles,
-            ...toApply,
+            ...(backgroundPatch({ ...DEFAULT_STYLES, ...s.styles }, toApply) as NonNullable<Slide['styles']>),
             objectFit: s.type !== 'text'
               ? ((toApply['objectFit'] as 'fill' | 'contain' | 'cover' | undefined) ?? s.styles?.objectFit ?? 'contain')
               : undefined,
@@ -471,7 +474,7 @@ export function useSlideOperations() {
     if (newSlides.length === 0) return;
     // Read the latest state on each call so chained appends (e.g. bulk hymn inserts) don't stick to a stale closure.
     const current = useStore.getState();
-    const slides = [...current.presentation.slides, ...newSlides];
+    const slides = [...current.presentation.slides, ...inheritGeneratedBackgrounds(current.presentation.slides, newSlides)];
 
     dispatchUndo({
       type: 'SET',
@@ -937,7 +940,7 @@ export function useSlideOperations() {
         ...presentation,
         slides: presentation.slides.map((s) =>
           selectedSlideIds.has(s.id)
-            ? { ...s, styles: { ...DEFAULT_STYLES, ...s.styles, ...styles } }
+            ? { ...s, styles: backgroundPatch({ ...DEFAULT_STYLES, ...s.styles }, styles ?? {}) as Slide['styles'] }
             : s
         ),
       },

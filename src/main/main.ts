@@ -50,6 +50,7 @@ import { initPerfMonitor, mainPerf, recordWs } from './perfMonitor';
 import { createPresetStore, isLiveSavePresetName } from './presetStore';
 import { localResourceUrlToPath, isZip, mediaRefToName } from '../shared/mediaTree';
 import { getMediaLibrary } from './mediaLibrary';
+import { registerGradientService } from './gradientService';
 import { getOrCreateThumbnail, thumbRefToPath, pruneThumbnailCache } from './mediaThumbnails';
 import { heavyClient } from './heavyWorkerClient';
 import { registerSttIpc, cleanupStt } from './sonioxService';
@@ -426,6 +427,7 @@ const presetStore = createPresetStore(app.getPath('userData'), mainPerf);
 
 // Persistent media library (Phase 6): userData/media/, see mediaLibrary.ts.
 const mediaLibrary = getMediaLibrary();
+registerGradientService(mediaLibrary);
 
 // Generic recursive file finder
 // One directory walker, parametrized by a filter, replaces two near-identical
@@ -1164,7 +1166,7 @@ app.whenReady().then(async () => {
   setPublicTunnelStatusListener((next) => win?.webContents.send('public-tunnel:status', next));
   setClientCountListener((count) => win?.webContents.send('share:client-count', count));
   setScreenShareClientCountListener((count) => win?.webContents.send('screen-share:client-count', count));
-  if (!restricted) registerSttIpc();
+  if (!restricted) registerSttIpc(() => win);
   void pruneThumbnailCache();
 });
 
@@ -1977,6 +1979,11 @@ function isMusicControl(event: Electron.IpcMainInvokeEvent): boolean {
   return !restricted && !!win && !win.isDestroyed() && event.sender === win.webContents &&
     event.senderFrame === win.webContents.mainFrame;
 }
+ipcMain.handle('soniox:open-website', async event => {
+  if (!isMusicControl(event)) return { ok: false };
+  await shell.openExternal('https://soniox.com/');
+  return { ok: true };
+});
 ipcMain.handle('youtube-music:search', (event, query: unknown) => isMusicControl(event)
   ? youtubeMusicService.search(query) : { ok: false, error: 'unavailable' });
 ipcMain.handle('youtube-music:play', (event, id: unknown) => isMusicControl(event)

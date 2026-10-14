@@ -475,6 +475,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
                   return next;
                 });
               }}
+              data-guide-anchor="hymns-mode"
               aria-pressed={partsModeEnabled}
               className={cn(
                 'inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none',
@@ -497,6 +498,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
                   return next;
                 });
               }}
+              data-guide-anchor="hymns-author"
               aria-pressed={showAuthorOnSlides}
               className={cn(
                 'inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors',
@@ -528,6 +530,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
                   ? 'bg-sky-600/20 border-sky-500/40 text-sky-300'
                   : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
               )}
+              data-guide-anchor="hymns-online"
               title={t('common.hymnsOnline')}
             >
               <Cloud className="w-4 h-4" aria-hidden="true" />

@@ -20,6 +20,8 @@ import {
 
 /** Per-slide editing draft held while the editor is open. */
 export interface SlideDraft {
+  /** A background-only operation must not materialize legacy text into items. */
+  backgroundOnly?: boolean;
   videoPlayback?: Slide['videoPlayback'];
   videoOverlays?: Slide['videoOverlays'];
   items: SlideItem[];
@@ -68,6 +70,7 @@ export function cloneDraft(draft: SlideDraft): SlideDraft {
  * legacy `content`/`styles` fields so older readers keep working.
  */
 export function draftToSlide(slide: Slide, draft: SlideDraft): Slide {
+  if (draft.backgroundOnly && slide.type === 'text') return { ...slide, styles: draft.styles as Slide['styles'] };
   if (isVideoEditableSlide(slide)) return { ...slide, videoPlayback: draft.videoPlayback ? { ...draft.videoPlayback } : undefined, videoOverlays: draft.videoOverlays?.map(item => ({ ...item, textStyles: item.textStyles ? { ...item.textStyles } : undefined })) };
   if (!isItemEditableSlide(slide)) return slide;
   const items = normalizeItems(draft.items);
@@ -126,7 +129,7 @@ export function applyDraftsToDeck(
   let changed = false;
   const slides = deck.slides.map((slide) => {
     const draft = drafts.get(slide.id);
-    if (!draft || !isEditorEditableSlide(slide)) return slide;
+    if (!draft || (!isEditorEditableSlide(slide) && !(slide.type === 'text' && draft.backgroundOnly))) return slide;
     changed = true;
     return draftToSlide(slide, draft);
   });

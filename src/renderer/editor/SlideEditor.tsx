@@ -1,3 +1,4 @@
+import { usePractice } from '../hooks/usePractice';
 import { isHelpActive } from '../components/Tour/tourController';
 import { newVideoOverlay } from '../videoOverlays';
 import VideoEditor from './VideoEditor';
@@ -59,6 +60,8 @@ import { TextStyleEditor } from './styleEditors/TextStyleEditor';
 import { ImageStyleEditor } from './styleEditors/ImageStyleEditor';
 import { LayerPanel } from './panels/LayerPanel';
 import { SlideSettingsPanel } from './panels/SlideSettingsPanel';
+import { GradientButton } from '../components/GradientGenerator';
+import { generatedStyles } from '../gradientBackground';
 import { AlignmentTools } from './AlignmentTools';
 import { SlideTemplates } from './SlideTemplates';
 import { applyTemplate } from './templates';
@@ -221,6 +224,7 @@ const ClipboardChip = memo(function ClipboardChip({
 
 export default function SlideEditor({ slide, deck, active, onSave, onClose, onOpenInSlides }: SlideEditorProps) {
   const { t } = useTranslation();
+  const practice = usePractice();
   const [editableOnly, setEditableOnly] = useState(false);
   const [videoRangeValid, setVideoRangeValid] = useState(true);
   const session = useEditorDeck({ deck, initialSlide: slide, editableOnly });
@@ -327,6 +331,13 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
   const selectedIds = session.selectedItemIds;
   const selectedItems = session.selectedItems;
   const primarySelected = useMemo(() => selectedItems[selectedItems.length - 1] ?? null, [selectedItems]);
+
+  useEffect(() => {
+    if (practice && active && slide?.items?.some(item => item.id.startsWith('practice-editor-')) && session.activeId !== slide.id) session.activateSlide(slide);
+  }, [practice, active, slide, session.activeId, session.activateSlide]);
+  useEffect(() => {
+    if (practice && active && primarySelected?.id.startsWith('practice-editor-')) { setInspectorOpen(true); setTab('item'); }
+  }, [practice, active, primarySelected?.id]);
 
   const imageSize = useImageSize(primarySelected?.type === 'image' ? primarySelected.mediaUrl : undefined);
   const ratioKey = primarySelected ? `${session.activeId}:${primarySelected.id}` : '';
@@ -922,7 +933,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
   );
 
   return (
-    <section ref={editorRootRef} aria-labelledby="slide-editor-title" className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface-base">
+    <section ref={editorRootRef} data-guide-state={practice && active ? JSON.stringify({ editorSlideId:activeSlide.id,editorItemId:primarySelected?.id ?? '',editorSelected:selectedIds.size === 1,editorRotation:primarySelected?.rotation ?? 0 }) : undefined} aria-labelledby="slide-editor-title" className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface-base">
       <div
         className="flex h-full min-h-0 w-full flex-col"
         onKeyDown={(event) => {
@@ -1286,6 +1297,8 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                     onGridColorChange={(value) => session.setGridField('gridColor', value)}
                     onSnapToggle={(value) => session.setGridField('snapEnabled', value)}
                   />
+                  <GradientButton slides={(session.buildSavePayload() ?? deck).slides} activeId={activeSlide.id} selectedIds={selectedSlideIds}
+                    onApply={(ids, image, recipe, groupDefault) => session.applyBackground(generatedStyles(image, recipe, groupDefault), ids)} />
                 </>
               )}
 
@@ -1394,6 +1407,8 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                             </span>
                             <input
                               type="number"
+                              data-guide-anchor="editor-rotate"
+                              aria-label={t('common.editorRotation')}
                               value={primarySelected.rotation || 0}
                               onChange={(event) => {
                                 const value = parseInt(event.target.value || '0', 10);
@@ -1781,6 +1796,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
             </button>
             <button
               type="button"
+              data-guide-anchor="editor-save"
               onClick={() => void handleSave()}
               disabled={confirming || !session.isDirty || !videoRangeValid}
               className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-500 disabled:opacity-40 disabled:hover:bg-green-600"

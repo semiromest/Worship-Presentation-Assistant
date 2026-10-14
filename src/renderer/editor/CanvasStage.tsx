@@ -1,3 +1,5 @@
+import { AnimatedGradientBackground } from '../components/AnimatedGradientBackground';
+import type { GeneratedBackground } from '../../shared/generatedBackground';
 import { isHelpActive } from '../components/Tour/tourController';
 import {
   useCallback,
@@ -339,6 +341,7 @@ export function CanvasStage({
             }}
           />
 
+          <AnimatedGradientBackground recipe={slideStyles.generatedBackground as GeneratedBackground | undefined} />
           {/* Gradient */}
           {bgGradient && (
             <div

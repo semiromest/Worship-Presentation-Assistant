@@ -1,4 +1,42 @@
 {
+  "gradient": {
+    "animation": "Animation",
+    "aurora": "Polarlicht",
+    "waves": "Wellen",
+    "fog": "Nebel",
+    "motion": "Lebendige Bewegung",
+    "speed": "Geschwindigkeit",
+    "amount": "Bewegungsstärke",
+    "motionNote": "Der Kontrast gilt für das Standbild und kann sich während der Bewegung ändern. Exporte verwenden das Standbild.",
+    "open": "Farbverlauf erstellen",
+    "palette": "Farbpalette",
+    "style": "Stil",
+    "soft": "Weich",
+    "flow": "Fließend",
+    "darkness": "Abdunklung",
+    "regenerate": "Neu erstellen",
+    "target": "Anwenden auf",
+    "slide": "Diese Folie",
+    "group": "Diese Lied- / Bibelversgruppe",
+    "selection": "Ausgewählte Folien",
+    "cancel": "Abbrechen",
+    "apply": "Anwenden ({{count}} Folien)",
+    "generating": "Hintergrund wird erstellt…",
+    "error": "Erstellen oder Speichern fehlgeschlagen. Bitte neu erstellen.",
+    "unknown": "Kontrast konnte nicht automatisch geprüft werden.",
+    "contrast": "Minimaler Kontrast: {{ratio}}:1",
+    "override": "Trotz Kontrastwarnung anwenden",
+    "palettes": {
+      "night": "Nacht",
+      "ocean": "Ozean",
+      "emerald": "Smaragd",
+      "lavender": "Lavendel",
+      "sunset": "Sonnenuntergang",
+      "amber": "Bernstein",
+      "rose": "Rose",
+      "smoke": "Rauch"
+    }
+  },
   "nav": {
     "editor": "Editor",
     "presentations": "Präsentationen",
@@ -1174,9 +1212,25 @@
         "retention": "aufbewahrung dauer tage",
         "clear-live-saves": "automatische aufnahmen löschen bereinigen",
         "updates": "updates version herunterladen",
-        "learn": "übung anleitung lernen hilfe"
+        "learn": "übung anleitung lernen hilfe",
+        "soniox-website": "soniox offizielle website konto kosten nutzung",
+        "stt-clear-key": "api schlüssel löschen entfernen",
+        "appearance-preview": "vorschau simulation logo autor größe position"
       }
-    }
+    },
+    "musicSeek": "Vor- oder zurückspulen",
+    "musicSeekUnavailable": "Diese Quelle unterstützt derzeit kein Spulen.",
+    "sonioxAbout": "Soniox ist ein Onlinedienst, der Sprache in Echtzeit in Text umwandelt und in andere Sprachen übersetzt. Diese App erstellt damit Untertitel aus Mikrofon-Audio.",
+    "sonioxSetup": "Erstelle einen API-Schlüssel in deinem Soniox-Konto und speichere ihn hier. Wähle anschließend die gesprochene Sprache und die Zielsprache. Internet ist erforderlich. Nutzung und Abrechnung verwaltest du in deinem Soniox-Konto.",
+    "sonioxWebsite": "Offizielle Soniox-Website öffnen",
+    "sonioxWebsiteFailed": "Soniox konnte nicht geöffnet werden. Versuche es erneut.",
+    "sonioxClearKey": "API-Schlüssel entfernen",
+    "sonioxClearFailed": "Der API-Schlüssel konnte nicht entfernt werden.",
+    "sonioxStopFirst": "Beende zuerst die aktive Untertitel-Sitzung.",
+    "sonioxClearHint": "Der Schlüssel wird nur aus dieser App entfernt; im Soniox-Konto wird er nicht widerrufen.",
+    "appearancePreview": "Layout-Vorschau",
+    "appearancePreviewHint": "Die echte Folienansicht wird proportional verkleinert. Position und Größe werden sofort sichtbar; Beispielinhalte werden nicht zur Präsentation hinzugefügt.",
+    "appearancePreviewSample": "Ein Beispiellogo und vier Liedzeilen werden angezeigt. Lade ein Logo hoch, um dein eigenes zu sehen."
   },
   "stage": {
     "next": "Als Nächstes",
@@ -1381,6 +1435,9 @@
       "slide-reorder": {
         "title": "Folien neu anordnen",
         "body": "Ziehe die hervorgehobene Beispielfolie auf die andere hervorgehobene Folie. Die Übung endet, sobald sich die Positionen tatsächlich ändern."
+      },
+      "canvas-edit": {
+        "title": "Bild im Folieneditor bearbeiten"
       }
     }
   },
@@ -1412,216 +1469,248 @@
     "shortTitle": "Kurze Tour",
     "steps": {
       "welcome": {
-        "title": "Gemeinsam lernen",
-        "body": "Du arbeitest in einem eigenen Übungsprofil. Live-Ausgabe ist deaktiviert; deine echte Präsentation bleibt unverändert. Folge den markierten Aktionen."
+        "title": "Lernen wir gemeinsam",
+        "body": "Mit ein paar einfachen Übungen lernst du diese App kennen. Alle Schritte führen wir in einem separaten Übungsprofil aus. Deine echten Präsentationen bleiben unberührt und die Live-Ausgabe bleibt ausgeschaltet. Bereit? Dann legen wir los!"
       },
       "presentations": {
         "title": "Präsentationen",
-        "body": "Hier verwaltest du Präsentationen. Wir stellen diesen Bereich nur vor; danach erstellst du eine Folie mit den echten Werkzeugen."
+        "body": "Hier kannst du deine Präsentationen erstellen, speichern und verwalten. Schauen wir uns diesen Bereich zunächst an. Bald wirst du deine eigenen Folien erstellen."
       },
       "sidebar": {
-        "title": "Bereiche",
-        "body": "Die Schaltflächen links öffnen die Bereiche. Das benötigte Ziel wird jeweils markiert."
+        "title": "In der App navigieren",
+        "body": "Über das Menü links erreichst du die verschiedenen Bereiche der App. Im Tutorial heben wir die benötigten Schaltflächen und Bereiche hervor und führen dich Schritt für Schritt."
       },
       "nav-slides": {
-        "title": "Folien öffnen",
-        "body": "Klicke auf die markierte Schaltfläche Folien."
+        "title": "Den Bereich Folien öffnen",
+        "body": "Erstellen wir unsere erste Folie! Klicke im linken Menü auf die hervorgehobene Schaltfläche Folien."
       },
       "add": {
-        "title": "Folie hinzufügen",
-        "body": "Klicke auf Neue Folie. Die Anleitung geht weiter, sobald die Folie erstellt ist."
+        "title": "Eine neue Folie erstellen",
+        "body": "Klicke auf die hervorgehobene Schaltfläche Neue Folie. Deiner Präsentation wird eine neue Folie hinzugefügt."
       },
       "select": {
-        "title": "Beispielfolie auswählen",
-        "body": "Klicke auf die markierte Beispielfolie. Deine hinzugefügte Folie bleibt erhalten."
+        "title": "Die Beispielfolie auswählen",
+        "body": "Jetzt lernen wir, wie du eine Folie löschst. Klicke auf die hervorgehobene Beispielfolie. Die gerade von dir erstellte Folie bleibt erhalten."
       },
       "delete": {
-        "title": "Beispiel löschen",
-        "body": "Lösche das ausgewählte Beispiel mit Entf oder dem hervorgehobenen Papierkorb rechts. Beide Methoden gelten; andere Folien bleiben erhalten."
+        "title": "Die Beispielfolie löschen",
+        "body": "Drücke die Entf-Taste oder klicke auf das hervorgehobene Papierkorbsymbol im rechten Panel, um die ausgewählte Beispielfolie zu löschen. Nutze die Methode, die dir lieber ist!"
       },
       "done": {
-        "title": "Abschluss",
-        "body": "Du hast das Ende der Anleitung erreicht. Übungsänderungen bleiben beim Beenden erhalten."
+        "title": "Glückwunsch, du hast das Tutorial abgeschlossen!",
+        "body": "Du hast die wichtigsten Funktionen der App entdeckt! Du hast gelernt, Folien zu erstellen, Inhalte hinzuzufügen, Bilder zu bearbeiten und deine Präsentation zu speichern.\n\nDeine Änderungen in der Übung bleiben beim Beenden erhalten. Jetzt bist du bereit, die App zu verwenden!"
       },
       "nav-bible": {
-        "title": "Bibel",
-        "body": "Klicke auf die markierte Schaltfläche Bibel."
+        "title": "Den Bereich Bibel öffnen",
+        "body": "Mit dieser App kannst du Bibelverse ganz einfach zu deiner Präsentation hinzufügen. Klicke im linken Menü auf die hervorgehobene Schaltfläche Bibel."
       },
       "bible-intro": {
-        "title": "Bibelquellen laden",
-        "body": "Lade eine Bibel aus einer lokalen XML-Datei oder suche online und wähle eine passende Quelle aus. Diese Übung verwendet eine sichere lokale XML-Beispieldatei."
+        "title": "Bibelquellen entdecken",
+        "body": "Du kannst Bibelübersetzungen aus XML-Dateien importieren oder sie über die Schaltfläche zur Online-Bibelauswahl in der App finden und hinzufügen. Für diese Übung verwenden wir eine vorbereitete XML-Beispieldatei."
       },
       "nav-media": {
-        "title": "Medien",
-        "body": "Klicke auf die markierte Schaltfläche Medien."
+        "title": "Den Bereich Medien öffnen",
+        "body": "Fügen wir nun ein Bild zu unserer Präsentation hinzu. Klicke im linken Menü auf die hervorgehobene Schaltfläche Medien."
       },
       "media-intro": {
-        "title": "Medien",
-        "body": "Suchen Sie Bilder und Videos, prüfen Sie die Vorschau und fügen Sie sie hinzu. Mehrere Inhalte können eine Schleifenfolie bilden."
+        "title": "Die Medienbibliothek entdecken",
+        "body": "Hier kannst du Bilder und Videos verwalten, in der Vorschau ansehen und zu deinen Präsentationen hinzufügen. Mit mehreren Mediendateien kannst du auch Folien erstellen, die in einer Schleife abgespielt werden."
       },
       "nav-hymns": {
-        "title": "Lieder",
-        "body": "Klicke auf die markierte Schaltfläche Lieder."
+        "title": "Den Bereich Lieder öffnen",
+        "body": "Lernen wir nun, wie wir Liedtexte zu unserer Präsentation hinzufügen. Klicke im linken Menü auf die hervorgehobene Schaltfläche Lieder."
       },
       "hymns-intro": {
-        "title": "Lieder",
-        "body": "Im normalen Modus wird jede Strophe eine eigene Folie. Im Teilemodus sind die Strophen Teile einer Folie. Wir fügen das Beispiel im Teilemodus hinzu."
+        "title": "Liedpräsentationen entdecken",
+        "body": "Du kannst Lieder auf zwei Arten präsentieren. Im Normalmodus steht jede Strophe auf einer eigenen Folie. Der Teilemodus fasst alle Strophen auf einer Folie zusammen. In dieser Übung verwenden wir den Teilemodus."
       },
       "nav-countdown": {
-        "title": "Countdown",
-        "body": "Klicke auf die markierte Schaltfläche Countdown."
+        "title": "Den Bereich Countdown öffnen",
+        "body": "Fügen wir nun einen Countdown zu unserer Präsentation hinzu. Klicke im linken Menü auf die hervorgehobene Schaltfläche Countdown."
       },
       "countdown-intro": {
-        "title": "Countdown",
-        "body": "Wählen Sie Minuten und Sekunden, gestalten Sie die Anzeige und fügen Sie den Countdown hinzu."
+        "title": "Einen Countdown erstellen",
+        "body": "Hier kannst du Minuten und Sekunden einstellen und Countdowns zu deinen Präsentationen hinzufügen. Auch das Aussehen des Countdowns kannst du an deine Bedürfnisse anpassen."
       },
       "nav-screen": {
-        "title": "Bildschirm",
-        "body": "Klicke auf die markierte Schaltfläche Bildschirm."
+        "title": "Den Bereich Bildschirm öffnen",
+        "body": "Klicke im linken Menü auf die hervorgehobene Schaltfläche Bildschirm."
       },
       "screen-intro": {
-        "title": "Bildschirm",
-        "body": "Wählen Sie eine Bildschirmaufnahme als Folienquelle. Die Quellenauswahl ist von der Projektionsausgabe getrennt."
+        "title": "Bildschirmaufnahme",
+        "body": "Hier kannst du einen Bildschirm oder ein Fenster auf deinem Computer auswählen und dessen Bild zu deiner Präsentation hinzufügen. Die Auswahl einer Aufnahmequelle startet die Projektorausgabe nicht. Im Übungsmodus kann ich das nicht ausführlicher vorführen."
       },
       "nav-calendar": {
-        "title": "Kalender",
-        "body": "Klicke auf die markierte Schaltfläche Kalender."
+        "title": "Den Bereich Kalender öffnen",
+        "body": "Klicke im linken Menü auf die hervorgehobene Schaltfläche Kalender."
       },
       "calendar-intro": {
-        "title": "Kalender",
-        "body": "Planen Sie vorbereitete Präsentationen im Kalender und öffnen Sie sie über ihre Einträge."
+        "title": "Deine Präsentationen planen",
+        "body": "Im Kalender kannst du Präsentationen für bestimmte Termine planen und sie später über den jeweiligen Eintrag wieder öffnen. So organisierst du deine Vorbereitungen für kommende Gottesdienste und Veranstaltungen."
       },
       "nav-editor": {
-        "title": "Editor",
-        "body": "Klicke auf die markierte Schaltfläche Editor."
+        "title": "Den Bereich Editor öffnen",
+        "body": "Schauen wir uns nun die ausführlicheren Werkzeuge zur Folienbearbeitung an. Klicke im linken Menü auf die hervorgehobene Schaltfläche Editor."
       },
       "editor-intro": {
-        "title": "Editor",
-        "body": "Bilder können rechts oder im Folieneditor bearbeitet werden. Der Folieneditor bietet detailliertere Optionen und Werkzeuge zur Videobearbeitung. Im Beispiel haben wir zwei einfache Bildänderungen vorgenommen."
+        "title": "Den Folieneditor entdecken",
+        "body": "Im Folieneditor kannst du Inhalt und Aussehen deiner Folien bearbeiten. Nun wählen wir unser Beispielbild aus, drehen es um 15° und speichern die Änderung. Alle Schritte betreffen ausschließlich die Übungspräsentation."
       },
       "nav-settings": {
-        "title": "Einstellungen",
-        "body": "Klicke auf die markierte Schaltfläche Einstellungen."
+        "title": "Den Bereich Einstellungen öffnen",
+        "body": "Klicke im linken Menü auf die hervorgehobene Schaltfläche Einstellungen."
       },
       "settings-intro": {
-        "title": "Einstellungen",
-        "body": "Verwalten Sie Sprache und Einstellungen. Öffnen Sie Seiteneinführungen und die kurze Tour erneut im Hilfebereich."
+        "title": "Die App an dich anpassen",
+        "body": "Hier kannst du die App-Sprache und weitere Einstellungen verwalten. Außerdem kannst du im Hilfebereich Tutorials neu starten und die Bereiche der App erneut entdecken."
       },
       "nav-save": {
-        "title": "Präsentationen",
-        "body": "Klicke auf die markierte Schaltfläche Präsentationen."
+        "title": "Zu Präsentationen zurückkehren",
+        "body": "Jetzt können wir unsere vorbereitete Präsentation speichern! Klicke im linken Menü auf die hervorgehobene Schaltfläche Präsentationen."
       },
       "bible-source": {
-        "title": "Quelle laden",
-        "body": "Klicke auf XML importieren. Bei geöffneter Quelle öffnen wir das Verwaltungsmenü."
+        "title": "Das Importmenü öffnen",
+        "body": "Klicke auf die hervorgehobene Schaltfläche XML importieren. Falls bereits eine Quelle geöffnet ist, machen wir über das zugehörige Verwaltungsmenü weiter."
       },
       "bible-import": {
-        "title": "Beispiel-XML importieren",
-        "body": "Klicke im Menü auf XML importieren. Nur die sichere Beispielquelle wird geladen."
+        "title": "Die Beispielbibel laden",
+        "body": "Klicke im geöffneten Menü auf XML importieren. Die Beispielbibel wird automatisch geladen; du musst keine eigenen Dateien auswählen."
       },
       "bible-book": {
-        "title": "Erstes Buch wählen",
-        "body": "Klicke auf das markierte erste Buch."
+        "title": "Ein Buch auswählen",
+        "body": "Klicke in der Liste der Bibelbücher auf das hervorgehobene erste Buch."
       },
       "bible-chapter": {
-        "title": "Erstes Kapitel wählen",
-        "body": "Klicke auf das markierte Kapitel 1."
+        "title": "Ein Kapitel auswählen",
+        "body": "Klicke nun auf die hervorgehobene Schaltfläche für Kapitel 1. Wir zeigen die Verse dieses Kapitels an."
       },
       "bible-verse": {
-        "title": "Vers auswählen",
-        "body": "Wähle den markierten Beispielvers."
+        "title": "Einen Vers auswählen",
+        "body": "Klicke auf den hervorgehobenen Beispielvers. Wir werden diesen Vers zu unserer Präsentation hinzufügen."
       },
       "bible-add": {
-        "title": "Vers hinzufügen",
-        "body": "Klicke auf Zur Präsentation hinzufügen. Wir warten auf die Versfolie."
+        "title": "Den Vers zur Präsentation hinzufügen",
+        "body": "Klicke auf Zur Präsentation hinzufügen. Für den ausgewählten Vers wird automatisch eine Folie erstellt."
       },
       "media-menu": {
-        "title": "Medienmenü öffnen",
-        "body": "Klicke auf die markierte Schaltfläche Medien hinzufügen."
+        "title": "Das Menü zum Hinzufügen von Medien öffnen",
+        "body": "Klicke auf die hervorgehobene Schaltfläche Medien hinzufügen."
       },
       "media-import": {
-        "title": "Beispielbild laden",
-        "body": "Klicke auf Bilder auswählen. Ein sicheres Beispielbild ersetzt die Dateiauswahl."
+        "title": "Das Beispielbild laden",
+        "body": "Klicke auf Bild auswählen. In dieser Übung verwenden wir ein vorbereitetes Beispielbild, statt eine Datei von deinem Computer auszuwählen."
       },
       "media-add": {
-        "title": "Bild hinzufügen",
-        "body": "Klicke auf das Plus unter dem Beispielbild. Wir warten auf die Bildfolie."
+        "title": "Das Bild zur Präsentation hinzufügen",
+        "body": "Klicke auf die Schaltfläche + unter dem Beispielbild. Das Bild wird deiner Präsentation als neue Folie hinzugefügt."
       },
       "countdown-duration": {
-        "title": "Dauer einstellen",
-        "body": "Setze Minuten auf 2. Nur dieses Feld ist bearbeitbar."
+        "title": "Die Countdown-Dauer festlegen",
+        "body": "Trage im Feld Minuten den Wert 2 ein. In dieser Übung ändern wir nur die Minuten."
       },
       "countdown-add": {
-        "title": "Countdown hinzufügen",
-        "body": "Klicke auf Zur Folie hinzufügen. Timer und Live-Ausgabe bleiben aus."
+        "title": "Den Countdown zur Präsentation hinzufügen",
+        "body": "Klicke auf Zur Folie hinzufügen. Eine Folie mit einem zweiminütigen Countdown wird erstellt. Wir starten weder den Timer noch die Live-Ausgabe."
       },
       "save": {
-        "title": "Übungspräsentation speichern",
-        "body": "Klicke auf In Bibliothek speichern. Nur das separate Übungsprofil wird verwendet. Wir warten auf die erfolgreiche Speicherung."
+        "title": "Deine Präsentation in der Bibliothek speichern",
+        "body": "Klicke auf In Bibliothek speichern. Deine Präsentation wird ausschließlich in der Bibliothek des Übungsprofils gespeichert; deine echten Präsentationen bleiben unberührt."
       },
       "add-result": {
-        "title": "Du hast eine Folie erstellt",
-        "body": "Du hast eine neue Folie erstellt. So werden Folien für deine Präsentation vorbereitet."
+        "title": "Deine erste Folie ist fertig!",
+        "body": "Glückwunsch, du hast deine erste Folie erstellt! Mit Folien kannst du deiner Präsentation Text, Bilder und viele weitere Inhalte hinzufügen."
       },
       "delete-result": {
         "title": "Die Beispielfolie wurde gelöscht",
         "body": "Die ausgewählte Beispielfolie wurde entfernt. Deine anderen Folien bleiben erhalten."
       },
       "bible-result": {
-        "title": "Du hast den Vers hinzugefügt",
-        "body": "Du hast den Vers zur Präsentation hinzugefügt. So sieht die vorbereitete Folie aus."
+        "title": "Deine Versfolie ist fertig!",
+        "body": "Super! Du hast einen Bibelvers zu deiner Präsentation hinzugefügt. So kannst du Verse schnell in Folien umwandeln."
       },
       "media-result": {
-        "title": "Du hast das Bild hinzugefügt",
-        "body": "Du hast das Bild zur Präsentation hinzugefügt. So sieht es auf der Folie aus."
+        "title": "Deine Bildfolie ist fertig!",
+        "body": "Du hast dein Bild erfolgreich hinzugefügt! So kannst du Fotos, Hintergründe und andere Bilder in deinen Präsentationen verwenden."
       },
       "countdown-result": {
-        "title": "Dein Countdown ist bereit",
-        "body": "Du hast eine Countdown-Folie für zwei Minuten vorbereitet. Dies ist eine statische Vorschau; der Timer läuft nicht."
+        "title": "Deine Countdown-Folie ist fertig!",
+        "body": "Du hast deinen zweiminütigen Countdown erstellt! Hier siehst du nur eine Vorschau; der Countdown hat noch nicht begonnen."
       },
       "save-result": {
-        "title": "Deine Präsentation wurde gespeichert",
-        "body": "Du hast deine Präsentation in der Übungsbibliothek gespeichert. Dort kannst du sie wieder öffnen."
+        "title": "Deine Präsentation wurde gespeichert!",
+        "body": "Glückwunsch! Du hast deine Präsentation erfolgreich gespeichert. Du kannst sie jederzeit wieder aus der Übungsbibliothek öffnen und daran weiterarbeiten."
       },
       "hymns-add": {
-        "title": "Beispiellied hinzufügen",
-        "body": "Klicke auf die hervorgehobene Liedzeile. Danach sehen wir uns die hinzugefügten Folien an."
+        "title": "Das Beispiellied hinzufügen",
+        "body": "Klicke auf das hervorgehobene Beispiellied. Sein Text wird deiner Präsentation im Teilemodus hinzugefügt."
       },
       "hymns-result": {
-        "title": "Du hast das Lied hinzugefügt",
-        "body": "Du hast den Text des Beispiellieds hinzugefügt. So sieht die vorbereitete Liedfolie aus."
+        "title": "Deine Liedfolie ist fertig!",
+        "body": "Glückwunsch! Du hast dein erstes Lied zu deiner Präsentation hinzugefügt. Jetzt kannst du den Liedtext auf der Folie anzeigen und zwischen den Strophen wechseln."
       },
       "image-select": {
-        "title": "Beispielbild auswählen",
-        "body": "Klicke auf die hervorgehobene Bildfolie. Rechts nehmen wir zwei einfache Änderungen vor."
+        "title": "Deine Bildfolie auswählen",
+        "body": "Bearbeiten wir nun unser Bild ein wenig. Klicke auf die hervorgehobene Bildfolie. Im rechten Panel nehmen wir zwei einfache Änderungen vor."
       },
       "image-fit": {
-        "title": "Ganzes Bild einpassen",
-        "body": "Klicke rechts auf Einpassen, damit das gesamte Bild im Rahmen sichtbar ist."
+        "title": "Das ganze Bild anzeigen",
+        "body": "Klicke im rechten Panel auf Einpassen. Dadurch passt das gesamte Bild ohne Zuschnitt in den Folienbereich."
       },
       "image-grayscale": {
         "title": "Graustufen anwenden",
-        "body": "Stelle den Graustufen-Regler auf 100 %. Du kannst den Regler fokussieren und Ende drücken."
+        "body": "Stelle den Graustufen-Regler auf 100 %. Du kannst den Regler auch auswählen und die Ende-Taste drücken."
       },
       "image-edit-result": {
-        "title": "Du hast das Bild bearbeitet",
-        "body": "Du hast die Bildanpassung geändert und Graustufen angewendet. So sieht das bearbeitete Bild aus."
+        "title": "Du hast dein Bild bearbeitet!",
+        "body": "Super! Du hast das ganze Bild in den Rahmen eingepasst und einen Graustufeneffekt angewendet. Hier siehst du das fertige Bild."
       },
       "hymns-parts": {
-        "title": "Die Liedteile",
-        "body": "Rechts siehst du die Liedteile. Mit der nummerierten Schaltfläche wechselst du zum gewünschten Teil. Hier erklären wir dies nur; du musst keinen Teil anklicken."
+        "title": "Zwischen den Strophen wechseln",
+        "body": "Im rechten Panel siehst du nummerierte Schaltflächen für die Strophen des Liedes. Klicke während der Präsentation einfach auf die entsprechende Nummer, um zur gewünschten Strophe zu wechseln. Jetzt lernen wir diesen Bereich nur kennen."
       },
       "reorder": {
-        "title": "Folien neu anordnen",
-        "body": "Ziehe die hervorgehobene Beispielfolie auf die andere hervorgehobene Folie. Die Übung endet, sobald sich die Positionen tatsächlich ändern."
+        "title": "Die Reihenfolge der Folien ändern",
+        "body": "Du kannst deine Folien beliebig anordnen. Ziehe die hervorgehobene Beispielfolie auf die andere hervorgehobene Folie und lasse sie dort los. Sobald sich die Reihenfolge ändert, ist dieser Schritt abgeschlossen."
       },
       "hymns-font": {
-        "title": "Schriftgröße des Lieds",
-        "body": "Ändere die Schriftgröße des ausgewählten Lieds im Feld Schriftgröße rechts. Größere Zahlen vergrößern die Schrift, kleinere verkleinern sie. Hier erklären wir es nur; keine Änderung ist erforderlich."
+        "title": "Die Größe des Liedtexts anpassen",
+        "body": "Über Schriftgröße im rechten Panel kannst du die Größe des Liedtexts ändern. Ein höherer Wert vergrößert den Text, ein niedrigerer verkleinert ihn. In diesem Schritt musst du nichts ändern."
       },
       "image-tools": {
-        "title": "Zwei Bearbeitungswege",
-        "body": "Bilder lassen sich rechts oder im Folieneditor über die hervorgehobene Stifttaste bearbeiten. Der Folieneditor bietet detailliertere Optionen und Videobearbeitung. Im Beispiel ändern wir nur Einpassen und Graustufen."
+        "title": "Wie kannst du Bilder bearbeiten?",
+        "body": "Über das Eigenschaftenpanel rechts kannst du Bilder schnell bearbeiten. Ausführlichere Optionen findest du im Folieneditor, den du über das Stiftsymbol öffnest. Dort erreichst du auch die Optionen zur Videobearbeitung."
+      },
+      "hymns-online": {
+        "title": "Online-Lieder",
+        "body": "Über die Schaltfläche Online-Lieder erreichst du Online-Liedquellen. Dort kannst du die gewünschten Lieder finden und zu deiner Bibliothek hinzufügen."
+      },
+      "hymns-author": {
+        "title": "Autoreninformationen anzeigen",
+        "body": "Autor anzeigen legt fest, ob der Autorenname zusammen mit dem Liedtext auf der Folie erscheint. Diese Funktion ist für Lieder mit Autoreninformationen verfügbar."
+      },
+      "hymns-mode": {
+        "title": "Wie funktioniert der Teilemodus?",
+        "body": "Der Teilemodus hält alle Strophen eines Liedes auf einer einzigen Folie. Während der Präsentation kannst du über die nummerierten Schaltflächen im rechten Panel zwischen den Strophen wechseln."
+      },
+      "phone-controls": {
+        "title": "Telefonsteuerung",
+        "body": "Über die Schaltfläche Telefonsteuerung in der oberen Werkzeugleiste der Haupt-App kannst du deine Präsentation vom Telefon aus steuern. Der Präsentationscomputer und dein Telefon müssen mit demselben Netzwerk verbunden sein!"
+      },
+      "editor-select": {
+        "title": "Das Bild auswählen",
+        "body": "Klicke auf das hervorgehobene Beispielbild. Im rechten Panel öffnen sich die Bearbeitungsoptionen für dieses Bild."
+      },
+      "editor-rotate": {
+        "title": "Das Bild drehen",
+        "body": "Trage im Feld Drehung im rechten Panel den Wert 15 ein. Du kannst sehen, wie sich das Bild auf der Folie dreht."
+      },
+      "editor-save": {
+        "title": "Änderungen speichern",
+        "body": "Die Bearbeitung ist fertig! Klicke nun auf Speichern. Sobald deine Änderungen in der Präsentation gespeichert sind, ist dieser Schritt abgeschlossen."
+      },
+      "editor-result": {
+        "title": "Deine Bearbeitung wurde gespeichert!",
+        "body": "Super! Du hast das Bild ausgewählt, um 15° gedreht und deine Änderung gespeichert. Hier siehst du die fertige Folie."
       }
     },
     "mapTitle": "Bereichsübersicht",

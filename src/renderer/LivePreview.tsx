@@ -1,4 +1,5 @@
 import { RangeVideo } from './components/RangeVideo';
+import { AnimatedGradientBackground } from './components/AnimatedGradientBackground';
 import { VideoOverlayLayer } from './components/VideoOverlayLayer';
 import { SlideImage } from './components/SlideImage';
 import { loadGoogleFont, slideFonts } from './fontLoader';
@@ -16,6 +17,9 @@ import { WatermarkOverlay } from './components/WatermarkOverlay';
 import { useWatermarkStore } from './state/useWatermarkStore';
 
 export interface LivePreviewProps {
+  watermarkConfig?: import('./types').WatermarkConfig;
+  hymnAuthorPosition?: import('./types').Position;
+  hymnAuthorSize?: number;
   slide: Slide | undefined;
   size?: 'preview' | 'projector';
   volume?: number;
@@ -181,12 +185,13 @@ function LoopVideoPlayer({ mediaUrl, isActive = true, preload = 'auto', volume =
   );
 }
 
-export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = false, isActive = true }: LivePreviewProps) => {
+export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = false, isActive = true, watermarkConfig, hymnAuthorPosition, hymnAuthorSize }: LivePreviewProps) => {
   const [videoPosition, setVideoPosition] = useState({ id: '', seconds: 0 });
   useEffect(() => { if (slide) slideFonts(slide).forEach(family => { void loadGoogleFont(family); }); }, [slide]);
   const outerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0, scale: 1 });
-  const wmConfig = useWatermarkStore((s) => s.config);
+  const storedWatermark = useWatermarkStore((s) => s.config);
+  const wmConfig = watermarkConfig ?? storedWatermark;
 
   useEffect(() => {
     const el = outerRef.current;
@@ -239,8 +244,12 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
             width: `${width}px`, 
             height: `${height}px`,
             backgroundColor: slide.styles?.backgroundColor ?? '#000000',
+            backgroundImage: slide.styles?.backgroundImage ? `url(${slide.styles.backgroundImage})` : undefined,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
           }}
         >
+          <AnimatedGradientBackground recipe={slide.styles?.generatedBackground} active={isActive} />
           {slide.styles?.backgroundVideo && (
             <video
               src={slide.styles.backgroundVideo}
@@ -250,7 +259,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
               className="absolute inset-0 w-full h-full object-cover pointer-events-none"
             />
           )}
-          {slide.items.map(item => {
+          {slide.items.filter(item => item.visible !== false).map(item => {
             const borderWidth = item.borderWidth || 0;
             const borderStyle = borderWidth > 0
               ? `${borderWidth}px solid ${item.borderColor || '#ffffff'}`
@@ -282,6 +291,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
                   }}
                 >
                   <span
+                    data-gradient-text=""
                     style={{
                       textTransform:   item.textStyles?.textTransform || 'none',
                       color:           item.textStyles?.textColor ?? '#ffffff',
@@ -439,6 +449,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
           justifyContent: 'center',
         }}
       >
+        <AnimatedGradientBackground recipe={slide.styles?.generatedBackground} active={isActive} />
         {styles.backgroundVideo && (
           <video
             src={styles.backgroundVideo}
@@ -449,6 +460,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
           />
         )}
         <p
+          data-gradient-text=""
           className="whitespace-pre-wrap leading-snug relative z-10"
           style={{ 
             textTransform: (styles as any).textTransform || 'none',
@@ -467,8 +479,8 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
           {displayContent}
         </p>
         {hymnAuthor && (() => {
-          const pos = (() => { try { return localStorage.getItem('hymnAuthorPosition') || 'bottom-center'; } catch { return 'bottom-center'; } })();
-          const sizePct = (() => { try { return Number(localStorage.getItem('hymnAuthorSize') || '28'); } catch { return 28; } })();
+          const pos = hymnAuthorPosition ?? (() => { try { return localStorage.getItem('hymnAuthorPosition') || 'bottom-center'; } catch { return 'bottom-center'; } })();
+          const sizePct = hymnAuthorSize ?? (() => { try { return Number(localStorage.getItem('hymnAuthorSize') || '28'); } catch { return 28; } })();
           const isTop    = pos.startsWith('top');
           const isBottom = !isTop;
           const isLeft   = pos.endsWith('left');

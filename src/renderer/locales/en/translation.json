@@ -1,4 +1,42 @@
 {
+  "gradient": {
+    "animation": "Animation",
+    "aurora": "Aurora",
+    "waves": "Waves",
+    "fog": "Fog",
+    "motion": "Live motion",
+    "speed": "Motion speed",
+    "amount": "Motion amount",
+    "motionNote": "Contrast is measured on the still image and may change during motion. Exports use the still image.",
+    "open": "Create gradient",
+    "palette": "Color palette",
+    "style": "Style",
+    "soft": "Soft",
+    "flow": "Flow",
+    "darkness": "Darkness",
+    "regenerate": "Generate again",
+    "target": "Apply to",
+    "slide": "This slide",
+    "group": "This hymn / scripture group",
+    "selection": "Selected slides",
+    "cancel": "Cancel",
+    "apply": "Apply ({{count}} slides)",
+    "generating": "Generating background…",
+    "error": "Could not generate or save the background. Generate again to retry.",
+    "unknown": "Contrast could not be verified automatically.",
+    "contrast": "Minimum contrast: {{ratio}}:1",
+    "override": "Apply anyway despite the contrast warning",
+    "palettes": {
+      "night": "Night",
+      "ocean": "Ocean",
+      "emerald": "Emerald",
+      "lavender": "Lavender",
+      "sunset": "Sunset",
+      "amber": "Amber",
+      "rose": "Rose",
+      "smoke": "Smoke"
+    }
+  },
   "nav": {
     "editor": "Editor",
     "presentations": "Presentations",
@@ -1187,9 +1225,25 @@
         "retention": "retention period days backup",
         "clear-live-saves": "automatic save clear delete backup",
         "updates": "updates version download",
-        "learn": "practice guide learn help tutorial"
+        "learn": "practice guide learn help tutorial",
+        "soniox-website": "soniox official website account billing usage",
+        "stt-clear-key": "api key clear remove delete",
+        "appearance-preview": "preview simulation logo author size position"
       }
-    }
+    },
+    "musicSeek": "Seek backward or forward",
+    "musicSeekUnavailable": "This source does not currently support seeking.",
+    "sonioxAbout": "Soniox is an online service that converts speech into text in real time and can translate it into other languages. This app uses it to create captions from microphone audio.",
+    "sonioxSetup": "Create an API key in your Soniox account and save it here, then select spoken and translation languages. An internet connection is required. Usage and billing are managed in your Soniox account.",
+    "sonioxWebsite": "Open the official Soniox website",
+    "sonioxWebsiteFailed": "Could not open Soniox. Please try again.",
+    "sonioxClearKey": "Clear API Key",
+    "sonioxClearFailed": "Could not clear the API key. Please try again.",
+    "sonioxStopFirst": "Stop the active caption session first.",
+    "sonioxClearHint": "This removes the key from this app only; it does not revoke the key in your Soniox account.",
+    "appearancePreview": "Layout preview",
+    "appearancePreviewHint": "The real slide rendering is scaled proportionally. Position and size changes appear here immediately; sample content is not added to your presentation.",
+    "appearancePreviewSample": "A sample logo and four-line hymn are shown. Upload a logo to preview your own logo."
   },
   "stage": {
     "next": "Up Next",
@@ -1445,6 +1499,9 @@
       "slide-reorder": {
         "title": "Reorder the slides",
         "body": "Drag the highlighted sample slide onto the other highlighted slide. This single exercise finishes when their positions actually change."
+      },
+      "canvas-edit": {
+        "title": "Edit an image in Slide Editor"
       }
     }
   },
@@ -1476,216 +1533,248 @@
     "shortTitle": "Quick tour",
     "steps": {
       "welcome": {
-        "title": "Let’s learn together",
-        "body": "You will work in a separate practice profile. Live output is disabled and your real presentation stays unchanged. Follow the highlighted actions in order."
+        "title": "Let's learn together",
+        "body": "You'll learn to use this app through a few simple exercises. We'll do everything in a separate practice profile. Your real presentations won't be affected, and live output will stay off. Ready? Let's begin!"
       },
       "presentations": {
         "title": "Presentations",
-        "body": "Manage your presentations here. We are only introducing this section; next you will create a slide with the real tools."
+        "body": "This is where you can create, save, and manage your presentations. For now, let's get to know this section. Soon you'll be making your own slides."
       },
       "sidebar": {
-        "title": "Section navigation",
-        "body": "The buttons on the left open the application sections. We will highlight the area you need at each step."
+        "title": "Getting around the app",
+        "body": "The menu on the left takes you to the app's different sections. Throughout the tutorial, we'll highlight the buttons and areas you need to guide you along."
       },
       "nav-slides": {
-        "title": "Open Slides",
-        "body": "Click the highlighted Slides button."
+        "title": "Open the Slides section",
+        "body": "Let's create our first slide! Click the highlighted Slides button in the left menu."
       },
       "add": {
-        "title": "Add a new slide",
-        "body": "Click the highlighted Add New Slide button. The guide advances when the slide exists."
+        "title": "Create a new slide",
+        "body": "Click the highlighted New Slide button. A new slide will be added to your presentation."
       },
       "select": {
         "title": "Select the sample slide",
-        "body": "Click the highlighted sample slide. Select only this sample; your added slide will be retained."
+        "body": "Now let's learn how to delete a slide. Click the highlighted sample slide. The slide you just created will be kept."
       },
       "delete": {
-        "title": "Delete the sample",
-        "body": "Delete the selected sample with Delete or the highlighted trash icon on the right. Either method is accepted; the other slides are retained."
+        "title": "Delete the sample slide",
+        "body": "To delete the selected sample slide, press Delete or click the highlighted trash icon in the right panel. Use whichever method you prefer!"
       },
       "done": {
-        "title": "Finished",
-        "body": "You reached the end of the guide. Practice changes are retained on exit."
+        "title": "Congratulations, you've completed the tutorial!",
+        "body": "You've explored the app's main features! You've learned to create slides, add content, edit images, and save your presentation.\n\nYour practice changes will be kept when you exit. You're now ready to use the app!"
       },
       "nav-bible": {
-        "title": "Bible",
-        "body": "Click the highlighted Bible button."
+        "title": "Open the Bible section",
+        "body": "This app makes it easy to add Bible verses to your presentation. Click the highlighted Bible button in the left menu."
       },
       "bible-intro": {
-        "title": "Load Bible sources",
-        "body": "Load a Bible from a local XML file, or search online and select a suitable source to add and use it. This practice uses a safe local sample XML."
+        "title": "Explore Bible sources",
+        "body": "You can import Bible translations from XML files or find and add them using the app's online Bible selection button. In this exercise, we'll use a sample XML file prepared for you."
       },
       "nav-media": {
-        "title": "Media",
-        "body": "Click the highlighted Media button."
+        "title": "Open the Media section",
+        "body": "Now let's add an image to our presentation. Click the highlighted Media button in the left menu."
       },
       "media-intro": {
-        "title": "Media",
-        "body": "Find and preview images and videos, then add them to your presentation. Combine several items into a loop slide."
+        "title": "Explore the media library",
+        "body": "Here you can manage, preview, and add images and videos to your presentations. You can also use multiple media files to create slides that play in a loop."
       },
       "nav-hymns": {
-        "title": "Hymns",
-        "body": "Click the highlighted Hymns button."
+        "title": "Open the Hymns section",
+        "body": "Now let's learn to add hymn lyrics to our presentation. Click the highlighted Hymns button in the left menu."
       },
       "hymns-intro": {
-        "title": "Hymns",
-        "body": "In normal mode each stanza becomes a separate slide. In parts mode the stanzas are parts of one slide. We will add our sample in parts mode."
+        "title": "Explore hymn presentations",
+        "body": "You can present hymns in two ways. Normal Mode puts each stanza on a separate slide. Parts Mode keeps all stanzas in one slide. We'll use Parts Mode in this exercise."
       },
       "nav-countdown": {
-        "title": "Countdown",
-        "body": "Click the highlighted Countdown button."
+        "title": "Open the Countdown section",
+        "body": "Now let's add a countdown to our presentation. Click the highlighted Countdown button in the left menu."
       },
       "countdown-intro": {
-        "title": "Countdown",
-        "body": "Choose minutes and seconds, prepare the appearance, and add a countdown to your presentation."
+        "title": "Create a countdown",
+        "body": "Here you can set minutes and seconds to add countdowns to your presentations. You can also adjust the countdown's appearance to suit your needs."
       },
       "nav-screen": {
-        "title": "Screen",
-        "body": "Click the highlighted Screen button."
+        "title": "Open the Screen section",
+        "body": "Click the highlighted Screen button in the left menu."
       },
       "screen-intro": {
-        "title": "Screen",
-        "body": "Choose a screen capture source and add it as a slide. Selecting a source is different from opening a projection output."
+        "title": "Screen capture",
+        "body": "Here you can select a screen or window on your computer and add its image to your presentation. Selecting a screen capture source doesn't start projector output. Since we're in practice mode, I can't demonstrate this in more detail."
       },
       "nav-calendar": {
-        "title": "Calendar",
-        "body": "Click the highlighted Calendar button."
+        "title": "Open the Calendar section",
+        "body": "Click the highlighted Calendar button in the left menu."
       },
       "calendar-intro": {
-        "title": "Calendar",
-        "body": "Schedule prepared presentations on the calendar and reopen them from their entries."
+        "title": "Plan your presentations",
+        "body": "Use the calendar to schedule presentations for specific dates and reopen them from their entries when the time comes. This helps you organize preparations for upcoming services and events."
       },
       "nav-editor": {
-        "title": "Editor",
-        "body": "Click the highlighted Editor button."
+        "title": "Open the Editor section",
+        "body": "Now let's explore more detailed slide editing tools. Click the highlighted Editor button in the left menu."
       },
       "editor-intro": {
-        "title": "Editor",
-        "body": "Images can be edited in the right panel or the Slide Editor. The Slide Editor offers more detailed options and video editing tools. We made two simple image edits in our example."
+        "title": "Explore the Slide Editor",
+        "body": "In the Slide Editor, you can edit your slides' content and appearance. Now we'll select our sample image, rotate it by 15°, and save the change. Everything will be done only in the practice presentation."
       },
       "nav-settings": {
-        "title": "Settings",
-        "body": "Click the highlighted Settings button."
+        "title": "Open the Settings section",
+        "body": "Click the highlighted Settings button in the left menu."
       },
       "settings-intro": {
-        "title": "Settings",
-        "body": "Manage language and app preferences. Reopen page introductions and the short tour from Help."
+        "title": "Make the app your own",
+        "body": "Here you can manage the app's language and other preferences. You can also restart tutorials from the Help section and explore the app's sections again."
       },
       "nav-save": {
-        "title": "Presentations",
-        "body": "Click the highlighted Presentations button."
+        "title": "Return to Presentations",
+        "body": "Now we can save the presentation we've prepared! Click the highlighted Presentations button in the left menu."
       },
       "bible-source": {
-        "title": "Load a source",
-        "body": "Click Import XML. If a source is already open, we will open its management menu."
+        "title": "Open the import menu",
+        "body": "Click the highlighted Import XML button. If a source is already open, we'll continue through its management menu."
       },
       "bible-import": {
-        "title": "Import the sample XML",
-        "body": "Click Import XML in the menu. Only the safe sample source is loaded."
+        "title": "Load the sample Bible source",
+        "body": "In the menu that opens, click Import XML. The sample Bible source will load automatically; you don't need to select your own files."
       },
       "bible-book": {
-        "title": "Choose the first book",
-        "body": "Click the highlighted first book."
+        "title": "Choose a book",
+        "body": "Click the highlighted first book in the list of Bible books."
       },
       "bible-chapter": {
-        "title": "Choose chapter one",
-        "body": "Click the highlighted Chapter 1 button."
+        "title": "Choose a chapter",
+        "body": "Now click the highlighted chapter 1 button. We'll display the verses in that chapter."
       },
       "bible-verse": {
-        "title": "Select the verse",
-        "body": "Select the highlighted sample verse."
+        "title": "Choose a verse",
+        "body": "Click the highlighted sample verse. We'll add your chosen verse to our presentation."
       },
       "bible-add": {
-        "title": "Add the verse",
-        "body": "Click Add to presentation. We will wait for the verse slide to exist."
+        "title": "Add the verse to the presentation",
+        "body": "Click Add to Presentation. A slide will be created automatically for your chosen verse."
       },
       "media-menu": {
-        "title": "Open the media menu",
+        "title": "Open the add media menu",
         "body": "Click the highlighted Add Media button."
       },
       "media-import": {
         "title": "Load the sample image",
-        "body": "Click Select Images. A safe sample image is used instead of a real file picker."
+        "body": "Click Select Image. In this exercise, we'll use a prepared sample image instead of choosing a file from your computer."
       },
       "media-add": {
-        "title": "Add the image",
-        "body": "Click the plus button below the sample image. We will wait for the image slide."
+        "title": "Add the image to your presentation",
+        "body": "Click the + button below the sample image. The image will be added to your presentation as a new slide."
       },
       "countdown-duration": {
-        "title": "Set the duration",
-        "body": "Set Minutes to 2. Only this field can be edited."
+        "title": "Set the countdown duration",
+        "body": "Enter 2 in the Minutes field. In this exercise, we'll only change the minutes value."
       },
       "countdown-add": {
-        "title": "Add the countdown",
-        "body": "Click Add to Slide. We will not start the timer or live output."
+        "title": "Add the countdown to the presentation",
+        "body": "Click Add to Slide. A two-minute countdown slide will be created. We won't start the timer or live output yet."
       },
       "save": {
-        "title": "Save the practice presentation",
-        "body": "Click Save to Library. Saving uses only the separate practice profile. We will wait for a successful result."
+        "title": "Save your presentation to the library",
+        "body": "Click Save to Library. Your presentation will be saved only in the practice profile's library; your real presentations won't be affected."
       },
       "add-result": {
-        "title": "You created a slide",
-        "body": "You created a new slide. This is how slides are prepared in your presentation."
+        "title": "Your first slide is ready!",
+        "body": "Congratulations, you've created your first slide! You can use slides to add text, images, and much more to your presentation."
       },
       "delete-result": {
         "title": "The sample slide was deleted",
         "body": "The selected sample was removed. Your other slides are retained."
       },
       "bible-result": {
-        "title": "You added the verse",
-        "body": "You added the verse to your presentation. This is what the prepared slide looks like."
+        "title": "Your verse slide is ready!",
+        "body": "Great! You've added a Bible verse to your presentation. This is how you can quickly turn verses into slides."
       },
       "media-result": {
-        "title": "You added the image",
-        "body": "You added the image to your presentation. This is how it looks on the slide."
+        "title": "Your image slide is ready!",
+        "body": "You've successfully added your image! This is how you can use photos, backgrounds, and other images in your presentations."
       },
       "countdown-result": {
-        "title": "Your countdown is ready",
-        "body": "You prepared a two-minute countdown slide. This is a static preview; the timer has not started."
+        "title": "Your countdown slide is ready!",
+        "body": "You've created your two-minute countdown! What you see here is only a preview; the countdown hasn't started yet."
       },
       "save-result": {
-        "title": "Your presentation was saved",
-        "body": "You saved your presentation in the practice library. You can reopen it there."
+        "title": "Your presentation has been saved!",
+        "body": "Congratulations! You've successfully saved your presentation. Whenever you like, you can reopen it from the practice library and continue your work."
       },
       "hymns-add": {
         "title": "Add the sample hymn",
-        "body": "Click the highlighted sample hymn row. Once its lyrics are added, we will inspect the result."
+        "body": "Click the highlighted sample hymn. Its lyrics will be added to your presentation in Parts Mode."
       },
       "hymns-result": {
-        "title": "You added the hymn",
-        "body": "You added the sample hymn lyrics to your presentation. This is what the prepared hymn slide looks like."
+        "title": "Your hymn slide is ready!",
+        "body": "Congratulations! You've added your first hymn to your presentation. Now you can display the lyrics on a slide and switch between stanzas."
       },
       "image-select": {
-        "title": "Select the sample image",
-        "body": "Click the highlighted image slide. We will make two simple changes in the editor panel on the right."
+        "title": "Select your image slide",
+        "body": "Now let's edit our image a little. Click the highlighted image slide. We'll make two simple changes using the panel on the right."
       },
       "image-fit": {
-        "title": "Fit the whole image",
-        "body": "Click Contain in the editor on the right so the whole image fits inside its frame."
+        "title": "Show the whole image",
+        "body": "Click Fit Inside in the right panel. The entire image will fit into the slide area without being cropped."
       },
       "image-grayscale": {
         "title": "Apply grayscale",
-        "body": "Set the Grayscale slider to 100%. You can focus the slider and press End."
+        "body": "Set the Grayscale slider to 100%. You can also select the slider and press End."
       },
       "image-edit-result": {
-        "title": "You edited the image",
-        "body": "You changed the image fit and applied grayscale. This is what the edited image looks like."
+        "title": "You've edited your image!",
+        "body": "Great! You've fitted the whole image into the frame and applied a grayscale effect. You can see the final version of your image here."
       },
       "hymns-parts": {
-        "title": "The hymn parts",
-        "body": "The panel on the right shows the hymn parts. Click the numbered button of the desired part to switch to it. This is an explanation only; you do not need to click a part."
+        "title": "Switch between hymn stanzas",
+        "body": "The numbered buttons in the right panel represent the hymn's stanzas. During a presentation, simply click the relevant number to switch to the stanza you want. For now, we're just getting to know this area."
       },
       "reorder": {
-        "title": "Reorder the slides",
-        "body": "Drag the highlighted sample slide onto the other highlighted slide. This single exercise finishes when their positions actually change."
+        "title": "Change the slide order",
+        "body": "You can arrange your slides in any order you like. Drag the highlighted sample slide onto the other highlighted slide and drop it. This step will be complete when the order changes."
       },
       "hymns-font": {
-        "title": "Change the hymn font size",
-        "body": "Change the selected hymn font size in the Font size field on the right. Larger numbers make the text larger; smaller numbers make it smaller. This is an explanation only; no change is required."
+        "title": "Adjust the hymn text size",
+        "body": "You can change the size of hymn lyrics using Font Size in the right panel. A higher value makes the text larger, and a lower value makes it smaller. You don't need to change anything in this step."
       },
       "image-tools": {
-        "title": "Two ways to edit",
-        "body": "Images can be edited in the right panel or in the Slide Editor opened by the highlighted pencil button. The Slide Editor offers more detailed options and also supports video editing. We will only change fit and grayscale on this sample."
+        "title": "How can you edit images?",
+        "body": "You can quickly edit images using the properties panel on the right. For more detailed options, use the Slide Editor opened by the pencil icon. You can also access video editing options there."
+      },
+      "hymns-online": {
+        "title": "Online hymns",
+        "body": "The Online Hymns button gives you access to online hymn sources, where you can find the hymns you want and add them to your library."
+      },
+      "hymns-author": {
+        "title": "Show author information",
+        "body": "Show Author determines whether the author's name appears on the slide alongside the hymn lyrics. This feature is available for hymns that include author information."
+      },
+      "hymns-mode": {
+        "title": "How does Parts Mode work?",
+        "body": "Parts Mode keeps all the hymn's stanzas in a single slide. During a presentation, you can switch between stanzas using the numbered buttons in the right panel."
+      },
+      "phone-controls": {
+        "title": "Phone Control",
+        "body": "Use the Phone Control button in the main app's top toolbar to manage your presentation from your phone. The computer running the presentation and your phone must be connected to the same network!"
+      },
+      "editor-select": {
+        "title": "Select the image",
+        "body": "Click the highlighted sample image. Editing options for your selected image will open in the right panel."
+      },
+      "editor-rotate": {
+        "title": "Rotate the image",
+        "body": "Enter 15 in the Rotation field in the right panel. You can see how the image rotates on the slide."
+      },
+      "editor-save": {
+        "title": "Save your changes",
+        "body": "We've finished editing! Now click Save. This step will be complete once your changes have been saved to the presentation."
+      },
+      "editor-result": {
+        "title": "Your edit has been saved!",
+        "body": "Great! You've selected the image, rotated it by 15°, and saved your change. You can see the final version of your slide here."
       }
     },
     "mapTitle": "Section map",

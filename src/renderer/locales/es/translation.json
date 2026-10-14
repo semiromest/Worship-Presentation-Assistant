@@ -1,4 +1,42 @@
 {
+  "gradient": {
+    "animation": "Animación",
+    "aurora": "Aurora",
+    "waves": "Olas",
+    "fog": "Niebla",
+    "motion": "Movimiento en vivo",
+    "speed": "Velocidad",
+    "amount": "Intensidad del movimiento",
+    "motionNote": "El contraste se mide en la imagen fija y puede cambiar con el movimiento. Las exportaciones usan la imagen fija.",
+    "open": "Crear degradado",
+    "palette": "Paleta de colores",
+    "style": "Estilo",
+    "soft": "Suave",
+    "flow": "Fluido",
+    "darkness": "Oscuridad",
+    "regenerate": "Volver a generar",
+    "target": "Aplicar a",
+    "slide": "Esta diapositiva",
+    "group": "Este grupo de himno / versículos",
+    "selection": "Diapositivas seleccionadas",
+    "cancel": "Cancelar",
+    "apply": "Aplicar ({{count}} diapositivas)",
+    "generating": "Generando fondo…",
+    "error": "No se pudo generar o guardar el fondo. Vuelve a generarlo.",
+    "unknown": "No se pudo verificar el contraste automáticamente.",
+    "contrast": "Contraste mínimo: {{ratio}}:1",
+    "override": "Aplicar a pesar del aviso de contraste",
+    "palettes": {
+      "night": "Noche",
+      "ocean": "Océano",
+      "emerald": "Esmeralda",
+      "lavender": "Lavanda",
+      "sunset": "Atardecer",
+      "amber": "Ámbar",
+      "rose": "Rosa",
+      "smoke": "Humo"
+    }
+  },
   "nav": {
     "editor": "Editor",
     "presentations": "Presentaciones",
@@ -1174,9 +1212,25 @@
         "retention": "conservación plazo días",
         "clear-live-saves": "guardados automáticos borrar limpiar",
         "updates": "actualizaciones versión descargar",
-        "learn": "práctica guía aprender ayuda tutorial"
+        "learn": "práctica guía aprender ayuda tutorial",
+        "soniox-website": "soniox sitio oficial cuenta uso facturación",
+        "stt-clear-key": "api clave borrar eliminar",
+        "appearance-preview": "vista previa simulación logotipo autor tamaño posición"
       }
-    }
+    },
+    "musicSeek": "Avanzar o retroceder en la pista",
+    "musicSeekUnavailable": "Esta fuente no permite desplazarse por la pista actualmente.",
+    "sonioxAbout": "Soniox es un servicio en línea que convierte voz en texto en tiempo real y puede traducirla. Esta aplicación lo usa para crear subtítulos a partir del micrófono.",
+    "sonioxSetup": "Crea una clave API en tu cuenta Soniox y guárdala aquí; elige después el idioma hablado y el de traducción. Se necesita internet. El uso y la facturación se gestionan en tu cuenta Soniox.",
+    "sonioxWebsite": "Abrir el sitio oficial de Soniox",
+    "sonioxWebsiteFailed": "No se pudo abrir Soniox. Inténtalo de nuevo.",
+    "sonioxClearKey": "Borrar clave API",
+    "sonioxClearFailed": "No se pudo borrar la clave API.",
+    "sonioxStopFirst": "Detén primero la sesión activa de subtítulos.",
+    "sonioxClearHint": "Solo elimina la clave de esta aplicación; no revoca la clave de tu cuenta Soniox.",
+    "appearancePreview": "Vista previa de la disposición",
+    "appearancePreviewHint": "La diapositiva real se reduce proporcionalmente. Los cambios de posición y tamaño aparecen al instante; el ejemplo no se añade a tu presentación.",
+    "appearancePreviewSample": "Se muestra un logotipo de ejemplo y un himno de cuatro líneas. Carga un logotipo para ver el tuyo."
   },
   "stage": {
     "next": "Siguiente",
@@ -1381,6 +1435,9 @@
       "slide-reorder": {
         "title": "Reordena las diapositivas",
         "body": "Arrastra la diapositiva de ejemplo resaltada sobre la otra diapositiva resaltada. El ejercicio termina cuando sus posiciones cambian realmente."
+      },
+      "canvas-edit": {
+        "title": "Editar una imagen en el Editor"
       }
     }
   },
@@ -1413,215 +1470,247 @@
     "steps": {
       "welcome": {
         "title": "Aprendamos juntos",
-        "body": "Trabajarás en un perfil de práctica separado. La salida en vivo está desactivada y tu presentación real no cambia. Sigue las acciones resaltadas."
+        "body": "Aprenderás a usar esta aplicación con unos ejercicios sencillos. Haremos todo en un perfil de práctica separado. Tus presentaciones reales no se verán afectadas y la salida en directo permanecerá desactivada. ¿Todo listo? ¡Empecemos!"
       },
       "presentations": {
         "title": "Presentaciones",
-        "body": "Aquí gestionas tus presentaciones. Solo presentamos esta sección; después crearás una diapositiva con las herramientas reales."
+        "body": "Aquí puedes crear, guardar y gestionar tus presentaciones. Por ahora, conozcamos esta sección. Pronto prepararás tus propias diapositivas."
       },
       "sidebar": {
-        "title": "Secciones",
-        "body": "Los botones de la izquierda abren las secciones. Resaltaremos el área necesaria en cada paso."
+        "title": "Moverte por la aplicación",
+        "body": "El menú de la izquierda te lleva a las distintas secciones de la aplicación. Durante el tutorial, resaltaremos los botones y las áreas que necesitas para guiarte."
       },
       "nav-slides": {
-        "title": "Abrir Diapositivas",
-        "body": "Haz clic en el botón Diapositivas resaltado."
+        "title": "Abre la sección Diapositivas",
+        "body": "¡Creemos nuestra primera diapositiva! Haz clic en el botón Diapositivas resaltado en el menú izquierdo."
       },
       "add": {
-        "title": "Añadir una diapositiva",
-        "body": "Haz clic en Añadir nueva diapositiva. La guía avanza cuando la diapositiva existe."
+        "title": "Crea una nueva diapositiva",
+        "body": "Haz clic en el botón Nueva diapositiva resaltado. Se añadirá una nueva diapositiva a tu presentación."
       },
       "select": {
-        "title": "Seleccionar el ejemplo",
-        "body": "Haz clic en la diapositiva de ejemplo resaltada. La diapositiva que añadiste se conservará."
+        "title": "Selecciona la diapositiva de ejemplo",
+        "body": "Ahora aprenderemos a eliminar una diapositiva. Haz clic en la diapositiva de ejemplo resaltada. La que acabas de crear se conservará."
       },
       "delete": {
-        "title": "Elimina el ejemplo",
-        "body": "Elimina el ejemplo seleccionado con Supr o la papelera resaltada del panel derecho. Se acepta cualquiera de los métodos; las demás diapositivas se conservan."
+        "title": "Elimina la diapositiva de ejemplo",
+        "body": "Para eliminar la diapositiva de ejemplo seleccionada, pulsa Supr o haz clic en el icono de papelera resaltado en el panel derecho. ¡Usa el método que prefieras!"
       },
       "done": {
-        "title": "Final",
-        "body": "Has llegado al final de la guía. Los cambios de práctica se conservan al salir."
+        "title": "¡Felicidades, has completado el tutorial!",
+        "body": "¡Has descubierto las funciones principales de la aplicación! Has aprendido a crear diapositivas, añadir contenido, editar imágenes y guardar tu presentación.\n\nTus cambios de práctica se conservarán al salir. ¡Ya puedes empezar a usar la aplicación!"
       },
       "nav-bible": {
-        "title": "Biblia",
-        "body": "Haz clic en el botón Biblia resaltado."
+        "title": "Abre la sección Biblia",
+        "body": "Con esta aplicación puedes añadir versículos bíblicos fácilmente a tu presentación. Haz clic en el botón Biblia resaltado en el menú izquierdo."
       },
       "bible-intro": {
-        "title": "Carga fuentes bíblicas",
-        "body": "Carga una Biblia desde un archivo XML local o busca en línea y selecciona una fuente adecuada para añadirla y utilizarla. Esta práctica usa un XML local de ejemplo seguro."
+        "title": "Explora las fuentes de la Biblia",
+        "body": "Puedes importar traducciones de la Biblia desde archivos XML o buscarlas y añadirlas con el botón de selección de Biblia en línea de la aplicación. En este ejercicio usaremos un archivo XML de ejemplo preparado para ti."
       },
       "nav-media": {
-        "title": "Medios",
-        "body": "Haz clic en el botón Medios resaltado."
+        "title": "Abre la sección Medios",
+        "body": "Ahora añadiremos una imagen a nuestra presentación. Haz clic en el botón Medios resaltado en el menú izquierdo."
       },
       "media-intro": {
-        "title": "Medios",
-        "body": "Busca y previsualiza imágenes y vídeos antes de añadirlos. Combina varios elementos en una diapositiva en bucle."
+        "title": "Explora la biblioteca multimedia",
+        "body": "Aquí puedes gestionar, previsualizar y añadir imágenes y vídeos a tus presentaciones. También puedes usar varios archivos multimedia para crear diapositivas que se reproduzcan en bucle."
       },
       "nav-hymns": {
-        "title": "Himnos",
-        "body": "Haz clic en el botón Himnos resaltado."
+        "title": "Abre la sección Himnos",
+        "body": "Ahora aprenderemos a añadir letras de himnos a nuestra presentación. Haz clic en el botón Himnos resaltado en el menú izquierdo."
       },
       "hymns-intro": {
-        "title": "Himnos",
-        "body": "En modo normal, cada estrofa es una diapositiva distinta. En modo de partes, las estrofas son partes de una sola diapositiva. Añadiremos el ejemplo en modo de partes."
+        "title": "Descubre las presentaciones de himnos",
+        "body": "Puedes presentar himnos de dos maneras. El Modo normal coloca cada estrofa en una diapositiva distinta. El Modo por partes reúne todas las estrofas en una sola diapositiva. En este ejercicio usaremos el Modo por partes."
       },
       "nav-countdown": {
-        "title": "Cuenta atrás",
-        "body": "Haz clic en el botón Cuenta atrás resaltado."
+        "title": "Abre la sección Cuenta atrás",
+        "body": "Ahora añadiremos una cuenta regresiva a nuestra presentación. Haz clic en el botón Cuenta atrás resaltado en el menú izquierdo."
       },
       "countdown-intro": {
-        "title": "Cuenta atrás",
-        "body": "Elige minutos y segundos, prepara el aspecto y añade la cuenta atrás a la presentación."
+        "title": "Crea una cuenta regresiva",
+        "body": "Aquí puedes establecer minutos y segundos para añadir cuentas regresivas a tus presentaciones. También puedes adaptar su apariencia a tus necesidades."
       },
       "nav-screen": {
-        "title": "Pantalla",
-        "body": "Haz clic en el botón Pantalla resaltado."
+        "title": "Abre la sección Pantalla",
+        "body": "Haz clic en el botón Pantalla resaltado en el menú izquierdo."
       },
       "screen-intro": {
-        "title": "Pantalla",
-        "body": "Elige una fuente de captura de pantalla para una diapositiva. Seleccionar la fuente es distinto de abrir una salida de proyección."
+        "title": "Captura de pantalla",
+        "body": "Aquí puedes seleccionar una pantalla o ventana de tu ordenador y añadir su imagen a tu presentación. Seleccionar una fuente de captura no inicia la salida del proyector. Como estamos en modo de práctica, no puedo mostrarlo con más detalle."
       },
       "nav-calendar": {
-        "title": "Calendario",
-        "body": "Haz clic en el botón Calendario resaltado."
+        "title": "Abre la sección Calendario",
+        "body": "Haz clic en el botón Calendario resaltado en el menú izquierdo."
       },
       "calendar-intro": {
-        "title": "Calendario",
-        "body": "Programa presentaciones preparadas en el calendario y vuelve a abrirlas desde sus entradas."
+        "title": "Planifica tus presentaciones",
+        "body": "Con el calendario puedes programar presentaciones para fechas concretas y volver a abrirlas desde su entrada cuando llegue el momento. Así podrás organizar los preparativos para los próximos cultos y eventos."
       },
       "nav-editor": {
-        "title": "Editor",
-        "body": "Haz clic en el botón Editor resaltado."
+        "title": "Abre la sección Editor",
+        "body": "Ahora conoceremos herramientas de edición de diapositivas más detalladas. Haz clic en el botón Editor resaltado en el menú izquierdo."
       },
       "editor-intro": {
-        "title": "Editor",
-        "body": "Puedes editar imágenes desde el panel derecho o el Editor de diapositivas, que ofrece opciones más detalladas y herramientas de vídeo. En nuestro ejemplo hicimos dos cambios sencillos."
+        "title": "Explora el Editor de diapositivas",
+        "body": "En el Editor de diapositivas puedes cambiar el contenido y la apariencia de tus diapositivas. Ahora seleccionaremos la imagen de ejemplo, la giraremos 15° y guardaremos el cambio. Todo se hará únicamente en la presentación de práctica."
       },
       "nav-settings": {
-        "title": "Ajustes",
-        "body": "Haz clic en el botón Ajustes resaltado."
+        "title": "Abre la sección Ajustes",
+        "body": "Haz clic en el botón Ajustes resaltado en el menú izquierdo."
       },
       "settings-intro": {
-        "title": "Ajustes",
-        "body": "Gestiona el idioma y las preferencias. Vuelve a abrir las introducciones y el recorrido breve desde Ayuda."
+        "title": "Adapta la aplicación a ti",
+        "body": "Aquí puedes gestionar el idioma de la aplicación y otras preferencias. También puedes reiniciar los tutoriales desde Ayuda y explorar de nuevo las secciones de la aplicación."
       },
       "nav-save": {
-        "title": "Presentaciones",
-        "body": "Haz clic en el botón Presentaciones resaltado."
+        "title": "Vuelve a Presentaciones",
+        "body": "¡Ya podemos guardar la presentación que hemos preparado! Haz clic en el botón Presentaciones resaltado en el menú izquierdo."
       },
       "bible-source": {
-        "title": "Cargar una fuente",
-        "body": "Haz clic en Importar XML. Si ya hay una fuente, abriremos su menú de gestión."
+        "title": "Abre el menú de importación",
+        "body": "Haz clic en el botón Importar XML resaltado. Si ya hay una fuente abierta, continuaremos desde su menú de gestión."
       },
       "bible-import": {
-        "title": "Importar XML de ejemplo",
-        "body": "Haz clic en Importar XML en el menú. Solo se carga la fuente de ejemplo segura."
+        "title": "Carga la Biblia de ejemplo",
+        "body": "En el menú que se abre, haz clic en Importar XML. La fuente bíblica de ejemplo se cargará automáticamente; no necesitas seleccionar tus propios archivos."
       },
       "bible-book": {
-        "title": "Elegir el primer libro",
-        "body": "Haz clic en el primer libro resaltado."
+        "title": "Elige un libro",
+        "body": "Haz clic en el primer libro resaltado de la lista de libros de la Biblia."
       },
       "bible-chapter": {
-        "title": "Elegir el primer capítulo",
-        "body": "Haz clic en el Capítulo 1 resaltado."
+        "title": "Elige un capítulo",
+        "body": "Ahora haz clic en el botón resaltado del capítulo 1. Mostraremos los versículos de ese capítulo."
       },
       "bible-verse": {
-        "title": "Seleccionar el versículo",
-        "body": "Selecciona el versículo de ejemplo resaltado."
+        "title": "Elige un versículo",
+        "body": "Haz clic en el versículo de ejemplo resaltado. Añadiremos el versículo elegido a nuestra presentación."
       },
       "bible-add": {
-        "title": "Añadir el versículo",
-        "body": "Haz clic en Añadir a la presentación. Esperaremos a que exista la diapositiva."
+        "title": "Añade el versículo a la presentación",
+        "body": "Haz clic en Añadir a la presentación. Se creará automáticamente una diapositiva para el versículo elegido."
       },
       "media-menu": {
-        "title": "Abrir el menú de medios",
-        "body": "Haz clic en Añadir medios resaltado."
+        "title": "Abre el menú para añadir multimedia",
+        "body": "Haz clic en el botón Añadir multimedia resaltado."
       },
       "media-import": {
-        "title": "Cargar la imagen de ejemplo",
-        "body": "Haz clic en Seleccionar imágenes. Se usa una imagen segura en lugar del selector de archivos."
+        "title": "Carga la imagen de ejemplo",
+        "body": "Haz clic en Seleccionar imagen. En este ejercicio usaremos una imagen de ejemplo preparada en lugar de elegir un archivo de tu ordenador."
       },
       "media-add": {
-        "title": "Añadir la imagen",
-        "body": "Haz clic en el botón más bajo la imagen de ejemplo. Esperaremos a la diapositiva."
+        "title": "Añade la imagen a tu presentación",
+        "body": "Haz clic en el botón + debajo de la imagen de ejemplo. La imagen se añadirá a tu presentación como una nueva diapositiva."
       },
       "countdown-duration": {
-        "title": "Ajustar la duración",
-        "body": "Establece Minutos en 2. Solo puedes editar este campo."
+        "title": "Establece la duración",
+        "body": "Escribe 2 en el campo Minutos. En este ejercicio solo cambiaremos el valor de los minutos."
       },
       "countdown-add": {
-        "title": "Añadir la cuenta atrás",
-        "body": "Haz clic en Añadir a diapositiva. No iniciaremos el temporizador ni la salida en vivo."
+        "title": "Añade la cuenta regresiva a la presentación",
+        "body": "Haz clic en Añadir a la diapositiva. Se creará una diapositiva de cuenta regresiva de dos minutos. Todavía no iniciaremos el temporizador ni la salida en directo."
       },
       "save": {
-        "title": "Guardar la práctica",
-        "body": "Haz clic en Guardar en biblioteca. Solo se utiliza el perfil de práctica separado. Esperaremos el resultado correcto."
+        "title": "Guarda tu presentación en la biblioteca",
+        "body": "Haz clic en Guardar en la biblioteca. Tu presentación se guardará únicamente en la biblioteca del perfil de práctica; tus presentaciones reales no se verán afectadas."
       },
       "add-result": {
-        "title": "Creaste una diapositiva",
-        "body": "Creaste una nueva diapositiva. Así se preparan las diapositivas de tu presentación."
+        "title": "¡Tu primera diapositiva está lista!",
+        "body": "¡Felicidades, has creado tu primera diapositiva! Puedes usar diapositivas para añadir texto, imágenes y muchos otros contenidos a tu presentación."
       },
       "delete-result": {
         "title": "Se eliminó la diapositiva de ejemplo",
         "body": "Se eliminó el ejemplo seleccionado. Las demás diapositivas se conservan."
       },
       "bible-result": {
-        "title": "Añadiste el versículo",
-        "body": "Añadiste el versículo a tu presentación. Así se ve la diapositiva preparada."
+        "title": "¡Tu diapositiva del versículo está lista!",
+        "body": "¡Genial! Has añadido un versículo bíblico a tu presentación. Así puedes convertir versículos en diapositivas rápidamente."
       },
       "media-result": {
-        "title": "Añadiste la imagen",
-        "body": "Añadiste la imagen a tu presentación. Así se ve en la diapositiva."
+        "title": "¡Tu diapositiva de imagen está lista!",
+        "body": "¡Has añadido tu imagen correctamente! Así puedes usar fotos, fondos y otras imágenes en tus presentaciones."
       },
       "countdown-result": {
-        "title": "Tu cuenta regresiva está lista",
-        "body": "Preparaste una diapositiva de cuenta regresiva de dos minutos. Es una vista previa estática; el temporizador no ha comenzado."
+        "title": "¡Tu diapositiva de cuenta regresiva está lista!",
+        "body": "¡Has creado tu cuenta regresiva de dos minutos! Lo que ves aquí es solo una vista previa; la cuenta regresiva aún no ha comenzado."
       },
       "save-result": {
-        "title": "Se guardó tu presentación",
-        "body": "Guardaste tu presentación en la biblioteca de práctica. Puedes volver a abrirla desde allí."
+        "title": "¡Tu presentación se ha guardado!",
+        "body": "¡Felicidades! Has guardado tu presentación correctamente. Puedes volver a abrirla desde la biblioteca de práctica cuando quieras y seguir trabajando."
       },
       "hymns-add": {
         "title": "Añade el himno de ejemplo",
-        "body": "Haz clic en la fila resaltada del himno. Veremos el resultado cuando se añada la letra."
+        "body": "Haz clic en el himno de ejemplo resaltado. Su letra se añadirá a tu presentación en Modo por partes."
       },
       "hymns-result": {
-        "title": "Añadiste el himno",
-        "body": "Añadiste la letra del himno de ejemplo a la presentación. Así se ve la diapositiva preparada."
+        "title": "¡Tu diapositiva de himno está lista!",
+        "body": "¡Felicidades! Has añadido tu primer himno a la presentación. Ahora puedes mostrar la letra en la diapositiva y cambiar entre estrofas."
       },
       "image-select": {
-        "title": "Selecciona la imagen de ejemplo",
-        "body": "Haz clic en la diapositiva resaltada. Haremos dos cambios sencillos en el editor de la derecha."
+        "title": "Selecciona tu diapositiva de imagen",
+        "body": "Ahora editaremos un poco nuestra imagen. Haz clic en la diapositiva de imagen resaltada. Haremos dos cambios sencillos desde el panel derecho."
       },
       "image-fit": {
-        "title": "Ajusta toda la imagen",
-        "body": "Haz clic en Contener en el editor para que toda la imagen quepa en su marco."
+        "title": "Muestra la imagen completa",
+        "body": "Haz clic en Ajustar dentro en el panel derecho. Así la imagen completa cabrá en el área de la diapositiva sin recortarse."
       },
       "image-grayscale": {
         "title": "Aplica escala de grises",
-        "body": "Pon el control de escala de grises al 100 %. Puedes enfocarlo y pulsar Fin."
+        "body": "Lleva el control de Escala de grises al 100 %. También puedes seleccionar el control y pulsar Fin."
       },
       "image-edit-result": {
-        "title": "Editaste la imagen",
-        "body": "Cambiaste el ajuste y aplicaste escala de grises. Así se ve la imagen editada."
+        "title": "¡Has editado tu imagen!",
+        "body": "¡Genial! Has ajustado la imagen completa al marco y aplicado el efecto de escala de grises. Aquí puedes ver el resultado final."
       },
       "hymns-parts": {
-        "title": "Las partes del himno",
-        "body": "El panel derecho muestra las partes del himno. Haz clic en el botón numerado de la parte deseada para cambiar a ella. Aquí solo lo explicamos; no necesitas hacer clic."
+        "title": "Cambia entre las estrofas del himno",
+        "body": "En el panel derecho verás botones numerados que representan las estrofas del himno. Durante la presentación, basta con hacer clic en el número correspondiente para ir a la estrofa que quieras. Ahora solo estamos conociendo esta área."
       },
       "reorder": {
-        "title": "Reordena las diapositivas",
-        "body": "Arrastra la diapositiva de ejemplo resaltada sobre la otra diapositiva resaltada. El ejercicio termina cuando sus posiciones cambian realmente."
+        "title": "Cambia el orden de las diapositivas",
+        "body": "Puedes ordenar las diapositivas como quieras. Arrastra la diapositiva de ejemplo resaltada sobre la otra diapositiva resaltada y suéltala. Completarás este paso cuando cambie el orden."
       },
       "hymns-font": {
-        "title": "Tamaño de letra del himno",
-        "body": "Cambia el tamaño de letra del himno seleccionado en el campo Tamaño de letra de la derecha. Un número mayor agranda el texto; uno menor lo reduce. Aquí solo lo explicamos; no debes cambiarlo."
+        "title": "Ajusta el tamaño de la letra del himno",
+        "body": "Puedes cambiar el tamaño de la letra del himno desde Tamaño de fuente en el panel derecho. Un valor mayor amplía el texto y uno menor lo reduce. No necesitas cambiar nada en este paso."
       },
       "image-tools": {
-        "title": "Dos formas de editar",
-        "body": "Puedes editar imágenes en el panel derecho o en el Editor de diapositivas mediante el lápiz resaltado. Este editor ofrece más opciones y edición de vídeo. En el ejemplo solo cambiaremos el ajuste y la escala de grises."
+        "title": "¿Cómo puedes editar imágenes?",
+        "body": "Puedes editar imágenes rápidamente desde el panel de propiedades de la derecha. Para opciones más detalladas, usa el Editor de diapositivas que se abre con el icono de lápiz. Allí también encontrarás las opciones de edición de vídeo."
+      },
+      "hymns-online": {
+        "title": "Himnos en línea",
+        "body": "El botón Himnos en línea te permite acceder a fuentes de himnos en línea, encontrar los que quieras y añadirlos a tu biblioteca."
+      },
+      "hymns-author": {
+        "title": "Muestra la información del autor",
+        "body": "Mostrar autor determina si el nombre del autor aparece en la diapositiva junto con la letra del himno. Esta función está disponible para himnos que incluyen información del autor."
+      },
+      "hymns-mode": {
+        "title": "¿Cómo funciona el Modo por partes?",
+        "body": "El Modo por partes mantiene todas las estrofas de un himno en una sola diapositiva. Durante la presentación, puedes cambiar entre estrofas con los botones numerados del panel derecho."
+      },
+      "phone-controls": {
+        "title": "Control desde el teléfono",
+        "body": "Usa el botón Control desde el teléfono de la barra superior de la aplicación principal para manejar la presentación desde tu teléfono. ¡El ordenador de la presentación y el teléfono deben estar conectados a la misma red!"
+      },
+      "editor-select": {
+        "title": "Selecciona la imagen",
+        "body": "Haz clic en la imagen de ejemplo resaltada. En el panel derecho se abrirán las opciones de edición de la imagen seleccionada."
+      },
+      "editor-rotate": {
+        "title": "Gira la imagen",
+        "body": "Escribe 15 en el campo Rotación del panel derecho. Puedes ver cómo gira la imagen sobre la diapositiva."
+      },
+      "editor-save": {
+        "title": "Guarda los cambios",
+        "body": "¡Hemos terminado de editar! Ahora haz clic en Guardar. Este paso se completará cuando los cambios se hayan guardado en la presentación."
+      },
+      "editor-result": {
+        "title": "¡Tu edición se ha guardado!",
+        "body": "¡Genial! Has seleccionado la imagen, la has girado 15° y has guardado el cambio. Aquí puedes ver el resultado final de tu diapositiva."
       }
     },
     "mapTitle": "Mapa de secciones",

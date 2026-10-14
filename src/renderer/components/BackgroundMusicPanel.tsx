@@ -3,6 +3,7 @@ import { FolderOpen, Music, Pause, Play, RefreshCw, Square, Volume2 } from 'luci
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../state/useStore';
 import { cn, toFileUrl } from '../utils';
+import AudioSeekBar from './AudioSeekBar';
 
 export default function BackgroundMusicPanel() {
   const { t } = useTranslation();
@@ -37,15 +38,19 @@ export default function BackgroundMusicPanel() {
 
   useEffect(() => {
     const audio = audioRef.current;
+    if (!audio) return;
+    if (current) audio.src = /^https?:\/\//i.test(current) ? current : toFileUrl(current);
+    else { audio.removeAttribute('src'); audio.load(); }
+  }, [current]);
+  useEffect(() => { const audio = audioRef.current; if (audio) { audio.volume = volume; audio.muted = muted; } }, [volume, muted]);
+  useEffect(() => {
+    const audio = audioRef.current;
     if (!audio || !current) return;
-    // YouTube returns an already signed HTTPS URL; local files need the
-    // app's local-resource conversion. Converting YouTube URLs breaks them.
-    audio.src = /^https?:\/\//i.test(current) ? current : toFileUrl(current);
-    audio.volume = volume;
-    audio.muted = muted;
-    if (playing) audio.play().catch(() => { setPlaying(false); setError(t('settings.backgroundMusicPlayError')); });
+    let cancelled = false;
+    if (playing) void audio.play().catch(() => { if (!cancelled) { setPlaying(false); setError(t('settings.backgroundMusicPlayError')); } });
     else audio.pause();
-  }, [current, playing, volume, muted, t]);
+    return () => { cancelled = true; };
+  }, [current, playing, setPlaying, t]);
 
   const playFile = (file: string) => {
     setCurrent(file);
@@ -82,6 +87,7 @@ export default function BackgroundMusicPanel() {
           ))}
         </div>
       ) : <p className="text-xs text-white/35">{folder ? t('settings.backgroundMusicEmpty') : t('settings.backgroundMusicChooseHint')}</p>}
+      <AudioSeekBar audioRef={audioRef} trackKey={current} />
       <div className="flex items-center gap-2 border-t border-white/10 pt-3">
         <button type="button" onClick={() => setPlaying(!playing)} disabled={!current} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs disabled:opacity-30">{playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}{playing ? t('common.pause') : t('common.play')}</button>
         <button type="button" onClick={stop} disabled={!playing} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs disabled:opacity-30"><Square className="w-3.5 h-3.5" />{t('common.stop')}</button>

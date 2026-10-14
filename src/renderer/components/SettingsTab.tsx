@@ -1,3 +1,5 @@
+import { usePractice } from '../hooks/usePractice';
+import { SettingsAppearancePreview } from './SettingsAppearancePreview';
 import { PracticePanel } from './PracticePanel';
 import { registerTourAnchor } from './Tour/tourController';
 import { useMemo, useState, useEffect, useRef, type ReactNode } from 'react';
@@ -22,6 +24,7 @@ const CATEGORY_ICONS = { general: Settings2, presentation: Monitor, appearance: 
 export default function SettingsTab() {
 
   const { t, i18n } = useTranslation();
+  const practice = usePractice();
   const [category, setCategory] = useState<SettingsCategoryId>(() => lastSettingsCategory);
   const [query, setQuery] = useState('');
   const [focusItem, setFocusItem] = useState<SettingsItemId | null>(null);
@@ -99,11 +102,15 @@ export default function SettingsTab() {
   const sttSetTargetLanguage = useSttStore((s) => s.setTargetLanguage);
   const [apiKeyDraft, setApiKeyDraft] = useState('');
   const [apiKeyState, setApiKeyState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const sttStatus = useSttStore(state => state.status);
+  const micActive = useSttStore(state => state.micActive);
+  const [keyDeleting, setKeyDeleting] = useState(false);
+  const [websiteError, setWebsiteError] = useState(false);
   const [keyError, setKeyError] = useState<string | null>(null);
 
   useEffect(() => {
-    void refreshSttStatus();
-  }, []);
+    if (!practice) void refreshSttStatus();
+  }, [practice]);
 
   const saveApiKey = async () => {
     const key = apiKeyDraft.trim();
@@ -127,6 +134,16 @@ export default function SettingsTab() {
       setKeyError(t('settings.sonioxKeySaveFailed'));
       setApiKeyState('idle');
     }
+  };
+
+  const clearApiKey = async () => {
+    setKeyDeleting(true); setKeyError(null);
+    try {
+      const result = await window.electronAPI.sttDeleteApiKey();
+      if (!result.ok) { setKeyError(t(result.code === 'SESSION_ACTIVE' ? 'settings.sonioxStopFirst' : 'settings.sonioxClearFailed')); return; }
+      setApiKeyDraft(''); setApiKeyState('idle'); await refreshSttStatus();
+    } catch { setKeyError(t('settings.sonioxClearFailed')); }
+    finally { setKeyDeleting(false); }
   };
 
   // Language defaults persist inside the store setters (localStorage).
@@ -234,6 +251,7 @@ export default function SettingsTab() {
           <SettingSwitch checked={operatorNotesEnabled} onCheckedChange={setOperatorNotesEnabled} label={t('common.operatorNotes')} />
         </section></>,
     appearance: <>
+        <SettingsAppearancePreview authorPosition={hymnAuthorPosition} authorSize={hymnAuthorSize} />
         <section id="settings-item-hymn-position" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4 space-y-4" aria-label={t('common.hymnsAuthorPosition')}>
           <div className="flex items-center gap-2">
             <Music className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
@@ -302,6 +320,11 @@ export default function SettingsTab() {
             </div>
           </div>
 
+          <div className="space-y-3 rounded-xl border border-blue-400/20 bg-blue-500/5 p-3 text-sm leading-relaxed text-white/70">
+            <p>{t('settings.sonioxAbout')}</p><p>{t('settings.sonioxSetup')}</p>
+            <button id="settings-item-soniox-website" type="button" disabled={practice} onClick={async () => { try { const result = await window.electronAPI.openSonioxWebsite(); setWebsiteError(!result.ok); } catch { setWebsiteError(true); } }} className="rounded-lg border border-blue-400/30 bg-blue-500/10 px-3 py-2 font-medium text-blue-200 hover:bg-blue-500/20 disabled:opacity-40">{t('settings.sonioxWebsite')}</button>
+            {websiteError && <p role="alert" className="text-red-300">{t('settings.sonioxWebsiteFailed')}</p>}
+          </div>
           {/* API key status */}
           <div
             className={cn(
@@ -351,7 +374,7 @@ export default function SettingsTab() {
               <button
                 type="button"
                 onClick={() => void saveApiKey()}
-                disabled={apiKeyState === 'saving'}
+                disabled={practice || keyDeleting || apiKeyState === 'saving'}
                 className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 px-4 py-2 text-sm font-semibold transition-colors"
               >
                 {apiKeyState === 'saving' ? (
@@ -363,6 +386,11 @@ export default function SettingsTab() {
                 )}
                 {apiKeyState === 'saved' ? t('common.saved') : t('common.save')}
               </button>
+            </div>
+            <div id="settings-item-stt-clear-key" tabIndex={-1} className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => void clearApiKey()} disabled={practice || micActive || !['idle','error'].includes(sttStatus) || keyDeleting || apiKeyState === 'saving' || (!sttHasKey && !apiKeyDraft)} className="inline-flex items-center gap-2 rounded-lg border border-red-400/25 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-40"><Trash2 className="h-4 w-4" aria-hidden="true" />{t('settings.sonioxClearKey')}</button>
+              <p className="w-full text-xs leading-relaxed text-white/55">{t('settings.sonioxClearHint')}</p>
+              {(micActive || !['idle','error'].includes(sttStatus)) && <span className="text-xs text-white/55">{t('settings.sonioxStopFirst')}</span>}
             </div>
             <p className="text-xs leading-5 text-white/55">{t('settings.sonioxApiKeyHint')}</p>
             {keyError && <p className="text-[11px] text-red-400">{keyError}</p>}

@@ -6,6 +6,9 @@ import type { DisplayInfo, ProjectorOutputStatus } from '../shared/displays';
 declare global {
   interface Window {
     electronAPI: {
+      generateGradient: (recipe: import('../shared/generatedBackground').GeneratedBackground, regions: import('../shared/gradientContrast').ContrastRegion[]) => Promise<import('./components/GradientGenerator').GradientDraft>;
+      saveGradient: (token: string) => Promise<string>;
+      discardGradient: () => Promise<void>;
       [x: string]: any;
       onPracticeWorkspaceChanged: (callback: (value: { sessionId: string; workspace: import('../shared/practice').PracticeWorkspace }) => void) => () => void;
       controlPracticeGuide: (id: string, step: import('../shared/practice').GuideStep, action: string, input: import('../shared/practice').GuideObservation, label: string, destination?: import('../shared/practice').GuideStep) => Promise<import('../shared/practice').PracticeWorkspace>;
@@ -126,6 +129,8 @@ declare global {
 
       // Soniox real-time STT + translation
       sttGetStatus: () => Promise<SttStatus>;
+      sttDeleteApiKey: () => Promise<{ ok: boolean; code?: string }>;
+      openSonioxWebsite: () => Promise<{ ok: boolean }>;
       sttSetApiKey: (key: string) => Promise<{ ok: boolean; code?: string; message?: string }>;
       sttStart: (config: SttConfig) => Promise<{ ok: boolean; code?: string; message?: string }>;
       sttSendAudio: (chunk: ArrayBuffer | Uint8Array) => void;

@@ -1,4 +1,42 @@
 {
+  "gradient": {
+    "animation": "Animasyon",
+    "aurora": "Aurora",
+    "waves": "Dalgalar",
+    "fog": "Sis",
+    "motion": "Canlı hareket",
+    "speed": "Hareket hızı",
+    "amount": "Hareket miktarı",
+    "motionNote": "Kontrast ölçümü sabit kareye aittir; hareket boyunca değişebilir. Dışa aktarmada sabit görsel kullanılır.",
+    "open": "Gradient oluştur",
+    "palette": "Renk paleti",
+    "style": "Stil",
+    "soft": "Yumuşak",
+    "flow": "Akışkan",
+    "darkness": "Koyuluk",
+    "regenerate": "Yeniden üret",
+    "target": "Uygulama hedefi",
+    "slide": "Bu slayt",
+    "group": "Bu ilahi / ayet grubu",
+    "selection": "Seçili slaytlar",
+    "cancel": "İptal",
+    "apply": "Uygula ({{count}} slayt)",
+    "generating": "Arka plan oluşturuluyor…",
+    "error": "Arka plan oluşturulamadı veya kaydedilemedi. Yeniden üretip tekrar deneyin.",
+    "unknown": "Kontrast otomatik doğrulanamadı.",
+    "contrast": "En düşük kontrast: {{ratio}}:1",
+    "override": "Kontrast uyarısına rağmen yine de uygula",
+    "palettes": {
+      "night": "Gece",
+      "ocean": "Okyanus",
+      "emerald": "Zümrüt",
+      "lavender": "Lavanta",
+      "sunset": "Gün Batımı",
+      "amber": "Kehribar",
+      "rose": "Gül",
+      "smoke": "Duman"
+    }
+  },
   "nav": {
     "editor": "Editör",
     "presentations": "Sunumlar",
@@ -1185,9 +1223,25 @@
         "retention": "saklama süre gün yedek",
         "clear-live-saves": "otomatik kayıt temizle sil yedek",
         "updates": "güncelleme sürüm indir",
-        "learn": "alıştırma rehber öğren yardım nasıl kullanılır"
+        "learn": "alıştırma rehber öğren yardım nasıl kullanılır",
+        "soniox-website": "soniox resmi site hesap ücret kullanım",
+        "stt-clear-key": "api anahtar temizle kaldır sil",
+        "appearance-preview": "önizleme simülasyon logo yazar boyut konum"
       }
-    }
+    },
+    "musicSeek": "Parçada ileri veya geri sar",
+    "musicSeekUnavailable": "Bu kaynak şu anda sarmayı desteklemiyor.",
+    "sonioxAbout": "Soniox, konuşmayı gerçek zamanlı metne dönüştüren ve başka dillere çevirebilen çevrimiçi bir hizmettir. Uygulama, mikrofon sesinden altyazı oluşturmak için bu hizmeti kullanır.",
+    "sonioxSetup": "Soniox hesabınızdan bir API anahtarı oluşturup buraya kaydedin; ardından konuşma ve çeviri dilini seçin. Kullanım için internet bağlantısı gerekir. Kullanım ve ücretlendirme Soniox hesabınızdan yönetilir.",
+    "sonioxWebsite": "Resmî Soniox sitesini aç",
+    "sonioxWebsiteFailed": "Soniox sitesi açılamadı. Lütfen tekrar deneyin.",
+    "sonioxClearKey": "API Anahtarını Temizle",
+    "sonioxClearFailed": "API anahtarı temizlenemedi. Lütfen tekrar deneyin.",
+    "sonioxStopFirst": "Önce aktif altyazı oturumunu durdurun.",
+    "sonioxClearHint": "Bu işlem yalnızca uygulamadaki anahtarı kaldırır; Soniox hesabındaki anahtarı iptal etmez.",
+    "appearancePreview": "Yerleşim önizlemesi",
+    "appearancePreviewHint": "Gerçek slayt çizimi orantılı küçültülür. Konum ve boyut değişiklikleri burada hemen görünür; sunumunuza örnek içerik eklenmez.",
+    "appearancePreviewSample": "Örnek logo ve dört satırlık ilahi gösterilir. Logo yüklerseniz önizlemede kendi logonuz kullanılır."
   },
   "stage": {
     "next": "Sırada",
@@ -1441,6 +1495,9 @@
       "slide-reorder": {
         "title": "Slaytları yeniden sırala",
         "body": "Aydınlatılan örnek slaytı diğer aydınlatılan slaytın üzerine sürükleyip bırak. Yerleri gerçekten değiştiğinde bu tek alıştırma tamamlanır."
+      },
+      "canvas-edit": {
+        "title": "Slayt Editör’de resmi düzenle"
       }
     }
   },
@@ -1473,215 +1530,247 @@
     "steps": {
       "welcome": {
         "title": "Birlikte öğrenelim",
-        "body": "Ayrı alıştırma profilinde çalışacaksın. Canlı çıktı kapalı; gerçek sunumun değişmez. Başladıktan sonra gösterilen işlemleri sırayla yap."
+        "body": "Bu uygulamayı kullanmayı birkaç basit alıştırmayla öğreneceksin. Tüm işlemleri ayrı bir alıştırma profilinde yapacağız. Gerçek sunumların etkilenmeyecek ve canlı çıktı kapalı kalacak. Hazırsan başlayalım!"
       },
       "presentations": {
         "title": "Sunumlar",
-        "body": "Bu bölümde sunumlarını yönetirsin. Şimdi yalnızca bölümü tanıyoruz; birazdan gerçek araçlarla bir slayt oluşturacağız."
+        "body": "Burası sunumlarını oluşturabileceğin, kaydedebileceğin ve yönetebileceğin alan. Şimdilik bu bölümü tanıyalım. Birazdan kendi slaytlarını hazırlayacaksın."
       },
       "sidebar": {
-        "title": "Bölüm düzeni",
-        "body": "Sol taraftaki düğmeler uygulamanın bölümlerini açar. Her adımda kullanacağın alanı aydınlatacağız."
+        "title": "Uygulamada gezinme",
+        "body": "Sol menüden bu uygulamanın farklı bölümlerine ulaşabilirsin. Öğretici boyunca kullanman gereken düğmeleri ve alanları vurgulayarak sana yol göstereceğiz."
       },
       "nav-slides": {
         "title": "Slaytlar bölümünü aç",
-        "body": "Aydınlatılan Slaytlar düğmesine tıkla."
+        "body": "İlk slaytımızı oluşturalım! Sol menüde vurgulanan Slaytlar düğmesine tıkla."
       },
       "add": {
-        "title": "Yeni slayt ekle",
-        "body": "Aydınlatılan Yeni Slayt düğmesine tıkla. Slayt oluştuğunda rehber ilerleyecek."
+        "title": "Yeni bir slayt oluştur",
+        "body": "Vurgulanan Yeni Slayt düğmesine tıkla. Sunumuna yeni bir slayt eklenecek."
       },
       "select": {
         "title": "Örnek slaytı seç",
-        "body": "Aydınlatılan örnek slayta tıkla. Yalnızca bu örneği seçeceğiz; eklediğin slayt korunacak."
+        "body": "Şimdi bir slaytı nasıl sileceğini öğrenelim. Vurgulanan örnek slayta tıkla. Az önce oluşturduğun slayt korunacak."
       },
       "delete": {
-        "title": "Örneği sil",
-        "body": "Seçili örneği Delete tuşuyla veya sağ panelde aydınlatılan çöp kutusu simgesiyle silebilirsin. İki yöntem de kabul edilir; diğer slaytlar korunur."
+        "title": "Örnek slaytı sil",
+        "body": "Seçili örnek slaytı silmek için Delete tuşuna basabilir veya sağ panelde vurgulanan çöp kutusu simgesine tıklayabilirsin. İstediğin yöntemi kullan!"
       },
       "done": {
-        "title": "Bitiş",
-        "body": "Rehberin sonuna geldin. Alıştırma değişikliklerin çıkışta korunur."
+        "title": "Tebrikler, öğreticiyi tamamladın!",
+        "body": "Bu uygulamanın temel özelliklerini keşfettin! Slayt oluşturmayı, içerik eklemeyi, görselleri düzenlemeyi ve sunumunu kaydetmeyi öğrendin.\n\nAlıştırmada yaptığın değişiklikler çıkışta korunacak. Artık bu uygulamayı kullanmaya hazırsın!"
       },
       "nav-bible": {
-        "title": "İncil",
-        "body": "Aydınlatılan İncil düğmesine tıkla."
+        "title": "İncil bölümünü aç",
+        "body": "Bu uygulama ile Kutsal Kitap ayetlerini kolayca sunumuna ekleyebilirsin. Sol menüde vurgulanan İncil düğmesine tıkla."
       },
       "bible-intro": {
-        "title": "İncil kaynaklarını yükleme",
-        "body": "İncil’i yerel bir XML dosyasından yükleyebilir veya çevrimiçi arayıp uygun kaynağı seçerek ekleyip kullanabilirsin. Bu alıştırmada güvenli, yerel örnek XML kullanıyoruz."
+        "title": "İncil kaynaklarını keşfet",
+        "body": "Kutsal Kitap çevirilerini XML dosyalarından içe aktarabilir veya uygulama içerisindeki Çevrimiçi İncil seç butonu ile bulup ekleyebilirsin. Bu alıştırmada senin için hazırlanmış örnek bir XML dosyası kullanacağız."
       },
       "nav-media": {
-        "title": "Medya",
-        "body": "Aydınlatılan Medya düğmesine tıkla."
+        "title": "Medya bölümünü aç",
+        "body": "Şimdi sunumumuza bir görsel ekleyelim. Sol menüde vurgulanan Medya düğmesine tıkla."
       },
       "media-intro": {
-        "title": "Medya",
-        "body": "Görsel ve videoları bulun, önizleyin ve sunuma ekleyin. Birden fazla içerikle döngü slaytı hazırlayabilirsiniz."
+        "title": "Medya kütüphanesini keşfet",
+        "body": "Bu bölümde görsellerini ve videolarını yönetebilir, ön izleyebilir ve sunumlarına ekleyebilirsin. Birden fazla medya dosyasını kullanarak döngü halinde oynatılan slaytlar da oluşturabilirsin."
       },
       "nav-hymns": {
-        "title": "İlahiler",
-        "body": "Aydınlatılan İlahiler düğmesine tıkla."
+        "title": "İlahiler bölümünü aç",
+        "body": "Şimdi ilahi sözlerini sunumumuza eklemeyi öğrenelim. Sol menüde vurgulanan İlahiler düğmesine tıkla."
       },
       "hymns-intro": {
-        "title": "İlahiler",
-        "body": "Normal modda her kıta ayrı slayt olur. Parça modunda kıtalar tek slaytın parçalarıdır. Örneğimizi parça modunda ekleyeceğiz."
+        "title": "İlahi sunumlarını keşfet",
+        "body": "İlahileri iki farklı şekilde sunabilirsin. Normal Mod her kıtayı ayrı bir slayta ekler. Parça Modu ise tüm kıtaları tek slaytta toplar. Bu alıştırmada Parça Modu'nu kullanacağız."
       },
       "nav-countdown": {
-        "title": "Geri Sayım",
-        "body": "Aydınlatılan Geri Sayım düğmesine tıkla."
+        "title": "Geri Sayım bölümünü aç",
+        "body": "Şimdi sunumumuza bir geri sayım ekleyelim. Sol menüde vurgulanan Geri Sayım düğmesine tıkla."
       },
       "countdown-intro": {
-        "title": "Geri Sayım",
-        "body": "Dakika ve saniyeyi seçin, görünümü hazırlayın ve geri sayımı sunuma ekleyin."
+        "title": "Geri sayım oluştur",
+        "body": "Bu bölümde dakika ve saniye belirleyerek sunumlarına geri sayım ekleyebilirsin. Geri sayımın görünümünü de ihtiyaçlarına göre düzenleyebilirsin."
       },
       "nav-screen": {
-        "title": "Ekran",
-        "body": "Aydınlatılan Ekran düğmesine tıkla."
+        "title": "Ekran bölümünü aç",
+        "body": "Sol menüde vurgulanan Ekran düğmesine tıkla."
       },
       "screen-intro": {
-        "title": "Ekran",
-        "body": "Ekran yakalama kaynağını seçerek içeriğini slayta ekleyin. Kaynak seçimi, projeksiyon çıktısını açmaktan farklıdır."
+        "title": "Ekran yakalama",
+        "body": "Bu bölümden bilgisayarındaki bir ekranı veya pencereyi seçerek görüntüsünü sunumuna ekleyebilirsin. Ekran yakalama kaynağı seçmek, projeksiyon çıktısını başlatmaz. Alıştırma modunda olduğumuz için daha detaylı gösteremiyorum."
       },
       "nav-calendar": {
-        "title": "Takvim",
-        "body": "Aydınlatılan Takvim düğmesine tıkla."
+        "title": "Takvim bölümünü aç",
+        "body": "Sol menüde vurgulanan Takvim düğmesine tıkla."
       },
       "calendar-intro": {
-        "title": "Takvim",
-        "body": "Hazırladığınız sunumları takvimde planlayın ve ilgili kayıttan yeniden açın."
+        "title": "Sunumlarını planla",
+        "body": "Takvim üzerinden sunumlarını belirli tarihlere planlayabilir ve zamanı geldiğinde ilgili kayıttan yeniden açabilirsin. Böylece yaklaşan ibadetler ve etkinlikler için hazırlıklarını düzenleyebilirsin."
       },
       "nav-editor": {
-        "title": "Editör",
-        "body": "Aydınlatılan Editör düğmesine tıkla."
+        "title": "Editör bölümünü aç",
+        "body": "Şimdi daha ayrıntılı slayt düzenleme araçlarını tanıyalım. Sol menüde vurgulanan Editör düğmesine tıkla."
       },
       "editor-intro": {
-        "title": "Editör",
-        "body": "Resimler sağ panelden veya Slayt Editör’den düzenlenebilir. Slayt Editör daha ayrıntılı düzenleme seçenekleri ve video düzenleme araçları sunar. Örneğimizde iki basit resim düzenlemesi yaptık."
+        "title": "Slayt Editör'ü keşfet",
+        "body": "Slayt Editör'de slaytlarının içeriğini ve görünümünü düzenleyebilirsin. Şimdi örnek görselimizi seçecek, 15° döndürecek ve değişikliği kaydedeceğiz. Tüm işlemler yalnızca alıştırma sunumunda yapılacak."
       },
       "nav-settings": {
-        "title": "Ayarlar",
-        "body": "Aydınlatılan Ayarlar düğmesine tıkla."
+        "title": "Ayarlar bölümünü aç",
+        "body": "Sol menüde vurgulanan Ayarlar düğmesine tıkla."
       },
       "settings-intro": {
-        "title": "Ayarlar",
-        "body": "Dil ve uygulama tercihlerini yönetin. Yardım bölümünden sayfa tanıtımlarını ve kısa turu yeniden açabilirsiniz."
+        "title": "Bu uygulamayı kendine göre ayarla",
+        "body": "Bu bölümden uygulama dilini ve diğer tercihlerini yönetebilirsin. Ayrıca Yardım bölümünden öğreticileri yeniden başlatabilir ve uygulama bölümlerini tekrar keşfedebilirsin."
       },
       "nav-save": {
-        "title": "Sunumlar",
-        "body": "Aydınlatılan Sunumlar düğmesine tıkla."
+        "title": "Sunumlar bölümüne dön",
+        "body": "Artık hazırladığımız sunumu kaydedebiliriz! Sol menüde vurgulanan Sunumlar düğmesine tıkla."
       },
       "bible-source": {
-        "title": "Kaynak yükle",
-        "body": "XML İçe Aktar düğmesine tıkla. Kaynak zaten açıksa yönetim menüsünü açacağız."
+        "title": "İçe aktarma menüsünü aç",
+        "body": "Vurgulanan XML İçe Aktar düğmesine tıkla. Bir kaynak zaten açıksa ilgili yönetim menüsünden devam edeceğiz."
       },
       "bible-import": {
-        "title": "Örnek XML’i içe aktar",
-        "body": "Menüdeki XML İçe Aktar öğesine tıkla. Yalnızca güvenli örnek kaynak yüklenir."
+        "title": "Örnek İncil kaynağını yükle",
+        "body": "Açılan menüde XML İçe Aktar seçeneğine tıkla. Örnek Kutsal Kitap kaynağı otomatik olarak yüklenecek; kendi dosyalarını seçmene gerek yok."
       },
       "bible-book": {
-        "title": "İlk kitabı seç",
-        "body": "Aydınlatılan ilk kitaba tıkla."
+        "title": "Bir kitap seç",
+        "body": "Kutsal Kitap kitapları arasından vurgulanan ilk kitaba tıkla."
       },
       "bible-chapter": {
-        "title": "İlk bölümü seç",
-        "body": "Aydınlatılan 1. bölüm düğmesine tıkla."
+        "title": "Bir bölüm seç",
+        "body": "Şimdi vurgulanan 1. bölüm düğmesine tıkla. Bölümdeki ayetleri görüntüleyeceğiz."
       },
       "bible-verse": {
-        "title": "Ayeti seç",
-        "body": "Aydınlatılan örnek ayeti seç."
+        "title": "Bir ayet seç",
+        "body": "Vurgulanan örnek ayete tıkla. Seçtiğin ayeti sunumumuza ekleyeceğiz."
       },
       "bible-add": {
         "title": "Ayeti sunuma ekle",
-        "body": "Sunuma Ekle düğmesine tıkla. Ayet slaytı oluşunca ilerleyeceğiz."
+        "body": "Sunuma Ekle düğmesine tıkla. Seçtiğin ayet için otomatik olarak bir slayt oluşturulacak."
       },
       "media-menu": {
-        "title": "Medya menüsünü aç",
-        "body": "Aydınlatılan Medya Ekle düğmesine tıkla."
+        "title": "Medya ekleme menüsünü aç",
+        "body": "Vurgulanan Medya Ekle düğmesine tıkla."
       },
       "media-import": {
-        "title": "Örnek resmi yükle",
-        "body": "Resim Seç düğmesine tıkla. Gerçek dosya seçicisi yerine güvenli örnek resim kullanılır."
+        "title": "Örnek görseli yükle",
+        "body": "Resim Seç düğmesine tıkla. Bu alıştırmada bilgisayarından dosya seçmek yerine hazır bir örnek görsel kullanacağız."
       },
       "media-add": {
-        "title": "Resmi slayta ekle",
-        "body": "Örnek resmin altındaki artı düğmesine tıkla. Resim slaytını bekleyeceğiz."
+        "title": "Görseli sunumuna ekle",
+        "body": "Örnek görselin altındaki + düğmesine tıkla. Görsel, sunumuna yeni bir slayt olarak eklenecek."
       },
       "countdown-duration": {
-        "title": "Süreyi ayarla",
-        "body": "Dakika alanını 2 yap. Yalnızca bu alanı düzenleyebilirsin."
+        "title": "Geri sayım süresini belirle",
+        "body": "Dakika alanına 2 yaz. Bu alıştırmada yalnızca dakika değerini değiştireceğiz."
       },
       "countdown-add": {
-        "title": "Geri sayımı ekle",
-        "body": "Slayta Ekle düğmesine tıkla. Zamanlayıcıyı veya canlı çıktıyı başlatmayacağız."
+        "title": "Geri sayımı sunuma ekle",
+        "body": "Slayta Ekle düğmesine tıkla. İki dakikalık geri sayım slaytı oluşturulacak. Henüz sayacı veya canlı çıktıyı başlatmayacağız."
       },
       "save": {
-        "title": "Alıştırmayı kütüphaneye kaydet",
-        "body": "Kütüphaneye Kaydet düğmesine tıkla. Kayıt yalnızca ayrı alıştırma profilinde yapılır. Başarı sonucunu bekleyeceğiz."
+        "title": "Sunumunu kütüphaneye kaydet",
+        "body": "Kütüphaneye Kaydet düğmesine tıkla. Sunumun yalnızca alıştırma profilinin kütüphanesine kaydedilecek; gerçek sunumların etkilenmeyecek."
       },
       "add-result": {
-        "title": "Slaytını oluşturdun",
-        "body": "Yeni bir slayt oluşturdun. Sunumundaki slaytlar bu şekilde hazırlanır."
+        "title": "İlk slaytın hazır!",
+        "body": "Tebrikler, ilk slaytını oluşturdun! Sunumuna metin, görsel ve daha birçok içerik eklemek için slaytları kullanabilirsin."
       },
       "delete-result": {
         "title": "Örnek slayt silindi",
         "body": "Seçtiğin örnek slayt kaldırıldı; diğer slaytların korunuyor."
       },
       "bible-result": {
-        "title": "Ayeti sunumuna ekledin",
-        "body": "Ayeti sunumuna ekledin. Hazırlanan slayt böyle görünüyor."
+        "title": "Ayet slaytın hazır!",
+        "body": "Harika! Kutsal Kitap'tan bir ayeti sunumuna ekledin. Ayetleri bu şekilde hızlıca slaytlara dönüştürebilirsin."
       },
       "media-result": {
-        "title": "Görselini ekledin",
-        "body": "Görseli sunumuna ekledin. Slayt üzerinde böyle görünüyor."
+        "title": "Görsel slaytın hazır!",
+        "body": "Görselini başarıyla ekledin! Fotoğrafları, arka planları ve diğer görselleri sunumlarında bu şekilde kullanabilirsin."
       },
       "countdown-result": {
-        "title": "Geri sayım hazır",
-        "body": "İki dakikalık geri sayım slaytını hazırladın. Bu sabit bir önizlemedir; sayaç başlamadı."
+        "title": "Geri sayım slaytın hazır!",
+        "body": "İki dakikalık geri sayımını oluşturdun! Burada gördüğün yalnızca bir ön izleme; geri sayım henüz başlamadı."
       },
       "save-result": {
-        "title": "Sunumun kaydedildi",
-        "body": "Sunumunu alıştırma kitaplığına kaydettin; buradan tekrar açabilirsin."
+        "title": "Sunumun kaydedildi!",
+        "body": "Tebrikler! Hazırladığın sunumu başarıyla kaydettin. İstediğinde alıştırma kütüphanesinden yeniden açarak çalışmalarına devam edebilirsin."
       },
       "hymns-add": {
         "title": "Örnek ilahiyi ekle",
-        "body": "Aydınlatılan örnek ilahi satırına tıkla. Sözleri sunumuna eklenince sonucu birlikte göreceğiz."
+        "body": "Vurgulanan örnek ilahiye tıkla. İlahi sözleri Parça Modu'nda sunumuna eklenecek."
       },
       "hymns-result": {
-        "title": "İlahini ekledin",
-        "body": "Örnek ilahinin sözlerini sunumuna ekledin. Hazırlanan ilahi slaytı böyle görünüyor."
+        "title": "İlahi slaytın hazır!",
+        "body": "Tebrikler! İlk ilahini sunumuna ekledin. Artık ilahi sözlerini slayt üzerinde görüntüleyebilir ve kıtalar arasında geçiş yapabilirsin."
       },
       "image-select": {
-        "title": "Örnek görseli seç",
-        "body": "Aydınlatılan görsel slaytına tıkla. Sağdaki editör panelinde iki basit düzenleme yapacağız."
+        "title": "Görsel slaytını seç",
+        "body": "Şimdi görselimizi biraz düzenleyelim. Vurgulanan görsel slaytına tıkla. Sağdaki panelden iki basit değişiklik yapacağız."
       },
       "image-fit": {
-        "title": "Görseli çerçeveye sığdır",
-        "body": "Sağdaki editörde İçine sığdır düğmesine tıkla. Görselin tamamı çerçevede görünsün."
+        "title": "Görselin tamamını göster",
+        "body": "Sağ paneldeki İçine sığdır seçeneğine tıkla. Böylece görselin tamamı, kırpılmadan slayt alanına sığacak."
       },
       "image-grayscale": {
-        "title": "Gri tonlamayı uygula",
-        "body": "Gri tonlama kaydırıcısını %100 yap. Kaydırıcıya odaklanıp End (Son) tuşuna da basabilirsin."
+        "title": "Gri tonlama uygula",
+        "body": "Gri tonlama kaydırıcısını %100 değerine getir. İstersen kaydırıcıyı seçip End (Son) tuşuna da basabilirsin."
       },
       "image-edit-result": {
-        "title": "Görselini düzenledin",
-        "body": "Görselin sığdırmasını değiştirdin ve gri tonlama uyguladın. Düzenlenen görsel böyle görünüyor."
+        "title": "Görselini düzenledin!",
+        "body": "Harika! Görselin tamamını çerçeveye sığdırdın ve gri tonlama efekti uyguladın. Düzenlediğin görselin son halini burada görebilirsin."
       },
       "hymns-parts": {
-        "title": "İlahinin parçaları",
-        "body": "Sağdaki panel ilahinin parçalarını gösterir. İstenen parçanın numaralı düğmesine tıklayarak o parçaya geçebilirsin. Burada yalnızca inceliyoruz; parçaya tıklaman gerekmiyor."
+        "title": "İlahinin kıtaları arasında geçiş",
+        "body": "Sağ panelde ilahinin kıtalarını temsil eden numaralı düğmeleri görebilirsin. Sunum sırasında istediğin kıtaya geçmek için ilgili numaraya tıklaman yeterli. Şimdi yalnızca bu alanı tanıyoruz."
       },
       "reorder": {
-        "title": "Slaytları yeniden sırala",
-        "body": "Aydınlatılan örnek slaytı diğer aydınlatılan slaytın üzerine sürükleyip bırak. Yerleri gerçekten değiştiğinde bu tek alıştırma tamamlanır."
+        "title": "Slaytların sırasını değiştir",
+        "body": "Slaytlarını istediğin sıraya yerleştirebilirsin. Vurgulanan örnek slaytı tutup diğer vurgulanan slaydın üzerine sürükleyerek bırak. Sıralama değiştiğinde bu adımı tamamlayacaksın."
       },
       "hymns-font": {
-        "title": "İlahinin yazı boyutu",
-        "body": "Seçili ilahinin yazı boyutunu sağdaki Yazı boyutu alanından değiştirebilirsin. Daha büyük sayı yazıyı büyütür, daha küçük sayı küçültür. Bu adım açıklamadır; değişiklik yapman gerekmiyor."
+        "title": "İlahi sözlerinin boyutunu ayarla",
+        "body": "Sağ paneldeki Yazı boyutu alanından ilahi sözlerinin büyüklüğünü değiştirebilirsin. Değeri artırmak yazıyı büyütür, azaltmak ise küçültür. Bu adımda değişiklik yapmana gerek yok."
       },
       "image-tools": {
-        "title": "İki düzenleme yolu",
-        "body": "Resimler sağ panelden ve aydınlatılan kalem düğmesinin açtığı Slayt Editör’den düzenlenebilir. Slayt Editör daha ayrıntılı seçenekler sunar; video düzenleme işlemleri de bu panelden yapılabilir. Örnek resimde yalnızca sığdırma ve gri tonlama yapacağız."
+        "title": "Görselleri nasıl düzenleyebilirsin?",
+        "body": "Görsellerini sağdaki özellikler panelinden hızlıca düzenleyebilirsin. Daha ayrıntılı seçenekler için kalem simgesiyle açılan Slayt Editör bölümünü kullanabilirsin. Video düzenleme seçeneklerine de buradan ulaşabilirsin."
+      },
+      "hymns-online": {
+        "title": "Çevrimiçi ilahiler",
+        "body": "Online İlahiler düğmesiyle çevrimiçi ilahi kaynaklarına ulaşabilir, istediğin ilahileri bulup kütüphanene ekleyebilirsin."
+      },
+      "hymns-author": {
+        "title": "Yazar bilgisini göster",
+        "body": "Yazarı Göster seçeneği, ilahi sözleriyle birlikte yazar adının da slaytta görünüp görünmeyeceğini belirler. Bu özellik, yazar bilgisi bulunan ilahilerde kullanılabilir."
+      },
+      "hymns-mode": {
+        "title": "Parça Modu nasıl çalışır?",
+        "body": "Parça Modu, ilahinin bütün kıtalarını tek slaytta tutar. Sunum sırasında sağ paneldeki numaralı düğmelerle kıtalar arasında geçiş yapabilirsin."
+      },
+      "phone-controls": {
+        "title": "Telefon Kontrolü",
+        "body": "Ana uygulamanın üst araç çubuğundaki Telefon Kontrolü düğmesiyle telefonundan sunumunu yönetebilirsin. Sunumu yönetebilmek için sunumun açıldığı bilgisayar ve telefon aynı ağa bağlı olmalıdır!"
+      },
+      "editor-select": {
+        "title": "Görseli seç",
+        "body": "Vurgulanan örnek görsele tıkla. Sağ panelde seçtiğin görsele ait düzenleme seçenekleri açılacak."
+      },
+      "editor-rotate": {
+        "title": "Görseli döndür",
+        "body": "Sağ paneldeki Döndürme alanına 15 yaz. Görselin slayt üzerinde nasıl döndüğünü görebilirsin."
+      },
+      "editor-save": {
+        "title": "Değişiklikleri kaydet",
+        "body": "Düzenlemeyi tamamladık! Şimdi Kaydet düğmesine tıkla. Değişikliklerin sunuma kaydedildiğinde bu adım tamamlanacak."
+      },
+      "editor-result": {
+        "title": "Düzenlemen kaydedildi!",
+        "body": "Harika! Görseli seçtin, 15° döndürdün ve değişikliğini kaydettin. Düzenlediğin slaytın son halini burada görebilirsin."
       }
     },
     "mapTitle": "Bölüm haritası",

@@ -48,6 +48,9 @@ function wrapApi(api: Record<string, AnyFn>): Record<string, AnyFn> {
 }
 
 contextBridge.exposeInMainWorld('electronAPI', wrapApi({
+  generateGradient: (recipe: unknown, regions: unknown) => ipcRenderer.invoke('gradient:generate', recipe, regions),
+  saveGradient: (token: string) => ipcRenderer.invoke('gradient:save', token),
+  discardGradient: () => ipcRenderer.invoke('gradient:discard'),
   onPracticeWorkspaceChanged: (callback: (value: any) => void) => {
     const listener = (_event: any, value: any) => callback(value);
     ipcRenderer.on('practice:workspace-changed', listener);
@@ -219,6 +222,8 @@ contextBridge.exposeInMainWorld('electronAPI', wrapApi({
   // Soniox real-time STT + translation
 
   sttGetStatus: () => ipcRenderer.invoke('stt:get-status'),
+  sttDeleteApiKey: () => ipcRenderer.invoke('stt:delete-api-key'),
+  openSonioxWebsite: () => ipcRenderer.invoke('soniox:open-website'),
   sttSetApiKey: (key: string) => ipcRenderer.invoke('stt:set-api-key', key),
   sttStart: (config: SttConfig) => ipcRenderer.invoke('stt:start', config),
   sttSendAudio: (chunk: ArrayBuffer | Uint8Array) => ipcRenderer.send('stt:audio', chunk),

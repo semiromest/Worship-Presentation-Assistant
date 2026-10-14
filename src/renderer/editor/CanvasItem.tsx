@@ -223,7 +223,8 @@ export const CanvasItem = memo(function CanvasItem({
 
   if (item.type === 'image') {
     return (
-      <div
+      <div data-editor-item-id={item.id}
+        onClick={event => { if (event.detail === 0) onSelect(item.id); }}
         ref={selfRef}
         tabIndex={0}
         role="button"

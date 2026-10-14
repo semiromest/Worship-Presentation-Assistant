@@ -107,3 +107,15 @@ Ayarlar artık Genel, Sunum, İlahi ve logo, Altyazı ve çeviri, Otomatik kayı
 Tipli ayar tanımı arama ve odak hedeflerini birleştirir. Beş dilde statik ad/açıklama/eş anlamlılar aramada kullanılır; kullanıcı değerleri, anahtarlar ve kayıt adları indekslenmez. Sonuç seçimi ilgili bölüme gider ve kullanılabilir kontrolü odaklar. Gizli paneller ekran okuyucu ve klavye erişimine kapalıdır. Mevcut ayar işlemleri ve IPC/depolama sözleşmeleri değişmez.
 
 Kaynak kodu incelemesi yapıldı; kullanıcı talebiyle test/lint/typecheck/build/uygulama açma yapılmadı. Manuel kabul: 800×600 / 1024×768 / 1366×768 düzeni; kategori değişiminde API taslağı; beş dilde aksan/büyük-küçük harf araması, sonuç odağı, temizleme/Esc, bulunamayan sonuç; gizli panel Tab erişimi; eski ayar kontrollerinin çalışması ve alıştırma Ayarlar hedefi.
+
+## Telefon, ilahi tanıtımları, Slayt Editör ve ayar önizlemesi
+
+Telefon tanıtımı üst araç çubuğundaki Telefon Kontrolü girişini salt okunur gösterir; QR tarama veya bağlantı başlatma adımı yoktur. Alıştırmada aynı düğme görünümü pasiftir; kumanda/paylaşım yetkileri açılmaz. İlahi eklemeden önce Online İlahiler, Yazarı Göster, Parça Modu gerçek düğmeleri kısa metinlerle tanıtılır.
+
+Editör bölümüne ait ayrı örnek görsel hazırlanır. Kullanıcı tuvalde seçer, sağdaki döndürme alanına 15 girer ve mevcut Kaydet ile sunuma işler. Bu üç işlemin ardından gerçek kayıt sonucu gösterilir. Seçim ve taslak açı görünür editörden tipli UI bilgisiyle izlenir; tamamlanma yalnızca kalıcı sunumdaki örnek öğenin 15 derece dönmüş olmasıyla doğrulanır. Kaydetmeden kapanışta kaybolan taslak başarı sayılmaz; yeniden girişte seçim/döndürme tekrar istenir. Mevcut tamamlanmış rehberler geriye döndürülmez.
+
+Müzik kontrolü geçen/toplam süre ve yerel/sarılabilir kaynaklar için seek bar sunar. Sonsuz süreli veya seekable aralığı olmayan akışlarda (mevcut YouTube SABR akışı dahil) sarma pasiftir ve açıklanır. Ses, oynatma/duraklatma ve ses düzeyi değişimleri kaynağı yeniden yüklemez.
+
+Soniox bilgisi resmî https://soniox.com/docs/translation/get-started kaynağına dayanır; sabit resmî site açma IPC’si yalnızca normal kontrol penceresinin ana frame isteğini kabul eder. Anahtar silme, aynı gönderen kontrolü ve aktif oturum yasağıyla yerel anahtar deposundan yapılır; Soniox hesabında iptal işlemi değildir. Silme hatası başarı sayılmaz.
+
+İlahi/logo önizlemesi gerçek LivePreview çizimini 1920×1080 referans koordinatlarında üretip tek ölçekle küçültür. Dört satırlık özgün İngilizce metin, örnek yazar ve logo kullanılır; kendi logo ayarları anında yansır. Önizleme sunuma veya mağazaya örnek kayıt yazmaz. Metinler beş dile eklendi. Kullanıcı tercihi doğrultusunda test, lint, typecheck, build, paketleme ve uygulama açma yapılmadı; yalnızca kaynak incelemesi yapıldı.

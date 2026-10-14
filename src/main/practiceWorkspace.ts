@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { assertNoLinks } from './launchPolicy';
 import { recoverPracticeReset, restartPracticeRun } from './practiceReset';
 import { practiceHymns, practiceExercises, exerciseOperation, guideSteps, guideChapters, guideNarrative, guideResultSteps, isGuideResultStep, type GuideResult, type GuideResultStep, type GuideUi, type GuideStep, type GuideObservation, type PracticeGuide, type PracticeExercise, type PracticeWorkspace } from '../shared/practice';
@@ -64,10 +64,12 @@ export function validGuideResult(result: GuideResult | undefined, step: GuideRes
     if (!result.slides.length || result.slides.length !== result.resourceIds.length || result.slides.some(slide => !result.resourceIds.includes(slide.id))) return false;
     if (step === 'delete-result') return result.slides.length === 1 && result.afterCount === result.beforeCount - 1 && Array.isArray(result.remaining);
     if (step === 'image-edit-result') return result.beforeCount === result.afterCount && result.slides.length === 1 && result.slides[0].type === 'image' && result.slides[0].styles?.objectFit === 'contain' && result.slides[0].styles?.imageGrayscale === 1;
+    if (step === 'editor-result') return result.beforeCount === result.afterCount && result.slides.length === 1 && result.slides[0].type === 'image' && result.slides[0].items?.length === 1 && result.slides[0].items[0].rotation === 15;
     if (result.afterCount <= result.beforeCount) return false;
     if (step === 'add-result') return result.slides.every(slide => slide.type === 'text');
     if (step === 'bible-result') return result.slides.every(slide => slide.type === 'text') && result.slides.some(slide => slide.content.includes(sampleVerse));
     if (step === 'hymns-result') return result.slides.every(isPracticeHymnSlide);
+
     if (step === 'media-result') return result.slides.every(slide => slide.type === 'image');
     return result.slides.every(slide => slide.type === 'countdown' && JSON.parse(slide.content).totalSeconds >= 120 && JSON.parse(slide.content).totalSeconds < 180);
   } catch { return false; }
@@ -75,8 +77,10 @@ export function validGuideResult(result: GuideResult | undefined, step: GuideRes
 function validateUi(ui: GuideUi) {
   if (!ui || typeof ui !== 'object' || Array.isArray(ui)) throw new Error('Invalid UI state');
   for (const [key,value] of Object.entries(ui)) {
-    if (['book','chapter','minutes'].includes(key)) { if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > 200) throw new Error('Invalid UI number'); }
-    else if (!['bibleReady','chapterChosen','verse','sourceMenu','mediaMenu','imageReady','imageImported'].includes(key) || typeof value !== 'boolean') throw new Error('Invalid UI flag');
+    if (['editorSlideId','editorItemId'].includes(key)) { if (typeof value !== 'string' || value.length > 200) throw new Error('Invalid editor target'); }
+    else if (key === 'editorRotation') { if (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) > 360) throw new Error('Invalid rotation'); }
+    else if (['book','chapter','minutes'].includes(key)) { if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > 200) throw new Error('Invalid UI number'); }
+    else if (!['bibleReady','chapterChosen','verse','sourceMenu','mediaMenu','imageReady','imageImported','editorSelected'].includes(key) || typeof value !== 'boolean') throw new Error('Invalid UI flag');
   }
 }
 function newGuide(): PracticeGuide { return { version: 3, id: randomUUID(), step: 'welcome', paused: true, skipped: [] }; }
@@ -103,6 +107,10 @@ export function exerciseSucceeded(state: PracticeWorkspace, next: Presentation, 
     case 'media': return added.some(slide => slide.type === 'image' && (() => { try { return path.resolve(fileURLToPath(slide.mediaUrl ?? '')) === path.resolve(sampleMedia); } catch { return false; } })());
     case 'bible': return !!active.importedBible && added.some(slide => slide.type === 'text' && slide.content.includes(sampleVerse));
     case 'hymns': return added.some(slide => isPracticeHymnSlide(slide) && (!slide.partsMode || slide.parts?.length === 2));
+    case 'canvas-edit': {
+      const sample = next.slides.find(slide => slide.id === active.target);
+      return active.baseline.length === next.slides.length && active.baseline.every(id => next.slides.some(slide => slide.id === id)) && sample?.type === 'image' && sample.items?.length === 1 && sample.items[0].id === active.peer && sample.items[0].rotation === 15 && sample.items[0].mediaUrl === pathToFileURL(sampleMedia).href;
+    }
     case 'image-edit': return active.baseline.length === next.slides.length && active.baseline.every(id => next.slides.some(slide => slide.id === id)) && next.slides.some(slide => slide.id === active.target && slide.type === 'image' && slide.mediaUrl === state.deck.slides.find(original => original.id === active.target)?.mediaUrl && slide.styles?.objectFit === 'contain' && slide.styles?.imageGrayscale === 1);
     case 'countdown': return added.some(slide => { try { return slide.type === 'countdown' && JSON.parse(slide.content).totalSeconds > 0; } catch { return false; } });
     default: return false;
@@ -190,7 +198,18 @@ export function createPracticeWorkspace(profile: string, progress: ReturnType<ty
     else if (step === 'hymns-font') { /* Keep the selected hymn for the explanation. */ }
     else delete state.guide.focusSlideId;
     delete state.guide.result;
-    state.active = ['image-fit','image-grayscale'].includes(step) && previousSession?.exercise === 'image-edit' ? previousSession : null;
+    state.active = ['image-fit','image-grayscale'].includes(step) && previousSession?.exercise === 'image-edit' || ['editor-intro','editor-select','editor-rotate','editor-save'].includes(step) && previousSession?.exercise === 'canvas-edit' ? previousSession : null;
+    if (['nav-editor','editor-intro'].includes(step) && !state.active) {
+      const itemId = 'practice-editor-' + randomUUID();
+      const item = { id:itemId,type:'image' as const,mediaUrl:pathToFileURL(media).href,x:25,y:25,width:50,height:50,rotation:0,zIndex:0,styles:{},imageStyles:{objectFit:'contain' as const},visible:true,locked:false };
+      const sample = { id:randomUUID(),type:'image' as const,content:label,styles:{fontSize:48,textColor:'#ffffff',backgroundColor:'#0f172a'},items:[item] };
+      state.deck.slides.push(sample);
+      state.active = {id:randomUUID(),exercise:'canvas-edit',deckId:state.deck.id,baseline:state.deck.slides.map(slide=>slide.id),target:sample.id,peer:itemId,fingerprint:JSON.stringify(sample),paused:false};
+      assertNoLinks(assets); assertNoLinks(media);
+      await fs.mkdir(assets,{recursive:true});
+      try { await fs.access(media); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; await fs.writeFile(media,'<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#1e3a8a"/><circle cx="320" cy="180" r="90" fill="#fbbf24"/></svg>'); }
+      await progress.setExerciseStatus('canvas-edit','inProgress');
+    }
     const exercises: Partial<Record<GuideStep, PracticeExercise>> = { reorder: 'slide-reorder', 'image-select': 'image-edit', add: 'slide-add', select: 'slide-delete', 'bible-source':'bible','media-menu':'media','hymns-add':'hymns','countdown-duration':'countdown',save:'presentations' };
     const exercise = exercises[step];
     if (exercise) {
@@ -241,6 +260,14 @@ export function createPracticeWorkspace(profile: string, progress: ReturnType<ty
       await progress.recordExerciseResult({ exercise:'slide-delete',operation:'owned-slide-deleted',sessionId:task.id,resourceId:task.target! });
       await advance('nav-bible',label);
     }
+    else if (step === 'editor-select' && task?.exercise === 'canvas-edit' && input.tab === 'editor' && ui.editorSlideId === task.target && ui.editorItemId === task.peer && ui.editorSelected) state.guide.step = 'editor-rotate';
+    else if (step === 'editor-rotate' && task?.exercise === 'canvas-edit' && ui.editorSlideId === task.target && ui.editorItemId === task.peer && ui.editorRotation === 15) state.guide.step = 'editor-save';
+    else if (step === 'editor-save' && task?.exercise === 'canvas-edit' && succeeded) {
+      const edited = next.slides.find(slide => slide.id === task.target)!;
+      await showResult('editor-result', {exercise:'canvas-edit',operation:'canvas-image-edited',sessionId:task.id,resourceId:edited.id,runId:state.runId!,deckId:next.id!,resourceIds:[edited.id],slides:[edited],beforeCount:next.slides.length,afterCount:next.slides.length});
+    }
+    else if (['editor-rotate','editor-save'].includes(step) && task?.exercise === 'canvas-edit' && ui.editorSlideId === task.target && (!ui.editorSelected || ui.editorItemId !== task.peer)) state.guide.step = 'editor-select';
+    else if (step === 'editor-save' && task?.exercise === 'canvas-edit' && ui.editorSlideId === task.target && ui.editorRotation !== 15) state.guide.step = 'editor-rotate';
     else if (step === 'image-select' && task?.target && input.selected.length === 1 && input.selected[0] === task.target) state.guide.step = 'image-tools';
     else if (step === 'image-fit' && task?.target && next.slides.find(slide => slide.id === task.target)?.styles?.objectFit === 'contain') state.guide.step = 'image-grayscale';
     else if (step === 'image-grayscale' && task && succeeded) {
@@ -325,7 +352,7 @@ export function createPracticeWorkspace(profile: string, progress: ReturnType<ty
         const deck=validatePracticeDeck(input.deck);if(deck.id!==state.deck.id)throw new Error('Practice presentation changed');state.deck=deck;
         const from=guideSteps.indexOf(state.guide.step),to=guideSteps.indexOf(destination!);
         const skipped=to>from?guideSteps.slice(from,to):[];
-        const taskSteps:Partial<Record<GuideStep,PracticeExercise>>={reorder:'slide-reorder','image-select':'image-edit',add:'slide-add',select:'slide-delete','bible-source':'bible','media-menu':'media','hymns-add':'hymns','countdown-duration':'countdown',save:'presentations'};
+        const taskSteps:Partial<Record<GuideStep,PracticeExercise>>={'nav-editor':'canvas-edit','editor-intro':'canvas-edit',reorder:'slide-reorder','image-select':'image-edit',add:'slide-add',select:'slide-delete','bible-source':'bible','media-menu':'media','hymns-add':'hymns','countdown-duration':'countdown',save:'presentations'};
         for(const step of skipped){if(!state.guide.skipped.includes(step))state.guide.skipped.push(step);if(taskSteps[step])await progress.setExerciseStatus(taskSteps[step]!,'skipped');}
         if(to>from&&state.active)await progress.setExerciseStatus(state.active.exercise,'skipped');
         state.guide.id=randomUUID();state.guide.ui={};await advance(destination!,label);state.guide.paused=true;if(state.active)state.active.paused=true;
@@ -354,7 +381,7 @@ export function createPracticeWorkspace(profile: string, progress: ReturnType<ty
       if (action === 'skip' && state.guide.step === 'save') next = 'done';
       if (action === 'skip' && (next === 'delete' || next === 'delete-result')) { state.guide.skipped.push('delete'); next = 'nav-bible'; }
       const group = state.active?.exercise;
-      const dependencies: Partial<Record<PracticeExercise, GuideStep>> = { 'slide-reorder':'select', 'image-edit':'nav-hymns', bible:'nav-media',media:'nav-hymns',hymns:'nav-countdown',countdown:'nav-screen' };
+      const dependencies: Partial<Record<PracticeExercise, GuideStep>> = { 'slide-reorder':'select', 'image-edit':'nav-hymns','canvas-edit':'nav-settings', bible:'nav-media',media:'nav-hymns',hymns:'nav-countdown',countdown:'nav-screen' };
       if (action === 'skip' && group && dependencies[group]) {
         const end = guideSteps.indexOf(dependencies[group]!);
         for (const skipped of guideSteps.slice(from, end)) if (!state.guide.skipped.includes(skipped)) state.guide.skipped.push(skipped);

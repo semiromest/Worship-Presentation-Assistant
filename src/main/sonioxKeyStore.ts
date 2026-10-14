@@ -37,8 +37,8 @@ export function setApiKey(key: string): void {
 export function deleteApiKey(): void {
   try {
     fs.unlinkSync(KEY_FILE);
-  } catch {
-    // Nothing stored — fine.
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
 }
 

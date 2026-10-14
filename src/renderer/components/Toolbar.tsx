@@ -250,6 +250,7 @@ export default function Toolbar({
         <div className="w-px h-6 bg-white/10 mx-1" />
 
         </>}
+        {practice && <button type="button" disabled data-guide-anchor="phone-controls" aria-label={t('common.remoteControl')} className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/60"><Smartphone className="h-4 w-4" aria-hidden="true" /><span>{t('common.remoteControl')}</span></button>}
         <button
           onClick={() => dispatchUndo({ type: 'UNDO' })}
           disabled={undoState.past.length === 0}

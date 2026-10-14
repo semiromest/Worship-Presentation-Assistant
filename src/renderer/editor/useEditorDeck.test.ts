@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Slide, SlideItem } from '../types';
 import { createEditorHistory, editorDeckReducer, EDITOR_HISTORY_LIMIT } from './useEditorDeck';
-import { createDraft } from './slideDraft';
+import { createDraft, applyDraftsToDeck } from './slideDraft';
 import { DEFAULT_TEXT_STYLE } from './editorUtils';
 
 const slide = (overrides: Partial<Slide> = {}): Slide => ({
@@ -226,4 +226,23 @@ test('a mutate action that changes nothing is a true no-op', () => {
     mutate: () => null,
   });
   assert.equal(state, start);
+});
+
+test('background-only drafts preserve legacy layout and parts through sync and undo', () => {
+ const a=slide({id:'a'}), b=slide({id:'b',partsMode:true,parts:['One','Two']});
+ const deck={id:'deck',name:'Test',zoom:1,slides:[a,b]};
+ let state=createEditorHistory(a);
+ const drafts=new Map(state.session.drafts);
+ for(const s of [a,b]) drafts.set(s.id,{...createDraft(s),backgroundOnly:true,styles:{...s.styles,backgroundImage:'gradient.jpg'}});
+ state=editorDeckReducer(state,{type:'bulk',drafts,touched:['a','b'],backgroundOnly:true,notice:{key:'done',tone:'info'}});
+ state=editorDeckReducer(state,{type:'sync',deck:{...deck,name:'Changed elsewhere'},changedIds:new Set()});
+ assert.ok(state.session.touchedIds.has('b'));
+ const result=applyDraftsToDeck(deck,state.session.drafts)!;
+ assert.equal(result.slides[0].items,undefined);
+ assert.equal(result.slides[1].partsMode,true);
+ assert.equal(result.slides[1].styles?.backgroundImage,'gradient.jpg');
+ state=editorDeckReducer(state,{type:'undo'});
+ assert.equal(state.session.touchedIds.size,0);
+ state=editorDeckReducer(state,{type:'redo'});
+ assert.ok(state.session.touchedIds.has('b'));
 });

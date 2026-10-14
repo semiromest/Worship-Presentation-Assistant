@@ -3,6 +3,7 @@ import { FolderOpen, Loader2, Music, Pause, Play, RefreshCw, Search, Square, X }
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../state/useStore';
 import { cn, toFileUrl } from '../utils';
+import AudioSeekBar from './AudioSeekBar';
 import type { YouTubeMusicResult } from '../../shared/youtubeMusic';
 
 export default function BackgroundMusicPopover() {
@@ -160,6 +161,7 @@ export default function BackgroundMusicPopover() {
             </div>
           </>}
           {(track || loading) && <div className="mt-2 flex gap-2 items-center text-[11px] text-white/60" data-testid="youtube-music-status">{loading && <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />}<span className="truncate">{loading ? t('settings.youtubeLoading') : track?.title}</span></div>}
+          <div className="mt-3"><AudioSeekBar audioRef={audioRef} trackKey={current} /></div>
           <div className="mt-2 pt-2 border-t border-white/10 flex gap-2">
             <button type="button" data-testid="background-music-play-pause" onClick={() => setPlaying(!playing)} disabled={!current || loading} className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1.5 text-xs disabled:opacity-30">{playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}{playing ? t('common.pause') : t('common.play')}</button>
             <button type="button" data-testid="background-music-stop" onClick={stop} disabled={!current && !loading} className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1.5 text-xs disabled:opacity-30"><Square className="w-3.5 h-3.5" />{t('common.stop')}</button>

@@ -21,6 +21,7 @@ perf/
 src/main/driveCredentials.ts
 
 # Planning / scratch files
+docs/
 docs/superpowers/plans/
 todo.txt
 

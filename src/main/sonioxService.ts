@@ -3,7 +3,7 @@ import { SonioxNodeClient, type RealtimeSttSession } from '@soniox/node';
 import crypto from 'node:crypto';
 import { CaptionTimeline } from '../shared/captions';
 import { SttSessionGroup, finishSttSession } from './sttSessionGroup';
-import { getApiKey as keyStoreGetApiKey, hasApiKey as keyStoreHasApiKey, keyHint as keyStoreKeyHint, setApiKey as keyStoreSetApiKey } from './sonioxKeyStore';
+import { getApiKey as keyStoreGetApiKey, hasApiKey as keyStoreHasApiKey, keyHint as keyStoreKeyHint, setApiKey as keyStoreSetApiKey, deleteApiKey as keyStoreDeleteApiKey } from './sonioxKeyStore';
 import type { SttConfig, SttErrorCode, SttEvent, SttSessionConfig, SttSessionStatus, SttStatus, SttToken } from '../shared/stt';
 
 const MODEL = 'stt-rt-v5';
@@ -183,7 +183,15 @@ function getStatus(): SttStatus {
   return { hasKey: keyStoreHasApiKey(), keyHint: keyStoreKeyHint(), sessionStatus: sessionState, sessionId, config: sessionConfig, captions: timeline?.snapshot() };
 }
 
-export function registerSttIpc(): void {
+export function registerSttIpc(getControlWindow: () => BrowserWindow | null): void {
+  ipcMain.handle('stt:delete-api-key', (event) => {
+    const control = getControlWindow();
+    if (!control || control.isDestroyed() || event.sender !== control.webContents || event.senderFrame !== control.webContents.mainFrame)
+      return { ok: false, code: 'UNKNOWN' as SttErrorCode };
+    if (sessions.size > 0 || closing) return { ok: false, code: 'SESSION_ACTIVE' as SttErrorCode };
+    try { keyStoreDeleteApiKey(); return { ok: true }; }
+    catch { return { ok: false, code: 'UNKNOWN' as SttErrorCode }; }
+  });
   ipcMain.handle('stt:get-status', () => getStatus());
   ipcMain.handle('stt:clear', () => {
     timeline = new CaptionTimeline(crypto.randomUUID(), sessionConfig?.translationEnabled ? sessionConfig.targetLanguages[0] : ORIGINAL_KEY);

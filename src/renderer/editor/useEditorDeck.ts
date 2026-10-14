@@ -28,6 +28,7 @@ import {
   type SelectModifiers,
 } from './editorSelection';
 import { normalizeItems, updateItemAt } from './editorUtils';
+import { backgroundPatch } from '../gradientBackground';
 
 /** Where an edit is applied: only the working slide, or every selected slide. */
 export type EditScope = 'active' | 'selected';
@@ -92,6 +93,7 @@ export type EditorDeckAction =
     }
   | {
       type: 'bulk';
+      backgroundOnly?: boolean;
       drafts: Map<string, SlideDraft>;
       touched: string[];
       selection?: RailSelection;
@@ -177,10 +179,10 @@ export function editorDeckReducer(state: HistoryState, action: EditorDeckAction)
         ...value,
         drafts: new Map([...value.drafts].flatMap(([id, draft]) => {
           const slide = byId.get(id);
-          if (!slide || !isEditorEditableSlide(slide)) return [];
+          if (!slide || (!isEditorEditableSlide(slide) && !(slide.type === 'text' && draft.backgroundOnly))) return [];
           return [[id, !value.touchedIds.has(id) && action.changedIds.has(id) ? createDraft(slide) : draft] as const];
         })),
-        touchedIds: new Set([...value.touchedIds].filter((id) => { const slide = byId.get(id); return !!slide && isEditorEditableSlide(slide); })),
+        touchedIds: new Set([...value.touchedIds].filter((id) => { const slide = byId.get(id); return !!slide && (isEditorEditableSlide(slide) || (slide.type === 'text' && value.drafts.get(id)?.backgroundOnly)); })),
         itemSelection: new Map([...value.itemSelection].filter(([id]) => byId.has(id))),
       });
       return { ...state, session: sync(session), past: state.past.map(sync), future: state.future.map(sync),
@@ -265,7 +267,7 @@ export function editorDeckReducer(state: HistoryState, action: EditorDeckAction)
       if (!nextDraft || nextDraft === draft) return state;
       const nextSession: EditorSession = {
         ...session,
-        drafts: withDraft(session.drafts, action.slide.id, nextDraft),
+        drafts: withDraft(session.drafts, action.slide.id, { ...nextDraft, backgroundOnly: false }),
         touchedIds: withTouched(session.touchedIds, [action.slide.id]),
         notice: null,
       };
@@ -279,7 +281,7 @@ export function editorDeckReducer(state: HistoryState, action: EditorDeckAction)
       const { items, pastedIds } = pasteItems(draft.items, action.clipboardItems, { offset });
       const nextSession: EditorSession = {
         ...session,
-        drafts: withDraft(session.drafts, action.slide.id, { ...draft, items }),
+        drafts: withDraft(session.drafts, action.slide.id, { ...draft, items, backgroundOnly: false }),
         touchedIds: withTouched(session.touchedIds, [action.slide.id]),
         itemSelection: withItemSelection(session.itemSelection, action.slide.id, pastedIds),
         notice: null,
@@ -291,9 +293,14 @@ export function editorDeckReducer(state: HistoryState, action: EditorDeckAction)
       if (action.drafts === session.drafts && action.touched.length === 0 && !action.selection) {
         return { ...state, session: { ...session, notice: action.notice } };
       }
+      const nextDrafts = new Map(action.drafts);
+      if (!action.backgroundOnly) for (const id of action.touched) {
+        const draft = nextDrafts.get(id);
+        if (draft?.backgroundOnly) nextDrafts.set(id, { ...draft, backgroundOnly: false });
+      }
       const nextSession: EditorSession = {
         ...session,
-        drafts: action.drafts,
+        drafts: nextDrafts,
         touchedIds: withTouched(session.touchedIds, action.touched),
         selection: action.selection ?? session.selection,
         activeId: action.selection?.activeId ?? session.activeId,
@@ -752,7 +759,7 @@ export function useEditorDeck({ deck, initialSlide, editableOnly = false }: UseE
           type: 'mutateSlide',
           slide: activeSlide,
           history: true,
-          mutate: (draft) => ({ ...draft, styles: { ...draft.styles, ...updates } }),
+          mutate: (draft) => ({ ...draft, styles: backgroundPatch(draft.styles, updates) }),
         });
         return;
       }
@@ -767,7 +774,7 @@ export function useEditorDeck({ deck, initialSlide, editableOnly = false }: UseE
           continue;
         }
         const draft = drafts.get(slideId) ?? createDraft(slide);
-        drafts.set(slideId, { ...draft, styles: { ...draft.styles, ...updates } });
+        drafts.set(slideId, { ...draft, styles: backgroundPatch(draft.styles, updates) });
         touched.push(slideId);
       }
       dispatch({
@@ -785,6 +792,19 @@ export function useEditorDeck({ deck, initialSlide, editableOnly = false }: UseE
     [activeSlide, session.drafts, slideById]
   );
   const setNotice = useCallback((notice: EditorNotice | null) => dispatch({ type: 'notice', notice }), []);
+  const applyBackground = useCallback((updates: Record<string, unknown>, ids: string[]) => {
+    const drafts = new Map(session.drafts);
+    const touched: string[] = [];
+    for (const id of ids) {
+      const slide = slideById.get(id);
+      if (!slide || slide.type !== 'text') continue;
+      const draft = drafts.get(id) ?? createDraft(slide);
+      drafts.set(id, { ...draft, styles: backgroundPatch(draft.styles, updates),
+        backgroundOnly: draft.backgroundOnly || (!slide.items?.length && !session.touchedIds.has(id)) || !!slide.partsMode });
+      touched.push(id);
+    }
+    dispatch({ type: 'bulk', drafts, touched, backgroundOnly: true, notice: { key:'common.editorScopeApplied', count:touched.length, tone:'info' } });
+  }, [session.drafts, session.touchedIds, slideById]);
 
   // ── History ────────────────────────────────────────────────────────────────
 
@@ -851,6 +871,7 @@ export function useEditorDeck({ deck, initialSlide, editableOnly = false }: UseE
     applySelectionStyleToSlides,
     applyItemUpdate,
     applySlideStylePatch,
+    applyBackground,
     setNotice,
 
     // history & save

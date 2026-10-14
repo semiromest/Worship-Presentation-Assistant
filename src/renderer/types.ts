@@ -181,8 +181,12 @@ export interface Slide {
     letterSpacing?: number;
     textDecoration?: string;
     backgroundImage?: string;
+    /** Distinguishes a newly created default fill from a deliberately chosen background. */
+    backgroundExplicit?: boolean;
     backgroundVideo?: string;
     backgroundGradient?: GradientStyle;
+    generatedBackground?: import('../shared/generatedBackground').GeneratedBackground;
+    generatedGroupBackground?: { image: string; recipe: import('../shared/generatedBackground').GeneratedBackground };
     backgroundBlur?: number;
     objectFit?: 'cover' | 'contain' | 'fill';
     fontFamily?: string;

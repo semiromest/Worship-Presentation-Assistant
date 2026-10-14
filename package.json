@@ -1,6 +1,6 @@
 {
   "name": "worship-presentation-assistant",
-  "version": "1.4.17",
+  "version": "1.4.18",
   "main": "dist-electron/main.js",
   "description": "Worship Presentation Assistant - Simple Worship Presentation App",
   "author": "IPCA",
@@ -25,7 +25,8 @@
     "test:tour:e2e": "playwright test",
     "lint:tour": "eslint \"src/renderer/components/Tour/**/*.{ts,tsx}\" src/renderer/state/useTourStore.ts src/main/tourProfile.ts src/main/tourProfile.test.ts src/main/isolatedLaunch.ts --max-warnings 0 scripts/check-tour-capture.cjs scripts/check-tour-capture.test.cjs tests/tour/packaged.spec.cjs playwright.packaged.config.cjs src/main/launchPolicy.ts src/main/launchPolicy.test.ts src/main/practicePolicy.ts src/main/practiceProgress.ts src/main/practiceProgress.test.ts src/shared/practice.ts src/renderer/components/PracticePanel.tsx src/renderer/hooks/usePractice.ts src/main/practiceSession.ts src/main/practiceWorkspace.ts src/main/practiceWorkspace.test.ts src/renderer/components/PracticeRunner.tsx src/renderer/components/PracticeSpotlight.tsx src/renderer/components/Tour/guideBoundary.ts tests/tour/guide-spike.tsx tests/tour/guided.spec.cjs tests/tour/guide-flow.cjs src/renderer/ScriptureBrowser.tsx src/renderer/MediaLoopTab.tsx src/renderer/CountdownTab.tsx src/renderer/PresentationsTab.tsx src/main/practiceReset.ts src/shared/practiceMerge.ts src/renderer/components/SettingsTab.tsx src/renderer/components/CheatsheetModal.tsx src/renderer/components/PracticeResult.tsx src/main/practiceResult.test.ts",
     "test:tour:packaged": "playwright test --config playwright.packaged.config.cjs",
-    "test:tour:isolation": "playwright test --config playwright.packaged.config.cjs --grep \"practice gate\""
+    "test:tour:isolation": "playwright test --config playwright.packaged.config.cjs --grep \"practice gate\"",
+    "test:gradients": "tsx --test src/shared/generatedBackground.test.ts src/renderer/gradientMedia.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -41,6 +42,7 @@
     "googlevideo": "^4.1.1",
     "i18next": "^26.3.1",
     "i18next-browser-languagedetector": "^8.2.1",
+    "jpeg-js": "0.4.4",
     "lucide-react": "^0.363.0",
     "motion": "^13.4.0",
     "pptx-glimpse": "^0.10.4",

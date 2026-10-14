@@ -1,0 +1,6 @@
+/* Paint only: emphasis must never alter target size, position or hit testing. */
+[data-practice-highlight] {
+  outline: 3px solid #fbbf24 !important;
+  outline-offset: 4px;
+  box-shadow: 0 0 0 6px rgb(251 191 36 / 12%), 0 0 22px rgb(251 191 36 / 35%) !important;
+}
