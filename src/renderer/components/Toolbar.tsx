@@ -30,6 +30,7 @@ import BackgroundMusicPopover from './BackgroundMusicPopover';
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 
 interface ToolbarProps {
+  addYouTubeMusicSlide: (track: import('../../shared/youtubeMusic').YouTubeMusicResult) => void;
   moveSelectedSlides: (direction: -1 | 1) => void;
   deleteSelectedSlides: () => void;
   duplicateSelectedSlides: () => void;
@@ -47,6 +48,7 @@ export default function Toolbar({
   closeLive,
   openOutput,
   closeOutput,
+  addYouTubeMusicSlide,
 }: ToolbarProps) {
   const { t } = useTranslation();
   const practice = usePractice();
@@ -339,7 +341,7 @@ export default function Toolbar({
           <HelpCircle className="w-4 h-4" aria-hidden="true" />
         </button>
 
-        <BackgroundMusicPopover />
+        <BackgroundMusicPopover onAddSlide={practice ? undefined : addYouTubeMusicSlide} />
 
         <div className="w-px h-6 bg-white/10 mx-1" />
 

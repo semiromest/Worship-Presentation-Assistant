@@ -1,4 +1,5 @@
 import { AnimatedGradientBackground } from '../components/AnimatedGradientBackground';
+import BackgroundDim from '../components/BackgroundDim';
 import type { GeneratedBackground } from '../../shared/generatedBackground';
 import { isHelpActive } from '../components/Tour/tourController';
 import {
@@ -359,6 +360,7 @@ export function CanvasStage({
             />
           )}
 
+          <BackgroundDim value={slideStyles.backgroundDim} />
           {/* Grid */}
           {gridLines}
           {safeAreaEnabled && (

@@ -10,6 +10,7 @@ import { SabrStream } from 'googlevideo/sabr-stream';
 import { buildSabrFormat, EnabledTrackTypes, Logger, LogLevel } from 'googlevideo/utils';
 import { buildURL, getHeaders, USER_AGENT, parseLooseJSON } from 'bgutils-js/utils';
 import { isYouTubeVideoId, type YouTubeSearchResponse, type YouTubePlayResponse } from '../shared/youtubeMusic';
+import { fetchMusicStream } from './musicStreamFetch';
 
 const fetchTimed: typeof fetch = (input, init = {}) => fetch(input, {
   ...init,
@@ -25,7 +26,15 @@ interface ActiveStream {
   reader?: Readable;
   response?: http.ServerResponse;
   finished: boolean;
+  videoId: string;
 }
+
+type PreparedTrack = {
+  info: Awaited<ReturnType<Innertube['getBasicInfo']>>;
+  token: string;
+  url: string;
+  port: number;
+};
 
 /** Anonymous music service. Renderer receives only metadata and a random loopback URL. */
 export class YouTubeMusicService {
@@ -38,6 +47,43 @@ export class YouTubeMusicService {
   private active?: ActiveStream;
   private generation = 0;
   private disposed = false;
+  private prepared = new Map<string, { expires: number; promise: Promise<PreparedTrack> }>();
+
+  /** Warm connection metadata only: never replaces the active stream or starts audio. */
+  private prepareTrack(id: string, refresh = false): Promise<PreparedTrack> {
+    const cached = this.prepared.get(id);
+    if (cached && cached.expires > Date.now() + (refresh ? 45000 : 0)) return cached.promise;
+    this.prepared.delete(id);
+    const entry = { expires: Date.now() + 120000, promise: undefined as unknown as Promise<PreparedTrack> };
+    entry.promise = (async () => {
+      const youtube = await this.getYouTube();
+      // Get a fresh playback context after the token browser is ready. A cold
+      // token setup can take seconds; fetching the context before it ages it.
+      const token = await this.mintToken(id);
+      const [info, port] = await Promise.all([
+        youtube.getBasicInfo(id, { client: 'WEB' }), this.ensureServer(),
+      ]);
+      if (this.disposed) throw new Error('cancelled');
+      if (info.playability_status?.status !== 'OK') throw new Error('unavailable-video');
+      const url = await youtube.session.player!.decipher(info.streaming_data?.server_abr_streaming_url);
+      if (this.disposed) throw new Error('cancelled');
+      entry.expires = Date.now() + 120000;
+      return { info, token, url, port };
+    })().catch(error => {
+      if (this.prepared.get(id) === entry) this.prepared.delete(id);
+      throw error;
+    });
+    this.prepared.set(id, entry);
+    while (this.prepared.size > 4) this.prepared.delete(this.prepared.keys().next().value!);
+    return entry.promise;
+  }
+
+  async prepare(id: unknown): Promise<{ ok: boolean }> {
+    if (this.disposed || !isYouTubeVideoId(id)) return { ok: false };
+    if (this.active?.videoId === id) return { ok: true };
+    try { await this.prepareTrack(id, true); return { ok: !this.disposed }; }
+    catch { return { ok: false }; }
+  }
 
   private getYouTube(): Promise<Innertube> {
     if (!this.youtube) {
@@ -159,25 +205,15 @@ export class YouTubeMusicService {
     return this.serverReady;
   }
 
-  async play(id: unknown): Promise<YouTubePlayResponse> {
-    if (this.disposed || !isYouTubeVideoId(id)) return { ok: false, error: 'invalid-video' };
-    this.stop();
-    const generation = this.generation;
+  private async createAudio(id: string, cancelled: () => boolean): Promise<{ stream: ActiveStream; port: number }> {
     let sabr: SabrStream | undefined;
-    let stage = 'session';
     try {
-      const youtube = await this.getYouTube();
-      if (generation !== this.generation || this.disposed) return { ok: false, error: 'cancelled' };
-      stage = 'player-and-token';
-      const token = await this.mintToken(id);
-      if (generation !== this.generation || this.disposed) return { ok: false, error: 'cancelled' };
-      const [info, port] = await Promise.all([youtube.getBasicInfo(id, { client: 'WEB' }), this.ensureServer()]);
-      if (generation !== this.generation || this.disposed) return { ok: false, error: 'cancelled' };
-      if (info.playability_status?.status !== 'OK') return { ok: false, error: 'unavailable-video' };
-      stage = 'decipher';
-      const url = await youtube.session.player!.decipher(info.streaming_data?.server_abr_streaming_url);
-      if (generation !== this.generation || this.disposed) return { ok: false, error: 'cancelled' };
-      stage = 'stream';
+      const preparation = this.prepareTrack(id);
+      const { info, token, url, port } = await preparation;
+      if (cancelled()) throw new Error('cancelled');
+      // SABR playback context belongs to one stream. Reusing it for a restart can
+      // return an initialization segment followed by no further media parts.
+      if (this.prepared.get(id)?.promise === preparation) this.prepared.delete(id);
       sabr = new SabrStream({
         serverAbrStreamingUrl: url,
         videoPlaybackUstreamerConfig: info.player_config?.media_common_config.media_ustreamer_request_config?.video_playback_ustreamer_config,
@@ -186,26 +222,44 @@ export class YouTubeMusicService {
         fetch: async (input, init) => {
           // Avoid a hot request loop if the server supplies no additional media.
           await new Promise(resolve => setTimeout(resolve, 200));
-          return fetchTimed(input, init);
+          // Bound stalled reads, not the lifetime of a playing audio response.
+          return fetchMusicStream(input, init);
         },
       });
+      const completion: { finished: boolean; stream?: ActiveStream } = { finished: false };
+      sabr.on('finish', () => { completion.finished = true; if (completion.stream) completion.stream.finished = true; });
       const { audioStream, selectedFormats } = await sabr.start({
         enabledTrackTypes: EnabledTrackTypes.AUDIO_ONLY, preferWebM: true, preferOpus: true,
         maxRetries: 2, stallDetectionMs: 15000,
       });
-      if (generation !== this.generation || this.disposed) {
-        try { sabr.abort(); } catch { /* Already closed. */ }
+      if (cancelled()) throw new Error('cancelled');
+      const streamId = randomBytes(24).toString('hex');
+      const stream: ActiveStream = { id: streamId, path: `/audio/${streamId}`, audio: audioStream, videoId: id,
+        mimeType: selectedFormats.audioFormat.mimeType!, sabr, finished: completion.finished };
+      completion.stream = stream;
+      return { stream, port };
+    } catch (error) {
+      try { sabr?.abort(); } catch { /* Completed streams may already be closed. */ }
+      throw error;
+    }
+  }
+
+  async play(id: unknown): Promise<YouTubePlayResponse> {
+    if (this.disposed || !isYouTubeVideoId(id)) return { ok: false, error: 'invalid-video' };
+    this.stop();
+    const generation = this.generation;
+    const cancelled = () => generation !== this.generation || this.disposed;
+    try {
+      const source = await this.createAudio(id, cancelled);
+      if (cancelled()) {
+        try { source.stream.sabr.abort(); } catch { /* Already closed. */ }
         return { ok: false, error: 'cancelled' };
       }
-      const streamId = randomBytes(24).toString('hex');
-      const stream: ActiveStream = { id: streamId, path: `/audio/${streamId}`, audio: audioStream,
-        mimeType: selectedFormats.audioFormat.mimeType!, sabr, finished: false };
-      sabr.on('finish', () => { stream.finished = true; });
-      this.active = stream;
-      return { ok: true, streamId, url: `http://127.0.0.1:${port}${stream.path}` };
+      this.active = source.stream;
+      return { ok: true, streamId: source.stream.id, url: `http://127.0.0.1:${source.port}${source.stream.path}` };
     } catch (error) {
-      console.warn('[youtube-music]', stage, error instanceof Error ? error.message.replace(/https?:\/\/\S+/g, '[URL]').slice(0, 180) : 'failed');
-      try { sabr?.abort(); } catch { /* Completed streams may already be closed. */ }
+      this.prepared.delete(id);
+      console.warn('[youtube-music] play', error instanceof Error ? error.message.replace(/https?:\/\/\S+/g, '[URL]').slice(0, 180) : 'failed');
       return { ok: false, error: generation !== this.generation ? 'cancelled' : 'play-failed' };
     }
   }
@@ -221,6 +275,7 @@ export class YouTubeMusicService {
 
   dispose(): void {
     this.disposed = true;
+    this.prepared.clear();
     this.stop();
     if (this.tokenWindow && !this.tokenWindow.isDestroyed()) this.tokenWindow.destroy();
     this.tokenWindow = undefined;

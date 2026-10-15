@@ -238,7 +238,7 @@ const SlideBadges = memo(({ slide, index, isSelected, isLive }: {
 }) => {
   const { t } = useTranslation();
   const showGroup = slide.group;
-  const showType = slide.type !== 'text';
+  const showType = slide.type !== 'text' || !!slide.youtubeMusic;
   const groupColor = slide.group?.color;
   const showBadges = showGroup || showType || isSelected || isLive;
 
@@ -276,7 +276,7 @@ const SlideBadges = memo(({ slide, index, isSelected, isLive }: {
       )}
 
       {showType && (
-        <Badge>{slide.type}</Badge>
+        <Badge>{slide.youtubeMusic ? t('settings.youtubeMusicSlideLabel') : slide.type}</Badge>
       )}
 
       {isLive && (

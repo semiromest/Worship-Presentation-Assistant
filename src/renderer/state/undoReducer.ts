@@ -83,6 +83,8 @@ function slideHasChanged(a: Slide, b: Slide): boolean {
   if (a.type !== b.type) return true;
   if (a.content !== b.content) return true;
   if (a.mediaUrl !== b.mediaUrl) return true;
+    if (!shallowEqual(a.youtubeMusic, b.youtubeMusic)) return true;
+    if (!shallowEqual(a.musicSettings, b.musicSettings)) return true;
   if (a.thumbnailUrl !== b.thumbnailUrl) return true;
   if (!shallowEqual(a.videoPlayback, b.videoPlayback)) return true;
   if (!shallowEqual(a.videoOverlays ?? [], b.videoOverlays ?? [])) return true;

@@ -16,6 +16,7 @@ export interface GradientDraft {
   hash: string;
 }
 export interface GradientGeneratorProps {
+  label?: string;
   slides: Slide[];
   activeId: string;
   selectedIds: string[];
@@ -31,7 +32,7 @@ export function GradientButton(props: GradientGeneratorProps) {
         className="w-full rounded-lg border border-violet-400/30 bg-violet-500/15 px-3 py-2 text-sm text-violet-100 hover:bg-violet-500/25"
         onClick={() => setOpen(true)}
       >
-        {t('gradient.open')}
+        {props.label ?? t('gradient.open')}
       </button>
       {open && <GradientGenerator {...props} onClose={() => setOpen(false)} />}
     </>

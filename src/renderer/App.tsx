@@ -151,6 +151,7 @@ export default function App() {
     createNewPresentation,
     handleSendToLive,
     handleMediaAdd,
+    handleYouTubeMusicAdd,
     handleAddAllMedia,
     handleScreenAdd,
     handleQrSlideAdd,
@@ -421,6 +422,7 @@ export default function App() {
           moveSelectedSlides={moveSelectedSlides}
           deleteSelectedSlides={deleteSelectedSlides}
           duplicateSelectedSlides={duplicateSelectedSlides}
+          addYouTubeMusicSlide={handleYouTubeMusicAdd}
           openLive={openLive}
           closeLive={closeLive}
           openOutput={openOutput}

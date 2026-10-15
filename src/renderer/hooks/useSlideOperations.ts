@@ -16,6 +16,8 @@ import { parseCountdownContent, serializeCountdownContent, CountdownSlideData } 
 import { splitHymnLyrics } from '../hymnSplit';
 import { findLockedSlideIndex } from '../slideLock';
 import { playSfx } from '../sfx';
+import { isYouTubeMusicResult, type YouTubeMusicResult } from '../../shared/youtubeMusic';
+import { musicGain } from '../musicCustomization';
 
 export const createSlide = (type: Slide['type'], overrides: Partial<Slide> = {}): Slide => ({
   id: makeSlideId(),
@@ -339,6 +341,11 @@ export function useSlideOperations() {
           id: typeof s.id === 'string' ? s.id : `${i + 1}`,
           type: ['image', 'video', 'text', 'screen', 'countdown', 'loop', 'captions'].includes(s.type) ? s.type : 'text',
           content: typeof s.content === 'string' ? s.content : '',
+          youtubeMusic: isYouTubeMusicResult(s.youtubeMusic)
+            ? { id: s.youtubeMusic.id, title: s.youtubeMusic.title, duration: s.youtubeMusic.duration }
+            : undefined,
+          musicSettings: s.musicSettings && typeof s.musicSettings === 'object'
+            ? { volume: musicGain(s.musicSettings.volume) } : undefined,
           mediaUrl: typeof s.mediaUrl === 'string' ? s.mediaUrl : undefined,
           thumbnailUrl: typeof s.thumbnailUrl === 'string' ? s.thumbnailUrl : undefined,
           loopItems: Array.isArray(s.loopItems)
@@ -522,6 +529,18 @@ export function useSlideOperations() {
       appendSlides([newSlide], options?.goLive);
     }
   }, [appendSlides]);
+
+  const handleYouTubeMusicAdd = useCallback((track: YouTubeMusicResult) => {
+    if (!isYouTubeMusicResult(track)) return;
+    const slide = createSlide('text', {
+      content: `♫\n${track.title}`,
+      youtubeMusic: { id: track.id, title: track.title, duration: track.duration },
+      styles: { ...DEFAULT_STYLES, fontSize: 76, backgroundColor: '#0f172a', textColor: '#f8fafc' },
+    });
+    appendSlides([slide]);
+    setSelectedSlideIds(new Set([slide.id]));
+    setLastSelectedIndex(useStore.getState().presentation.slides.length - 1);
+  }, [appendSlides, setSelectedSlideIds, setLastSelectedIndex]);
 
   const handleMediaAdd = useCallback((type: 'image' | 'video', path: string, thumbnailUrl?: string) => {
     const newSlide = createSlide(type, {
@@ -971,6 +990,7 @@ export function useSlideOperations() {
     appendSlides,
     handleSendToLive,
     handleMediaAdd,
+    handleYouTubeMusicAdd,
     handleAddAllMedia,
     handleScreenAdd,
     handleQrSlideAdd,

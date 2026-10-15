@@ -1,4 +1,5 @@
 import { setComponentInert } from './Tour/guideBoundary';
+import MusicSlideEditor from './MusicSlideEditor';
 import { isEditorEditableSlide } from '../editor/slideCapabilities';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -380,6 +381,7 @@ export default function RightPanel({
           </div>
 
           <div className="space-y-4">
+            {selectedSlide?.youtubeMusic && <MusicSlideEditor slide={selectedSlide} onPatch={updateSlideProperty} />}
             {selectedSlide?.type === 'text' && !selectedSlide.items?.length ? (
               <SlideStyleEditor
                 selectedSlide={selectedSlide}

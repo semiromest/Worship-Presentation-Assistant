@@ -1,0 +1,93 @@
+const { test, expect, _electron: electron } = require('@playwright/test');
+const path = require('node:path');
+
+test('production music slide: real YouTube, live output, editing and instant stop', async ({}, info) => {
+  const env = { ...process.env };
+  delete env.ELECTRON_RUN_AS_NODE; delete env.VITE_DEV_SERVER_URL;
+  const app = await electron.launch({ args: [path.resolve('.'), '--wpa-smoke'], env });
+  let page;
+  const errors = [];
+  const logs = [];
+  app.process().stdout?.on('data', chunk => logs.push(String(chunk)));
+  app.process().stderr?.on('data', chunk => logs.push(String(chunk)));
+  try {
+    page = await app.firstWindow();
+    page.on('pageerror', error => errors.push(error.message));
+    page.on('console', message => { if (message.type() === 'error') logs.push(message.text()); });
+    await page.locator('nav').waitFor();
+    await page.keyboard.press('Escape');
+    await page.locator('nav [data-guide-anchor="nav-slides"]').click();
+    await page.getByTestId('background-music-toggle').click();
+    await page.getByTestId('music-source-youtube').click();
+    await page.getByTestId('youtube-music-query').fill('Amazing Grace piano instrumental hymn with lyrics');
+    await page.getByTestId('youtube-music-query').press('Enter');
+    await page.getByTestId('youtube-add-slide-KI33ItOO_M4').click({ timeout: 30000 });
+    await page.getByTestId('background-music-toggle').click();
+    const musicCard = page.locator('[data-slide-id]').last();
+    const audio = page.getByTestId('background-music-audio');
+    await audio.evaluate(el => { window.__musicEvents = []; for (const type of ['error', 'ended', 'playing', 'pause', 'emptied', 'stalled']) el.addEventListener(type, () => window.__musicEvents.push({ type, time: performance.now(), position: el.currentTime, error: el.error?.message, code: el.error?.code, src: el.getAttribute('src') })); });
+    await expect(page.getByTestId('music-slide-editor').getByRole('status')).toHaveText('Connection ready', { timeout: 60000 });
+    // Connection preparation must remain silent; it does not preload audio.
+    await page.waitForTimeout(25000);
+    expect(await audio.getAttribute('src')).toBeNull();
+    const displayId = await page.evaluate(async () => {
+      const id = String((await window.electronAPI.getDisplays())[0].id);
+      await window.electronAPI.openProjector(id);
+      return id;
+    });
+    await expect(page.getByRole('button', { name: /^(STOP BROADCAST|YAYINI DURDUR)$/ })).toBeVisible();
+    // Master controls appear with output open, before sending the music slide live.
+    await page.getByRole('button', { name: /^(Mute|Sesi kapat)$/ }).click();
+    const sentLiveAt = Date.now();
+    await musicCard.click();
+    await expect.poll(() => audio.evaluate(el => el.currentTime), { timeout: 15000, intervals: [100, 200, 500] }).toBeGreaterThan(0.1);
+    console.log('Connection-prepared slide first playback:', Date.now() - sentLiveAt, 'ms');
+    await expect.poll(() => audio.evaluate(el => el.currentTime), { timeout: 60000 }).toBeGreaterThan(2);
+    expect(await audio.evaluate(el => el.muted)).toBe(true);
+    const source = await audio.getAttribute('src');
+    await page.locator('#slide-content-textarea').fill('Evening worship');
+    await page.getByTestId('music-slide-volume').focus();
+    await page.keyboard.press('Home');
+    for (let i = 0; i < 50; i++) await page.keyboard.press('ArrowRight');
+    await expect.poll(() => audio.evaluate(el => el.volume)).toBeCloseTo(0.5, 4);
+    expect(await audio.getAttribute('src')).toBe(source);
+    expect(await audio.evaluate(el => el.currentTime)).toBeGreaterThan(2);
+    await expect.poll(() => audio.evaluate(el => el.currentTime), { timeout: 40000 }).toBeGreaterThan(30);
+    await page.getByTestId('background-music-toggle').click();
+    await page.getByTestId('background-music-stop').click();
+    await expect.poll(() => audio.getAttribute('src')).toBeNull();
+    expect(await audio.evaluate(el => el.paused)).toBe(true);
+    await page.getByTestId('background-music-play-pause').click();
+    await expect.poll(() => audio.evaluate(el => el.currentTime), { timeout: 60000 }).toBeGreaterThan(5);
+    const playingSource = await audio.getAttribute('src');
+    await page.getByTestId('youtube-music-query').fill('Amazing Grace Piano Instrumental');
+    await page.getByTestId('youtube-music-query').press('Enter');
+    await page.getByTestId('youtube-add-slide-SIfMHRHdTAI').click({ timeout: 30000 });
+    await page.getByTestId('background-music-toggle').click();
+    await expect(page.getByTestId('music-slide-editor').getByRole('status')).toHaveText('Connection ready', { timeout: 60000 });
+    expect(await audio.getAttribute('src')).toBe(playingSource);
+    expect(await audio.evaluate(el => el.paused)).toBe(false);
+    await expect.poll(() => audio.evaluate(el => el.currentTime), { timeout: 40000 }).toBeGreaterThan(30);
+    const nextSentLiveAt = Date.now();
+    await page.locator('[data-slide-id]').last().click();
+    await expect.poll(() => audio.getAttribute('src'), { timeout: 15000 }).not.toBe(playingSource);
+    await expect.poll(() => audio.evaluate(el => el.currentTime), { timeout: 15000 }).toBeGreaterThan(0.2);
+    console.log('Prepared next track playback (including 800 ms fade-out):', Date.now() - nextSentLiveAt, 'ms');
+    await page.getByTestId('background-music-toggle').click();
+    await page.getByTestId('background-music-play-pause').click();
+    const pausedTime = await audio.evaluate(el => el.currentTime);
+    await page.waitForTimeout(25000);
+    expect(await audio.evaluate(el => el.currentTime)).toBeCloseTo(pausedTime, 1);
+    await page.getByTestId('background-music-play-pause').click();
+    await expect.poll(() => audio.evaluate(el => el.currentTime), { timeout: 15000 }).toBeGreaterThan(pausedTime + 2);
+    await page.evaluate(id => window.electronAPI.closeProjector(id), displayId);
+    await expect.poll(() => audio.getAttribute('src')).toBeNull();
+    expect(errors).toEqual([]);
+  } finally {
+    await info.attach('music-process-log', { body: logs.join(''), contentType: 'text/plain' });
+    if (page && !page.isClosed()) await info.attach('music-events', { body: JSON.stringify(await page.evaluate(() => window.__musicEvents), null, 2), contentType: 'application/json' });
+    if (page && !page.isClosed()) await page.screenshot({ path: info.outputPath('real-music-slide.png') }).catch(() => {});
+    await app.evaluate(({ app }) => { setTimeout(() => app.exit(0), 0); }).catch(() => {});
+    await app.close().catch(() => {});
+  }
+});

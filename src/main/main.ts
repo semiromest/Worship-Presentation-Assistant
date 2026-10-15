@@ -1988,6 +1988,8 @@ ipcMain.handle('youtube-music:search', (event, query: unknown) => isMusicControl
   ? youtubeMusicService.search(query) : { ok: false, error: 'unavailable' });
 ipcMain.handle('youtube-music:play', (event, id: unknown) => isMusicControl(event)
   ? youtubeMusicService.play(id) : { ok: false, error: 'unavailable' });
+ipcMain.handle('youtube-music:prepare', (event, id: unknown) => isMusicControl(event)
+  ? youtubeMusicService.prepare(id) : { ok: false });
 ipcMain.handle('youtube-music:stop', (event, streamId?: unknown) => {
   if (isMusicControl(event) && (streamId === undefined || typeof streamId === 'string'))
     youtubeMusicService.stop(streamId);

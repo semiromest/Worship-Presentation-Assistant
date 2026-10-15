@@ -1,0 +1,93 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { activeMusicSlide, musicPreparationIds } from './musicSlides';
+import { computePatch, applyProjectorPatch } from './state/undoReducer';
+import { isYouTubeMusicResult } from '../shared/youtubeMusic';
+import { backgroundDim, musicGain, musicPresetStyles } from './musicCustomization';
+
+function fixture(): Parameters<typeof activeMusicSlide>[0] {
+  return {
+    displays: [{ id: 'tv', label: 'TV', isPrimary: true, scaleFactor: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 }, workArea: { x: 0, y: 0, width: 1920, height: 1080 } }],
+    outputAssignments: { tv: { mode: 'follow', isOpen: false, isBlackout: false, slideIndex: 0 } },
+    isProjectorWindowOpen: false,
+    liveIndex: 0,
+    presentation: { name: 'Test', slides: [
+      { id: 'normal', type: 'text', content: 'Hello' },
+      { id: 'music', type: 'text', content: 'Song', youtubeMusic: { id: 'KI33ItOO_M4', title: 'Song', duration: 60 } },
+    ] },
+  };
+}
+
+test('preparation skips repeated live sources to find the next distinct track', () => {
+  const slides = fixture().presentation.slides;
+  slides.push({ ...slides[1], id: 'same-source' }, {
+    ...slides[1], id: 'next-source', youtubeMusic: { id: 'SIfMHRHdTAI', title: 'Next', duration: 60 },
+  });
+  assert.deepEqual(musicPreparationIds(slides, 'same-source', 1, 'KI33ItOO_M4'), ['SIfMHRHdTAI']);
+  assert.deepEqual(musicPreparationIds(slides, 'music', 0), ['KI33ItOO_M4']);
+});
+
+test('music requires a real audience output and the live slide, not selection', () => {
+  const state = fixture();
+  assert.equal(activeMusicSlide(state), null);
+  state.liveIndex = 1;
+  assert.equal(activeMusicSlide(state), null);
+  state.outputAssignments.tv.isOpen = true;
+  assert.equal(activeMusicSlide(state)?.id, 'music');
+  state.liveIndex = 0;
+  assert.equal(activeMusicSlide(state), null);
+  state.outputAssignments.tv = { ...state.outputAssignments.tv, mode: 'manual', slideIndex: 1 };
+  assert.equal(activeMusicSlide(state)?.id, 'music');
+  state.outputAssignments.tv.mode = 'stage';
+  assert.equal(activeMusicSlide(state), null);
+});
+
+test('one audience output owns audio; blackout retains audio and invalid references cannot play', () => {
+  const state = fixture();
+  state.outputAssignments.tv.isOpen = true;
+  state.outputAssignments.other = { mode: 'manual', isOpen: true, slideIndex: 1, isBlackout: false };
+  assert.equal(activeMusicSlide(state), null);
+  state.liveIndex = 1;
+  state.outputAssignments.tv.isBlackout = true;
+  assert.equal(activeMusicSlide(state)?.id, 'music');
+  state.presentation.slides[1].youtubeMusic!.id = 'invalid';
+  assert.equal(activeMusicSlide(state), null);
+  assert.equal(isYouTubeMusicResult({ id: 'KI33ItOO_M4', title: 'Song', duration: Infinity }), false);
+});
+
+test('music reference survives save/load and a metadata-only projector delta', () => {
+  const previous = fixture().presentation;
+  const next = JSON.parse(JSON.stringify(previous));
+  next.slides[1].youtubeMusic.id = 'SIfMHRHdTAI';
+  const patch = computePatch(previous, next);
+  assert.equal(patch.slidesPatch.length, 1);
+  const actual = applyProjectorPatch(previous, { slidesPatch: patch.slidesPatch.map(({ id, nextSlide }) => ({ id, nextSlide })) });
+  assert.deepEqual(actual.slides[1].youtubeMusic, next.slides[1].youtubeMusic);
+});
+
+test('gain-only changes survive projector deltas and JSON persistence', () => {
+  const previous = fixture().presentation;
+  const next = structuredClone(previous);
+  next.slides[1].musicSettings = { volume: 0.35 };
+  const patch = computePatch(previous, next);
+  assert.equal(patch.slidesPatch.length, 1);
+  const actual = applyProjectorPatch(previous, { slidesPatch: patch.slidesPatch.map(({ id, nextSlide }) => ({ id, nextSlide })) });
+  assert.equal(JSON.parse(JSON.stringify(actual)).slides[1].musicSettings.volume, 0.35);
+  assert.equal(previous.slides[1].musicSettings, undefined);
+});
+
+test('presets retain typography and clamp optional legacy settings safely', () => {
+  const styles = { fontSize: 90, textColor: '#abc', backgroundColor: '#000', backgroundVideo: 'old.mp4', backgroundImage: 'old.png' };
+  const photo = musicPresetStyles(styles, 'new.png');
+  assert.equal(photo.fontSize, 90);
+  assert.equal(photo.textColor, '#abc');
+  assert.equal(photo.backgroundVideo, undefined);
+  assert.equal(photo.backgroundImage, 'new.png');
+  assert.equal(photo.backgroundDim, 0.45);
+  assert.equal(musicPresetStyles(photo).backgroundImage, undefined);
+  assert.equal(styles.backgroundImage, 'old.png');
+  assert.equal(backgroundDim(undefined), 0);
+  assert.equal(backgroundDim(1), 0.8);
+  assert.equal(musicGain(undefined), 1);
+  assert.equal(musicGain(-1), 0);
+});

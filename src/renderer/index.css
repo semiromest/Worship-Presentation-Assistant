@@ -107,9 +107,9 @@ body {
 /* ─── Reduced Motion ─────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
 
-  *,
-  *::before,
-  *::after {
+  *:not([data-slide-transition]),
+  *:not([data-slide-transition])::before,
+  *:not([data-slide-transition])::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
@@ -121,10 +121,11 @@ body {
   }
 }
 
-/* User override from Settings. Keep state changes instant and readable. */
-html[data-ui-motion='off'] *,
-html[data-ui-motion='off'] *::before,
-html[data-ui-motion='off'] *::after {
+/* UI motion preferences must not override explicitly chosen slide effects.
+   The same exception applies above to the OS reduced-motion preference. */
+html[data-ui-motion='off'] *:not([data-slide-transition]),
+html[data-ui-motion='off'] *:not([data-slide-transition])::before,
+html[data-ui-motion='off'] *:not([data-slide-transition])::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;

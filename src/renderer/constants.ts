@@ -46,7 +46,6 @@ export const injectTransitionStyles = (): void => {
   const s = document.createElement('style');
   s.id = 'slide-tr-styles';
   s.textContent = `
-    @media (prefers-reduced-motion: no-preference) {
     @keyframes tr-fadeIn        { from{opacity:0}                                          to{opacity:1} }
     @keyframes tr-fadeOut       { from{opacity:1}                                          to{opacity:0} }
     @keyframes tr-slideInL      { from{transform:translateX(100%)}                         to{transform:translateX(0)} }
@@ -65,7 +64,6 @@ export const injectTransitionStyles = (): void => {
     @keyframes tr-blurOut       { from{filter:blur(0px);opacity:1}                         to{filter:blur(18px);opacity:0} }
     @keyframes tr-flipIn        { from{transform:perspective(700px) rotateY(-90deg);opacity:0} to{transform:perspective(700px) rotateY(0);opacity:1} }
     @keyframes tr-flipOut       { from{transform:perspective(700px) rotateY(0);opacity:1}  to{transform:perspective(700px) rotateY(90deg);opacity:0} }
-    }
   `;
   document.head.appendChild(s);
 };

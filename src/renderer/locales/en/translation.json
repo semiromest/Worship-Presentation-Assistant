@@ -1116,6 +1116,11 @@
     "updateDownloadedBadge": "Update downloaded — restart to apply"
   },
   "settings": {
+    "youtubeAddMusicSlide": "Add music slide",
+    "youtubeMusicSlideLabel": "Music · YouTube",
+    "youtubeMusicSlideHint": "A music slide plays when sent live and stops when you switch slides. Internet is required. For TV audio, select HDMI/your TV as the Windows audio output.",
+    "youtubeMusicSlideAdded": "Music slide added: {{title}}",
+    "youtubeMusicSlideLive": "This music slide is live. You can pause or stop it. Music stops when you switch slides or close the output.",
     "operatorNotesDesc": "Show operator notes at the bottom of the right panel.",
     "language": "Language",
     "languageDesc": "Select the app interface language",
@@ -1796,5 +1801,23 @@
       "unavailableTitle": "The result is unavailable",
       "unavailable": "The verified result could not be read. Retry; you do not need to repeat the operation."
     }
+  },
+  "musicSlide": {
+    "connectionPreparing": "Preparing connection…",
+    "connectionReady": "Connection ready",
+    "connectionUnavailable": "Preparation unavailable; will retry when sent live.",
+    "heading": "Music slide",
+    "source": "Source track",
+    "unknownDuration": "Unknown duration",
+    "independentTitle": "This source name stays unchanged. Edit the on-screen title using the text tools below or the Editor.",
+    "appearance": "Appearance preset",
+    "simple": "Simple",
+    "gradient": "Gradient",
+    "photo": "Photo",
+    "imageError": "Could not load the image. Try again.",
+    "dim": "Background dimming",
+    "volume": "This slide’s volume",
+    "volumeHint": "Combined with the master volume. Changing the title or appearance does not restart the music.",
+    "fadeHint": "Audio fades in over 0.5 seconds and fades out over 0.8 seconds when leaving the slide. Stop and closing the output silence it immediately."
   }
 }

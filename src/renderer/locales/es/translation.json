@@ -1103,6 +1103,11 @@
     "updateDownloadedBadge": "Actualización descargada; reinicia para aplicarla"
   },
   "settings": {
+    "youtubeAddMusicSlide": "Añadir diapositiva musical",
+    "youtubeMusicSlideLabel": "Música · YouTube",
+    "youtubeMusicSlideHint": "La diapositiva musical se reproduce al enviarla en directo y se detiene al cambiar de diapositiva. Requiere Internet. Para oírla en el televisor, selecciona HDMI/el televisor como salida de audio de Windows.",
+    "youtubeMusicSlideAdded": "Diapositiva musical añadida: {{title}}",
+    "youtubeMusicSlideLive": "Esta diapositiva musical está en directo. Puedes pausarla o detenerla. La música se detiene al cambiar de diapositiva o cerrar la salida.",
     "operatorNotesDesc": "Mostrar las notas del operador al final del panel derecho.",
     "language": "Idioma",
     "languageDesc": "Selecciona el idioma de la interfaz de la aplicación",
@@ -1732,5 +1737,23 @@
       "unavailableTitle": "El resultado no está disponible",
       "unavailable": "No se pudo leer el resultado verificado. Reintenta; no necesitas repetir la operación."
     }
+  },
+  "musicSlide": {
+    "connectionPreparing": "Preparando conexión…",
+    "connectionReady": "Conexión lista",
+    "connectionUnavailable": "No se pudo preparar; se reintentará al emitir la diapositiva.",
+    "heading": "Diapositiva musical",
+    "source": "Pista de origen",
+    "unknownDuration": "Duración desconocida",
+    "independentTitle": "Este nombre de origen no cambia. Edita el título que aparece en pantalla con las herramientas de texto de abajo o desde el Editor.",
+    "appearance": "Diseño predefinido",
+    "simple": "Sencillo",
+    "gradient": "Degradado",
+    "photo": "Foto",
+    "imageError": "No se pudo cargar la imagen. Inténtalo de nuevo.",
+    "dim": "Oscurecer el fondo",
+    "volume": "Volumen de esta diapositiva",
+    "volumeHint": "Se combina con el volumen general. Cambiar el título o el diseño no reinicia la música.",
+    "fadeHint": "El sonido sube gradualmente en 0,5 segundos y baja en 0,8 segundos al salir de la diapositiva. Detener y cerrar la salida cortan el sonido al instante."
   }
 }

@@ -1,4 +1,5 @@
 import { RangeVideo } from './components/RangeVideo';
+import BackgroundDim from './components/BackgroundDim';
 import { AnimatedGradientBackground } from './components/AnimatedGradientBackground';
 import { VideoOverlayLayer } from './components/VideoOverlayLayer';
 import { SlideImage } from './components/SlideImage';
@@ -43,6 +44,8 @@ function LoopRenderer({ slide, width, height, isActive = true, volume = 1, muted
   const advanceToNext = useCallback(() => {
     if (!items.length) return;
     const nextIndex = (currentIndex + 1) % items.length;
+    // A single item has no next frame: fading it out would only reveal black.
+    if (nextIndex === currentIndex) return;
     const nextItem = items[nextIndex];
     const shouldAnimate =
       currentItem?.type !== 'video' &&
@@ -98,6 +101,7 @@ function LoopRenderer({ slide, width, height, isActive = true, volume = 1, muted
           <div
             key={item.id}
             className="absolute inset-0"
+            data-slide-transition=""
             aria-hidden={!isVisible}
             style={{
               zIndex: isIncoming ? 2 : isOutgoing ? 1 : 0,
@@ -259,6 +263,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
               className="absolute inset-0 w-full h-full object-cover pointer-events-none"
             />
           )}
+          <BackgroundDim value={slide.styles?.backgroundDim} />
           {slide.items.filter(item => item.visible !== false).map(item => {
             const borderWidth = item.borderWidth || 0;
             const borderStyle = borderWidth > 0
@@ -459,6 +464,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
           />
         )}
+        <BackgroundDim value={styles.backgroundDim} />
         <p
           data-gradient-text=""
           className="whitespace-pre-wrap leading-snug relative z-10"

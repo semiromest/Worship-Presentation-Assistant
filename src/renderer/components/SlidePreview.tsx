@@ -1,4 +1,5 @@
 import { MediaPoster } from './MediaPoster';
+import BackgroundDim from './BackgroundDim';
 import { VideoOverlayLayer } from './VideoOverlayLayer';
 import { memo, useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +13,7 @@ import { SlideTextItem as TextItem } from './SlideTextItem';
 export { SlideTextItem as TextItem } from './SlideTextItem';
 import { SLIDE_REFERENCE_HEIGHT, SLIDE_REFERENCE_WIDTH } from '../editor/editorUtils';
 import { slidePreviewGeometry } from '../slidePreviewGeometry';
+import { isYouTubeMusicResult } from '../../shared/youtubeMusic';
 
 /**
  * Shared slide previews.
@@ -164,6 +166,7 @@ export const SlideItemsPreview = memo(({ items, slide, staticMedia = false, enab
           background: gradientStyle,
           pointerEvents: 'none' as const,
         }} />
+        <BackgroundDim value={slide.styles?.backgroundDim} />
         {/* Slide layers share their own stack so they cannot cover media controls. */}
         <div className="absolute inset-0 isolate">
           {items.filter(item => item.visible !== false).map(item => (
@@ -189,6 +192,7 @@ SlideItemsPreview.displayName = 'SlideItemsPreview';
 
 // Legacy (item-less) text slide preview
 export const TextSlidePreview = memo(({ slide, cardWidth = 320, staticMedia = false, enabled = true }: { slide: Slide; cardWidth?: number; staticMedia?: boolean; enabled?: boolean }) => {
+  const music = isYouTubeMusicResult(slide.youtubeMusic);
   const displayContent = getSlideDisplayContent(slide);
   const bgColor = slide.styles?.backgroundColor ?? '#000000';
   const bgImage = slide.styles?.backgroundImage;
@@ -208,17 +212,18 @@ export const TextSlidePreview = memo(({ slide, cardWidth = 320, staticMedia = fa
   // Font size scales with card width — at the reference card width (320px
   // at zoom=1 in a ~1200px container) the baseline is 16px, proportional
   // elsewhere. Clamped so text is never illegible or absurdly large.
-  const fontSize = Math.round(Math.max(7, Math.min(42, cardWidth / 20)));
+  const fontSize = music ? Math.max(1, (slide.styles?.fontSize ?? 76) * cardWidth / SLIDE_REFERENCE_WIDTH) : Math.round(Math.max(7, Math.min(42, cardWidth / 20)));
 
   return (
     <div
-      className="w-full h-full flex items-center justify-center p-4 text-center relative overflow-hidden"
+      className={cn('w-full h-full flex items-center justify-center text-center relative overflow-hidden', !music && 'p-4')}
       style={{
         backgroundColor: bgColor,
         backgroundImage: bgImage ? `url(${bgImage})` : undefined,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         filter: bgBlur && bgBlur > 0 ? `blur(${bgBlur}px)` : undefined,
+        ...(music ? { alignItems: slide.styles?.verticalAlign === 'top' ? 'flex-start' : slide.styles?.verticalAlign === 'bottom' ? 'flex-end' : 'center' } : {}),
       }}
     >
       {/* Background video — show first frame, play on click */}
@@ -229,12 +234,23 @@ export const TextSlidePreview = memo(({ slide, cardWidth = 320, staticMedia = fa
         background: gradientStyle,
         pointerEvents: 'none' as const,
       }} />
+      <BackgroundDim value={slide.styles?.backgroundDim} />
       <p
-        className="font-bold whitespace-pre-wrap text-white/90 leading-snug line-clamp-6 relative z-10"
+        className={cn('font-bold whitespace-pre-wrap text-white/90 leading-snug relative z-10', !music && 'line-clamp-6')}
         style={{
           color: slide.styles?.textColor ?? '#ffffff',
           fontSize: `${fontSize}px`,
           fontFamily: slide.styles?.fontFamily || 'inherit',
+          ...(music ? {
+            width: '100%', boxSizing: 'border-box' as const,
+            padding: `${54 * cardWidth / SLIDE_REFERENCE_WIDTH}px ${96 * cardWidth / SLIDE_REFERENCE_WIDTH}px`,
+            textAlign: (slide.styles?.textAlign ?? 'center') as 'center',
+            textTransform: slide.styles?.textTransform ?? 'none',
+            fontWeight: slide.styles?.fontWeight ?? 'bold',
+            fontStyle: slide.styles?.fontStyle ?? 'normal',
+            lineHeight: slide.styles?.lineHeight ?? 1.3,
+            backgroundColor: slide.styles?.textHighlight && slide.styles.textHighlight !== 'transparent' ? slide.styles.textHighlight : undefined,
+          } : {}),
         }}
       >
         {displayContent}

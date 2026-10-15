@@ -1114,6 +1114,11 @@
     "updateDownloadedBadge": "Güncelleme indirildi — yeniden başlat"
   },
   "settings": {
+    "youtubeAddMusicSlide": "Müzik slaytı ekle",
+    "youtubeMusicSlideLabel": "Müzik · YouTube",
+    "youtubeMusicSlideHint": "Müzik slaytı canlıya alınınca çalar, başka slayta geçince durur. İnternet gerekir. TV sesi için Windows ses çıkışını HDMI/televizyon olarak seç.",
+    "youtubeMusicSlideAdded": "Müzik slaytı eklendi: {{title}}",
+    "youtubeMusicSlideLive": "Bu müzik slaytı canlıda. Duraklatabilir veya durdurabilirsin. Başka slayta geçtiğinde ya da çıktıyı kapattığında müzik durur.",
     "operatorNotesDesc": "Operatör notlarını sağ panelin en altında göster.",
     "language": "Dil",
     "languageDesc": "Uygulamanın arayüz dilini seçin",
@@ -1792,5 +1797,23 @@
       "unavailableTitle": "Sonuç şu anda gösterilemiyor",
       "unavailable": "Doğrulanmış sonuç kaydı okunamadı. Tekrar dene; işlemi yeniden yapmana gerek yok."
     }
+  },
+  "musicSlide": {
+    "connectionPreparing": "Bağlantı hazırlanıyor…",
+    "connectionReady": "Bağlantı hazır",
+    "connectionUnavailable": "Ön hazırlık yapılamadı; yayına geçince tekrar denenecek.",
+    "heading": "Müzik slaytı",
+    "source": "Kaynak parça",
+    "unknownDuration": "Süre bilinmiyor",
+    "independentTitle": "Bu kaynak adı değişmez. Ekranda görünen başlığı aşağıdaki yazı araçlarından veya Editör’den düzenleyebilirsin.",
+    "appearance": "Hazır görünüm",
+    "simple": "Sade",
+    "gradient": "Renk geçişli",
+    "photo": "Fotoğraflı",
+    "imageError": "Görsel yüklenemedi. Tekrar dene.",
+    "dim": "Arka plan karartması",
+    "volume": "Bu slaydın ses seviyesi",
+    "volumeHint": "Genel ses seviyesiyle birlikte uygulanır. Başlık ve görünüm değişiklikleri müziği yeniden başlatmaz.",
+    "fadeHint": "Ses 0,5 saniyede açılır. Slayttan ayrılınca 0,8 saniyede azalır. Durdur ve çıktı kapatma sesi anında keser."
   }
 }

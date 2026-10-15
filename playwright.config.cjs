@@ -1,6 +1,6 @@
 const { defineConfig } = require('@playwright/test');
 module.exports = defineConfig({
-  testDir: './tests/tour', testMatch: ['tour.spec.cjs', 'guided.spec.cjs'], timeout: 60000,
+  testDir: './tests/tour', testMatch: ['tour.spec.cjs', 'guided.spec.cjs', 'transitions.spec.cjs', 'music-slides.spec.cjs'], timeout: 60000,
   workers: 1, retries: 0, reporter: 'list',
   outputDir: 'test-results/tour',
   webServer: {

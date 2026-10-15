@@ -139,6 +139,7 @@ contextBridge.exposeInMainWorld('electronAPI', wrapApi({
   selectAudioFolder: () => ipcRenderer.invoke('select-audio-folder'),
   youtubeMusicSearch: (query: string) => ipcRenderer.invoke('youtube-music:search', query),
   youtubeMusicPlay: (id: string) => ipcRenderer.invoke('youtube-music:play', id),
+  youtubeMusicPrepare: (id: string) => ipcRenderer.invoke('youtube-music:prepare', id),
   youtubeMusicStop: (streamId?: string) => ipcRenderer.invoke('youtube-music:stop', streamId),
   readAudioFolder: (folderPath: string, recursive = true) => ipcRenderer.invoke('read-audio-folder', folderPath, recursive),
   selectAudioFile: () => ipcRenderer.invoke('select-audio-file'),

@@ -140,6 +140,9 @@ export interface Slide {
   id: string;
   type: 'text' | 'image' | 'video' | 'countdown' | 'screen' | 'loop' | 'captions';
   content: string;
+  /** Durable YouTube reference; transient stream URLs are never saved in slides. */
+  youtubeMusic?: import('../shared/youtubeMusic').YouTubeMusicResult;
+  musicSettings?: { volume?: number };
   /** Live captions slide options (see CaptionsRenderer). */
   captions?: {
     showOriginal?: boolean;
@@ -181,6 +184,8 @@ export interface Slide {
     letterSpacing?: number;
     textDecoration?: string;
     backgroundImage?: string;
+    /** Black overlay over background layers only (0–0.8). */
+    backgroundDim?: number;
     /** Distinguishes a newly created default fill from a deliberately chosen background. */
     backgroundExplicit?: boolean;
     backgroundVideo?: string;

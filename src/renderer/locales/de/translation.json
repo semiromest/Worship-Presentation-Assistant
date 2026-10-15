@@ -1103,6 +1103,11 @@
     "updateDownloadedBadge": "Update heruntergeladen – Neustart zum Anwenden"
   },
   "settings": {
+    "youtubeAddMusicSlide": "Musikfolie hinzufügen",
+    "youtubeMusicSlideLabel": "Musik · YouTube",
+    "youtubeMusicSlideHint": "Eine Musikfolie spielt, sobald sie live geschaltet wird, und stoppt beim Folienwechsel. Internet ist erforderlich. Wähle für TV-Ton HDMI/deinen Fernseher als Windows-Audioausgabe.",
+    "youtubeMusicSlideAdded": "Musikfolie hinzugefügt: {{title}}",
+    "youtubeMusicSlideLive": "Diese Musikfolie ist live. Du kannst sie pausieren oder stoppen. Beim Folienwechsel oder Schließen der Ausgabe stoppt die Musik.",
     "operatorNotesDesc": "Operator-Notizen unten im rechten Bereich anzeigen.",
     "language": "Sprache",
     "languageDesc": "Sprache der Benutzeroberfläche auswählen",
@@ -1732,5 +1737,23 @@
       "unavailableTitle": "Das Ergebnis ist nicht verfügbar",
       "unavailable": "Das bestätigte Ergebnis konnte nicht gelesen werden. Versuche es erneut; wiederhole den Vorgang nicht."
     }
+  },
+  "musicSlide": {
+    "connectionPreparing": "Verbindung wird vorbereitet…",
+    "connectionReady": "Verbindung bereit",
+    "connectionUnavailable": "Vorbereitung fehlgeschlagen; beim Live-Schalten wird es erneut versucht.",
+    "heading": "Musikfolie",
+    "source": "Quelltitel",
+    "unknownDuration": "Dauer unbekannt",
+    "independentTitle": "Dieser Quellname bleibt unverändert. Den angezeigten Titel kannst du mit den Textwerkzeugen unten oder im Editor bearbeiten.",
+    "appearance": "Gestaltungsvorlage",
+    "simple": "Schlicht",
+    "gradient": "Farbverlauf",
+    "photo": "Foto",
+    "imageError": "Das Bild konnte nicht geladen werden. Versuche es erneut.",
+    "dim": "Hintergrund abdunkeln",
+    "volume": "Lautstärke dieser Folie",
+    "volumeHint": "Wird mit der Gesamtlautstärke kombiniert. Änderungen an Titel und Aussehen starten die Musik nicht neu.",
+    "fadeHint": "Der Ton wird in 0,5 Sekunden eingeblendet und beim Folienwechsel in 0,8 Sekunden ausgeblendet. Stopp und das Schließen der Ausgabe schalten ihn sofort aus."
   }
 }

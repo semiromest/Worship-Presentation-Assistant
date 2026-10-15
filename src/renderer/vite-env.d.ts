@@ -149,6 +149,7 @@ declare global {
       selectAudioFolder: () => Promise<string | null>;
       youtubeMusicSearch: (query: string) => Promise<import('../shared/youtubeMusic').YouTubeSearchResponse>;
       youtubeMusicPlay: (id: string) => Promise<import('../shared/youtubeMusic').YouTubePlayResponse>;
+      youtubeMusicPrepare: (id: string) => Promise<{ ok: boolean }>;
       youtubeMusicStop: (streamId?: string) => Promise<void>;
       readAudioFolder: (folderPath: string, recursive?: boolean) => Promise<{ paths: string[]; missing: boolean } | null>;
       selectAudioFile: () => Promise<string | null>;

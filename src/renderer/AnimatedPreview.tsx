@@ -203,6 +203,7 @@ const SlideLayer = memo(({
   return (
     <div
       className="absolute inset-0"
+      data-slide-transition=""
       style={style}
       aria-hidden={!animation}
     >
@@ -252,6 +253,7 @@ export const AnimatedPreview = memo(({
       {/* Outgoing layer */}
       {outgoing && isTransitioning && (
         <SlideLayer
+          key={outgoing.id}
           slide={outgoing}
           size={size}
           zIndex={1}
@@ -265,6 +267,7 @@ export const AnimatedPreview = memo(({
       {/* Incoming layer */}
       {incoming && (
         <SlideLayer
+          key={incoming.id}
           slide={incoming}
           size={size}
           zIndex={2}
