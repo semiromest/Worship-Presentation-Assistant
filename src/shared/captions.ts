@@ -147,7 +147,9 @@ export class CaptionTimeline {
 
   private pushHistory(entry: CaptionEntry): void {
     this.history = [...this.history, entry]
-      .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
+      // Stable sort keeps arrival order when several segments share a millisecond.
+      // Lexicographic ids put e.g. segment 10 before 2 and retain the wrong owner.
+      .sort((a, b) => a.order - b.order)
       .slice(-50);
     const retained = new Set(this.history.map((item) => item.id));
     for (const id of this.primaryHistoryIds) {

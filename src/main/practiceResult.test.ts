@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { createPracticeWorkspace, readPracticeSavedPreset, sampleVerse, validateGuide, validGuideResult } from './practiceWorkspace';
 import { createProgressStore } from './practiceProgress';
 import { practiceHymns, guideResultSteps, type GuideStep, type PracticeTask } from '../shared/practice';
-import type { Presentation } from '../renderer/types';
+import type { Presentation } from '../shared/presentation';
 
 const seed: Presentation = { id:'deck',name:'Practice',slides:[{id:'keep',type:'text',content:'Keep'}] };
 async function fixture() {
@@ -19,6 +19,8 @@ async function fixture() {
     await command('pause');const entries={slides:'add',bible:'bible-intro',media:'media-intro',hymns:'hymns-intro',countdown:'countdown-intro',settings:'settings-intro'} as const;
     await command('jump',entries[page as keyof typeof entries]);await command('resume');
     if(page!=='slides')await command('next');
+    if(page==='settings') { assert.equal(value.guide.step,'phone-controls'); await command('next'); assert.equal(value.guide.step,'nav-save'); }
+    if(page==='hymns') { for (const step of ['hymns-online','hymns-author','hymns-mode']) { assert.equal(value.guide.step,step); await command('next'); } }
   };
   const observe=async(deck=value.deck,ui={},tab='slides',selected:string[]=[])=>value=await engine.guide(value.guide.id,value.guide.step,'observe',{deck,ui,tab,selected},'Sample');
   return {dir,progress,command,chapter,observe,get value(){return value;},get engine(){return engine;},
@@ -40,12 +42,14 @@ test('all seven results are real, explicitly acknowledged, and their snapshots s
     await f.observe();assert.equal(f.value.guide.step,'add-result');assert.deepEqual(await f.progress.read(),rev);
     await assert.rejects(f.command('skip'));
     await f.command('pause');await f.reopen();await f.command('resume');assert.deepEqual(f.value.guide.result,proof);
-    await f.command('next');assert.equal(f.value.guide.step,'select');assert.equal(f.value.deck.slides.length,3);
+    await f.command('next');assert.equal(f.value.guide.step,'reorder');assert.equal(f.value.deck.slides.length,3);
+    const reordered=[...f.value.deck.slides];[reordered[1],reordered[2]]=[reordered[2],reordered[1]];
+    await f.observe({...f.value.deck,slides:reordered});assert.equal(f.value.guide.step,'select');
     const target=f.value.active!.target!;await f.observe(f.value.deck,{},'slides',[target]);
     await f.observe({...f.value.deck,slides:f.value.deck.slides.filter(slide=>slide.id!==target)});
-    assert.equal(f.value.guide.step,'delete-result');assert.equal(f.value.guide.result?.slides[0].content,'Sample');
-    assert.equal(f.value.guide.result?.beforeCount,3);assert.equal(f.value.guide.result?.afterCount,2);assert.deepEqual(f.value.deck.slides.map(s=>s.id),['keep','new']);
-    await f.command('next');assert.equal(f.value.guide.step,'nav-bible');
+    assert.equal(f.value.guide.step,'nav-bible');assert.equal(Boolean(f.value.guide.result),false);
+    assert.deepEqual(f.value.deck.slides.map(s=>s.id),['keep','new']);
+    const deletion=await f.progress.read();assert.ok(deletion.ok&&deletion.progress.exercises['slide-delete']==='completed');
     await f.chapter('bible');await f.engine.sampleBible();await f.observe(f.value.deck,{bibleReady:true});
     await f.observe(f.value.deck,{book:1});await f.observe(f.value.deck,{chapter:1,chapterChosen:true});await f.observe(f.value.deck,{verse:true});
     await f.observe({...f.value.deck,slides:[...f.value.deck.slides,{id:'verse1',type:'text',content:'Genesis 1:1 '+sampleVerse},{id:'verse2',type:'text',content:'Second verse'}]});
@@ -66,7 +70,7 @@ test('all seven results are real, explicitly acknowledged, and their snapshots s
     await f.engine.saved(saved,'stale',preset);assert.equal((await f.engine.read(seed)).guide.step,'save');
     await f.engine.saved(saved,f.value.active!.id,preset);await f.reopen();assert.equal(f.value.guide.step,'save-result');assert.equal(f.value.guide.result?.savedName,preset.name);
     await f.command('resume');await f.command('next');assert.equal(f.value.guide.step,'done');
-    const status=await f.progress.read();assert.ok(status.ok);for(const exercise of Object.values(guideResultSteps).filter(exercise=>exercise!=='image-edit'))assert.equal(status.progress.exercises[exercise],'completed');
+    const status=await f.progress.read();assert.ok(status.ok);for(const exercise of Object.values(guideResultSteps).filter(exercise=>exercise!=='image-edit'&&exercise!=='canvas-edit'))assert.equal(status.progress.exercises[exercise],'completed');
   }finally{await f.cleanup();}
 });
 

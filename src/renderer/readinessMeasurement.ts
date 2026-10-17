@@ -121,7 +121,7 @@ export function measureSlideReadability(slide: Slide): ReadinessIssue[] {
     }
   };
 
-  if (slide.items?.length) {
+  if (!slide.partsMode && slide.items?.length) {
     inspect(slide.items);
   } else if (slide.type === 'text') {
     const parts = slide.partsMode && slide.parts?.length ? slide.parts : [getSlideDisplayContent(slide)];

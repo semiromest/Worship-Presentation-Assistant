@@ -1,4 +1,6 @@
 export interface Hymn {
+  /** Per-addition display preference; not part of imported hymn identity. */
+  showAuthorOnSlides?: boolean;
   id: string;
   title: string;
   lyrics: string;

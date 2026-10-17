@@ -1,8 +1,8 @@
+import { playSfx } from './sfx';
 import { memo, useCallback } from 'react';
-import { Settings2, Clock, ChevronDown } from 'lucide-react';
+import { Settings2, ChevronDown } from 'lucide-react';
 import type { TransitionType } from './types';
 import { TRANSITION_OPTIONS, DURATION_OPTIONS } from './constants';
-import { cn } from './utils';
 import { useTranslation } from 'react-i18next';
 
 interface TransitionSelectorProps {
@@ -19,16 +19,20 @@ export const TransitionSelector = memo(({
   const { t } = useTranslation();
   const handleTransitionChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
+      if (e.target.value === transitionType) return;
       onChange({ type: e.target.value as TransitionType });
+      playSfx('press');
     },
-    [onChange]
+    [onChange, transitionType]
   );
 
   const handleDurationChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
+      if (parseInt(e.target.value) === duration) return;
       onChange({ duration: parseInt(e.target.value) });
+      playSfx('press');
     },
-    [onChange]
+    [onChange, duration]
   );
 
   return (

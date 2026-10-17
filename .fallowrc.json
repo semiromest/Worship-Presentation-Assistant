@@ -1,0 +1,123 @@
+{
+  "minimumVersion": "3.33.1",
+  "entry": [
+    "src/renderer/main.tsx",
+    "src/main/main.ts",
+    "src/main/preload.ts",
+    "src/main/utility/heavyWorker.ts",
+    "src/main/utility/gradientWorker.ts",
+    "src/main/youtubeTokenBrowser.ts"
+  ],
+  "ignorePatterns": [
+    "dist-electron/**",
+    "release/**",
+    ".tmp/**",
+    "perf/editor-review/baseline-src/**"
+  ],
+  "ignoreExportsUsedInFile": true,
+  "ignoreDependencies": [
+    "ffmpeg-static"
+  ],
+  "framework": [
+    {
+      "name": "node-and-playwright-tests",
+      "entryPointRole": "test",
+      "entryPoints": [
+        "src/**/*.test.{ts,cjs}",
+        "tests/**/*.spec.cjs"
+      ],
+      "enablers": [
+        "electron"
+      ]
+    },
+    {
+      "name": "manual-validation-tools",
+      "entryPointRole": "support",
+      "entryPoints": [
+        "scripts/*.{ts,cjs}",
+        "perf/worker-smoke.cjs"
+      ],
+      "enablers": [
+        "electron"
+      ]
+    }
+  ],
+  "rules": {
+    "boundary-violation": "warn",
+    "circular-dependencies": "error"
+  },
+  "boundaries": {
+    "zones": [
+      {
+        "name": "tests",
+        "patterns": [
+          "src/**/*.test.{ts,cjs}",
+          "src/**/__tests__/**",
+          "tests/**"
+        ]
+      },
+      {
+        "name": "preload",
+        "patterns": [
+          "src/main/preload.ts"
+        ]
+      },
+      {
+        "name": "main",
+        "patterns": [
+          "src/main/**"
+        ]
+      },
+      {
+        "name": "renderer",
+        "patterns": [
+          "src/renderer/**"
+        ]
+      },
+      {
+        "name": "shared",
+        "patterns": [
+          "src/shared/**"
+        ]
+      }
+    ],
+    "rules": [
+      {
+        "from": "main",
+        "allow": [
+          "main",
+          "shared"
+        ]
+      },
+      {
+        "from": "preload",
+        "allow": [
+          "shared"
+        ]
+      },
+      {
+        "from": "renderer",
+        "allow": [
+          "renderer",
+          "shared"
+        ]
+      },
+      {
+        "from": "shared",
+        "allow": [
+          "shared"
+        ]
+      },
+      {
+        "from": "tests",
+        "allow": [
+          "main",
+          "preload",
+          "renderer",
+          "shared",
+          "tests"
+        ]
+      }
+    ]
+  }
+}

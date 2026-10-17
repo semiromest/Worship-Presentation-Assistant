@@ -1066,6 +1066,13 @@
     "flip": "뒤집기"
   },
   "watermark": {
+    "unsupportedFormat": "지원하지 않는 파일 형식입니다. PNG, JPG 또는 SVG를 선택하세요.",
+    "fileTooLarge": "파일이 너무 큽니다. 최대 크기는 2MB입니다.",
+    "uploadSuccess": "로고를 업로드했습니다.",
+    "uploadError": "로고를 업로드할 수 없습니다.",
+    "requireLogo": "먼저 로고를 업로드하세요.",
+    "collapse": "로고 설정 접기",
+    "expand": "로고 설정 펼치기",
     "title": "로고 워터마크",
     "uploadLogo": "로고 업로드",
     "replaceLogo": "로고 변경",
@@ -1101,6 +1108,9 @@
     "updateDownloadedBadge": "업데이트 다운로드 완료 — 다시 시작하여 적용"
   },
   "settings": {
+    "youtubeLoadMore": "더 보기",
+    "youtubeSearchingMore": "추가 결과를 불러오는 중…",
+    "youtubeSearchExpired": "검색 결과가 만료되었습니다. 계속하려면 다시 검색하세요.",
     "youtubeAddMusicSlide": "음악 슬라이드 추가",
     "youtubeMusicSlideLabel": "음악 · YouTube",
     "youtubeMusicSlideHint": "음악 슬라이드를 라이브로 보내면 재생되고 다른 슬라이드로 이동하면 멈춰요. 인터넷 연결이 필요해요. TV에서 소리를 들으려면 Windows 오디오 출력을 HDMI/TV로 선택하세요.",
@@ -1120,6 +1130,8 @@
     "retention30d": "30일",
     "liveSaveLastSaved": "마지막 저장: {{time}}",
     "liveSaveEmpty": "자동 저장 백업이 없습니다.",
+    "muteSfxDuringLive": "라이브 중 효과음 음소거",
+    "muteSfxDuringLiveDesc": "프로젝션 또는 무대 출력이 열려 있는 동안 인터페이스 효과음을 끕니다. 미디어와 음악 소리에는 영향을 주지 않습니다.",
     "soundEffects": "사운드 효과",
     "backgroundMusic": "배경 음악",
     "backgroundMusicDesc": "선택한 폴더의 음악을 앱에서 재생합니다.",
@@ -1248,20 +1260,25 @@
     "screenSlide": "🖥 라이브 화면"
   },
   "prepCheck": {
+    "stale": "내용이 변경되어 확인을 기다리는 중…",
+    "completed": "확인 완료",
+    "slideErrors": "오류를 포함한 문제 {{count}}개. 슬라이드 보고서 열기.",
+    "slideWarnings": "경고 {{count}}개. 슬라이드 보고서 열기.",
+    "severity": {"error":"오류","warning":"경고"},
     "title": "준비 확인",
     "button": "준비 확인",
     "allClear": "모두 준비된 것으로 보입니다",
     "allClearHint": "가독성 또는 누락된 미디어 문제가 없습니다.",
     "summary": "라이브 시작 전에 {{count}}개 슬라이드를 확인해야 할 수 있습니다.",
     "issue": {
+      "duplicateSlide": "이 슬라이드는 이전 슬라이드와 동일해 보입니다.",
       "emptyText": "이 텍스트 슬라이드가 비어 있습니다.",
-      "longTextSmallFont": "긴 텍스트입니다. 가독성을 위해 구절/텍스트를 나누세요.",
+      "longTextSmallFont": "예상 위험: 긴 텍스트를 나누어야 할 수 있습니다. 실제 측정된 넘침은 아닙니다.",
       "missingImage": "이 이미지 슬라이드에 이미지가 선택되지 않았습니다.",
       "missingVideo": "이 비디오 슬라이드에 비디오가 선택되지 않았습니다.",
       "emptyLoop": "이 반복 슬라이드에 항목이 없습니다.",
       "emptyPart": "찬양의 한 부분이 비어 있습니다.",
       "onlineResource": "인터넷이 필요한 미디어입니다. 오프라인 사용에는 로컬 파일을 사용하세요.",
-      "safeMargin": "텍스트가 안전 여백에 너무 가깝습니다.",
       "inaccessibleMedia": "미디어 파일이 없거나 읽을 수 없습니다.",
       "fontUnavailable": "글꼴을 오프라인으로 준비하지 못했습니다. 다른 글꼴을 선택하거나 연결을 확인하세요.",
       "textOverflow": "텍스트가 표시 영역을 넘습니다. 구절/텍스트를 나누거나 글꼴 크기를 줄이세요."
@@ -1293,6 +1310,9 @@
     "confirmNew": "새 프레젠테이션을 시작할까요? 현재 작업을 유지하려면 먼저 저장하세요."
   },
   "sections": {
+    "includeSelectedSlides": "선택한 슬라이드를 새 순서로 이동 ({{count}})",
+    "time": "순서 시간",
+    "timeHint": "시간을 입력하세요(예: 10:30). Enter로 저장하고, 지우면 삭제됩니다.",
     "title": "예배 순서 구역",
     "description": "슬라이드를 접을 수 있는 구역으로 정리합니다. 꺼도 내용은 유지됩니다.",
     "none": "구역 없음",
@@ -1440,7 +1460,8 @@
         "body": "강조된 예제 슬라이드를 다른 강조된 슬라이드 위로 끌어 놓으세요. 실제 순서가 바뀌면 이 연습이 끝나요."
       },
       "canvas-edit": {
-        "title": "슬라이드 편집기에서 이미지 편집"
+        "title": "슬라이드 편집기에서 이미지 편집",
+        "body": "슬라이드 편집기에서 예제 이미지를 선택하고 15도 회전한 뒤 변경 사항을 저장하세요."
       }
     }
   },

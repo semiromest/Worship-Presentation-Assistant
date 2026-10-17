@@ -1,3 +1,4 @@
+import { playSfx } from '../sfx';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../state/useStore';
@@ -10,6 +11,13 @@ import type { YouTubeMusicResult } from '../../shared/youtubeMusic';
 export function useBackgroundMusicPlayback() {
   const { t } = useTranslation();
   const audioRef = useRef<HTMLAudioElement>(null);
+  // Only explicit preview playback requests get sound; slide-driven playback stays silent.
+  const manualPlayPending = useRef(false);
+  const finishManualPlay = useCallback((failed = false) => {
+    if (!manualPlayPending.current) return;
+    manualPlayPending.current = false;
+    playSfx(failed ? 'error' : 'play');
+  }, []);
   const stream = useRef<string>();
   const request = useRef(0);
   const navigation = useRef(0);
@@ -56,13 +64,15 @@ export function useBackgroundMusicPlayback() {
     if (playing) void audio.play().catch(() => {
       if (cancelled) return;
       setPlaying(false); setError(translate.current('settings.backgroundMusicPlayError'));
+      finishManualPlay(true);
       void window.electronAPI?.youtubeMusicStop(stream.current).catch(() => {});
     });
     else audio.pause();
     return () => { cancelled = true; };
-  }, [current, playing, setPlaying]);
+  }, [current, playing, setPlaying, finishManualPlay]);
 
   const stop = useCallback(() => {
+    manualPlayPending.current = false;
     navigation.current++; request.current++; exiting.current = false;
     fadeInPending.current = false; playbackOwner.current = null;
     audioRef.current?.pause(); setPlaying(false);
@@ -73,6 +83,7 @@ export function useBackgroundMusicPlayback() {
   }, [mixer, setCurrent, setPlaying]);
 
   const playYouTube = useCallback(async (video: YouTubeMusicResult, owner?: { key: string; gain: number }) => {
+    manualPlayPending.current = !owner;
     navigation.current++; exiting.current = false;
     const ownRequest = ++request.current;
     playbackOwner.current = owner?.key ?? null;
@@ -89,12 +100,12 @@ export function useBackgroundMusicPlayback() {
         if (response.ok) void window.electronAPI.youtubeMusicStop(response.streamId);
         return;
       }
-      if (!response.ok) { setError(translate.current('settings.youtubePlayError')); return; }
+      if (!response.ok) { setError(translate.current('settings.youtubePlayError')); finishManualPlay(true); return; }
       stream.current = response.streamId;
       setCurrent(response.url); setPlaying(true);
-    } catch { if (ownRequest === request.current) setError(translate.current('settings.youtubePlayError')); }
+    } catch { if (ownRequest === request.current) { setError(translate.current('settings.youtubePlayError')); finishManualPlay(true); } }
     finally { if (ownRequest === request.current) setLoading(false); }
-  }, [mixer, setCurrent, setPlaying]);
+  }, [mixer, setCurrent, setPlaying, finishManualPlay]);
 
   useEffect(() => {
     if (!audienceOpen && (playbackOwner.current || exiting.current)) { lastDesired.current = desiredKey; stop(); return; }
@@ -123,15 +134,21 @@ export function useBackgroundMusicPlayback() {
   const playFile = (file: string) => {
     const state = useStore.getState();
     if (!youtubeActive.current && state.backgroundMusicCurrent === file && state.backgroundMusicPlaying) return;
-    stop(); mixer.update({ gain: 1 }); mixer.reset(); setTrack(null);
+    stop(); manualPlayPending.current = true; mixer.update({ gain: 1 }); mixer.reset(); setTrack(null);
     setCurrent(file); setPlaying(true);
   };
   const playPause = () => {
     if (!current && liveSlide?.youtubeMusic && desiredKey) {
       void playYouTube(liveSlide.youtubeMusic, { key: desiredKey, gain: musicGain(liveSlide.musicSettings?.volume) });
-    } else setPlaying(!playing);
+    } else {
+      if (!current) return;
+      manualPlayPending.current = !playing;
+      if (playing) playSfx('pause');
+      setPlaying(!playing);
+    }
   };
   const onPlaying = () => {
+    finishManualPlay();
     if (fadeInPending.current && playbackOwner.current === desired.current.key) {
       fadeInPending.current = false; mixer.fadeTo(1, MUSIC_FADE_IN_MS);
     }
@@ -145,6 +162,7 @@ export function useBackgroundMusicPlayback() {
     }
   };
   const onError = () => {
+    finishManualPlay(true);
     if (!useStore.getState().backgroundMusicCurrent) return;
     setError(translate.current(track ? 'settings.youtubePlayError' : 'settings.backgroundMusicPlayError')); ended();
   };

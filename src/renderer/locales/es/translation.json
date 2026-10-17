@@ -1068,6 +1068,13 @@
     "flip": "Voltear"
   },
   "watermark": {
+    "unsupportedFormat": "Formato no compatible. Elige PNG, JPG o SVG.",
+    "fileTooLarge": "El archivo es demasiado grande. Tamaño máximo: 2 MB.",
+    "uploadSuccess": "Logotipo cargado correctamente.",
+    "uploadError": "No se pudo cargar el logotipo.",
+    "requireLogo": "Primero carga un logotipo.",
+    "collapse": "Contraer ajustes del logotipo",
+    "expand": "Expandir ajustes del logotipo",
     "title": "Marca de agua del logotipo",
     "uploadLogo": "Subir logotipo",
     "replaceLogo": "Reemplazar logotipo",
@@ -1103,6 +1110,9 @@
     "updateDownloadedBadge": "Actualización descargada; reinicia para aplicarla"
   },
   "settings": {
+    "youtubeLoadMore": "Cargar más",
+    "youtubeSearchingMore": "Cargando más…",
+    "youtubeSearchExpired": "Estos resultados han caducado. Vuelve a buscar para continuar.",
     "youtubeAddMusicSlide": "Añadir diapositiva musical",
     "youtubeMusicSlideLabel": "Música · YouTube",
     "youtubeMusicSlideHint": "La diapositiva musical se reproduce al enviarla en directo y se detiene al cambiar de diapositiva. Requiere Internet. Para oírla en el televisor, selecciona HDMI/el televisor como salida de audio de Windows.",
@@ -1122,6 +1132,8 @@
     "retention30d": "30 días",
     "liveSaveLastSaved": "Último guardado: {{time}}",
     "liveSaveEmpty": "No existe ninguna copia de seguridad automática.",
+    "muteSfxDuringLive": "Silenciar efectos de sonido en directo",
+    "muteSfxDuringLiveDesc": "Silencia los sonidos de la interfaz mientras haya una salida de proyección o escenario abierta. No afecta al audio multimedia ni a la música.",
     "soundEffects": "Efectos de sonido",
     "backgroundMusic": "Música de fondo",
     "backgroundMusicDesc": "Reproduce música de una carpeta seleccionada dentro de la aplicación.",
@@ -1250,20 +1262,25 @@
     "screenSlide": "🖥 Pantalla en vivo"
   },
   "prepCheck": {
+    "stale": "Contenido modificado; comprobación pendiente…",
+    "completed": "Comprobación completada",
+    "slideErrors": "{{count}} problema(s), incluidos errores. Abrir informe de diapositiva.",
+    "slideWarnings": "{{count}} aviso(s). Abrir informe de diapositiva.",
+    "severity": {"error":"Error","warning":"Aviso"},
     "title": "Comprobación de preparación",
     "button": "Comprobación",
     "allClear": "Todo parece listo",
     "allClearHint": "No se encontraron problemas de legibilidad ni de medios faltantes.",
     "summary": "{{count}} diapositiva(s) pueden necesitar atención antes de salir en vivo.",
     "issue": {
+      "duplicateSlide": "Esta diapositiva parece idéntica a la anterior.",
       "emptyText": "Esta diapositiva de texto está vacía.",
-      "longTextSmallFont": "Texto largo: considera dividir el versículo/texto para facilitar la lectura.",
+      "longTextSmallFont": "Riesgo estimado: puede ser necesario dividir el texto largo. No es un desbordamiento medido.",
       "missingImage": "Esta diapositiva de imagen no tiene imagen seleccionada.",
       "missingVideo": "Esta diapositiva de video no tiene video seleccionado.",
       "emptyLoop": "Esta diapositiva de bucle no tiene elementos.",
       "emptyPart": "Una parte de la canción está vacía.",
       "onlineResource": "El medio requiere internet; usa un archivo local para trabajar sin conexión.",
-      "safeMargin": "Texto demasiado cerca del margen seguro.",
       "inaccessibleMedia": "Archivo multimedia ausente o ilegible.",
       "fontUnavailable": "Fuente no disponible sin conexión; elige otra o revisa la conexión.",
       "textOverflow": "El texto excede su espacio. Divide el versículo/texto o reduce la fuente."
@@ -1295,6 +1312,9 @@
     "confirmNew": "¿Crear una presentación? Guarda antes el trabajo actual en la biblioteca."
   },
   "sections": {
+    "includeSelectedSlides": "Mover las diapositivas seleccionadas a la nueva sección ({{count}})",
+    "time": "Hora de la sección",
+    "timeHint": "Escribe una hora (p. ej., 10:30). Pulsa Enter para guardar; borra para quitarla.",
     "title": "Secciones del culto",
     "description": "Organiza diapositivas en secciones plegables; desactivarlas conserva el contenido.",
     "none": "Sin sección",
@@ -1442,7 +1462,8 @@
         "body": "Arrastra la diapositiva de ejemplo resaltada sobre la otra diapositiva resaltada. El ejercicio termina cuando sus posiciones cambian realmente."
       },
       "canvas-edit": {
-        "title": "Editar una imagen en el Editor"
+        "title": "Editar una imagen en el Editor",
+        "body": "Selecciona la imagen de ejemplo en el editor de diapositivas, gírala 15 grados y guarda el cambio."
       }
     }
   },

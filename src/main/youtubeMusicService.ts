@@ -10,6 +10,7 @@ import { SabrStream } from 'googlevideo/sabr-stream';
 import { buildSabrFormat, EnabledTrackTypes, Logger, LogLevel } from 'googlevideo/utils';
 import { buildURL, getHeaders, USER_AGENT, parseLooseJSON } from 'bgutils-js/utils';
 import { isYouTubeVideoId, type YouTubeSearchResponse, type YouTubePlayResponse } from '../shared/youtubeMusic';
+import { YouTubeSearchPager, type YouTubeSearchPage } from './youtubeSearchPager';
 import { fetchMusicStream } from './musicStreamFetch';
 
 const fetchTimed: typeof fetch = (input, init = {}) => fetch(input, {
@@ -96,15 +97,20 @@ export class YouTubeMusicService {
     return this.youtube;
   }
 
-  async search(query: unknown): Promise<YouTubeSearchResponse> {
-    if (this.disposed || typeof query !== 'string' || !query.trim() || query.length > 200)
-      return { ok: false, error: 'invalid-query' };
-    try {
-      const results = await (await this.getYouTube()).search(query.trim(), { type: 'video' });
-      return { ok: true, results: results.videos.filterType(YTNodes.Video).slice(0, 12).map(video => ({
+  private searchPager = new YouTubeSearchPager(async query => {
+    const youtube = await this.getYouTube();
+    const adapt = (page: Awaited<ReturnType<Innertube['search']>>): YouTubeSearchPage => ({
+      results: page.videos.filterType(YTNodes.Video).map(video => ({
         id: video.id, title: video.title.toString(), duration: video.duration?.seconds ?? 0,
-      })) };
-    } catch { return { ok: false, error: 'search-failed' }; }
+      })),
+      next: page.has_continuation ? async () => adapt(await page.getContinuation()) : undefined,
+    });
+    return adapt(await youtube.search(query, { type: 'video' }));
+  });
+
+  async search(query: unknown, cursor?: unknown): Promise<YouTubeSearchResponse> {
+    if (this.disposed) return { ok: false, error: 'unavailable' };
+    return this.searchPager.search(query, cursor);
   }
 
   private async createTokenWindow(): Promise<BrowserWindow> {
@@ -276,6 +282,7 @@ export class YouTubeMusicService {
   dispose(): void {
     this.disposed = true;
     this.prepared.clear();
+    this.searchPager.clear();
     this.stop();
     if (this.tokenWindow && !this.tokenWindow.isDestroyed()) this.tokenWindow.destroy();
     this.tokenWindow = undefined;

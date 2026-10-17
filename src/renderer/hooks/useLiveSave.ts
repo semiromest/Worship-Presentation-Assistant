@@ -1,5 +1,6 @@
 import { isSessionOnlyChange, writeLiveSession } from '../liveSession';
 import { useCallback, useEffect, useRef } from 'react';
+import { shallow } from 'zustand/shallow';
 import { useStore } from '../state/useStore';
 import { IS_PROJECTOR_MODE } from '../constants';
 import type { Presentation } from '../types';
@@ -372,16 +373,18 @@ export function useLiveSave(): null {
       }
     };
 
-    const unsubscribe = useStore.subscribe((state, prev) => {
-      const changed = state.presentation !== prev.presentation || state.liveSlideId !== prev.liveSlideId;
-      if (changed && state.liveSaveEnabled) {
-        try {
-          writeLiveSession(state.presentation, state.liveSlideId);
-          state.setSessionSaveStatus('idle');
-        } catch { state.setSessionSaveStatus('error'); }
-      }
-      if (!isSessionOnlyChange(prev.presentation, state.presentation) || (!prev.liveSaveEnabled && state.liveSaveEnabled)) scheduleSave();
-    });
+    const unsubscribe = useStore.subscribe(
+      state => ({ presentation: state.presentation, liveSlideId: state.liveSlideId, liveSaveEnabled: state.liveSaveEnabled }),
+      (state, prev) => {
+        const changed = state.presentation !== prev.presentation || state.liveSlideId !== prev.liveSlideId;
+        if (changed && state.liveSaveEnabled) {
+          try {
+            writeLiveSession(state.presentation, state.liveSlideId);
+            useStore.getState().setSessionSaveStatus('idle');
+          } catch { useStore.getState().setSessionSaveStatus('error'); }
+        }
+        if (!isSessionOnlyChange(prev.presentation, state.presentation) || (!prev.liveSaveEnabled && state.liveSaveEnabled)) scheduleSave();
+      }, { equalityFn: shallow });
 
     /*
      * Best-effort final save before the renderer is unloaded.

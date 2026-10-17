@@ -1,3 +1,4 @@
+import { playSfx } from '../sfx';
 import {
   memo,
   useCallback,
@@ -442,8 +443,8 @@ export default function VideoEditor({
   const togglePlay = useStableCallback(() => {
     const video = videoRef.current;
     if (!video || !active || !canPlay) return;
-    if (video.paused) void video.play().catch(() => setPlaying(false));
-    else video.pause();
+    if (video.paused) void video.play().then(() => { if (!video.paused) playSfx('play'); }).catch(() => { setPlaying(false); playSfx('error'); });
+    else { video.pause(); playSfx('pause'); }
   });
 
   /* ------------------------------ trim / settings -------------------------- */

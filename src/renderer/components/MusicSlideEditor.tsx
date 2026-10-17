@@ -1,3 +1,4 @@
+import { SettingSlider } from './SettingsControls';
 import { useState } from 'react';
 import { Image, Music, Palette } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -57,17 +58,15 @@ export default function MusicSlideEditor({ slide, onPatch }: {
       <button type="button" disabled={choosing} className={button} data-testid="music-preset-photo" onClick={() => void chooseImage()}><Image className="h-4 w-4" />{t('musicSlide.photo')}</button>
       {error && <p role="alert" className="text-xs text-red-300">{t('musicSlide.imageError')}</p>}
     </div>
-    {slide.styles?.backgroundImage && <label className="block space-y-2 text-xs text-white/75">
-      <span className="flex justify-between gap-2"><span>{t('musicSlide.dim')}</span><span>{Math.round(backgroundDim(slide.styles.backgroundDim) * 100)}%</span></span>
-      <input data-testid="music-background-dim" aria-label={t('musicSlide.dim')} type="range" min="0" max="80" step="1" value={Math.round(backgroundDim(slide.styles.backgroundDim) * 100)} className="w-full accent-sky-400"
-        onChange={event => { const current = latest(); if (current) onPatch(slide.id, { styles: { ...current.styles, backgroundDim: Number(event.target.value) / 100 } }); }} />
-    </label>}
-    <label className="block space-y-2 text-xs text-white/75">
-      <span className="flex justify-between gap-2"><span>{t('musicSlide.volume')}</span><span>{Math.round(musicGain(slide.musicSettings?.volume) * 100)}%</span></span>
-      <input data-testid="music-slide-volume" aria-label={t('musicSlide.volume')} type="range" min="0" max="100" step="1" value={Math.round(musicGain(slide.musicSettings?.volume) * 100)} className="w-full accent-sky-400"
-        onChange={event => onPatch(slide.id, { musicSettings: { volume: Number(event.target.value) / 100 } })} />
-      <span className="block leading-relaxed text-white/45">{t('musicSlide.volumeHint')}</span>
-    </label>
+    {slide.styles?.backgroundImage && <SettingSlider testId="music-background-dim" label={t('musicSlide.dim')}
+      value={Math.round(backgroundDim(slide.styles.backgroundDim) * 100)} min={0} max={80} suffix="%"
+      onChange={value => { const current = latest(); if (current) onPatch(slide.id, { styles: { ...current.styles, backgroundDim: value / 100 } }); }} />}
+    <div className="space-y-2">
+      <SettingSlider id="music-slide-volume" testId="music-slide-volume" label={t('musicSlide.volume')}
+        value={Math.round(musicGain(slide.musicSettings?.volume) * 100)} min={0} max={100} suffix="%"
+        onChange={value => onPatch(slide.id, { musicSettings: { ...slide.musicSettings, volume: value / 100 } })} />
+      <p className="text-xs leading-relaxed text-white/45">{t('musicSlide.volumeHint')}</p>
+    </div>
     <p className="text-xs leading-relaxed text-white/45">{t('musicSlide.fadeHint')}</p>
   </section>;
 }

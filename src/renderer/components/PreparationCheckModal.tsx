@@ -1,19 +1,12 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { playSfx } from '../sfx';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, AlertCircle, CheckCircle2, ClipboardCheck, RefreshCw, X } from 'lucide-react';
-import { measureSlideReadability } from '../readinessMeasurement';
-import { loadGoogleFont, slideFonts } from '../fontLoader';
 import { useStore } from '../state/useStore';
-import {
-  analyzePresentationReadiness,
-  collectMediaResources,
-  type SlideReadinessResult,
-  type ReadinessIssue,
-} from '../../shared/readiness';
+import type { ReadinessIssue } from '../../shared/readiness';
+import { usePreparationStore } from '../state/usePreparationStore';
 import Dialog from './Dialog';
 import { splitScripture } from '../hymnSplit';
-
-type Slide = ReturnType<typeof useStore.getState>['presentation']['slides'][number];
 
 const SEVERITY_ICON = {
   error: AlertCircle,
@@ -26,84 +19,6 @@ const SEVERITY_CLASS = {
 } as const;
 
 const SPLITTABLE_ISSUES = new Set(['textOverflow', 'longTextSmallFont']);
-/** Max time (ms) the check may hold the main thread before yielding to the UI. */
-const YIELD_BUDGET_MS = 12;
-
-const severityRank = (issue: ReadinessIssue) => (issue.severity === 'error' ? 0 : 1);
-
-/* -------------------------------------------------------------------------- */
-/* The check itself (pure async function, no React)                            */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Runs every readiness check. Returns `undefined` if cancelled; throws if media
- * cannot be verified (an "all clear" that skipped the media check would be misleading).
- */
-async function runPreparationCheck(
-  slides: Slide[],
-  isCancelled: () => boolean
-): Promise<SlideReadinessResult[] | undefined> {
-  const base = new Map(analyzePresentationReadiness(slides).map((result) => [result.slideId, result]));
-
-  // Collect once per slide and de-duplicate, so shared media/fonts are checked a single time.
-  const mediaBySlide = slides.map((slide) => [...new Set(collectMediaResources(slide))]);
-  const fontsBySlide = slides.map((slide) => [...new Set(Array.from(slideFonts(slide)))]);
-
-  const resources = [...new Set(mediaBySlide.flat())];
-  let statuses: Record<string, boolean> = {};
-  if (resources.length > 0) {
-    const checked = await window.electronAPI?.checkMediaResources?.(resources);
-    if (!checked) throw new Error('Resource checks unavailable');
-    statuses = checked;
-  }
-  if (isCancelled()) return undefined;
-
-  // Load every distinct font in parallel up front; a font that throws becomes a warning, not a failed check.
-  const families = [...new Set(fontsBySlide.flat())];
-  const fontStatus = new Map(
-    await Promise.all(
-      families.map(async (family) => {
-        try {
-          return [family, !!(await loadGoogleFont(family))] as const;
-        } catch {
-          return [family, false] as const;
-        }
-      })
-    )
-  );
-  if (isCancelled()) return undefined;
-
-  const results: SlideReadinessResult[] = [];
-  let lastYield = performance.now();
-  for (let index = 0; index < slides.length; index++) {
-    if (isCancelled()) return undefined;
-    const slide = slides[index];
-    const issues: ReadinessIssue[] = [...(base.get(slide.id)?.issues ?? [])];
-
-    for (const url of mediaBySlide[index]) {
-      if (statuses[url] === false) issues.push({ severity: 'error', message: 'inaccessibleMedia', detail: url });
-    }
-    for (const family of fontsBySlide[index]) {
-      if (!fontStatus.get(family)) issues.push({ severity: 'warning', message: 'fontUnavailable', detail: family });
-    }
-    issues.push(...measureSlideReadability(slide));
-
-    if (issues.length) {
-      // Errors first; sort is stable so the original order is kept within a severity.
-      results.push({ slideId: slide.id, index, issues: issues.sort((a, b) => severityRank(a) - severityRank(b)) });
-    }
-    if (performance.now() - lastYield > YIELD_BUDGET_MS) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      lastYield = performance.now();
-    }
-  }
-  return results;
-}
-
-/* -------------------------------------------------------------------------- */
-/* One slide's issues (memoized: only re-renders when its own data changes)    */
-/* -------------------------------------------------------------------------- */
-
 const SlideIssues = memo(function SlideIssues({
   slideId,
   label,
@@ -111,6 +26,7 @@ const SlideIssues = memo(function SlideIssues({
   canSplit,
   onJump,
   onSplit,
+  focused,
 }: {
   slideId: string;
   label: string;
@@ -118,19 +34,26 @@ const SlideIssues = memo(function SlideIssues({
   canSplit: boolean;
   onJump: (slideId: string) => void;
   onSplit: (slideId: string) => void;
+  focused: boolean;
 }) {
   const { t } = useTranslation();
+  const itemRef = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (focused) itemRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [focused]);
   const showSplit = canSplit && issues.some((issue) => SPLITTABLE_ISSUES.has(issue.message));
   return (
-    <li className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+    <li
+      ref={itemRef}
+      data-preparation-slide={slideId}
+      className={`rounded-xl border bg-white/[0.03] p-3 ${focused ? 'border-blue-400' : 'border-white/10'}`}
+    >
       <button
         type="button"
         onClick={() => onJump(slideId)}
         className="w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
       >
-        <span className="block text-sm font-semibold text-white/85 hover:text-blue-300 transition-colors">
-          {label}
-        </span>
+        <span className="block text-sm font-semibold text-white/85 hover:text-blue-300 transition-colors">{label}</span>
       </button>
       <ul className="mt-2 space-y-1">
         {issues.map((issue, i) => {
@@ -180,48 +103,17 @@ export default function PreparationCheckModal() {
   const outputs = useStore((s) => s.outputAssignments);
   const isProjectorOpen = useStore((s) => s.isProjectorWindowOpen);
 
-  // `null` = no result yet for this open session (distinct from "checked, nothing found").
-  const [results, setResults] = useState<SlideReadinessResult[] | null>(null);
-  const [checking, setChecking] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const [retry, setRetry] = useState(0);
-
-  const { disconnected, noOutput } = useMemo(() => {
-    const entries = Object.entries(outputs);
-    return {
-      disconnected: entries.some(([id, value]) => value.isOpen && !displays.some((display) => display.id === id)),
-      noOutput: !isProjectorOpen && !entries.some(([, output]) => output.isOpen && output.mode !== 'stage'),
-    };
-  }, [outputs, displays, isProjectorOpen]);
-  const outputProblem = disconnected || noOutput;
-
-  useEffect(() => {
-    if (!isOpen) {
-      // Never show a previous session's results when the dialog is reopened.
-      setResults(null);
-      setChecking(false);
-      setFailed(false);
-      return;
-    }
-    let cancelled = false;
-    setChecking(true);
-    setFailed(false);
-    runPreparationCheck(presentation.slides, () => cancelled)
-      .then((next) => {
-        if (!cancelled && next) setResults(next);
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        console.error('Preparation check failed', error);
-        setFailed(true);
-      })
-      .finally(() => {
-        if (!cancelled) setChecking(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [isOpen, presentation.slides, retry]);
+  const results = usePreparationStore((s) => s.results);
+  const status = usePreparationStore((s) => s.status);
+  const focusedSlideId = usePreparationStore((s) => s.focusedSlideId);
+  const requestCheck = usePreparationStore((s) => s.requestCheck);
+  const disconnectedIds = usePreparationStore((s) => s.disconnectedOutputIds);
+  const checking = status === 'checking';
+  const disconnected =
+    disconnectedIds.length > 0 ||
+    Object.entries(outputs).some(([id, output]) => output.isOpen && !displays.some((display) => display.id === id));
+  const noOutput =
+    !isProjectorOpen && !Object.values(outputs).some((output) => output.isOpen && output.mode !== 'stage');
 
   // Results can briefly outlive the slides they describe (e.g. right after a split or delete),
   // so positions and existence are always resolved against the current slide list.
@@ -243,6 +135,7 @@ export default function PreparationCheckModal() {
       setSelectedSlideId(slideId);
       state.setSelectedSlideIds(new Set([slideId]));
       state.setSearchQuery('');
+      state.setSectionFilterId('');
       setActiveTab('slides');
       setIsOpen(false);
     },
@@ -273,13 +166,10 @@ export default function PreparationCheckModal() {
     return title ? `${index + 1}. ${title.slice(0, 40)}` : `${t('common.slide')} ${index + 1}`;
   };
 
-  // Full-screen "checking" only when there is nothing to show yet; re-checks keep the list visible.
-  const showInitialChecking = !failed && (results === null || (checking && visible.length === 0));
-
   return (
     <Dialog
       open={isOpen}
-      onClose={() => setIsOpen(false)}
+      onClose={() => { setIsOpen(false); playSfx('close'); }}
       labelledBy="prep-check-title"
       className="bg-surface-overlay border border-white/10 rounded-2xl p-6 max-w-xl w-full mx-4 shadow-2xl max-h-[85vh] overflow-y-auto"
     >
@@ -290,7 +180,7 @@ export default function PreparationCheckModal() {
         </h2>
         <button
           type="button"
-          onClick={() => setIsOpen(false)}
+          onClick={() => { setIsOpen(false); playSfx('close'); }}
           aria-label={t('common.close')}
           className="p-1 rounded hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
         >
@@ -298,62 +188,69 @@ export default function PreparationCheckModal() {
         </button>
       </div>
 
-      {outputProblem && (
-        <p role="status" className="mb-3 text-sm text-amber-300">
+      {(disconnected || noOutput) && (
+        <p role="status" className={`mb-3 text-sm ${disconnected ? 'text-amber-300' : 'text-white/55'}`}>
           {t(disconnected ? 'prepCheck.outputDisconnected' : 'prepCheck.outputClosed')}
         </p>
       )}
 
-      {failed ? (
-        <div role="alert" className="py-6 text-amber-300">
-          <p>{t('prepCheck.checkFailed')}</p>
-          <button
-            type="button"
-            className="mt-3 rounded bg-white/10 px-3 py-2 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
-            onClick={() => setRetry((n) => n + 1)}
-          >
-            {t('prepCheck.retry')}
-          </button>
-        </div>
-      ) : showInitialChecking ? (
-        <p role="status" className="py-8 text-center">
-          {t('prepCheck.checking')}
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p
+          role={status === 'failed' ? 'alert' : 'status'}
+          className={`text-xs ${status === 'failed' ? 'text-amber-300' : 'text-white/60'}`}
+          data-preparation-status={status}
+        >
+          {t(
+            status === 'failed'
+              ? 'prepCheck.checkFailed'
+              : status === 'checking'
+                ? 'prepCheck.checking'
+                : status === 'stale'
+                  ? 'prepCheck.stale'
+                  : 'prepCheck.completed'
+          )}
         </p>
-      ) : visible.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 py-8 text-center">
-          <CheckCircle2 className="w-12 h-12 text-emerald-400" aria-hidden="true" />
-          <p className="text-white/80 font-medium">{t(outputProblem ? 'prepCheck.contentClear' : 'prepCheck.allClear')}</p>
-          <p className="text-sm text-white/45">{t('prepCheck.allClearHint')}</p>
-        </div>
-      ) : (
-        <>
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <p className="text-sm text-white/55">{t('prepCheck.summary', { count: visible.length })}</p>
-            <button
-              type="button"
-              onClick={() => setRetry((n) => n + 1)}
-              disabled={checking}
-              className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-white/60 hover:bg-white/10 hover:text-white/85 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
-            >
-              <RefreshCw className={checking ? 'w-3.5 h-3.5 animate-spin' : 'w-3.5 h-3.5'} aria-hidden="true" />
-              {t('prepCheck.retry')}
-            </button>
+        <button
+          type="button"
+          onClick={requestCheck}
+          disabled={checking}
+          className="shrink-0 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs hover:bg-white/10 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+        >
+          <RefreshCw className={checking ? 'w-3.5 h-3.5 animate-spin' : 'w-3.5 h-3.5'} aria-hidden="true" />
+          {t('prepCheck.retry')}
+        </button>
+      </div>
+
+      {status === 'complete' &&
+        (visible.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-8 text-center">
+            <CheckCircle2 className="w-12 h-12 text-emerald-400" aria-hidden="true" />
+            <p className="text-white/80 font-medium">{t('prepCheck.contentClear')}</p>
+            <p className="text-sm text-white/45">{t('prepCheck.allClearHint')}</p>
           </div>
-          <ul className="space-y-2" aria-busy={checking}>
-            {visible.map((result) => (
-              <SlideIssues
-                key={result.slideId}
-                slideId={result.slideId}
-                label={slideLabel(result.index)}
-                issues={result.issues}
-                canSplit={presentation.slides[result.index]?.type === 'text' && !presentation.slides[result.index]?.partsMode}
-                onJump={jumpToSlide}
-                onSplit={splitLongText}
-              />
-            ))}
-          </ul>
-        </>
-      )}
+        ) : (
+          <>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <p className="text-sm text-white/55">{t('prepCheck.summary', { count: visible.length })}</p>
+            </div>
+            <ul className="space-y-2" aria-busy={checking}>
+              {visible.map((result) => (
+                <SlideIssues
+                  key={result.slideId}
+                  focused={isOpen && result.slideId === focusedSlideId}
+                  slideId={result.slideId}
+                  label={slideLabel(result.index)}
+                  issues={result.issues}
+                  canSplit={
+                    presentation.slides[result.index]?.type === 'text' && !presentation.slides[result.index]?.partsMode
+                  }
+                  onJump={jumpToSlide}
+                  onSplit={splitLongText}
+                />
+              ))}
+            </ul>
+          </>
+        ))}
     </Dialog>
   );
 }

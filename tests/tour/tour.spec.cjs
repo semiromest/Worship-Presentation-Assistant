@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- CommonJS Electron fixture. */
 const { test, expect, _electron: electron } = require('@playwright/test');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -23,6 +24,7 @@ async function launch() {
   await page.evaluate(() => window.__tourTest.language('en'));
 }
 test.beforeEach(async () => { processLog = []; profile = await fs.mkdtemp(path.join(os.tmpdir(), 'wpa-tour-e2e-')); });
+// eslint-disable-next-line no-empty-pattern -- Only testInfo is used.
 test.afterEach(async ({}, info) => {
   if (page && !page.isClosed() && info.status !== info.expectedStatus) {
     await page.screenshot({ path: info.outputPath('failure.png') }).catch(() => {});
@@ -40,7 +42,7 @@ async function existingProfile() {
   await launch();
 }
 test('normal help: one learning entry, no automatic surfaces, keyboard reference launches practice', async()=>{
-  await launch(); await page.keyboard.press('Alt+9');
+  await launch(); await page.keyboard.press('Alt+9'); await require('./guide-flow.cjs').openLearning(page);
   await expect(page.getByTestId('practice-open')).toBeVisible();
   for(const id of ['tour-map-open','tour-map','tour-card','page-suggestion'])await expect(page.getByTestId(id)).toHaveCount(0);
   await expect(page.locator('[data-testid^="intro-settings-"]')).toHaveCount(0);
@@ -49,7 +51,7 @@ test('normal help: one learning entry, no automatic surfaces, keyboard reference
   await page.keyboard.press('?');await expect(page.getByTestId('cheatsheet-practice')).toBeVisible();
   await page.getByTestId('cheatsheet-practice').click();expect(await app.evaluate(()=>global.__openedPractice)).toBe(2);
   await expect(page.getByTestId('cheatsheet-practice')).toHaveCount(0);
-  await page.reload();await page.locator('nav').waitFor();
+  await page.reload();await page.locator('[data-app-shell] > nav').waitFor();
   await expect(page.getByTestId('tour-map')).toHaveCount(0);await expect(page.getByTestId('page-suggestion')).toHaveCount(0);
 });
 
@@ -93,7 +95,7 @@ test('guide spike: renderer loss restores usable document without inherited iner
   await expect(page.locator('[data-guide-card]')).toBeVisible();
   await app.evaluate(async ({ BrowserWindow }) => { const contents = BrowserWindow.getAllWindows()[0].webContents; await new Promise(resolve => { contents.once('render-process-gone', resolve); contents.forcefullyCrashRenderer(); }); });
   await app.close(); app = page = undefined; await launch();
-  await expect(page.locator('nav')).toBeVisible();
+  await expect(page.locator('[data-app-shell] > nav')).toBeVisible();
   await expect(page.locator('[data-app-shell]')).not.toHaveAttribute('inert');
   await page.getByRole('button', { name: 'Slides', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Slides', exact: true })).toHaveAttribute('aria-current', 'page');

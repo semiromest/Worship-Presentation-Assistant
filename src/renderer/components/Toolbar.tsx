@@ -1,3 +1,4 @@
+import { playSfx } from '../sfx';
 import { usePractice } from '../hooks/usePractice';
 import { registerTourAnchor } from './Tour/tourController';
 import OutputStatus from './OutputStatus';
@@ -23,11 +24,11 @@ import {
 } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { useSttStore } from '../state/useSttStore';
-import { analyzePresentationReadiness } from '../../shared/readiness';
+import { usePreparationStore } from '../state/usePreparationStore';
 import { cn } from '../utils';
 import DisplayOutputsPopover from './DisplayOutputsPopover';
 import BackgroundMusicPopover from './BackgroundMusicPopover';
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 interface ToolbarProps {
   addYouTubeMusicSlide: (track: import('../../shared/youtubeMusic').YouTubeMusicResult) => void;
@@ -53,10 +54,11 @@ export default function Toolbar({
   const { t } = useTranslation();
   const practice = usePractice();
 
-  const presentation = useStore((s) => s.presentation);
-  const undoState = useStore((s) => s.undoState);
+  const presentationName = useStore(s => s.presentation.name);
+  const canUndo = useStore(s => s.undoState.past.length > 0);
+  const canRedo = useStore(s => s.undoState.future.length > 0);
   const dispatchUndo = useStore((s) => s.dispatchUndo);
-  const selectedSlideIds = useStore((s) => s.selectedSlideIds);
+  const selectedCount = useStore(s => s.selectedSlideIds.size);
   const setIsCheatsheetOpen = useStore((s) => s.setIsCheatsheetOpen);
   const isProjectorWindowOpen = useStore((s) => s.isProjectorWindowOpen);
   const setPresentationName = useStore((s) => s.setPresentationName);
@@ -87,18 +89,19 @@ export default function Toolbar({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const startEditing = useCallback(() => {
-    setDraftName(presentation.name);
+    setDraftName(presentationName);
     setEditingName(true);
     requestAnimationFrame(() => inputRef.current?.select());
-  }, [presentation.name]);
+  }, [presentationName]);
 
   const commitName = useCallback(() => {
     const trimmed = draftName.trim();
-    if (trimmed && trimmed !== presentation.name) {
+    if (trimmed && trimmed !== presentationName) {
       setPresentationName(trimmed);
+      playSfx('success');
     }
     setEditingName(false);
-  }, [draftName, presentation.name, setPresentationName]);
+  }, [draftName, presentationName, setPresentationName]);
 
   const cancelEditing = useCallback(() => {
     setEditingName(false);
@@ -122,10 +125,10 @@ export default function Toolbar({
     return t('common.savedMinAgo', { count: diffMin });
   })();
 
-  const readinessIssueCount = useMemo(
-    () => analyzePresentationReadiness(presentation.slides).length,
-    [presentation.slides],
-  );
+  const readinessIssueCount = usePreparationStore(s => s.results.length);
+  const readinessStatus = usePreparationStore(s => s.status);
+  const readinessLabel = t(readinessStatus === 'checking' ? 'prepCheck.checking' : readinessStatus === 'stale' ? 'prepCheck.stale' : readinessStatus === 'failed' ? 'prepCheck.checkFailed' : 'prepCheck.completed');
+
 
   return (
     <div className="shrink-0"><header ref={element => registerTourAnchor('toolbar', element)} className="h-14 bg-surface-raised border-b border-white/10 flex items-center justify-between px-6 flex-shrink-0">
@@ -151,7 +154,7 @@ export default function Toolbar({
             title={t('common.clickToRename')}
             aria-label={t('common.clickToRename')}
           >
-            <span className="truncate">{presentation.name}</span>
+            <span className="truncate">{presentationName}</span>
             <svg
               className="w-3.5 h-3.5 text-white/50 group-hover:text-white/70 transition-colors shrink-0"
               viewBox="0 0 24 24"
@@ -220,7 +223,7 @@ export default function Toolbar({
         {/* Phone viewers (live-slide broadcast) */}
         <div className="relative shrink-0">
           <button
-            onClick={() => setIsLiveShareOpen(true)}
+            onClick={() => { setIsLiveShareOpen(true); playSfx('open'); }}
             aria-haspopup="dialog"
             aria-pressed={screenShareActive}
             className={`flex items-center justify-center w-[150px] py-1.5 rounded-md transition-colors text-sm font-medium focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.97] ${
@@ -240,7 +243,7 @@ export default function Toolbar({
         {/* Remote Panel */}
         <div className="relative shrink-0">
           <button
-            onClick={() => setIsRemoteOpen(true)}
+            onClick={() => { setIsRemoteOpen(true); playSfx('open'); }}
             aria-haspopup="dialog"
             className="flex items-center justify-center w-[150px] py-1.5 rounded-md transition-colors text-sm font-medium focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.97] bg-white/5 hover:bg-white/10 text-white"
           >
@@ -255,7 +258,7 @@ export default function Toolbar({
         {practice && <button type="button" disabled data-guide-anchor="phone-controls" aria-label={t('common.remoteControl')} className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/60"><Smartphone className="h-4 w-4" aria-hidden="true" /><span>{t('common.remoteControl')}</span></button>}
         <button
           onClick={() => dispatchUndo({ type: 'UNDO' })}
-          disabled={undoState.past.length === 0}
+          disabled={!canUndo}
           title={t('common.undo')}
           aria-label={t('common.undo')}
           className="p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-30 disabled:hover:bg-white/5 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92] disabled:active:scale-100"
@@ -264,7 +267,7 @@ export default function Toolbar({
         </button>
         <button
           onClick={() => dispatchUndo({ type: 'REDO' })}
-          disabled={undoState.future.length === 0}
+          disabled={!canRedo}
           title={t('common.redo')}
           aria-label={t('common.redo')}
           className="p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-30 disabled:hover:bg-white/5 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92] disabled:active:scale-100"
@@ -272,11 +275,11 @@ export default function Toolbar({
           <Redo2 className="w-4 h-4" aria-hidden="true" />
         </button>
 
-        {selectedSlideIds.size > 1 && (
+        {selectedCount > 1 && (
           <>
             <div className="w-px h-6 bg-white/10 mx-1" aria-hidden="true" />
             <span className="text-xs text-white/55 font-medium" aria-live="polite">
-              {selectedSlideIds.size} {t('common.selected')}
+              {selectedCount} {t('common.selected')}
             </span>
             <button
               onClick={() => moveSelectedSlides(-1)}
@@ -316,12 +319,16 @@ export default function Toolbar({
         <div className="w-px h-6 bg-white/10 mx-1" />
 
         <button
-          onClick={() => setIsPrepCheckOpen(true)}
-          title={t('prepCheck.title')}
+          onClick={() => { usePreparationStore.setState({ focusedSlideId: null }); setIsPrepCheckOpen(true); playSfx('open'); }}
+          title={t('prepCheck.title') + ': ' + readinessLabel}
           aria-label={t('prepCheck.title')}
+          aria-describedby="preparation-toolbar-status"
+          data-preparation-status={readinessStatus}
           className="relative p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]"
         >
-          <ClipboardCheck className="w-4 h-4" aria-hidden="true" />
+          <ClipboardCheck className={readinessStatus === 'checking' ? 'w-4 h-4 animate-pulse' : 'w-4 h-4'} aria-hidden="true" />
+          <span id="preparation-toolbar-status" className="sr-only">{readinessLabel}{readinessIssueCount > 0 ? ': ' + t('prepCheck.summary', { count: readinessIssueCount }) : ''}</span>
+          {readinessStatus !== 'complete' && <span aria-hidden="true" className="absolute -top-1 -right-1 h-4 min-w-4 rounded-full bg-amber-500 text-black text-[10px]">{readinessStatus === 'failed' ? '!' : '…'}</span>}
           {readinessIssueCount > 0 && (
             <span
               className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-[10px] font-bold text-black flex items-center justify-center tabular-nums"
@@ -333,7 +340,7 @@ export default function Toolbar({
         </button>
 
         <button
-          onClick={() => setIsCheatsheetOpen(true)}
+          onClick={() => { setIsCheatsheetOpen(true); playSfx('open'); }}
           title={t('common.keyboardShortcuts')}
           aria-label={t('common.keyboardShortcuts')}
           className="p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]"
@@ -371,7 +378,7 @@ export default function Toolbar({
         <div className="w-px h-6 bg-white/10 mx-1" />
 
         <button
-          onClick={() => setIsRightPanelOpen(!isRightPanelOpen)}
+          onClick={() => { setIsRightPanelOpen(!isRightPanelOpen); playSfx(isRightPanelOpen ? 'close' : 'open'); }}
           title={isRightPanelOpen ? t('common.panelClose') : t('common.panelOpen')}
           aria-label={isRightPanelOpen ? t('common.panelClose') : t('common.panelOpen')}
           aria-pressed={isRightPanelOpen}

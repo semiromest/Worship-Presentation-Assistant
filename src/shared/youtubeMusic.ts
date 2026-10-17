@@ -5,7 +5,7 @@ export interface YouTubeMusicResult {
 }
 
 export type YouTubeSearchResponse =
-  | { ok: true; results: YouTubeMusicResult[] }
+  | { ok: true; results: YouTubeMusicResult[]; nextCursor?: string }
   | { ok: false; error: string };
 export type YouTubePlayResponse =
   | { ok: true; streamId: string; url: string }

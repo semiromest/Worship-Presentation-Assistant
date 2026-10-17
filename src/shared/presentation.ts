@@ -1,0 +1,263 @@
+import type { VideoPlaybackSettings } from './videoPlayback';
+// ─── Transition Types ─────────────────────────────────────────────────────────
+
+export type TransitionType =
+  | 'none'
+  | 'fade'
+  | 'slideLeft'
+  | 'slideRight'
+  | 'slideUp'
+  | 'slideDown'
+  | 'zoom'
+  | 'zoomOut'
+  | 'blur'
+  | 'flip';
+
+// ─── Text Effects ─────────────────────────────────────────────────────────
+
+export interface TextStyle {
+  textDecoration: string;
+  textTransform?: 'none' | 'uppercase' | 'lowercase';
+  fontSize?: number;
+  textColor?: string;
+  /** Background paint behind each individual text glyph/line. */
+  textHighlight?: string;
+  backgroundColor?: string;
+  objectFit?: 'cover' | 'contain';
+  textAlign?: 'left' | 'center' | 'right' | 'justify';
+  fontWeight?: 'normal' | 'bold';
+  fontStyle?: 'normal' | 'italic';
+  verticalAlign?: 'top' | 'center' | 'bottom';
+  fontFamily?: string;
+  lineHeight?: number;
+  letterSpacing?: number;
+  textShadow?: {
+    color?: string;
+    blur?: number;
+    offsetX?: number;
+    offsetY?: number;
+  };
+  textStroke?: {
+    color: string;
+    width: number;
+  };
+}
+
+export interface ImageStyle {
+  objectFit?: 'cover' | 'contain' | 'fill';
+  opacity?: number;
+  blur?: number;
+  brightness?: number;
+  contrast?: number;
+  grayscale?: number;
+  sepia?: number;
+  hueRotate?: number;
+  dropShadow?: {
+    color?: string;
+    blur?: number;
+    offsetX?: number;
+    offsetY?: number;
+  };
+  flipX?: boolean;
+  flipY?: boolean;
+  crop?: { x: number; y: number; width: number; height: number };
+  /** Source-image percentage coordinates; absence preserves legacy frame clipping. */
+  cropMode?: 'source';
+}
+
+export interface GradientStyle {
+  type: 'linear' | 'radial';
+  angle?: number;
+  stops?: Array<{ color: string; position: number }>;
+}
+
+// ─── Loop Types ────────────────────────────────────────────────────────────────
+
+export interface LoopItem {
+  id: string;
+  type: 'image' | 'video';
+  mediaUrl: string;
+  duration: number;
+  /** Optional static frame used for loop slide thumbnails/previews. */
+  thumbnailUrl?: string;
+  /** When true, a video plays until its native end instead of using duration. */
+  useVideoDuration?: boolean;
+  fileName?: string;
+}
+
+export type MediaKind = 'image' | 'video';
+
+export interface MediaItem {
+  id: string;
+  type: MediaKind;
+  path: string;
+  name: string;
+  preview?: string;
+  origin?: 'manual' | 'folder';
+}
+
+// ─── Slide Types ──────────────────────────────────────────────────────────────
+
+export interface SlideItem {
+  styles: any;
+  id: string;
+  type: 'text' | 'image' | 'group' | 'shape';
+  content?: string;
+  mediaUrl?: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation?: number;
+  zIndex: number;
+  locked?: boolean;
+  visible?: boolean;
+  textStyles?: TextStyle;
+  imageStyles?: ImageStyle;
+  gradient?: GradientStyle;
+  borderWidth?: number;
+  borderColor?: string;
+  borderRadius?: number;
+  groupItems?: SlideItem[];
+  animation?: {
+    type?: 'fade' | 'slide' | 'zoom' | 'bounce' | 'shake';
+    duration?: number;
+    delay?: number;
+  };
+}
+
+/** Text layer drawn during playback; timestamps refer to the original media. */
+export interface VideoTextOverlay extends SlideItem {
+  type: 'text';
+  startSeconds?: number;
+  endSeconds?: number;
+}
+
+export interface Slide {
+  sectionId?: string;
+  /** Compatibility snapshot for older project readers. */
+  section?: { id: string; title: string };
+  id: string;
+  type: 'text' | 'image' | 'video' | 'countdown' | 'screen' | 'loop' | 'captions';
+  content: string;
+  /** Durable YouTube reference; transient stream URLs are never saved in slides. */
+  youtubeMusic?: import('./youtubeMusic').YouTubeMusicResult;
+  musicSettings?: { volume?: number };
+  /** Live captions slide options (see CaptionsRenderer). */
+  captions?: {
+    showOriginal?: boolean;
+    showTranslation?: boolean;
+    /** Display layout: centered (default), lower-third band, or top band. */
+    layout?: 'centered' | 'lowerThird' | 'top';
+  };
+  loopTransition?: { type: TransitionType; duration: number };
+  partsMode?: boolean;
+  parts?: string[];
+  activePart?: number;
+  mediaUrl?: string;
+  thumbnailUrl?: string;
+  videoPlayback?: VideoPlaybackSettings;
+  videoOverlays?: VideoTextOverlay[];
+  items?: SlideItem[];
+  loopItems?: LoopItem[];
+  group?: { id: string; title: string; part: number; parts: number; color?: string; author?: string };
+  gridEnabled?: boolean;
+  gridSize?: number;
+  gridColor?: string;
+  snapEnabled?: boolean;
+  /** Broadcast lock: while set, the live output is pinned to this slide. */
+  locked?: boolean;
+  /** Operator-only note shown on the confidence monitor, never on the audience output. */
+  operatorNotes?: string;
+  styles?: {
+    fontSize: number;
+    textTransform?: 'none' | 'uppercase' | 'lowercase';
+    backgroundColor: string;
+    textColor: string;
+    /** Background paint behind the text glyphs, separate from the slide background. */
+    textHighlight?: string;
+    textAlign?: string;
+    verticalAlign?: string;
+    fontWeight?: string;
+    fontStyle?: string;
+    lineHeight?: number;
+    letterSpacing?: number;
+    textDecoration?: string;
+    backgroundImage?: string;
+    /** Black overlay over background layers only (0–0.8). */
+    backgroundDim?: number;
+    /** Distinguishes a newly created default fill from a deliberately chosen background. */
+    backgroundExplicit?: boolean;
+    backgroundVideo?: string;
+    backgroundGradient?: GradientStyle;
+    generatedBackground?: import('./generatedBackground').GeneratedBackground;
+    generatedGroupBackground?: { image: string; recipe: import('./generatedBackground').GeneratedBackground };
+    backgroundBlur?: number;
+    objectFit?: 'cover' | 'contain' | 'fill';
+    fontFamily?: string;
+    opacity?: number;
+    imageBrightness?: number;
+    imageContrast?: number;
+    imageBlur?: number;
+    imageGrayscale?: number;
+    imageSepia?: number;
+    imageFlipX?: boolean;
+    imageFlipY?: boolean;
+  };
+}
+
+export interface Presentation {
+  /** Ordered section records. Slide order remains the presentation playback order. */
+  sections?: PresentationSection[];
+  id?: string;
+  name: string;
+  slides: Slide[];
+  zoom?: number; // Slide preview zoom level (default: 1)
+  transition?: {
+    type: TransitionType;
+    duration: number;
+  };
+  /** Stable identity of the live slide, used when restoring a backup after reordering. */
+  liveSlideId?: string;
+  /** Legacy live-slide position retained for backwards-compatible persistence. */
+  liveIndex?: number;
+}
+
+export interface PresentationSection {
+  id: string;
+  title: string;
+  /** Optional operator-entered start time, displayed beside the section name. */
+  time?: string;
+  color?: string;
+  icon?: string;
+  unassigned?: boolean;
+}
+
+export interface Preset {
+  name: string;
+  presentation: Presentation;
+  createdAt: number;
+}
+
+export interface DriveFile {
+  id: string;
+  name: string;
+  modifiedTime: string;
+  size?: string;
+}
+
+export type DriveStatus = { signedIn: false; email: null } | { signedIn: true; email: string };
+
+// ─── Watermark Types ──────────────────────────────────────────────────────
+
+export type Position = 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
+
+export interface WatermarkConfig {
+  logoDataUrl: string | null;
+  position: Position;
+  size: number;
+  opacity: number;
+  applyToHymns: boolean;
+  applyToScriptures: boolean;
+  enabled: boolean;
+}

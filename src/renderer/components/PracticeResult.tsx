@@ -1,6 +1,36 @@
 import { useTranslation } from 'react-i18next';
+import { useLayoutEffect, useRef, useState } from 'react';
 import type { GuideResult, GuideResultStep } from '../../shared/practice';
 import { SlidePreviewAny } from './SlidePreview';
+
+const PREVIEW_WIDTH = 480;
+const PREVIEW_HEIGHT = 270;
+
+function ResultSlidePreview({ slide }: { slide: GuideResult['slides'][number] }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const update = (width: number, height: number) => setSize(previous =>
+      previous.width === width && previous.height === height ? previous : { width, height });
+    update(container.clientWidth, container.clientHeight);
+    const observer = new ResizeObserver(([entry]) => update(entry.contentRect.width, entry.contentRect.height));
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+  const scale = Math.min(size.width / PREVIEW_WIDTH, size.height / PREVIEW_HEIGHT);
+  return <div ref={containerRef} className="absolute inset-0 overflow-hidden">
+    {scale > 0 && <div className="absolute" style={{
+      width: PREVIEW_WIDTH, height: PREVIEW_HEIGHT,
+      left: (size.width - PREVIEW_WIDTH * scale) / 2,
+      top: (size.height - PREVIEW_HEIGHT * scale) / 2,
+      transform: `scale(${scale})`, transformOrigin: 'top left',
+    }}>
+      <SlidePreviewAny slide={slide} cardWidth={PREVIEW_WIDTH} enabled={false} />
+    </div>}
+  </div>;
+}
 
 /** Read-only snapshots of verified operations, never live output or playable media. */
 export default function PracticeResult({ result, step }: { result: GuideResult; step: GuideResultStep }) {
@@ -12,10 +42,10 @@ export default function PracticeResult({ result, step }: { result: GuideResult; 
       <p className="text-sm text-slate-600">{t('guide.result.savedCount', { count: result.afterCount })}</p>
     </div>}
     {step === 'delete-result' && <p className="text-sm font-semibold text-amber-700">{t('guide.result.deletedPreview')}</p>}
-    {result.slides.length > 0 ? <div className={result.slides.length > 1 ? 'grid gap-4 sm:grid-cols-2' : 'mx-auto max-w-lg'}>
+    {result.slides.length > 0 ? <div className="grid min-w-0 grid-cols-1 gap-4">
       {result.slides.map(slide => <figure key={slide.id} data-testid="guide-result-slide" data-result-slide-id={slide.id} className="space-y-2">
-        <div aria-hidden="true" className={`aspect-video overflow-hidden rounded-lg border border-slate-300 bg-black pointer-events-none ${step === 'delete-result' ? 'opacity-50 grayscale' : ''}`}>
-          <SlidePreviewAny slide={slide} cardWidth={480} enabled={false} />
+        <div aria-hidden="true" className={`relative aspect-video overflow-hidden rounded-lg border border-slate-300 bg-black pointer-events-none ${step === 'delete-result' ? 'opacity-50 grayscale' : ''}`}>
+          <ResultSlidePreview slide={slide} />
         </div>
         <figcaption className="text-sm break-words text-slate-700">
           {slide.type === 'text' ? slide.content : t(`guide.result.${slide.type === 'countdown' ? 'countdownPreview' : 'imagePreview'}`)}

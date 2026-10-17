@@ -1,3 +1,4 @@
+import { playSfx } from '../sfx';
 import { useState } from 'react';
 import { Popover } from '@base-ui/react/popover';
 import { Eye, EyeOff, Monitor, Radio, Settings2, Tv } from 'lucide-react';
@@ -34,7 +35,7 @@ export default function DisplayOutputsPopover({ openOutput, closeOutput }: Displ
   if (outputDisplays.length === 0) return null;
 
   return (
-    <Popover.Root open={isOpen} onOpenChange={setIsOpen}>
+    <Popover.Root open={isOpen} onOpenChange={(next) => { if (next !== isOpen) playSfx(next ? 'open' : 'close'); setIsOpen(next); }}>
       <Popover.Trigger
         title={t('common.displayOutputs')}
         aria-label={t('common.displayOutputs')}

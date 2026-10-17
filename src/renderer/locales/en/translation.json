@@ -1081,6 +1081,13 @@
     "flip": "Flip"
   },
   "watermark": {
+    "unsupportedFormat": "Unsupported file format. Choose PNG, JPG or SVG.",
+    "fileTooLarge": "The file is too large. Maximum size: 2 MB.",
+    "uploadSuccess": "Logo uploaded successfully.",
+    "uploadError": "Could not upload the logo.",
+    "requireLogo": "Upload a logo first.",
+    "collapse": "Collapse logo settings",
+    "expand": "Expand logo settings",
     "title": "Logo Watermark",
     "uploadLogo": "Upload Logo",
     "replaceLogo": "Replace Logo",
@@ -1116,6 +1123,9 @@
     "updateDownloadedBadge": "Update downloaded — restart to apply"
   },
   "settings": {
+    "youtubeLoadMore": "Load more",
+    "youtubeSearchingMore": "Loading more…",
+    "youtubeSearchExpired": "These search results have expired. Search again to continue.",
     "youtubeAddMusicSlide": "Add music slide",
     "youtubeMusicSlideLabel": "Music · YouTube",
     "youtubeMusicSlideHint": "A music slide plays when sent live and stops when you switch slides. Internet is required. For TV audio, select HDMI/your TV as the Windows audio output.",
@@ -1135,6 +1145,8 @@
     "retention30d": "30 days",
     "liveSaveLastSaved": "Last saved: {{time}}",
     "liveSaveEmpty": "No auto-save backup exists.",
+    "muteSfxDuringLive": "Mute sound effects while live",
+    "muteSfxDuringLiveDesc": "Silence interface sounds while a projection or stage output is open. Media and music audio are unaffected.",
     "soundEffects": "Sound Effects",
     "backgroundMusic": "Background Music",
     "backgroundMusicDesc": "Play music from a selected folder inside the app.",
@@ -1263,20 +1275,25 @@
     "screenSlide": "🖥 Live screen"
   },
   "prepCheck": {
+    "stale": "Content changed; waiting to check…",
+    "completed": "Check complete",
+    "slideErrors": "{{count}} issue(s), including errors. Open slide report.",
+    "slideWarnings": "{{count}} warning(s). Open slide report.",
+    "severity": {"error":"Error","warning":"Warning"},
     "title": "Preparation Check",
     "button": "Prep Check",
     "allClear": "Everything looks ready",
     "allClearHint": "No readability or missing-media issues found.",
     "summary": "{{count}} slide(s) may need attention before you go live.",
     "issue": {
+      "duplicateSlide": "This slide appears identical to the previous slide.",
       "emptyText": "This text slide is empty.",
-      "longTextSmallFont": "Long text: consider splitting the verse/text for readability.",
+      "longTextSmallFont": "Estimated risk: long text may need splitting. This is not a measured overflow.",
       "missingImage": "This image slide has no image selected.",
       "missingVideo": "This video slide has no video selected.",
       "emptyLoop": "This loop slide has no items.",
       "emptyPart": "A song part is empty.",
       "onlineResource": "Media requires internet; use a local file for offline use.",
-      "safeMargin": "Text is too close to the safe margin.",
       "inaccessibleMedia": "Media file is missing or unreadable.",
       "fontUnavailable": "Font could not be prepared offline; choose another font or check your connection.",
       "textOverflow": "Text exceeds its display area. Split the verse/text or reduce the font size."
@@ -1310,6 +1327,9 @@
     "slideCount_other": "{{count}} slides"
   },
   "sections": {
+    "includeSelectedSlides": "Move selected slides into the new section ({{count}})",
+    "time": "Section time",
+    "timeHint": "Enter a time (e.g. 10:30). Press Enter to save; clear to remove.",
     "emptyScope": "Create an empty section here. Existing slides keep their order and sections.",
     "create": "Create section",
     "outline": "Presentation outline",
@@ -1506,7 +1526,8 @@
         "body": "Drag the highlighted sample slide onto the other highlighted slide. This single exercise finishes when their positions actually change."
       },
       "canvas-edit": {
-        "title": "Edit an image in Slide Editor"
+        "title": "Edit an image in Slide Editor",
+        "body": "Select the sample image in Slide Editor, rotate it 15 degrees, and save the change."
       }
     }
   },

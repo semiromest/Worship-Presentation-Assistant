@@ -1,0 +1,95 @@
+{
+  "minimumVersion": "3.33.1",
+  "entry": [
+    "renderer/main.tsx",
+    "main/main.ts",
+    "main/preload.ts",
+    "main/utility/heavyWorker.ts",
+    "main/utility/gradientWorker.ts",
+    "main/youtubeTokenBrowser.ts",
+    "**/*.test.{ts,cjs}"
+  ],
+  "ignorePatterns": [],
+  "ignoreExportsUsedInFile": true,
+  "ignoreDependencies": [
+    "ffmpeg-static"
+  ],
+  "framework": [],
+  "rules": {
+    "boundary-violation": "warn",
+    "circular-dependencies": "error"
+  },
+  "boundaries": {
+    "zones": [
+      {
+        "name": "tests",
+        "patterns": [
+          "**/*.test.{ts,cjs}",
+          "**/__tests__/**"
+        ]
+      },
+      {
+        "name": "preload",
+        "patterns": [
+          "main/preload.ts"
+        ]
+      },
+      {
+        "name": "main",
+        "patterns": [
+          "main/**"
+        ]
+      },
+      {
+        "name": "renderer",
+        "patterns": [
+          "renderer/**"
+        ]
+      },
+      {
+        "name": "shared",
+        "patterns": [
+          "shared/**"
+        ]
+      }
+    ],
+    "rules": [
+      {
+        "from": "main",
+        "allow": [
+          "main",
+          "shared"
+        ]
+      },
+      {
+        "from": "preload",
+        "allow": [
+          "shared"
+        ]
+      },
+      {
+        "from": "renderer",
+        "allow": [
+          "renderer",
+          "shared"
+        ]
+      },
+      {
+        "from": "shared",
+        "allow": [
+          "shared"
+        ]
+      },
+      {
+        "from": "tests",
+        "allow": [
+          "main",
+          "preload",
+          "renderer",
+          "shared",
+          "tests"
+        ]
+      }
+    ]
+  }
+}

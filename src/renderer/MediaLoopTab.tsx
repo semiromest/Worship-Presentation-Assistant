@@ -1,3 +1,10 @@
+import UiMenu from './components/UiMenu';
+import { AnimatePresence } from 'motion/react';
+import { useUiMotionEnabled } from './hooks/useUiMotionEnabled';
+import { uiMotion } from './uiMotion';
+import { useListMotion } from './hooks/useListMotion';
+import * as m from 'motion/react-m';
+import { playSfx } from './sfx';
 import { usePractice } from './hooks/usePractice';
 import { useState, useCallback, useRef, useMemo, useEffect, memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -570,13 +577,14 @@ const LoopItemRow = memo(function LoopItemRow({
   return (
     <div
       draggable
+      data-motion-item="loop" data-motion-id={item.id}
       onDragStart={() => onDragStart(index)}
       onDragEnter={() => onDragEnter(index)}
       onDragEnd={onDragEnd}
       onDragOver={(e) => e.preventDefault()}
       className={cn(
         'group flex items-center gap-2 px-2 py-1.5 rounded-lg',
-        'bg-zinc-800/60 hover:bg-zinc-800 transition-all duration-150 select-none',
+        'bg-zinc-800/60 hover:bg-zinc-800 transition-colors duration-[var(--ui-motion-fast,120ms)] select-none',
         isDragOver && 'ring-1 ring-amber-500/50 bg-zinc-800 scale-[1.01]'
       )}
     >
@@ -727,7 +735,7 @@ const MediaCard = memo(function MediaCard({
           {ext || (isImage ? 'IMG' : 'VID')}
         </span>
         {selected ? (
-          <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center shadow-lg">
+          <div className="ui-choice-mark absolute top-1 right-1 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center shadow-lg">
             <svg
               width="12"
               height="12"
@@ -852,6 +860,7 @@ const VirtualizedMediaGrid = memo(function VirtualizedMediaGrid({
           {visibleItems.map((item) => (
             <div
               key={item.id}
+              data-motion-item="media" data-motion-id={item.id}
               style={{ height: CARD_HEIGHT, minWidth: 0, contain: 'layout paint style' }}
               // minWidth:0 — a grid item's default automatic minimum is its
               // content's min-content size; without this an oversized child
@@ -918,6 +927,8 @@ export default function MediaLoopTab({
   const practice = usePractice();
   const [imageImported,setImageImported] = useState(false);
   const [activeSub, setActiveSub] = useState<'media' | 'loop'>('media');
+  const motionRoot = useRef<HTMLDivElement>(null);
+  const motionEnabled = useUiMotionEnabled();
 
   const mediaItems = useStore((s) => s.mediaItems);
   const setMediaItems = useStore((s) => s.setMediaItems);
@@ -930,6 +941,8 @@ export default function MediaLoopTab({
   useEffect(() => { if (practice) { try { localStorage.setItem('wpa.practice.sampleMedia', JSON.stringify(mediaItems.filter(item => item.name === 'practice-image.svg'))); } catch { /* Workspace outcomes remain authoritative. */ } } }, [practice,mediaItems]);
   const loopItems = useStore((s) => s.loopItems);
   const setLoopItems = useStore((s) => s.setLoopItems);
+  useListMotion(motionRoot, mediaItems.map(item => item.id), 'media-library', 'media', activeSub);
+  useListMotion(motionRoot, loopItems.map(item => item.id), 'loop-library', 'loop', activeSub);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -961,6 +974,8 @@ export default function MediaLoopTab({
           return { id: makeId(), type, path: p, name: getFileName(p), preview: undefined, origin } satisfies MediaItem;
         });
       if (!incoming.length) return;
+      const existing = new Set(useStore.getState().mediaItems.map(i => normalizePath(i.path)));
+      if (origin === 'manual' && incoming.some(i => !existing.has(normalizePath(i.path)))) playSfx('complete');
       setMediaItems((prev) => {
         const seen = new Set(prev.map((i) => normalizePath(i.path)));
         const unique = incoming.filter((i) => {
@@ -983,21 +998,23 @@ export default function MediaLoopTab({
           })
         | undefined;
       if (!api) return;
-      if (api.selectMediaFiles) {
-        const r = await api.selectMediaFiles(type);
-        if (r) await addMediaPaths(Array.isArray(r) ? r : [r]);
-        return;
-      }
-      if (api.selectMediaFile) {
-        const r = await api.selectMediaFile(type);
-        if (r) addMediaPaths([r]);
-      }
+      try {
+        if (api.selectMediaFiles) {
+          const r = await api.selectMediaFiles(type);
+          if (r) await addMediaPaths(Array.isArray(r) ? r : [r]);
+          return;
+        }
+        if (api.selectMediaFile) {
+          const r = await api.selectMediaFile(type);
+          if (r) await addMediaPaths([r]);
+        }
+      } catch { playSfx('error'); }
     },
     [addMediaPaths]
   );
 
   const scanFolder = useCallback(
-    async (settings: MediaFolderSettings) => {
+    async (settings: MediaFolderSettings, feedback = false) => {
       const api = window.electronAPI as
         | (NonNullable<typeof window.electronAPI> & {
             readMediaFolder?: (
@@ -1014,7 +1031,8 @@ export default function MediaLoopTab({
           includeImages: settings.includeImages,
           includeVideos: settings.includeVideos,
         });
-        if (!result) return;
+        if (!result) { if (feedback) playSfx('error'); return; }
+        if (feedback) playSfx(result.missing ? 'error' : 'complete');
         setFolderMissing(result.missing);
         if (result.missing) {
           setMediaItems((prev) => prev.filter((i) => i.origin !== 'folder'));
@@ -1023,6 +1041,8 @@ export default function MediaLoopTab({
           setMediaItems((prev) => prev.filter((i) => i.origin !== 'folder' || keep.has(normalizePath(i.path))));
           if (result.paths.length) await addMediaPaths(result.paths, 'folder');
         }
+      } catch {
+        if (feedback) playSfx('error');
       } finally {
         setScanLoading(false);
       }
@@ -1047,6 +1067,7 @@ export default function MediaLoopTab({
     if (!folder) return;
     setFolderMissing(false);
     updateFolderSettings({ path: folder });
+    playSfx('open');
   }, [updateFolderSettings]);
 
   const clearFolder = useCallback(() => {
@@ -1059,7 +1080,7 @@ export default function MediaLoopTab({
   }, [folderSettings, scanFolder]);
 
   const removeMediaItem = useCallback(
-    (id: string) => setMediaItems((prev) => prev.filter((i) => i.id !== id)),
+    (id: string) => { setMediaItems(prev => prev.filter(i => i.id !== id)); playSfx('delete'); },
     [setMediaItems]
   );
   const addMediaToPres = useCallback(
@@ -1069,9 +1090,10 @@ export default function MediaLoopTab({
     [onAddMediaToPresentation]
   );
   const toggleSelect = useCallback((id: string) => {
+    playSfx(selectedIds.includes(id) ? 'uncheck' : 'check');
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  }, []);
-  const clearSelection = useCallback(() => setSelectedIds([]), []);
+  }, [selectedIds]);
+  const clearSelection = useCallback(() => { if (selectedIds.length) { setSelectedIds([]); playSfx('uncheck'); } }, [selectedIds]);
 
   const handleAddSelected = useCallback(() => {
     if (selectedIds.length === 0) return;
@@ -1121,16 +1143,19 @@ export default function MediaLoopTab({
         };
       }));
       setLoopItems((prev) => [...prev, ...newItems]);
+      playSfx('complete');
+    } catch {
+      playSfx('error');
     } finally {
       setIsLoading(false);
     }
   }, [defaultDuration, setLoopItems]);
 
   const removeLoopItem = useCallback(
-    (id: string) => setLoopItems((prev) => prev.filter((i) => i.id !== id)),
+    (id: string) => { setLoopItems(prev => prev.filter(i => i.id !== id)); playSfx('delete'); },
     [setLoopItems]
   );
-  const clearLoop = useCallback(() => setLoopItems([]), [setLoopItems]);
+  const clearLoop = useCallback(() => { if (loopItems.length) { setLoopItems([]); playSfx('delete'); } }, [loopItems.length, setLoopItems]);
   const updateLoopDuration = useCallback(
     (id: string, ms: number) => {
       const clamped = Math.max(MIN_DURATION_MS, Math.min(MAX_DURATION_MS, ms));
@@ -1154,6 +1179,7 @@ export default function MediaLoopTab({
     const from = dragItemIndex.current;
     const to = dragOverIndex;
     if (from !== null && to !== null && from !== to) {
+      playSfx('reorder');
       setLoopItems((prev) => {
         const next = [...prev];
         const [moved] = next.splice(from, 1);
@@ -1176,7 +1202,7 @@ export default function MediaLoopTab({
   }, []);
 
   return (
-    <div data-guide-state={JSON.stringify({ mediaMenu: menuOpen, imageReady: mediaItems.some(item => item.name === 'practice-image.svg'), imageImported })} className="flex flex-col h-full bg-[#181818] text-white overflow-hidden">
+    <div ref={motionRoot} data-guide-state={JSON.stringify({ mediaMenu: menuOpen, imageReady: mediaItems.some(item => item.name === 'practice-image.svg'), imageImported })} className="flex flex-col h-full bg-[#181818] text-white overflow-hidden">
       <div className="shrink-0 px-3 pt-3 pb-2 border-b border-white/[0.07]">
         <div
           role="tablist"
@@ -1188,15 +1214,16 @@ export default function MediaLoopTab({
             aria-selected={activeSub === 'media'}
             id="media-tab"
             aria-controls="media-panel"
-            onClick={() => setActiveSub('media')}
+            onClick={() => { if (activeSub !== 'media') { setActiveSub('media'); playSfx('swipe'); } }}
             className={cn(
-              'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all',
+              'relative isolate flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-colors',
               activeSub === 'media'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30'
+                ? 'text-white shadow-lg shadow-blue-900/30'
                 : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'
             )}
           >
-            <ImageIcon className="w-3.5 h-3.5" />
+
+            {activeSub === 'media' && <m.span layoutId="media-active-tab" className="pointer-events-none absolute inset-0 -z-10 rounded-lg bg-blue-600" transition={{ duration: motionEnabled ? uiMotion.duration.fast : 0, ease: uiMotion.ease }} />}            <ImageIcon className="w-3.5 h-3.5" />
             {t('common.mediaLibrary')}
             {mediaItems.length > 0 && (
               <span
@@ -1216,15 +1243,16 @@ export default function MediaLoopTab({
             aria-selected={activeSub === 'loop'}
             id="loop-tab"
             aria-controls="loop-panel"
-            onClick={() => setActiveSub('loop')}
+            onClick={() => { if (activeSub !== 'loop') { setActiveSub('loop'); playSfx('swipe'); } }}
             className={cn(
-              'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all',
+              'relative isolate flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-colors',
               activeSub === 'loop'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30'
+                ? 'text-white shadow-lg shadow-blue-900/30'
                 : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'
             )}
           >
-            <Repeat className="w-3.5 h-3.5" />
+
+            {activeSub === 'loop' && <m.span layoutId="media-active-tab" className="pointer-events-none absolute inset-0 -z-10 rounded-lg bg-blue-600" transition={{ duration: motionEnabled ? uiMotion.duration.fast : 0, ease: uiMotion.ease }} />}            <Repeat className="w-3.5 h-3.5" />
             {t('common.loopTitle')}
             {loopItems.length > 0 && (
               <span
@@ -1247,7 +1275,7 @@ export default function MediaLoopTab({
           role="tabpanel"
           id="media-panel"
           aria-labelledby="media-tab"
-          className="flex flex-col flex-1 overflow-hidden"
+          className="ui-fade-enter flex flex-col flex-1 overflow-hidden"
         >
           <div className="shrink-0 px-3 py-2.5 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -1286,13 +1314,13 @@ export default function MediaLoopTab({
             <div ref={menuRef} className="relative">
               <button
                 data-guide-anchor="media-menu"
-                onClick={() => setMenuOpen((v) => !v)}
+                onClick={() => { setMenuOpen(!menuOpen); playSfx(menuOpen ? 'close' : 'open'); }}
                 className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] text-[11px] font-bold uppercase tracking-wider transition-all"
               >
                 <Plus size={13} /> {t('common.mediaAdd')} <ChevronDown size={12} className="opacity-60" />
               </button>
-              {menuOpen && (
-                <div className="absolute right-0 top-[calc(100%+6px)] w-[280px] z-20 p-1.5 rounded-xl border border-white/10 bg-[#141414]/[0.98] shadow-2xl shadow-black/50 backdrop-blur-xl">
+              <AnimatePresence initial={false}>{menuOpen && (
+                <UiMenu className="absolute right-0 top-[calc(100%+6px)] w-[280px] z-20 p-1.5 rounded-xl border border-white/10 bg-[#141414]/[0.98] shadow-2xl shadow-black/50 backdrop-blur-xl">
                   <DropItem
                     icon={<ImageIcon size={14} />}
                     guideAnchor="media-import"
@@ -1321,8 +1349,8 @@ export default function MediaLoopTab({
                       chooseFolder();
                     }}
                   />
-                </div>
-              )}
+                </UiMenu>
+              )}</AnimatePresence>
             </div>
           </div>
 
@@ -1416,7 +1444,7 @@ export default function MediaLoopTab({
                 </button>
                 <button
                   type="button"
-                  onClick={() => scanFolder(folderSettings)}
+                  onClick={() => scanFolder(folderSettings, true)}
                   disabled={scanLoading}
                   title={t('common.mediaFolderRefresh')}
                   className="w-6 h-6 flex items-center justify-center rounded border border-white/[0.14] bg-white/[0.05] text-white/60 hover:text-white hover:bg-white/[0.1] transition-all disabled:opacity-40"
@@ -1472,7 +1500,7 @@ export default function MediaLoopTab({
           role="tabpanel"
           id="loop-panel"
           aria-labelledby="loop-tab"
-          className="flex flex-col flex-1 overflow-hidden"
+          className="ui-fade-enter flex flex-col flex-1 overflow-hidden"
         >
           <div className="shrink-0 px-3 pt-2.5 pb-2 space-y-2.5">
             <div className="flex items-center justify-between">

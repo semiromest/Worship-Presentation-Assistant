@@ -1,3 +1,4 @@
+import { applyPreviewUpdates } from './previewUpdates';
 import { launchMode, restricted, practiceProfile, systemTempRoot } from './isolatedLaunch';
 import { restrictPracticeSession } from './practiceSession';
 import { setPracticeControl } from './practicePolicy';
@@ -209,6 +210,9 @@ function projectorBounds(display: Electron.Display): Electron.Rectangle {
 }
 
 function refreshProjectorWindows(): void {
+  // Publish hotplug before closing its output: the operator must be able to
+  // distinguish a disconnected open display from an intentionally closed one.
+  sendDisplaySnapshot();
   for (const [displayId, entry] of projectorWindows) {
     const display = getRawDisplay(displayId);
     if (!display) {
@@ -217,7 +221,6 @@ function refreshProjectorWindows(): void {
     }
     // Fullscreen windows auto-position on their display — no reposition needed.
   }
-  sendDisplaySnapshot();
 }
 
 function attachDisplayWatch(): void {
@@ -1718,16 +1721,7 @@ ipcMain.handle('update-all-slide-previews', (_, previews: string[]) => {
 // list (~23 KB instead of ~117 MB at 5000 slides).
 ipcMain.handle('update-slide-previews-delta', (_, updates: { i: number; url: string }[]) => {
   if (!Array.isArray(updates) || updates.length === 0) return false;
-  const applied: { i: number; url: string }[] = [];
-  for (const u of updates) {
-    if (!u || typeof u.i !== 'number' || typeof u.url !== 'string') continue;
-    // '' is a falsy placeholder, equivalent to the null entries the full-list
-    // path can carry (remote renders it as an empty slot).
-    while (allSlidePreviews.length <= u.i) allSlidePreviews.push('');
-    if (allSlidePreviews[u.i] === u.url) continue; // already current, skip
-    allSlidePreviews[u.i] = u.url;
-    applied.push(u);
-  }
+  const applied = applyPreviewUpdates(allSlidePreviews, updates);
   if (applied.length > 0) broadcast({ type: 'previewsDelta', data: applied });
   return true;
 });
@@ -1947,34 +1941,6 @@ ipcMain.handle('select-media-folder', async () => {
   return result.filePaths[0];
 });
 
-/* YouTube music integration removed.
-/* ipcMain.handle('youtube-search', async (_, query: string) => {
-  const cleanQuery = typeof query === 'string' ? query.trim().slice(0, 200) : '';
-  if (!cleanQuery) return { ok: false, results: [], error: 'empty-query' };
-  try {
-    const response = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(cleanQuery)}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'text/html' },
-    });
-    if (!response.ok) throw new Error(`YouTube HTTP ${response.status}`);
-    const html = await response.text();
-    const results: Array<{ id: string; title: string; duration?: string }> = [];
-    const seen = new Set<string>();
-    const re = /"videoId":"([\\w-]{11})"[\\s\\S]{0,2000}?"title":\{"runs":\[\{"text":"((?:[^"\\\\]|\\\\.)*)"/g;
-    let match: RegExpExecArray | null;
-    while ((match = re.exec(html)) && results.length < 12) {
-      const id = match[1];
-      if (seen.has(id)) continue;
-      seen.add(id);
-      results.push({ id, title: JSON.parse('"' + match[2] + '"') });
-    }
-    return { ok: true, results };
-  } catch (error) {
-    console.error('[youtube-search] failed:', error);
-    return { ok: false, results: [], error: 'search-failed' };
-  }});
-
-*/
-
 function isMusicControl(event: Electron.IpcMainInvokeEvent): boolean {
   return !restricted && !!win && !win.isDestroyed() && event.sender === win.webContents &&
     event.senderFrame === win.webContents.mainFrame;
@@ -1984,8 +1950,8 @@ ipcMain.handle('soniox:open-website', async event => {
   await shell.openExternal('https://soniox.com/');
   return { ok: true };
 });
-ipcMain.handle('youtube-music:search', (event, query: unknown) => isMusicControl(event)
-  ? youtubeMusicService.search(query) : { ok: false, error: 'unavailable' });
+ipcMain.handle('youtube-music:search', (event, query: unknown, cursor?: unknown) => isMusicControl(event)
+  ? youtubeMusicService.search(query, cursor) : { ok: false, error: 'unavailable' });
 ipcMain.handle('youtube-music:play', (event, id: unknown) => isMusicControl(event)
   ? youtubeMusicService.play(id) : { ok: false, error: 'unavailable' });
 ipcMain.handle('youtube-music:prepare', (event, id: unknown) => isMusicControl(event)

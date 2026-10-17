@@ -1,4 +1,4 @@
-import type { Presentation } from '../renderer/types';
+import type { Presentation } from './presentation';
 /** Keep edits made after an observation while accepting coordinator samples. */
 export function mergePracticeObservation(observed:Presentation, server:Presentation, current:Presentation):Presentation {
   if (current.id!==observed.id || server.id!==observed.id) return current;

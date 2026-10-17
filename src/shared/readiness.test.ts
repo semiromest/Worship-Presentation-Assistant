@@ -44,3 +44,10 @@ test('analyzePresentationReadiness only returns slides with issues', () => {
   assert.equal(results[0].slideId, '2');
   assert.equal(results[0].index, 1);
 });
+
+test('slides with different timed video text are not duplicate slides', () => {
+  const overlay = { id: 'text', type: 'text' as const, x: 10, y: 10, width: 50, height: 20, content: 'First', styles: {}, zIndex: 0 };
+  const first = { id: 'one', type: 'video', content: '', mediaUrl: 'video.mp4', videoOverlays: [overlay] };
+  const second = { ...first, id: 'two', videoOverlays: [{ ...overlay, content: 'Second' }] };
+  assert.equal(analyzePresentationReadiness([first, second]).length, 0);
+});

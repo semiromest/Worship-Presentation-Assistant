@@ -1,3 +1,4 @@
+import { playSfx } from './sfx';
 import { usePractice } from './hooks/usePractice';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -116,8 +117,10 @@ function useMediaStream() {
 
       await videoRef.current.play();
       setStatus('active');
+      playSfx('start');
     } catch (err) {
       console.error('[ScreenCapture] Stream error:', err);
+      playSfx('error');
       cleanup();
       setStatus('error');
     }
@@ -450,15 +453,18 @@ function ActiveScreenCaptureTab({ onAddScreenToPresentation }: ScreenCaptureTabP
   const handleToggleCapture = useCallback(() => {
     if (isActive) {
       stopStream();
+      playSfx('stop');
     } else if (selectedId) {
       startStream(selectedId);
     }
   }, [isActive, selectedId, startStream, stopStream]);
 
   const handleSourceSelect = useCallback((source: ScreenSource) => {
+    if (source.id === selectedId) return;
     if (isActive) stopStream();
     selectSource(source);
-  }, [isActive, stopStream, selectSource]);
+    playSfx('select');
+  }, [isActive, stopStream, selectSource, selectedId]);
 
   const handleAddToPresentation = useCallback(() => {
     if (!selectedId || !selectedSource) return;

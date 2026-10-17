@@ -7,11 +7,22 @@ type Sessions = Record<string, Session>;
 function read(): Sessions {
   try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { return {}; }
 }
+// Structural sharing makes repeated navigation reuse the part snapshot. Weak
+// keys allow replaced decks to be collected; no persistent cache or new format.
+const partSnapshots = new WeakMap<Presentation['slides'], Record<string, number>>();
+function sessionParts(slides: Presentation['slides']): Record<string, number> {
+  let parts = partSnapshots.get(slides);
+  if (!parts) {
+    parts = Object.fromEntries(slides.filter(s => s.partsMode).map(s => [s.id, s.activePart ?? 0]));
+    partSnapshots.set(slides, parts);
+  }
+  return parts;
+}
 export function writeLiveSession(presentation: Presentation, slideId: string | null): void {
   const sessions = read();
   sessions[presentation.id || presentation.name] = {
     savedAt: Date.now(), slideId,
-    parts: Object.fromEntries(presentation.slides.filter(s => s.partsMode).map(s => [s.id, s.activePart ?? 0])),
+    parts: sessionParts(presentation.slides),
   };
   const entries = Object.entries(sessions).sort((a, b) => b[1].savedAt - a[1].savedAt).slice(0, 100);
   localStorage.setItem(KEY, JSON.stringify(Object.fromEntries(entries)));

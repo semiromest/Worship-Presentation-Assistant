@@ -1,13 +1,20 @@
+import { useUiMotionEnabled } from '../hooks/useUiMotionEnabled';
+import { uiMotion } from '../uiMotion';
+import * as m from 'motion/react-m';
+import { playSfx } from '../sfx';
+import { readHymnAuthorPosition, readHymnAuthorSize } from '../hymnAuthorSettings';
 import { usePractice } from '../hooks/usePractice';
 import { SettingsAppearancePreview } from './SettingsAppearancePreview';
 import { PracticePanel } from './PracticePanel';
 import { registerTourAnchor } from './Tour/tourController';
 import { useMemo, useState, useEffect, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Globe, Zap, Settings2, Save, Trash2, DatabaseBackup, Volume2, Mic, KeyRound, Languages, Check, Loader2, Music, Sparkles, Search, X, ChevronRight, BookOpen, Monitor, RefreshCw } from 'lucide-react';
+import { Globe, Zap, Settings2, Save, Trash2, DatabaseBackup, Volume2, Mic, KeyRound, Languages, Check, Loader2, Music, Palette, Sparkles, Search, X, ChevronRight, BookOpen, Monitor, RefreshCw } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { useUpdaterStore } from '../state/useUpdaterStore';
 import { WatermarkSettingsPanel } from './WatermarkSettingsPanel';
+import { PositionPicker, SettingSlider } from './SettingsControls';
+import type { Position } from '../types';
 import { useSttStore, refreshSttStatus } from '../state/useSttStore';
 import { AUTO_STT_LANGUAGE, STT_LANGUAGES } from '../../shared/stt';
 import { cn } from '../utils';
@@ -18,13 +25,23 @@ import './SettingsTab.css';
 
 // Navigation is session-only; it never changes a saved presentation or user setting.
 let lastSettingsCategory: SettingsCategoryId = 'general';
-const CATEGORY_ICONS = { general: Settings2, presentation: Monitor, appearance: Music, captions: Mic, autosave: DatabaseBackup, updates: RefreshCw, learning: BookOpen };
+const CATEGORY_ICONS = { general: Settings2, presentation: Monitor, appearance: Palette, captions: Mic, autosave: DatabaseBackup, updates: RefreshCw, learning: BookOpen };
+
+const HYMN_POSITION_KEYS: Record<Position, string> = {
+  'bottom-left': 'common.hymnsAuthorPosBottomLeft',
+  'bottom-center': 'common.hymnsAuthorPosBottomCenter',
+  'bottom-right': 'common.hymnsAuthorPosBottomRight',
+  'top-left': 'common.hymnsAuthorPosTopLeft',
+  'top-center': 'common.hymnsAuthorPosTopCenter',
+  'top-right': 'common.hymnsAuthorPosTopRight',
+};
 
 
 export default function SettingsTab() {
 
   const { t, i18n } = useTranslation();
   const practice = usePractice();
+  const motionEnabled = useUiMotionEnabled();
   const [category, setCategory] = useState<SettingsCategoryId>(() => lastSettingsCategory);
   const [query, setQuery] = useState('');
   const [focusItem, setFocusItem] = useState<SettingsItemId | null>(null);
@@ -32,12 +49,13 @@ export default function SettingsTab() {
   const searchRef = useRef<HTMLInputElement>(null);
   const normalizedQuery = normalizeSettingsSearch(query);
   const searchResults = settingsItems.filter(item => {
-    const copy = [t(item.titleKey), t(item.descriptionKey), t(`settings.navigation.categories.${item.category}.title`), t(`settings.navigation.keywords.${item.id}`)];
+    const copy = [item.id === 'sound' ? `${t('settings.muteSfxDuringLive')} ${t('settings.muteSfxDuringLiveDesc')}` : '', t(item.titleKey), t(item.descriptionKey), t(`settings.navigation.categories.${item.category}.title`), t(`settings.navigation.keywords.${item.id}`)];
     const haystack = normalizeSettingsSearch(copy.join(' '));
     return normalizedQuery.split(/\s+/).every(word => haystack.includes(word));
   });
 
   const chooseCategory = (next: SettingsCategoryId) => {
+    if (next !== category || query) playSfx('swipe');
     lastSettingsCategory = next;
     setCategory(next);
     setQuery('');
@@ -79,19 +97,18 @@ export default function SettingsTab() {
   const setLiveSaveRetentionMs = useStore((s) => s.setLiveSaveRetentionMs);
   const presets = useStore((s) => s.presets);
   const setPresets = useStore((s) => s.setPresets);
+  const uiSfxMuteDuringLive = useStore(s => s.uiSfxMuteDuringLive);
+  const setUiSfxMuteDuringLive = useStore(s => s.setUiSfxMuteDuringLive);
   const uiSfxEnabled = useStore((s) => s.uiSfxEnabled);
   const setUiSfxEnabled = useStore((s) => s.setUiSfxEnabled);
   const uiMotionEnabled = useStore((s) => s.uiMotionEnabled);
   const setUiMotionEnabled = useStore((s) => s.setUiMotionEnabled);
   const updaterStatus = useUpdaterStore((s) => s.status);
+  const currentVersion = useUpdaterStore((s) => s.currentVersion);
 
   // Hymn author position & size
-  const [hymnAuthorPosition, setHymnAuthorPosition] = useState(() => {
-    try { return localStorage.getItem('hymnAuthorPosition') || 'bottom-center'; } catch { return 'bottom-center'; }
-  });
-  const [hymnAuthorSize, setHymnAuthorSize] = useState(() => {
-    try { return Number(localStorage.getItem('hymnAuthorSize') || '28'); } catch { return 28; }
-  });
+  const [hymnAuthorPosition, setHymnAuthorPosition] = useState(readHymnAuthorPosition);
+  const [hymnAuthorSize, setHymnAuthorSize] = useState(readHymnAuthorSize);
 
   // Soniox real-time captions
   const sttHasKey = useSttStore((s) => s.hasKey);
@@ -115,7 +132,7 @@ export default function SettingsTab() {
   const saveApiKey = async () => {
     const key = apiKeyDraft.trim();
     if (!key) {
-      setKeyError(t('settings.sonioxKeyEmpty'));
+      setKeyError(t('settings.sonioxKeyEmpty')); playSfx('error');
       return;
     }
     setApiKeyState('saving');
@@ -123,15 +140,16 @@ export default function SettingsTab() {
     try {
       const res = await window.electronAPI?.sttSetApiKey?.(key);
       if (!res?.ok) {
-        setKeyError(t('settings.sonioxKeySaveFailed'));
+        setKeyError(t('settings.sonioxKeySaveFailed')); playSfx('error');
       } else {
         setApiKeyDraft('');
         setApiKeyState('saved');
+        playSfx('success');
         await refreshSttStatus();
         setTimeout(() => setApiKeyState('idle'), 2200);
       }
     } catch {
-      setKeyError(t('settings.sonioxKeySaveFailed'));
+      setKeyError(t('settings.sonioxKeySaveFailed')); playSfx('error');
       setApiKeyState('idle');
     }
   };
@@ -140,9 +158,9 @@ export default function SettingsTab() {
     setKeyDeleting(true); setKeyError(null);
     try {
       const result = await window.electronAPI.sttDeleteApiKey();
-      if (!result.ok) { setKeyError(t(result.code === 'SESSION_ACTIVE' ? 'settings.sonioxStopFirst' : 'settings.sonioxClearFailed')); return; }
-      setApiKeyDraft(''); setApiKeyState('idle'); await refreshSttStatus();
-    } catch { setKeyError(t('settings.sonioxClearFailed')); }
+      if (!result.ok) { setKeyError(t(result.code === 'SESSION_ACTIVE' ? 'settings.sonioxStopFirst' : 'settings.sonioxClearFailed')); playSfx('error'); return; }
+      setApiKeyDraft(''); setApiKeyState('idle'); await refreshSttStatus(); playSfx('delete');
+    } catch { setKeyError(t('settings.sonioxClearFailed')); playSfx('error'); }
     finally { setKeyDeleting(false); }
   };
 
@@ -182,7 +200,7 @@ export default function SettingsTab() {
           </div>
           <select
             value={i18n.language}
-            onChange={(e) => i18n.changeLanguage(e.target.value)}
+            onChange={(e) => { if (e.target.value !== i18n.language) { void i18n.changeLanguage(e.target.value); playSfx('press'); } }}
             aria-label={t('settings.language')}
             className="w-full sm:w-auto bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/40 transition-colors"
           >
@@ -204,6 +222,10 @@ export default function SettingsTab() {
               </div>
             </div>
             <SettingSwitch checked={uiSfxEnabled} onCheckedChange={setUiSfxEnabled} label={t('settings.soundEffects')} />
+          </div>
+          <div className="settings-row mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-4">
+            <div><h4 className="text-sm font-medium">{t('settings.muteSfxDuringLive')}</h4><p className="text-sm text-white/60">{t('settings.muteSfxDuringLiveDesc')}</p></div>
+            <SettingSwitch checked={uiSfxMuteDuringLive} onCheckedChange={setUiSfxMuteDuringLive} label={t('settings.muteSfxDuringLive')} />
           </div>
         </section>
 
@@ -251,66 +273,50 @@ export default function SettingsTab() {
           <SettingSwitch checked={operatorNotesEnabled} onCheckedChange={setOperatorNotesEnabled} label={t('common.operatorNotes')} />
         </section></>,
     appearance: <>
-        <SettingsAppearancePreview authorPosition={hymnAuthorPosition} authorSize={hymnAuthorSize} />
-        <section id="settings-item-hymn-position" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4 space-y-4" aria-label={t('common.hymnsAuthorPosition')}>
-          <div className="flex items-center gap-2">
-            <Music className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
-            <div>
-              <h3 className="text-sm font-semibold">{t('common.hymnsAuthorPosition')}</h3>
-              <p className="text-sm leading-relaxed text-white/60">{t('common.hymnsAuthorPositionDesc')}</p>
+        {!normalizedQuery && category === 'appearance' && <SettingsAppearancePreview authorPosition={hymnAuthorPosition} authorSize={hymnAuthorSize} />}
+        <div className="grid gap-4 mt-4 lg:grid-cols-2 items-start">
+          <section id="settings-item-hymn-position" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4 space-y-4 h-full" aria-label={t('common.hymnsAuthorPosition')}>
+            <div className="flex items-center gap-2">
+              <Music className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
+              <div>
+                <h3 className="text-sm font-semibold">{t('common.hymnsAuthorPosition')}</h3>
+                <p className="text-sm leading-relaxed text-white/60">{t('common.hymnsAuthorPositionDesc')}</p>
+              </div>
             </div>
-          </div>
 
-          {/* Position select */}
-          <select
-            value={hymnAuthorPosition}
-            onChange={(e) => {
-              const v = e.target.value;
-              setHymnAuthorPosition(v);
-              try { localStorage.setItem('hymnAuthorPosition', v); } catch { /* storage unavailable */ }
-            }}
-            aria-label={t('common.hymnsAuthorPosition')}
-            className="w-full sm:w-auto bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/40 transition-colors"
-          >
-            <option value="bottom-left"   className="bg-surface-overlay">{t('common.hymnsAuthorPosBottomLeft')}</option>
-            <option value="bottom-center" className="bg-surface-overlay">{t('common.hymnsAuthorPosBottomCenter')}</option>
-            <option value="bottom-right"  className="bg-surface-overlay">{t('common.hymnsAuthorPosBottomRight')}</option>
-            <option value="top-left"      className="bg-surface-overlay">{t('common.hymnsAuthorPosTopLeft')}</option>
-            <option value="top-center"    className="bg-surface-overlay">{t('common.hymnsAuthorPosTopCenter')}</option>
-            <option value="top-right"     className="bg-surface-overlay">{t('common.hymnsAuthorPosTopRight')}</option>
-          </select>
-
-          {/* Size slider */}
-          <div id="settings-item-hymn-size" tabIndex={-1} className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label htmlFor="hymn-author-size" className="text-xs text-white/65">
-                {t('common.hymnsAuthorSize')}
-              </label>
-              <span className="text-[11px] font-mono text-amber-300">{hymnAuthorSize}%</span>
-            </div>
-            <input
-              id="hymn-author-size"
-              type="range"
-              min={10}
-              max={60}
-              step={1}
-              value={hymnAuthorSize}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                setHymnAuthorSize(v);
-                try { localStorage.setItem('hymnAuthorSize', String(v)); } catch { /* storage unavailable */ }
+            {/* Position picker (same control as the logo watermark) */}
+            <PositionPicker
+              value={hymnAuthorPosition as Position}
+              labelFor={(position) => t(HYMN_POSITION_KEYS[position])}
+              ariaLabel={t('common.hymnsAuthorPosition')}
+              onChange={(position) => {
+                setHymnAuthorPosition(position);
+                try { localStorage.setItem('hymnAuthorPosition', position); } catch { /* storage unavailable */ }
               }}
-              aria-label={t('common.hymnsAuthorSize')}
-              className="w-full h-1.5 accent-amber-400 cursor-pointer"
             />
-            <div className="flex justify-between text-[10px] text-white/25">
-              <span>10%</span>
-              <span>60%</span>
-            </div>
-          </div>
-        </section>
 
-        <div id="settings-item-watermark" tabIndex={-1}><WatermarkSettingsPanel /></div></>,
+            {/* Size slider */}
+            <div id="settings-item-hymn-size" tabIndex={-1}>
+              <SettingSlider
+                id="hymn-author-size"
+                label={t('common.hymnsAuthorSize')}
+                value={hymnAuthorSize}
+                min={10}
+                max={60}
+                suffix="%"
+                onChange={(size) => {
+                  setHymnAuthorSize(size);
+                  try { localStorage.setItem('hymnAuthorSize', String(size)); } catch { /* storage unavailable */ }
+                }}
+              />
+            </div>
+          </section>
+
+          <div id="settings-item-watermark" tabIndex={-1} className="h-full">
+            <WatermarkSettingsPanel />
+          </div>
+        </div>
+      </>,
     captions: <section className="rounded-xl border border-white/10 bg-surface-raised p-4 space-y-4" aria-label={t('settings.soniox')}>
           <div className="flex items-center gap-2">
             <Mic className="w-4 h-4 text-blue-400 shrink-0" aria-hidden="true" />
@@ -463,7 +469,7 @@ export default function SettingsTab() {
             </div>
             <button
               type="button"
-              onClick={() => setLiveSaveEnabled(!liveSaveEnabled)}
+              onClick={() => { setLiveSaveEnabled(!liveSaveEnabled); playSfx(liveSaveEnabled ? 'toggle-off' : 'toggle-on'); }}
               aria-pressed={liveSaveEnabled}
               aria-label={t('settings.liveSave')}
               className={cn(
@@ -487,7 +493,7 @@ export default function SettingsTab() {
             </div>
             <select
               value={String(liveSaveRetentionMs)}
-              onChange={(e) => setLiveSaveRetentionMs(Number(e.target.value))}
+              onChange={(e) => { const next = Number(e.target.value); if (next !== liveSaveRetentionMs) { setLiveSaveRetentionMs(next); playSfx('press'); } }}
               className="mt-2 w-full rounded-lg border border-white/10 bg-surface-overlay px-3 py-2 text-sm text-white outline-none focus-visible:border-emerald-400 focus-visible:ring-2 focus-visible:ring-emerald-500/30"
               aria-label={t('settings.liveSaveRetention')}
             >
@@ -532,9 +538,14 @@ export default function SettingsTab() {
             <div className="min-w-0">
               <h3 className="text-sm font-semibold">{t('settings.updates')}</h3>
               <p className="text-sm leading-relaxed text-white/60">{t('settings.updatesDesc')}</p>
+              {currentVersion && (
+                <p className="mt-2 text-xs font-mono text-white/40">
+                  {t('updates.currentVersion')}: v{currentVersion}
+                </p>
+              )}
             </div>
             <button
-              onClick={() => setIsUpdatesOpen(true)}
+              onClick={() => { setIsUpdatesOpen(true); playSfx('open'); }}
               className="relative inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.96]"
             >
               {t('settings.openUpdates')}
@@ -579,8 +590,13 @@ export default function SettingsTab() {
           <div className="space-y-1">{settingsCategories.map(id => {
             const Icon = CATEGORY_ICONS[id];
             return <button key={id} type="button" aria-current={category === id ? 'page' : undefined} aria-controls={`settings-panel-${id}`} onClick={() => chooseCategory(id)}
-              className={cn('flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left text-sm font-medium', category === id ? 'border-blue-400/25 bg-blue-500/15 text-blue-200' : 'border-transparent text-white/65 hover:bg-white/5 hover:text-white')}>
-              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="min-w-0 break-words">{t(`settings.navigation.categories.${id}.title`)}</span>
+              className={cn('relative isolate flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left text-sm font-medium', category === id ? 'border-blue-400/25 text-blue-200' : 'border-transparent text-white/65 hover:bg-white/5 hover:text-white')}>
+              {category === id && <m.span layoutId="settings-active-category" className="pointer-events-none absolute inset-0 -z-10 rounded-xl bg-blue-500/15" transition={{ duration: motionEnabled ? uiMotion.duration.fast : 0, ease: uiMotion.ease }} />}
+              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="min-w-0 break-words flex-1">{t(`settings.navigation.categories.${id}.title`)}</span>
+              {id === 'updates' && (updaterStatus === 'available' || updaterStatus === 'downloaded') && (
+                <span className="w-2 h-2 rounded-full bg-blue-400" aria-hidden="true" />
+              )}
             </button>;
           })}</div>
         </nav>
@@ -595,7 +611,7 @@ export default function SettingsTab() {
             {!searchResults.length && <div className="rounded-xl border border-dashed border-white/15 p-6 text-center"><p className="text-sm text-white/65">{t('settings.navigation.noResults')}</p><button type="button" onClick={clearSearch} className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-500">{t('settings.navigation.clearSearch')}</button></div>}
           </div>
           <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{normalizedQuery ? t('settings.navigation.resultCount', { count: searchResults.length }) : ''}</p>
-          {settingsCategories.map(id => <section key={id} id={`settings-panel-${id}`} hidden={!!normalizedQuery || id !== category} aria-labelledby={`settings-title-${id}`} className="mx-auto max-w-4xl space-y-4">
+          {settingsCategories.map(id => <section key={id} id={`settings-panel-${id}`} hidden={!!normalizedQuery || id !== category} aria-labelledby={`settings-title-${id}`} className="ui-fade-enter mx-auto max-w-4xl space-y-4">
             <div><h3 id={`settings-title-${id}`} className="text-lg font-bold">{t(`settings.navigation.categories.${id}.title`)}</h3>
               {id !== 'learning' && <p className="mt-1 text-sm leading-relaxed text-white/60">{t(`settings.navigation.categories.${id}.description`)}</p>}
             </div>

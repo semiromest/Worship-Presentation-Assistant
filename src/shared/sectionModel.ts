@@ -1,4 +1,4 @@
-import type { Presentation, PresentationSection, Slide } from '../renderer/types';
+import type { Presentation, PresentationSection, Slide } from './presentation';
 
 export const SECTION_COLORS = ['#60a5fa', '#a78bfa', '#34d399', '#fbbf24', '#fb7185', '#22d3ee'];
 export const SECTION_ICONS = ['•', '♫', '✦', '☀', '☷', '✝'];
@@ -20,6 +20,7 @@ export function normalizeSections(deck: Presentation): Presentation {
       records.set(section.id, {
         id: section.id,
         title: section.title,
+        ...(typeof section.time === 'string' && section.time.trim() ? { time: section.time.trim().slice(0, 8) } : {}),
         ...(section.unassigned ? { unassigned: true } : {}),
         ...(SECTION_COLORS.includes(section.color ?? '') ? { color: section.color } : {}),
         ...(SECTION_ICONS.includes(section.icon ?? '') ? { icon: section.icon } : {}),
@@ -176,8 +177,7 @@ export function selectedSlideIds(deck: Presentation, selection: Iterable<string>
  * Group exactly the selected slides into a new section. Sections are contiguous
  * runs, so the chosen slides are gathered in their existing relative order at the
  * position of the first one; no unselected slide changes its relative order.
- * Selecting a whole existing section renames it in place instead of leaving an
- * empty orphan behind.
+ * Existing sections remain in the flow even when all their slides are moved.
  */
 export function createSectionFromSelection(
   deck: Presentation,
@@ -193,11 +193,9 @@ export function createSectionFromSelection(
   const sections = [...(deck.sections ?? [])];
   const anchor = sections.findIndex((s) => s.id === anchorId);
   if (anchor < 0) return deck;
-  // Every slide of one existing section was chosen: reuse its slot, don't orphan it.
-  const whole = deck.slides.filter((slide) => slide.sectionId === anchorId).length === ids.length;
+  // Creating a section never replaces another section, even with a one-slide deck.
   const created = { ...section, title: section.title.trim() };
-  if (whole) sections.splice(anchor, 1, created);
-  else sections.splice(anchor + 1, 0, created);
+  sections.splice(anchor + 1, 0, created);
   const moved = deck.slides.filter((slide) => chosen.has(slide.id)).map((slide) => ({ ...slide, sectionId: created.id }));
   const rest = deck.slides.filter((slide) => !chosen.has(slide.id));
   rest.splice(firstIndex, 0, ...moved);
@@ -227,7 +225,7 @@ export function createSectionAt(deck: Presentation, slideId: string, section: Pr
 export function updateSection(
   deck: Presentation,
   id: string,
-  update: Partial<Pick<PresentationSection, 'title' | 'color' | 'icon'>>
+  update: Partial<Pick<PresentationSection, 'title' | 'color' | 'icon' | 'time'>>
 ): Presentation {
   if (update.title !== undefined && !update.title.trim()) return deck;
   return normalizeSections({

@@ -11,7 +11,7 @@ import {
   inheritGeneratedBackgrounds,
 } from '../renderer/gradientBackground';
 import { undoReducer } from '../renderer/state/undoReducer';
-import type { Presentation, Slide } from '../renderer/types';
+import type { Presentation, Slide } from './presentation';
 const recipe: GeneratedBackground = {
   engineVersion: 1,
   seed: 20261014,

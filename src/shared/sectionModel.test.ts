@@ -21,7 +21,7 @@ import {
 } from './sectionModel';
 import { computePatch, applyProjectorPatch, undoReducer, isPatchEmpty } from '../renderer/state/undoReducer';
 import { resolveLiveSlidePosition } from '../renderer/slideLock';
-import type { Presentation, Slide } from '../renderer/types';
+import type { Presentation, Slide } from './presentation';
 const ids = (deck: Presentation) => deck.slides.map((s) => s.id);
 const base = (): Presentation =>
   normalizeSections({
@@ -183,12 +183,13 @@ test('non-adjacent picks are gathered at the first chosen slide without reorderi
   );
 });
 
-test('choosing a whole existing section renames it in place instead of orphaning it', () => {
+test('grouping a whole section creates a new section and preserves the empty source', () => {
   const deck = divided();
   const next = createSectionFromSelection(deck, new Set(['a', 'b']), { id: 'renamed', title: 'Açılış' });
   assert.deepEqual(
     getSectionBlocks(next).map((b) => [b.id, b.slides.map((s) => s.id)]),
     [
+      ['intro', []],
       ['renamed', ['a', 'b']],
       ['worship', ['c', 'd']],
       ['end', ['e', 'f']],

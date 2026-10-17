@@ -11,7 +11,7 @@
  * Production builds pay zero overhead (perf buffers are disabled).
  */
 
-import { PerfBuffer, defaultPerfEnabled, type PerfSnapshot } from '../shared/perf';
+import { PerfBuffer, defaultPerfEnabled, type PerfSnapshot, type MainPerfSnapshot } from '../shared/perf';
 
 // NOTE: this module must NOT import useStore — useStore → utils → perf would
 // form a circular import. The store is passed in from main.tsx instead.
@@ -67,15 +67,11 @@ export function initRendererPerf(store: PerfStoreLike): void {
   // Startup marker: time from process start to first script evaluation.
   rendererPerf.push({ kind: 'startup', label: 'renderer-init', ms: performance.now(), bytes: 0, t: Date.now() });
 
-  const all = async (): Promise<{
-    renderer: PerfSnapshot;
-    main: PerfSnapshot | null;
-  }> => {
-    // preload's getPerfSnapshot() invokes main's perf:snapshot channel, which
-    // carries the main-process buffer (plus event-loop lag metadata).
-    const mainSnap = (await (window as { electronAPI?: { getPerfSnapshot?: () => Promise<PerfSnapshot | null> } }).electronAPI?.getPerfSnapshot?.()) ?? null;
-    return { renderer: rendererPerf.snapshot(), main: mainSnap };
-  };
+  const all = async (): Promise<{ renderer: PerfSnapshot; preload: PerfSnapshot | null; main: MainPerfSnapshot | null }> => ({
+    renderer: rendererPerf.snapshot(),
+    preload: window.electronAPI?.getPreloadPerfSnapshot?.() ?? null,
+    main: await window.electronAPI?.getMainPerfSnapshot?.() ?? null,
+  });
 
   (window as unknown as Record<string, unknown>).__perf = {
     enabled: true,
@@ -83,7 +79,8 @@ export function initRendererPerf(store: PerfStoreLike): void {
     all,
     reset: async () => {
       rendererPerf.reset();
-      await (window as { electronAPI?: { resetPerf?: () => Promise<unknown> } }).electronAPI?.resetPerf?.();
+      window.electronAPI?.resetPerf?.();
+      await window.electronAPI?.resetMainPerf?.();
       return true;
     },
   };

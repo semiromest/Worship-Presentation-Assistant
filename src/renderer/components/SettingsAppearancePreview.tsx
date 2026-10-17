@@ -29,11 +29,12 @@ export function SettingsAppearancePreview({ authorPosition, authorSize }: { auth
   const previewConfig = config.logoDataUrl ? config : { ...config, logoDataUrl: SAMPLE_LOGO, enabled: true, applyToHymns: true };
   return <section id="settings-item-appearance-preview" tabIndex={-1} className="space-y-3 rounded-xl border border-blue-400/20 bg-surface-raised p-4" aria-label={t('settings.appearancePreview')}>
     <h4 className="text-sm font-semibold">{t('settings.appearancePreview')}</h4>
-    <div ref={outer} className="relative aspect-video w-full overflow-hidden rounded-lg border border-white/10 bg-black">
-      <div className="absolute left-0 top-0 origin-top-left" style={{ width: 1920, height: 1080, transform: `scale(${scale})` }}>
-        <LivePreview slide={slide} watermarkConfig={previewConfig} hymnAuthorPosition={authorPosition as Position} hymnAuthorSize={authorSize} isActive={false} />
+    <div className="flex justify-center">
+      <div ref={outer} className="relative aspect-video w-full max-w-2xl overflow-hidden rounded-lg border border-white/10 bg-black shadow-2xl">
+        <div className="absolute left-0 top-0 origin-top-left" style={{ width: 1920, height: 1080, transform: `scale(${scale})` }}>
+          <LivePreview slide={slide} watermarkConfig={previewConfig} hymnAuthorPosition={authorPosition as Position} hymnAuthorSize={authorSize} isActive={false} />
+        </div>
       </div>
     </div>
-    <p className="text-xs leading-relaxed text-white/60">{t(config.logoDataUrl ? 'settings.appearancePreviewHint' : 'settings.appearancePreviewSample')}</p>
   </section>;
 }

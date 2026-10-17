@@ -1,3 +1,4 @@
+import { readHymnAuthorPosition, readHymnAuthorSize } from './hymnAuthorSettings';
 import { RangeVideo } from './components/RangeVideo';
 import BackgroundDim from './components/BackgroundDim';
 import { AnimatedGradientBackground } from './components/AnimatedGradientBackground';
@@ -485,8 +486,8 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
           {displayContent}
         </p>
         {hymnAuthor && (() => {
-          const pos = hymnAuthorPosition ?? (() => { try { return localStorage.getItem('hymnAuthorPosition') || 'bottom-center'; } catch { return 'bottom-center'; } })();
-          const sizePct = hymnAuthorSize ?? (() => { try { return Number(localStorage.getItem('hymnAuthorSize') || '28'); } catch { return 28; } })();
+          const pos = hymnAuthorPosition ?? readHymnAuthorPosition();
+          const sizePct = hymnAuthorSize ?? readHymnAuthorSize();
           const isTop    = pos.startsWith('top');
           const isBottom = !isTop;
           const isLeft   = pos.endsWith('left');

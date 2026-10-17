@@ -4,7 +4,7 @@ import type { CueName, PlayOptions, PlayingSFX, UISFXPlayer } from 'uisfx';
 //
 // A thin singleton around the uisfx runtime. The app ships exactly one sonic
 // personality ("minimal" — dry, precise, almost invisible) and the sounds are
-// never modified: we only expose an on/off switch, which is off by default.
+// never modified. The master switch is off by default; live outputs can mute it.
 // The library synthesizes every sound locally via Web Audio, so nothing is
 // fetched from the network and no audio assets are added to the bundle.
 //
@@ -15,12 +15,59 @@ import type { CueName, PlayOptions, PlayingSFX, UISFXPlayer } from 'uisfx';
 
 const STORAGE_KEY = 'uiSfxEnabled';
 const PACK = 'minimal' as const;
+const LIVE_MUTE_KEY = 'uiSfxMuteDuringLive';
+let liveOutputOpen = false;
+let outputTransitions = 0;
+let muteDuringLive = readSfxMuteDuringLive();
+
+export function readSfxMuteDuringLive(): boolean {
+  try { return localStorage.getItem(LIVE_MUTE_KEY) !== '0'; } catch { return true; }
+}
+
+export function setSfxMuteDuringLive(value: boolean): void {
+  muteDuringLive = value;
+  try { localStorage.setItem(LIVE_MUTE_KEY, value ? '1' : '0'); } catch { /* Session preference still applies. */ }
+  if (isLiveMuted()) player?.stopAll();
+}
+
+function isLiveMuted(): boolean {
+  return muteDuringLive && (liveOutputOpen || outputTransitions > 0);
+}
+
+/** Called synchronously from the existing output status store. */
+export function setSfxLiveOutput(open: boolean): void {
+  if (liveOutputOpen === open) return;
+  liveOutputOpen = open;
+  if (isLiveMuted()) player?.stopAll();
+}
+
+/** Keep output transitions silent, including their completion cues. */
+export async function withSfxOutputTransition<T>(action: () => Promise<T>): Promise<T> {
+  outputTransitions++;
+  if (isLiveMuted()) player?.stopAll();
+  try { return await action(); } finally { outputTransitions--; }
+}
 
 // Cues actually used by the app. Preloaded once after the first trusted
 // interaction so the first real sound plays instantly instead of being
 // synthesized on demand.
 const PRELOAD_CUES: CueName[] = [
   'select',
+  'deselect',
+  'focus',
+  'forward',
+  'back',
+  'swipe',
+  'check',
+  'uncheck',
+  'press',
+  'snap',
+  'copy',
+  'close',
+  'expand',
+  'collapse',
+  'play',
+  'pause',
   'success',
   'complete',
   'delete',
@@ -75,7 +122,7 @@ function loadPlayer(): Promise<UISFXPlayer | null> {
     .then(({ createUISFX }) => {
       player = createUISFX({
         pack: PACK,
-        volume: 1,
+        volume: 0.45,
         enabled: readStoredEnabled(),
         // No `preferences` adapter on purpose: we persist only the on/off flag
         // ourselves under STORAGE_KEY, so the library never writes localStorage.
@@ -128,9 +175,11 @@ export function initSfx(): void {
  * Loop cues return a handle; stop it with `stopSfx` when the state resolves.
  */
 export function playSfx(cue: CueName, options?: PlayOptions): PlayingSFX | null {
-  if (!initialized) return null;
+  if (!initialized || isLiveMuted()) return null;
   if (!player || !player.isEnabled()) return null;
-  return player.play(cue, options);
+  // Dense selection/navigation should not chatter during rapid interaction.
+  const frequent = ['select', 'focus', 'press', 'snap', 'check', 'uncheck', 'forward', 'back', 'swipe', 'deselect'].includes(cue);
+  return player.play(cue, frequent ? { cooldownMs: 180, ...options } : options);
 }
 
 /** Stops a loop handle returned by `playSfx` (no-op for null/one-shots). */

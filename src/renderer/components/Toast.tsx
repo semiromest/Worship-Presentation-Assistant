@@ -1,3 +1,4 @@
+import { AnimatePresence } from 'motion/react';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as m from 'motion/react-m';
@@ -19,16 +20,16 @@ export default function Toast() {
 
   useEffect(() => {
     if (!toastMessage) return;
-    if (!isDisconnected) playSfx(isUndo ? 'undo' : 'redo');
+    if (isUndo || toastMessage === 'redoNotification') playSfx(isUndo ? 'undo' : 'redo');
     const timer = setTimeout(() => setToastMessage(null), isDisconnected ? 4000 : 1800);
     return () => clearTimeout(timer);
   }, [toastKey, toastMessage, isDisconnected, isUndo, setToastMessage]);
 
-  if (!toastMessage) return null;
-
   return (
+    <AnimatePresence initial={false}>
+      {toastMessage && (
         <m.div
-          key={toastKey}
+          key="toast"
           className="fixed bottom-6 left-1/2 z-[100] -translate-x-1/2"
           role="status"
           aria-live="polite"
@@ -46,5 +47,7 @@ export default function Toast() {
             {t(`common.${toastMessage}`, { defaultValue: toastMessage })}
           </div>
         </m.div>
+      )}
+    </AnimatePresence>
   );
 }

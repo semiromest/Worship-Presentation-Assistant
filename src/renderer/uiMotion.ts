@@ -3,7 +3,10 @@ export const UI_MOTION_STORAGE_KEY = 'uiMotionEnabled';
 export const uiMotion = {
   duration: { fast: 0.12, standard: 0.18, emphasized: 0.22 },
   ease: [0.2, 0.8, 0.2, 1] as const,
-  distance: 8,
+  distance: 6,
+  menuDistance: 4,
+  maxListItems: 8,
+  stagger: 0.008,
 };
 
 export function readUiMotionEnabled(): boolean {

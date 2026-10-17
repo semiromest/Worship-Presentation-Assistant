@@ -1,12 +1,5 @@
-export interface VideoPlaybackSettings {
-  startSeconds?: number;
-  endSeconds?: number;
-  loop?: boolean;
-  muted?: boolean;
-  playbackRate?: number;
-  volume?: number;
-}
-
+import type { VideoPlaybackSettings } from '../shared/videoPlayback';
+export type { VideoPlaybackSettings } from '../shared/videoPlayback';
 export interface VideoRange {
   start: number;
   end: number;

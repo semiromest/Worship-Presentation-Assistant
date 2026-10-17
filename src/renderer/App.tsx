@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as m from 'motion/react-m';
+import { AnimatePresence } from 'motion/react';
 import {
   Layers,
   Layout,
@@ -33,7 +34,7 @@ const SettingsTab = lazy(() => import('./components/SettingsTab'));
 
 import { IS_PROJECTOR_MODE, DEFAULT__TRANSITION } from './constants';
 import { cn } from './utils';
-import { initSfx } from './sfx';
+import { initSfx, playSfx } from './sfx';
 import { uiMotion } from './uiMotion';
 import { useUiMotionEnabled } from './hooks/useUiMotionEnabled';
 
@@ -47,10 +48,11 @@ import { useScreenShare } from './hooks/useScreenShare';
 import { useLiveSave, getLiveSaveRetention } from './hooks/useLiveSave';
 import { useSlideOperations } from './hooks/useSlideOperations';
 import { useStt } from './hooks/useStt';
+import { usePreparationCheck } from './hooks/usePreparationCheck';
 import { useSttSlideTracker } from './hooks/useSttSlideTracker';
 import { useShare } from './hooks/useShare';
 import { useSttStore } from './state/useSttStore';
-import { initUpdaterSync } from './state/useUpdaterStore';
+import { initUpdaterSync, useUpdaterStore } from './state/useUpdaterStore';
 
 // Components
 import Toolbar from './components/Toolbar';
@@ -67,67 +69,86 @@ import Toast from './components/Toast';
 
 import { registerTourAnchor, notifyPageVisit } from './components/Tour/tourController';
 
+type Operations = ReturnType<typeof useSlideOperations>;
+type AppCommands = ReturnType<typeof useRemoteControl> & {
+  sttStart: ReturnType<typeof useStt>['start'];
+  sttStop: ReturnType<typeof useStt>['stop'];
+  startShare: () => Promise<void>;
+  stopShare: () => Promise<void>;
+  startScreenShare: ReturnType<typeof useScreenShare>['startShare'];
+  stopScreenShare: ReturnType<typeof useScreenShare>['stopShare'];
+};
+
 export default function App() {
-  const { t, i18n } = useTranslation();
-
-  // Custom Hooks
-  const { openLive, closeLive, openOutput, closeOutput } = useRemoteControl();
-  useProjectorSync();
-  useLiveSave();
-  // Real-time captions/translation — runs in BOTH windows so the projector
-  // screen renders the same live text. The hook owns mic capture + session
-  // start/stop; the panel below is just the control UI.
+  const remote = useRemoteControl();
   const { start: sttStart, stop: sttStop } = useStt();
-  // Slide tracker: follows the speaker by matching the live transcript against
-  // the deck's text slides. No-ops in the projector window.
-  useSttSlideTracker();
-  // Phone captions/translation share — a pure subscriber of the STT store that
-  // pushes normalized snapshots to the main process for LAN broadcast.
   const { startShare, stopShare } = useShare();
-  // Live-screen phone viewers: while a broadcast is active, streams JPEG frames
-  // of the CURRENT LIVE SLIDE (the one “Canlı Yayın” sends to the projector) to
-  // connected phones. No-ops in the projector window.
-  useLiveScreenShare();
   const { startShare: startScreenShare, stopShare: stopScreenShare } = useScreenShare();
+  const commands = { ...remote, sttStart, sttStop, startShare, stopShare, startScreenShare, stopScreenShare };
+  return <><RuntimeSync />{IS_PROJECTOR_MODE ? <ProjectorView /> : <ControlApp commands={commands} />}</>;
+}
 
-  // Field-level selectors: subscribing to the whole store re-rendered App on
-  // every state change (toast, search, liveIndex, …). Each selector returns a
-  // stable reference, so re-renders are limited to actual field changes.
-  const presentation = useStore((s) => s.presentation);
-  const selectedSlideId = useStore((s) => s.selectedSlideId);
-  const liveIndex = useStore((s) => s.liveIndex);
-  const instantTransition = useStore((s) => s.instantTransition);
-  const setInstantTransition = useStore((s) => s.setInstantTransition);
-  const projectorReady = useStore((s) => s.projectorReady);
-  const isProjectorWindowOpen = useStore((s) => s.isProjectorWindowOpen);
-  const isBlackout = useStore((s) => s.isBlackout);
-  const mediaVolume = useStore((s) => s.mediaVolume);
-  const isMediaMuted = useStore((s) => s.isMediaMuted);
+/** Reactive bridges have their own render boundary; no visual children. */
+function RuntimeSync() {
+  useProjectorSync();
+  usePreparationCheck();
+  useLiveSave();
+  useSttSlideTracker();
+  useLiveScreenShare();
+  const { i18n } = useTranslation();
+  // ─── Sync html lang with i18n ────────────────────────────────────────────
+  useEffect(() => {
+    document.documentElement.lang = i18n.language?.split('-')[0] ?? 'tr';
+  }, [i18n.language]);
+
+  useEffect(() => {
+    let alive = true;
+
+    const hydratePresets = async () => {
+      const loaded = await window.electronAPI?.loadPresets?.(getLiveSaveRetention());
+      if (!alive || !Array.isArray(loaded)) return;
+      useStore.getState().setPresets(loaded);
+    };
+
+    void hydratePresets();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // ─── Updater sync (preload events → store) ────────────────────────────────
+  useEffect(() => {
+    initUpdaterSync();
+  }, []);
+
+  const instantTransition = useStore(s => s.instantTransition);
+  useEffect(() => {
+    if (!instantTransition) return;
+    const id = setTimeout(() => useStore.getState().setInstantTransition(false), 0);
+    return () => clearTimeout(id);
+  }, [instantTransition]);
+  return null;
+}
+
+function ControlApp({ commands }: { commands: AppCommands }) {
+  const { t } = useTranslation();
+  const { openLive, closeLive, openOutput, closeOutput, startScreenShare, stopScreenShare } = commands;
+  // Layout-only subscriptions. Deck and live state belong to local connectors.
   const activeTab = useStore((s) => s.activeTab);
   const setActiveTab = useStore((s) => s.setActiveTab);
-  const presets = useStore((s) => s.presets);
-  const setPresets = useStore((s) => s.setPresets);
-  const panels = useStore((s) => s.panels);
+  const stylesPanelOpen = useStore(s => s.panels.styles);
   const setPanels = useStore((s) => s.setPanels);
-  const selectedPresetName = useStore((s) => s.selectedPresetName);
-  const setSelectedPresetName = useStore((s) => s.setSelectedPresetName);
   const editorDirty = useStore((s) => s.editorDirty);
-  const editorSessionVersion = useStore((s) => s.editorSessionVersion);
   const [editorMounted, setEditorMounted] = useState(false);
   useEffect(() => { if (activeTab === 'editor') setEditorMounted(true); }, [activeTab]);
   const activeColorPicker = useStore((s) => s.activeColorPicker);
   const setActiveColorPicker = useStore((s) => s.setActiveColorPicker);
   const isRightPanelOpen = useStore((s) => s.isRightPanelOpen);
   const setIsRightPanelOpen = useStore((s) => s.setIsRightPanelOpen);
-  const isSttPanelOpen = useStore((s) => s.isSttPanelOpen);
-  const setIsSttPanelOpen = useStore((s) => s.setIsSttPanelOpen);
-  const outputMode = useStore((s) => s.outputMode);
+  const updaterStatus = useUpdaterStore((s) => s.status);
   const uiMotionEnabled = useUiMotionEnabled();
   const [shouldMountBible, setShouldMountBible] = useState(false);
-  // Live captions session (mic on / connecting / connected). Read at App level
-  // only for layout decisions; the console and session bar subscribe to text.
-  const sttSessionActive = useSttStore((s) => s.micActive || s.status !== 'idle');
-
+  const operations = useSlideOperations();
   const {
     addSlide,
     removeSlide,
@@ -143,12 +164,7 @@ export default function App() {
     applyStyleFieldToAll,
     handleKeyDown,
     updateTransition,
-    savePresentation,
-    handleImportSlides,
-    openPresentation,
-    applyPreset,
     openSavedPresentationByName,
-    createNewPresentation,
     handleSendToLive,
     handleMediaAdd,
     handleYouTubeMusicAdd,
@@ -157,8 +173,6 @@ export default function App() {
     handleQrSlideAdd,
     handleHymnAdd,
     handleAddCountdownToPresentation,
-    handleAddCaptionsSlide,
-    handleSttUtteranceToSlide,
     handleAddLoopToPresentation,
     handleSlideClick,
     handleSlideDoubleClick,
@@ -169,47 +183,12 @@ export default function App() {
     removeSlideMedia,
     updateLoopItems,
     updateSlideProperty,
-  } = useSlideOperations();
-
-  // Puts captions on the screen right now: jumps to the deck's existing
-  // captions slide (respecting whether a broadcast is open) or adds + goes
-  // live with a fresh one when the deck has none.
-  const sendCaptionsLive = useCallback(() => {
-    const idx = presentation.slides.findIndex((s) => s.type === 'captions');
-    if (idx === -1) {
-      handleAddCaptionsSlide(true);
-      return;
-    }
-    const id = presentation.slides[idx].id;
-    if (isProjectorWindowOpen) handleSlideClick(id, idx);
-    else handleSlideDoubleClick(id, idx);
-  }, [presentation, isProjectorWindowOpen, handleAddCaptionsSlide, handleSlideClick, handleSlideDoubleClick]);
+  } = operations;
 
   useKeyboardNavigation({
     onDeleteSlides: deleteSelectedSlides,
     onDuplicateSlides: duplicateSelectedSlides,
   });
-
-  const configuredTransitionType = presentation.transition?.type ?? DEFAULT__TRANSITION.type;
-  const configuredTransitionDuration = presentation.transition?.duration ?? DEFAULT__TRANSITION.duration;
-  // Auto-tracked slide changes switch instantly (no fade/zoom) so the speaker
-  // is followed with minimal delay; manual navigation keeps the configured
-  // transition.
-  const transitionType = instantTransition ? 'none' : configuredTransitionType;
-  const transitionDuration = instantTransition ? 0 : configuredTransitionDuration;
-  const liveSlide = presentation.slides[liveIndex] ?? presentation.slides[0];
-  const selectedSlide = presentation.slides.find((s) => s.id === selectedSlideId);
-  const captionsOnAir = liveSlide?.type === 'captions';
-  // Slide used for the WYSIWYG captions monitor: the live captions slide when
-  // one is on air, otherwise the deck's captions slide (styling preview).
-  const captionsPreviewSlide = useMemo(() => {
-    if (captionsOnAir) return liveSlide;
-    for (let i = presentation.slides.length - 1; i >= 0; i--) {
-      const s = presentation.slides[i];
-      if (s.type === 'captions') return s;
-    }
-    return undefined;
-  }, [presentation.slides, liveSlide, captionsOnAir]);
 
   const SIDEBAR_TABS = useMemo(
     () =>
@@ -227,45 +206,6 @@ export default function App() {
       ] as const,
     []
   );
-
-  const savedPresentationNames = useMemo(
-    () => presets.filter((p) => !p.name.startsWith('__live_autosave_')).map((p) => p.name),
-    [presets]
-  );
-
-  // ─── Sync html lang with i18n ────────────────────────────────────────────
-  useEffect(() => {
-    document.documentElement.lang = i18n.language?.split('-')[0] ?? 'tr';
-  }, [i18n.language]);
-
-  // ─── Auto-track "instant switch" is one-shot ─────────────────────────────
-  // The flag is consumed by this render (transitionType becomes 'none') and
-  // then cleared so the next manual navigation uses the configured effect.
-  useEffect(() => {
-    if (!instantTransition) return;
-    const id = setTimeout(() => setInstantTransition(false), 0);
-    return () => clearTimeout(id);
-  }, [instantTransition, setInstantTransition]);
-
-  useEffect(() => {
-    let alive = true;
-
-    const hydratePresets = async () => {
-      const loaded = await window.electronAPI?.loadPresets?.(getLiveSaveRetention());
-      if (!alive || !Array.isArray(loaded)) return;
-      setPresets(loaded);
-    };
-
-    void hydratePresets();
-    return () => {
-      alive = false;
-    };
-  }, [setPresets]);
-
-  // ─── Updater sync (preload events → store) ────────────────────────────────
-  useEffect(() => {
-    initUpdaterSync();
-  }, []);
 
   // ─── UI sound effects (uisfx) ─────────────────────────────────────────────
   // Only the control window plays sounds; the fullscreen projector window
@@ -306,7 +246,7 @@ export default function App() {
 
   // ─── Effect: Dropdown Click-Outside ───────────────────────────────────────
   useEffect(() => {
-    if (!panels.styles && !activeColorPicker) return;
+    if (!stylesPanelOpen && !activeColorPicker) return;
 
     const handleClick = (e: MouseEvent) => {
       if (
@@ -320,62 +260,7 @@ export default function App() {
 
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
-  }, [panels.styles, activeColorPicker, setPanels, setActiveColorPicker]);
-
-  // ─── Projector View ───────────────────────────────────────────────────────
-  if (IS_PROJECTOR_MODE) {
-    if (!projectorReady) {
-      return (
-        <div className="fixed inset-0 flex items-center justify-center overflow-hidden bg-black">
-          <AnimatedPreview
-            slide={liveSlide}
-            transitionType={transitionType}
-            duration={transitionDuration}
-            size="projector"
-            volume={mediaVolume}
-            muted={isMediaMuted}
-          />
-          <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-white text-sm">
-            {t('common.loading') || 'Yükleniyor...'}
-          </div>
-        </div>
-      );
-    }
-
-    if (isBlackout) {
-      return <div className="fixed inset-0 bg-black z-50" />;
-    }
-
-    // Stage display (confidence monitor): shows current + next slide text,
-    // a live clock and elapsed time — instead of the styled projector view.
-    if (outputMode === 'stage') {
-      return <StageDisplay />;
-    }
-
-    return (
-      <div
-        className="fixed inset-0 flex items-center justify-center overflow-hidden bg-black"
-        style={{
-          backgroundColor: liveSlide?.type === 'text' ? (liveSlide.styles?.backgroundColor ?? '#000') : '#000',
-          backgroundImage:
-            liveSlide?.type === 'text' && liveSlide.styles?.backgroundImage
-              ? `url(${liveSlide.styles.backgroundImage})`
-              : undefined,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
-      >
-        <AnimatedPreview
-          slide={liveSlide}
-          transitionType={transitionType}
-          duration={transitionDuration}
-          size="projector"
-          volume={mediaVolume}
-          muted={isMediaMuted}
-        />
-      </div>
-    );
-  }
+  }, [stylesPanelOpen, activeColorPicker, setPanels, setActiveColorPicker]);
 
   // ─── Main UI ──────────────────────────────────────────────────────────────
   return (
@@ -389,7 +274,7 @@ export default function App() {
           <button
             key={id}
             data-guide-anchor={`nav-${id}`}
-            onClick={() => { setActiveTab(id as any); notifyPageVisit(id); }}
+            onClick={() => { if (activeTab !== id) playSfx('forward'); setActiveTab(id as any); notifyPageVisit(id); }}
             title={t(titleKey)}
             aria-label={t(titleKey)}
             aria-current={activeTab === id ? 'page' : undefined}
@@ -408,6 +293,9 @@ export default function App() {
               />
             )}
             {id === 'editor' && editorDirty && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-amber-400" aria-label={t('common.editorPendingDraft')} />}
+            {id === 'settings' && (updaterStatus === 'available' || updaterStatus === 'downloaded') && (
+              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-blue-400" aria-hidden="true" />
+            )}
             <Icon className="relative z-10 w-5 h-5 shrink-0" aria-hidden="true" />
             <span className="relative z-10 text-[10px] font-semibold leading-tight text-white/65 max-w-[56px] truncate text-center text-balance">
               {t(titleKey)}
@@ -437,7 +325,6 @@ export default function App() {
               className="h-full"
               initial={uiMotionEnabled ? { opacity: 0, y: uiMotion.distance } : false}
               animate={{ opacity: 1, y: 0 }}
-              exit={uiMotionEnabled ? { opacity: 0, y: -4 } : { opacity: 1, y: 0 }}
               transition={{ duration: uiMotionEnabled ? uiMotion.duration.standard : 0, ease: uiMotion.ease }}
             >
             <Suspense
@@ -449,18 +336,7 @@ export default function App() {
             >
           {activeTab === 'presentations' && (
             <div ref={element => registerTourAnchor('page-presentations', element)} className="h-full">
-              <PresentationsTab
-                presentation={presentation}
-                presets={presets}
-                selectedPresetName={selectedPresetName}
-                onPresetsChange={setPresets}
-                onApplyPreset={applyPreset}
-                onSelectedPresetNameChange={setSelectedPresetName}
-                onOpenFile={openPresentation}
-                onSaveFile={savePresentation}
-                onImportSlides={handleImportSlides}
-                onNewPresentation={createNewPresentation}
-              />
+              <PresentationLibrary operations={operations} />
             </div>
           )}
 
@@ -494,11 +370,11 @@ export default function App() {
                     removeSlideMedia={removeSlideMedia}
                     updateLoopItems={updateLoopItems}
                     updateSlideProperty={updateSlideProperty}
-                    onClose={() => setIsRightPanelOpen(false)}
+                    onClose={() => { setIsRightPanelOpen(false); playSfx('close'); }}
                 />
                 <button
                   data-testid="right-panel-opener"
-                  onClick={() => setIsRightPanelOpen(true)}
+                  onClick={() => { setIsRightPanelOpen(true); playSfx('open'); }}
                   tabIndex={isRightPanelOpen ? -1 : 0}
                   aria-hidden={isRightPanelOpen}
                   className={cn(
@@ -544,10 +420,7 @@ export default function App() {
           )}
           {activeTab === 'calendar' && (
             <div ref={element => registerTourAnchor('page-calendar', element)} className="h-full">
-              <CalendarTab
-                savedPresentationNames={savedPresentationNames}
-                onOpenPresentation={openSavedPresentationByName}
-              />
+              <CalendarConnection onOpenPresentation={openSavedPresentationByName} />
             </div>
           )}
           {activeTab === 'settings' && (
@@ -567,60 +440,19 @@ export default function App() {
                   ) : null
                 }
               >
-                <div ref={element => registerTourAnchor('page-bible', element)} className={activeTab === 'bible' ? 'h-full' : 'hidden'} aria-hidden={activeTab !== 'bible'}>
+                <div ref={element => registerTourAnchor('page-bible', element)} className={activeTab === 'bible' ? 'ui-fade-enter h-full' : 'hidden'} aria-hidden={activeTab !== 'bible'}>
                   <ScriptureBrowser active={activeTab === 'bible'} onSendToLive={handleSendToLive} />
                 </div>
               </Suspense>
             )}
           {(editorMounted || activeTab === 'editor') && (
-            <div ref={element => registerTourAnchor('page-editor', element)} className={activeTab === 'editor' ? 'h-full' : 'hidden'} aria-hidden={activeTab !== 'editor'}>
-              <SlideEditor
-                key={editorSessionVersion}
-                active={activeTab === 'editor'}
-                slide={selectedSlide ?? presentation.slides[0]}
-                deck={presentation}
-                onSave={(editedSlides) => {
-                  const current = useStore.getState();
-                  if (editedSlides.length) current.dispatchUndo({ type: 'SET',
-                    payload: mergeEditorCommit(current.presentation, editedSlides) });
-                }}
-                onOpenInSlides={(slideId) => {
-                  const current = useStore.getState();
-                  current.setSelectedSlideId(slideId);
-                  current.setSelectedSlideIds(new Set([slideId]));
-                  current.setIsRightPanelOpen(true);
-                  setActiveTab('slides');
-                }}
-                onClose={() => setActiveTab('slides')}
-              />
+            <div ref={element => registerTourAnchor('page-editor', element)} className={activeTab === 'editor' ? 'ui-fade-enter h-full' : 'hidden'} aria-hidden={activeTab !== 'editor'}>
+              <EditorConnection active={activeTab === 'editor'} />
             </div>
           )}
         </main>
 
-        {/* Live captions: bottom-docked console / persistent session bar (any tab) */}
-        {isSttPanelOpen ? (
-          <div className="h-[440px] shrink-0 min-h-0 border-t border-white/10">
-            <LiveCaptionsConsole
-              captionsSlide={captionsPreviewSlide}
-              captionsOnAir={captionsOnAir}
-              onSendCaptionsLive={sendCaptionsLive}
-              onAddCaptionsSlide={() => handleAddCaptionsSlide(true)}
-              onAddUtteranceSlide={handleSttUtteranceToSlide}
-              onOpenSettings={() => {
-                setIsSttPanelOpen(false);
-                setActiveTab('settings');
-              }}
-              onStart={sttStart}
-              onStop={sttStop}
-              onStartShare={startShare}
-              onStopShare={stopShare}
-              onAddQrSlide={handleQrSlideAdd}
-              onClose={() => setIsSttPanelOpen(false)}
-            />
-          </div>
-        ) : sttSessionActive ? (
-          <LiveCaptionsSessionBar onStop={sttStop} onExpand={() => setIsSttPanelOpen(true)} />
-        ) : null}
+        <CaptionsDock operations={operations} commands={commands} />
       </div>
 
 
@@ -645,4 +477,181 @@ export default function App() {
       <Toast />
     </div>
   );
+}
+
+function ProjectorView() {
+  const { t } = useTranslation();
+  // Keep the focused output window's existing keyboard behavior (including
+  // local mute/Enter); moving the visual branch must not remove its listener.
+  const { deleteSelectedSlides, duplicateSelectedSlides } = useSlideOperations();
+  useKeyboardNavigation({ onDeleteSlides: deleteSelectedSlides, onDuplicateSlides: duplicateSelectedSlides });
+  const liveSlide = useStore(s => s.presentation.slides[s.liveIndex] ?? s.presentation.slides[0]);
+  const transition = useStore(s => s.presentation.transition);
+  const instantTransition = useStore(s => s.instantTransition);
+  const transitionType = instantTransition ? 'none' : transition?.type ?? DEFAULT__TRANSITION.type;
+  const transitionDuration = instantTransition ? 0 : transition?.duration ?? DEFAULT__TRANSITION.duration;
+  const projectorReady = useStore(s => s.projectorReady);
+  const isBlackout = useStore(s => s.isBlackout);
+  const mediaVolume = useStore(s => s.mediaVolume);
+  const isMediaMuted = useStore(s => s.isMediaMuted);
+  const outputMode = useStore(s => s.outputMode);
+  if (!projectorReady) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center overflow-hidden bg-black">
+        <AnimatedPreview
+          slide={liveSlide}
+          transitionType={transitionType}
+          duration={transitionDuration}
+          size="projector"
+          volume={mediaVolume}
+          muted={isMediaMuted}
+        />
+        <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-white text-sm">
+          {t('common.loading') || 'Yükleniyor...'}
+        </div>
+      </div>
+    );
+  }
+
+  if (isBlackout) {
+    return <div className="fixed inset-0 bg-black z-50" />;
+  }
+
+  // Stage display (confidence monitor): shows current + next slide text,
+  // a live clock and elapsed time — instead of the styled projector view.
+  if (outputMode === 'stage') {
+    return <StageDisplay />;
+  }
+
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center overflow-hidden bg-black"
+      style={{
+        backgroundColor: liveSlide?.type === 'text' ? (liveSlide.styles?.backgroundColor ?? '#000') : '#000',
+        backgroundImage:
+          liveSlide?.type === 'text' && liveSlide.styles?.backgroundImage
+            ? `url(${liveSlide.styles.backgroundImage})`
+            : undefined,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }}
+    >
+      <AnimatedPreview
+        slide={liveSlide}
+        transitionType={transitionType}
+        duration={transitionDuration}
+        size="projector"
+        volume={mediaVolume}
+        muted={isMediaMuted}
+      />
+    </div>
+  );
+
+}
+
+function PresentationLibrary({ operations }: { operations: Operations }) {
+  const presentation = useStore(s => s.presentation);
+  const presets = useStore(s => s.presets);
+  const selectedPresetName = useStore(s => s.selectedPresetName);
+  const { setPresets, setSelectedPresetName } = useStore.getState();
+  const { applyPreset, openPresentation, savePresentation, handleImportSlides, createNewPresentation } = operations;
+  return <PresentationsTab
+    presentation={presentation} presets={presets} selectedPresetName={selectedPresetName}
+    onPresetsChange={setPresets} onApplyPreset={applyPreset} onSelectedPresetNameChange={setSelectedPresetName}
+    onOpenFile={openPresentation} onSaveFile={savePresentation} onImportSlides={handleImportSlides}
+    onNewPresentation={createNewPresentation} />;
+}
+
+function CalendarConnection({ onOpenPresentation }: { onOpenPresentation: Operations['openSavedPresentationByName'] }) {
+  const presets = useStore(s => s.presets);
+  const savedPresentationNames = useMemo(() => presets.filter(p => !p.name.startsWith('__live_autosave_')).map(p => p.name), [presets]);
+  return <CalendarTab savedPresentationNames={savedPresentationNames} onOpenPresentation={onOpenPresentation} />;
+}
+
+function EditorConnection({ active }: { active: boolean }) {
+  const presentation = useStore(s => s.presentation);
+  const selectedSlide = useStore(s => s.presentation.slides.find(slide => slide.id === s.selectedSlideId) ?? s.presentation.slides[0]);
+  const editorSessionVersion = useStore(s => s.editorSessionVersion);
+  const setActiveTab = useStore(s => s.setActiveTab);
+  const save = useCallback((editedSlides: Parameters<NonNullable<React.ComponentProps<typeof SlideEditor>['onSave']>>[0]) => {
+    const current = useStore.getState();
+    if (editedSlides.length) current.dispatchUndo({ type: 'SET', payload: mergeEditorCommit(current.presentation, editedSlides) });
+  }, []);
+  const openInSlides = useCallback((slideId: string) => {
+    const current = useStore.getState();
+    current.selectSlides({ activeId: slideId, ids: new Set([slideId]) });
+    current.setIsRightPanelOpen(true);
+    current.setActiveTab('slides');
+  }, []);
+  const close = useCallback(() => setActiveTab('slides'), [setActiveTab]);
+  return <SlideEditor key={editorSessionVersion} active={active} slide={selectedSlide} deck={presentation}
+    onSave={save} onOpenInSlides={openInSlides} onClose={close} />;
+}
+
+function CaptionsDock({ operations, commands }: { operations: Operations; commands: AppCommands }) {
+  const presentation = useStore(s => s.presentation);
+  const liveSlide = useStore(s => s.presentation.slides[s.liveIndex] ?? s.presentation.slides[0]);
+  const isSttPanelOpen = useStore(s => s.isSttPanelOpen);
+  const { setIsSttPanelOpen, setActiveTab } = useStore.getState();
+  const uiMotionEnabled = useUiMotionEnabled();
+  const sttSessionActive = useSttStore(s => s.micActive || s.status !== 'idle');
+  const { sttStart, sttStop, startShare, stopShare } = commands;
+  const { handleAddCaptionsSlide, handleSttUtteranceToSlide, handleQrSlideAdd, handleSlideClick, handleSlideDoubleClick } = operations;
+  const captionsOnAir = liveSlide?.type === 'captions';
+  const captionsPreviewSlide = useMemo(() => {
+    if (captionsOnAir) return liveSlide;
+    for (let i = presentation.slides.length - 1; i >= 0; i--) {
+      if (presentation.slides[i].type === 'captions') return presentation.slides[i];
+    }
+    return undefined;
+  }, [presentation.slides, liveSlide, captionsOnAir]);
+  const sendCaptionsLive = useCallback(() => {
+    const state = useStore.getState();
+    const idx = state.presentation.slides.findIndex(slide => slide.type === 'captions');
+    if (idx === -1) { handleAddCaptionsSlide(true); return; }
+    const id = state.presentation.slides[idx].id;
+    if (state.isProjectorWindowOpen) handleSlideClick(id, idx);
+    else handleSlideDoubleClick(id, idx);
+  }, [handleAddCaptionsSlide, handleSlideClick, handleSlideDoubleClick]);
+  return (<>
+        {/* Live captions: bottom-docked console / persistent session bar (any tab) */}
+        <AnimatePresence initial={false} mode="wait">
+          {isSttPanelOpen ? (
+            <m.div
+              key="stt-console"
+              className="shrink-0 min-h-0 overflow-hidden"
+              initial={uiMotionEnabled ? { height: 0, opacity: 0 } : false}
+              animate={{ height: 440, opacity: 1 }}
+              exit={uiMotionEnabled ? { height: 0, opacity: 0 } : { opacity: 1 }}
+              transition={{ duration: uiMotionEnabled ? uiMotion.duration.standard : 0, ease: uiMotion.ease }}
+            >
+              <div className="h-[440px] border-t border-white/10">
+                <LiveCaptionsConsole
+                  captionsSlide={captionsPreviewSlide}
+                  captionsOnAir={captionsOnAir}
+                  onSendCaptionsLive={sendCaptionsLive}
+                  onAddCaptionsSlide={() => handleAddCaptionsSlide(true)}
+                  onAddUtteranceSlide={handleSttUtteranceToSlide}
+                  onOpenSettings={() => {
+                    setIsSttPanelOpen(false);
+                    setActiveTab('settings');
+                  }}
+                  onStart={sttStart}
+                  onStop={sttStop}
+                  onStartShare={startShare}
+                  onStopShare={stopShare}
+                  onAddQrSlide={handleQrSlideAdd}
+                  onClose={() => setIsSttPanelOpen(false)}
+                />
+              </div>
+            </m.div>
+          ) : sttSessionActive ? (
+            <LiveCaptionsSessionBar
+              key="stt-session-bar"
+              onStop={sttStop}
+              onExpand={() => setIsSttPanelOpen(true)}
+            />
+          ) : null}
+        </AnimatePresence>
+  </>);
 }

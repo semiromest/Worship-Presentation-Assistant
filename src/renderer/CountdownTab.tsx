@@ -1,3 +1,4 @@
+import { playSfx } from './sfx';
 import { usePractice } from './hooks/usePractice';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -99,6 +100,7 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
   const startCountdown = useCallback(() => {
     const total = minutes * 60 + seconds;
     if (total <= 0) return;
+    playSfx('start');
     totalSecondsRef.current = total;
     setHasStarted(true);
     setTimeLeft(total);
@@ -107,6 +109,7 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
 
   // Pause: stop the timer, keep current value for resume
   const pauseCountdown = useCallback(() => {
+    playSfx('pause');
     // Store remaining time so resume can pick up correctly
     totalSecondsRef.current = timeLeft;
     setIsRunning(false);
@@ -114,17 +117,20 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
 
   const resumeCountdown = useCallback(() => {
     if (timeLeft <= 0) return;
+    playSfx('play');
     totalSecondsRef.current = timeLeft;
     setIsRunning(true);
   }, [timeLeft]);
 
   const resetCountdown = useCallback(() => {
+    if (!hasStarted) return;
+    playSfx('stop');
     setHasStarted(false);
     setIsRunning(false);
     setTimeLeft(0);
     totalSecondsRef.current = 0;
     startTimeRef.current = null;
-  }, []);
+  }, [hasStarted]);
 
   const handleMinutesChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setMinutes(clamp(parseInt(e.target.value) || 0, 0, 99));
@@ -183,7 +189,7 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
               disabled={minutes === 0 && seconds === 0}
               className="flex items-center space-x-2 px-6 py-3 bg-green-600 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
             >
-              <Play size={20} />
+              <span className="ui-control-icon"><Play size={20} /></span>
               <span>{t('common.countdownStart')}</span>
             </button>
           ) : isRunning ? (
@@ -191,7 +197,7 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
               onClick={pauseCountdown}
               className="flex items-center space-x-2 px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg transition-colors"
             >
-              <Pause size={20} />
+              <span className="ui-control-icon"><Pause size={20} /></span>
               <span>{t('common.countdownPause')}</span>
             </button>
           ) : timeLeft > 0 ? (
@@ -199,10 +205,10 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
               onClick={resumeCountdown}
               className="flex items-center space-x-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
             >
-              <Play size={20} />
+              <span className="ui-control-icon"><Play size={20} /></span>
               <span>{t('common.countdownResume')}</span>
             </button>
-          ) : <span role="status" className="self-center text-emerald-300">{t('common.countdownFinished')}</span>}
+          ) : <span role="status" className="ui-fade-enter self-center text-emerald-300">{t('common.countdownFinished')}</span>}
 
           <button
             onClick={resetCountdown}
@@ -231,7 +237,7 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
           {COUNTDOWN_THEMES.map((theme) => (
             <button
               key={theme.id}
-              onClick={() => setSelectedThemeId(theme.id)}
+              onClick={() => { if (theme.id !== selectedThemeId) { setSelectedThemeId(theme.id); playSfx('select'); } }}
               className={`relative p-3 rounded-xl border-2 transition-all text-left space-y-2 ${
                 selectedThemeId === theme.id
                   ? 'border-blue-500 bg-blue-500/10'

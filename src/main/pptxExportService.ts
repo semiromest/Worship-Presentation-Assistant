@@ -15,7 +15,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath as nodeFileURLToPath } from 'node:url';
 import PptxGenJS from 'pptxgenjs';
-import type { Presentation, Slide, SlideItem } from '../renderer/types';
+import type { Presentation, Slide, SlideItem } from '../shared/presentation';
 import { mediaRefToName } from '../shared/mediaTree';
 
 // ─── Geometry ──────────────────────────────────────────────────────────────

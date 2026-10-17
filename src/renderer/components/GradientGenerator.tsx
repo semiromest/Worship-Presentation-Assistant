@@ -1,20 +1,14 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect,useId,useRef,useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GRADIENT_PALETTES, type GeneratedBackground } from '../../shared/generatedBackground';
-import type { ContrastRegion, ContrastResult } from '../../shared/gradientContrast';
-import type { Slide } from '../types';
-import { gradientTargets, type GradientScope } from '../gradientBackground';
+import { GRADIENT_PALETTES,type GeneratedBackground } from '../../shared/generatedBackground';
+import type { GradientDraft } from '../../shared/gradientDraft';
+import { gradientTargets,type GradientScope } from '../gradientBackground';
 import { LivePreview } from '../LivePreview';
+import { playSfx } from '../sfx';
+import type { Slide } from '../types';
 import Dialog from './Dialog';
+export type { GradientDraft } from '../../shared/gradientDraft';
 
-export interface GradientDraft {
-  token: string;
-  image: string;
-  recipe: GeneratedBackground;
-  contrast: ContrastResult;
-  byteLength: number;
-  hash: string;
-}
 export interface GradientGeneratorProps {
   label?: string;
   slides: Slide[];
@@ -30,7 +24,7 @@ export function GradientButton(props: GradientGeneratorProps) {
       <button
         type="button"
         className="w-full rounded-lg border border-violet-400/30 bg-violet-500/15 px-3 py-2 text-sm text-violet-100 hover:bg-violet-500/25"
-        onClick={() => setOpen(true)}
+        onClick={() => { setOpen(true); playSfx('open'); }}
       >
         {props.label ?? t('gradient.open')}
       </button>
@@ -66,64 +60,18 @@ function GradientGenerator({
   const [draft, setDraft] = useState<GradientDraft | null>(null);
   const [error, setError] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [override, setOverride] = useState(false);
-  const [unknown, setUnknown] = useState(false);
-  const measuring = useRef<HTMLDivElement>(null);
   const requestId = useRef(0);
   const targets = gradientTargets(slides, activeId, selectedIds, scope);
   const targetSignature = JSON.stringify(targets);
   const latestSignature = useRef(targetSignature);
   latestSignature.current = targetSignature;
   useEffect(() => {
-    const measuredTargets = JSON.parse(targetSignature) as Slide[];
     const request = ++requestId.current;
     let cancelled = false;
     setDraft(null);
     setError(false);
-    setOverride(false);
     const timer = setTimeout(async () => {
       try {
-        await document.fonts.ready;
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        if (cancelled) return;
-        const regions: ContrastRegion[] = [];
-        let unverified = measuredTargets.length === 0;
-        for (const root of measuring.current?.querySelectorAll<HTMLElement>('[data-gradient-slide]') ?? []) {
-          const bounds = root.getBoundingClientRect();
-          for (const text of root.querySelectorAll<HTMLElement>('[data-gradient-text]')) {
-            if (!text.textContent?.trim()) continue;
-            const css = getComputedStyle(text),
-              rect = text.getBoundingClientRect();
-            const color = css.color.match(/[\d.]+/g)?.map(Number);
-            if (!color || color.length < 3 || (color.length > 3 && color[3] !== 1) || css.opacity !== '1') {
-              unverified = true;
-              continue;
-            }
-            regions.push({
-              x: ((rect.x - bounds.x) * 1920) / bounds.width,
-              y: ((rect.y - bounds.y) * 1080) / bounds.height,
-              width: (rect.width * 1920) / bounds.width,
-              height: (rect.height * 1080) / bounds.height,
-              color: color.slice(0, 3) as [number, number, number],
-            });
-          }
-        }
-        const painted = (color?: string) => !!color && color !== 'transparent';
-        unverified ||= measuredTargets.some(
-          (s) =>
-            painted(s.styles?.textHighlight) ||
-            s.items?.some(
-              (i) =>
-                i.visible !== false &&
-                (i.type !== 'text' ||
-                  !!i.rotation ||
-                  i.styles?.opacity != null ||
-                  painted(i.textStyles?.textHighlight) ||
-                  painted(i.textStyles?.backgroundColor))
-            ) ||
-            !!s.group?.author
-        );
-        setUnknown(unverified || regions.length === 0);
         const recipe: GeneratedBackground = {
           engineVersion: 1,
           seed,
@@ -134,7 +82,7 @@ function GradientGenerator({
           width: 1920,
           height: 1080,
         };
-        const result = await window.electronAPI.generateGradient(recipe, regions);
+        const result = await window.electronAPI.generateGradient(recipe, []);
         if (!cancelled && requestId.current === request) setDraft(result);
       } catch {
         if (!cancelled) setError(true);
@@ -145,11 +93,9 @@ function GradientGenerator({
       clearTimeout(timer);
       void window.electronAPI.discardGradient();
     };
-    // Signature includes target text/styles; any concurrent edit invalidates the draft.
-  }, [palette, style, darkness, seed, targetSignature]);
-  const failed = motionEnabled || unknown || draft?.contrast.minimum == null || draft.contrast.minimum < 4.5;
+  }, [palette, style, darkness, seed]);
   const apply = async () => {
-    if (!draft || saving || (failed && !override) || targets.length === 0) return;
+    if (!draft || saving || targets.length === 0) return;
     setSaving(true);
     const signature = targetSignature;
     try {
@@ -162,7 +108,9 @@ function GradientGenerator({
         scope === 'group'
       );
       onClose();
+      playSfx('success');
     } catch {
+      playSfx('error');
       setError(true);
       setSaving(false);
     }
@@ -183,7 +131,7 @@ function GradientGenerator({
     <Dialog
       open
       onClose={() => {
-        if (!saving) onClose();
+        if (!saving) { onClose(); playSfx('close'); }
       }}
       labelledBy={titleId}
       className="w-[min(1000px,94vw)] max-h-[92vh] overflow-y-auto rounded-2xl border border-white/15 bg-[#171921] p-5 text-white shadow-2xl"
@@ -201,20 +149,12 @@ function GradientGenerator({
               ? t('gradient.error')
               : !draft
                 ? t('gradient.generating')
-                : `${(draft.byteLength / 1024).toFixed(0)} KiB · 1920 × 1080 · ${t(unknown ? 'gradient.unknown' : 'gradient.contrast', { ratio: draft.contrast.minimum?.toFixed(2) ?? '—' })}`}
+                : `${(draft.byteLength / 1024).toFixed(0)} KiB · 1920 × 1080`}
           </p>
-          {draft && failed && (
-            <label className="mt-3 flex gap-2 text-sm text-amber-200">
-              <input type="checkbox" checked={override} onChange={(e) => setOverride(e.target.checked)} />
-              {t('gradient.override')}
-            </label>
-          )}
           {motionEnabled && <p className="mt-2 text-xs text-amber-200/80">{t('gradient.motionNote')}</p>}
-        </div>
-        <div className="space-y-4">
-          <fieldset disabled={saving} className="space-y-4">
+          <fieldset disabled={saving} className="mt-4 space-y-2">
             <legend className="mb-2 text-xs text-white/60">{t('gradient.palette')}</legend>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {Object.entries(GRADIENT_PALETTES).map(([key, colors]) => (
                 <button
                   type="button"
@@ -231,6 +171,10 @@ function GradientGenerator({
                 </button>
               ))}
             </div>
+          </fieldset>
+        </div>
+        <div className="space-y-4">
+          <fieldset disabled={saving} className="space-y-4">
             <label className="block text-sm">
               {t('gradient.style')}
               <select
@@ -255,13 +199,13 @@ function GradientGenerator({
             </label>
             <label className="flex items-center justify-between gap-3 text-sm">
               {t('gradient.motion')}
-              <input type="checkbox" checked={motionEnabled} onChange={e => { setMotionEnabled(e.target.checked); setOverride(false); }} />
+              <input type="checkbox" checked={motionEnabled} onChange={e => setMotionEnabled(e.target.checked)} />
             </label>
               <fieldset className="space-y-2">
                 <legend className="text-sm">{t('gradient.animation')}</legend>
                 <div className="grid grid-cols-2 gap-2">
                   {(['flow', 'aurora', 'waves', 'fog'] as const).map(type => <button key={type} type="button"
-                    aria-pressed={motionEnabled && motionType === type} onClick={() => { setMotionType(type); setMotionEnabled(true); setOverride(false); }}
+                    aria-pressed={motionEnabled && motionType === type} onClick={() => { setMotionType(type); setMotionEnabled(true); }}
                     className={`${control} ${motionEnabled && motionType === type ? 'ring-2 ring-violet-400 bg-violet-500/20' : ''}`}>
                     {t(`gradient.${type}`)}
                   </button>)}
@@ -298,40 +242,17 @@ function GradientGenerator({
         </div>
       </div>
       <div className="mt-5 flex justify-end gap-3">
-        <button type="button" disabled={saving} className={control} onClick={onClose}>
+        <button type="button" disabled={saving} className={control} onClick={() => { onClose(); playSfx('close'); }}>
           {t('gradient.cancel')}
         </button>
         <button
           type="button"
-          disabled={!draft || error || saving || !targets.length || (failed && !override)}
+          disabled={!draft || error || saving || !targets.length}
           onClick={apply}
           className="rounded-lg bg-violet-600 px-4 py-2 disabled:opacity-40"
         >
           {t('gradient.apply', { count: targets.length })}
         </button>
-      </div>
-      <div
-        ref={measuring}
-        aria-hidden="true"
-        className="pointer-events-none fixed"
-        style={{ left: -20000, top: 0, visibility: 'hidden' }}
-      >
-        {targets
-          .flatMap((s) =>
-            s.partsMode && s.parts?.length ? s.parts.map((_, index) => ({ ...s, activePart: index })) : [s]
-          )
-          .map((s, index) => (
-            <div key={`${s.id}-${index}`} data-gradient-slide="" style={{ width: 1920, height: 1080 }}>
-              <LivePreview
-                slide={{
-                  ...s,
-                  styles: { ...s.styles, backgroundImage: undefined, backgroundVideo: undefined } as Slide['styles'],
-                }}
-                muted
-                isActive={false}
-              />
-            </div>
-          ))}
       </div>
     </Dialog>
   );

@@ -8,7 +8,6 @@ import { computePatch, isPatchEmpty, type ProjectorPatch } from '../state/undoRe
 import type { Presentation, Slide, TransitionType } from '../types';
 import { chooseDefaultOutputDisplay, effectiveOutputSlideIndex, type DisplayMode } from '../../shared/displays';
 import { findLockedSlideIndex } from '../slideLock';
-import type { ThumbSlideData } from '../../shared/thumbnailConfig';
 
 /**
  * Top-level style equality (mirrors undoReducer.shallowEqual). Replaces
@@ -41,50 +40,8 @@ const TRANSITION_MAP: Record<TransitionType, string> = {
   flip: 'flip',
 };
 
-/**
- * Serialize a slide into the minimal format for the utility process worker.
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for the planned utility-process thumbnail path
-function toThumbSlideData(slide: Slide): ThumbSlideData {
-  return {
-    id: slide.id,
-    type: slide.type,
-    content: slide.content,
-    mediaUrl: slide.mediaUrl,
-    thumbnailUrl: slide.thumbnailUrl,
-    styles: slide.styles as any,
-    items: slide.items?.map(it => ({
-      type: it.type,
-      x: it.x,
-      y: it.y,
-      width: it.width,
-      height: it.height,
-      rotation: it.rotation,
-      zIndex: it.zIndex,
-      borderWidth: it.borderWidth,
-      borderColor: it.borderColor,
-      borderRadius: it.borderRadius,
-      content: it.content,
-      mediaUrl: it.mediaUrl,
-      textStyles: it.textStyles as any,
-      imageStyles: it.imageStyles as any,
-    })),
-    loopItems: slide.loopItems?.map(it => ({ type: it.type, mediaUrl: it.mediaUrl })),
-    partsMode: slide.partsMode,
-    parts: slide.parts,
-    activePart: slide.activePart,
-    group: slide.group,
-  };
-}
-
-/**
- * Hybrid thumbnail generation: text-only slides → utility process,
- * image slides → renderer DOM (images already loaded).
- * Falls back to DOM if IPC fails or times out.
- */
-async function generateThumbnailHybrid(slide: Slide, status?: ThumbnailStatus): Promise<string | null> {
-  // Always try DOM first for reliability — utility process is an optimization
-  // that should never block the user experience.
+/** Operator previews use the DOM renderer so they match the presentation. */
+async function generateOperatorThumbnail(slide: Slide, status?: ThumbnailStatus): Promise<string | null> {
   return generateSlideThumbnail(slide, { status });
 }
 
@@ -338,7 +295,7 @@ export function useProjectorSync() {
             if (!structurePreserved) thumbs[i] = cachedEntry?.url ?? null;
           } else {
             const status: ThumbnailStatus = {};
-            const url = await generateThumbnailHybrid(s, status);
+            const url = await generateOperatorThumbnail(s, status);
             if (url && !cancelled) {
               thumbnailCache.current.set(s.id, { url });
               if (structurePreserved) delta.push({ i, url });
@@ -390,7 +347,7 @@ export function useProjectorSync() {
           setTimeout(async () => {
             if (cancelled) return;
             const status: ThumbnailStatus = {};
-            const retryUrl = await generateThumbnailHybrid(liveSlide, status);
+            const retryUrl = await generateOperatorThumbnail(liveSlide, status);
             if (cancelled || !retryUrl) return;
             thumbnailCache.current.set(liveSlide.id, { url: retryUrl });
             if (status.usedFallback) pendingRetryRef.current.add(liveSlide.id);

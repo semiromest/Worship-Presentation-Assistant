@@ -17,7 +17,7 @@ import { makeSlideId } from '../utils';
 import { describeQuickVerseError, resolveQuickVerse } from '../quickVerse';
 import { bibleRepository } from '../bibleRepository';
 import type { Slide } from '../types';
-import { playSfx } from '../sfx';
+import { playSfx, withSfxOutputTransition } from '../sfx';
 import { confirmDialog } from '../dialogs';
 
 const REMOTE_ACTIONS = {
@@ -103,7 +103,7 @@ export function useRemoteControl() {
     };
   };
 
-  const openLive = async () => {
+  const openLive = async () => withSfxOutputTransition(async () => {
     const state = useStore.getState();
     if (state.isProjectorWindowOpen) return;
 
@@ -115,17 +115,17 @@ export function useRemoteControl() {
     const isOpen = await window.electronAPI?.toggleProjector?.(buildInitialData());
     setIsProjectorWindowOpen(!!isOpen);
     if (isOpen) playSfx('start');
-  };
+  });
 
-  const closeLive = async () => {
+  const closeLive = async () => withSfxOutputTransition(async () => {
     const state = useStore.getState();
     if (!state.isProjectorWindowOpen) return;
     const isOpen = await window.electronAPI?.toggleProjector?.();
     setIsProjectorWindowOpen(!!isOpen);
     if (!isOpen) playSfx('stop');
-  };
+  });
 
-  const openOutput = async (displayId: string) => {
+  const openOutput = async (displayId: string) => withSfxOutputTransition(async () => {
     const isOpen = await window.electronAPI?.openProjector?.(displayId, buildInitialData(displayId));
     setOutputOpen(displayId, !!isOpen);
     const defaultId = chooseDefaultOutputDisplay(useStore.getState().displays)?.id;
@@ -134,15 +134,15 @@ export function useRemoteControl() {
       setIsProjectorWindowOpen(!!isOpen);
     }
     if (isOpen) playSfx('start');
-  };
+  });
 
-  const closeOutput = async (displayId: string) => {
+  const closeOutput = async (displayId: string) => withSfxOutputTransition(async () => {
     const closed = await window.electronAPI?.closeProjector?.(displayId);
     setOutputOpen(displayId, false);
     const defaultId = chooseDefaultOutputDisplay(useStore.getState().displays)?.id;
     if (displayId === defaultId) setIsProjectorWindowOpen(false);
     if (closed) playSfx('stop');
-  };
+  });
 
   // When the broadcast ends while live captions are still running, remind the
   // user to stop them so a forgotten session doesn't keep consuming tokens.
@@ -205,16 +205,14 @@ export function useRemoteControl() {
           if (findLockedSlideIndex(slides) >= 0) break;
           const baseIdx = projOpen ? state.liveIndex : Math.max(currentIdx, 0);
           const nextIdx = Math.min(baseIdx + 1, lastIndex);
-          setSelectedSlideId(slides[nextIdx].id);
-          setLiveIndex(nextIdx);
+          state.selectSlides({ activeId: slides[nextIdx].id, liveTargetId: slides[nextIdx].id });
           break;
         }
         case REMOTE_ACTIONS.prev: {
           if (findLockedSlideIndex(slides) >= 0) break;
           const baseIdx = projOpen ? state.liveIndex : Math.max(currentIdx, 0);
           const prevIdx = Math.max(baseIdx - 1, 0);
-          setSelectedSlideId(slides[prevIdx].id);
-          setLiveIndex(prevIdx);
+          state.selectSlides({ activeId: slides[prevIdx].id, liveTargetId: slides[prevIdx].id });
           break;
         }
         case REMOTE_ACTIONS.blackout:
@@ -233,9 +231,8 @@ export function useRemoteControl() {
         case REMOTE_ACTIONS.goto:
           if (typeof data.value === 'number') {
             const idx = Math.max(0, Math.min(lastIndex, data.value));
-            setSelectedSlideId(slides[idx]?.id ?? state.selectedSlideId);
-            if (findLockedSlideIndex(slides) >= 0) break;
-            setLiveIndex(idx);
+            state.selectSlides({ activeId: slides[idx]?.id ?? state.selectedSlideId,
+              liveTargetId: findLockedSlideIndex(slides) >= 0 ? undefined : slides[Math.floor(idx)]?.id ?? slides[0]?.id });
           }
           break;
         case REMOTE_ACTIONS.partGoto: {
@@ -250,8 +247,7 @@ export function useRemoteControl() {
                 ? { ...slide, activePart, content: getSlideDisplayContent({ ...slide, activePart }) }
                 : slide,
             );
-            setSelectedSlideId(target.id);
-            setLiveIndex(slideIdx);
+            state.selectSlides({ activeId: target.id, liveTargetId: target.id });
             dispatchUndo({ type: 'SET', payload: { ...state.presentation, slides: updatedSlides } });
           }
           break;
@@ -321,8 +317,7 @@ export function useRemoteControl() {
           const nextSlides = [...latest.presentation.slides, ...newSlides];
           dispatchUndo({ type: 'SET', payload: { ...latest.presentation, slides: nextSlides } });
           if (goLive && !locked) {
-            setSelectedSlideId(newSlides[0].id);
-            setLiveSlideId(newSlides[0].id);
+            useStore.getState().selectSlides({ activeId: newSlides[0].id, liveTargetId: newSlides[0].id });
             setIsBlackout(false);
             try {
               await openLive();

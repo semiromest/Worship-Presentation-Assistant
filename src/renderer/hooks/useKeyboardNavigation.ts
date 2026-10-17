@@ -3,15 +3,8 @@ import { moveSectionSlidesOneStep } from '../../shared/sectionModel';
 import { useShallow } from 'zustand/react/shallow';
 import { useEffect } from 'react';
 import { useStore } from '../state/useStore';
-import { playSfx } from '../sfx';
-import { tabForShortcut } from '../navigation';
-
-const NAV_KEYS = {
-  NEXT: new Set(['ArrowRight', 'ArrowDown', ' ', 'PageDown', 'j', 'J']),
-  PREV: new Set(['ArrowLeft', 'ArrowUp', 'PageUp', 'k', 'K']),
-  HOME: new Set(['Home']),
-  END: new Set(['End']),
-};
+import { playSfx, withSfxOutputTransition } from '../sfx';
+import { resolveKeyboardCommand } from '../keyboardCommands';
 
 interface KeyboardNavigationOptions {
   /** Delete selected slides (Delete) */
@@ -24,21 +17,15 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
   const { onDeleteSlides, onDuplicateSlides } = options ?? {};
   const {
     dispatchUndo,
-    setSelectedSlideId,
     setLiveIndex,
     setIsBlackout,
-    setSelectedSlideIds,
-    setLastSelectedIndex,
     setIsCheatsheetOpen,
     setActiveTab,
     setIsMediaMuted,
   } = useStore(useShallow((s) => ({
     dispatchUndo: s.dispatchUndo,
-    setSelectedSlideId: s.setSelectedSlideId,
     setLiveIndex: s.setLiveIndex,
     setIsBlackout: s.setIsBlackout,
-    setSelectedSlideIds: s.setSelectedSlideIds,
-    setLastSelectedIndex: s.setLastSelectedIndex,
     setIsCheatsheetOpen: s.setIsCheatsheetOpen,
     setActiveTab: s.setActiveTab,
     setIsMediaMuted: s.setIsMediaMuted,
@@ -50,56 +37,6 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
       const tag = el?.tagName?.toLowerCase();
       // Dialogs own their keys; inputs retain native text undo and punctuation.
       if (el?.closest('[role="dialog"]')) return;
-      if (tag === 'input' || tag === 'textarea' || tag === 'select' || el?.isContentEditable) return;
-
-      // The journal slide editor owns every key it needs while it is open:
-      // deck undo/redo, slide navigation, delete/duplicate, move and Escape all
-      // belong to the editor session instead of the deck.
-      const editorOpen = useStore.getState().activeTab === 'editor';
-      if (editorOpen) {
-        const navKey =
-          e.key === 'Enter' ||
-          e.key === 'Escape' ||
-          e.key === 'Delete' ||
-          e.key === 'Home' ||
-          e.key === 'End' ||
-          e.key === 'PageUp' ||
-          e.key === 'PageDown' ||
-          e.key.startsWith('Arrow') ||
-          NAV_KEYS.NEXT.has(e.key) ||
-          NAV_KEYS.PREV.has(e.key) ||
-          ((e.ctrlKey || e.metaKey) && ['z', 'y', 'd', 'a'].includes(e.key.toLowerCase())) ||
-          (e.altKey && e.key.startsWith('Arrow'));
-        // Operator shortcuts (mute, blackout) stay live; editing keys do not.
-        if (navKey) return;
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-        if (editorOpen) return;
-        e.preventDefault();
-        dispatchUndo({ type: 'UNDO' });
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-        if (editorOpen) return;
-        e.preventDefault();
-        dispatchUndo({ type: 'REDO' });
-        return;
-      }
-
-      if (e.key === '?' && !e.ctrlKey && !e.altKey && !e.metaKey) {
-        e.preventDefault();
-        setIsCheatsheetOpen(!useStore.getState().isCheatsheetOpen);
-        return;
-      }
-
-      const destination = tabForShortcut(e.key);
-      if (e.altKey && !e.ctrlKey && !e.metaKey && destination) {
-        e.preventDefault();
-        setActiveTab(destination);
-        notifyPageVisit(destination);
-        return;
-      }
-
       if (tag === 'input' || tag === 'textarea' || tag === 'select' || el?.isContentEditable) return;
 
       const state = useStore.getState();
@@ -115,14 +52,9 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
         // Arrow/Home/End/Space/J/K only change the selection; live position moves only via Enter (Send to Live).
         // Keep the selection set and anchor in sync so the last keyboard target reads as selected.
         const id = slides[index].id;
-        setSelectedSlideId(id);
-        setSelectedSlideIds(new Set([id]));
-        setLastSelectedIndex(index);
-        // "Instant Live" mode: while the broadcast is open, selection changes also go live.
-        // Needed for remotes that only send left/right keys; off preserves the old behavior.
-        if (state.autoGoLive && canLive && !isLocked) {
-          setLiveIndex(index);
-        }
+        if (id !== state.selectedSlideId || state.selectedSlideIds.size !== 1 || !state.selectedSlideIds.has(id)) playSfx('focus');
+        state.selectSlides({ activeId: id, ids: new Set([id]), anchorIndex: index,
+          liveTargetId: state.autoGoLive && canLive && !isLocked ? id : undefined });
       };
 
       const moveSelectedSlide = (direction: -1 | 1) => {
@@ -135,66 +67,33 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
           type: 'SET',
           payload: moveSectionSlidesOneStep(state.presentation, state.selectedSlideIds.size ? state.selectedSlideIds : new Set([state.selectedSlideId]), direction),
         });
+        playSfx('reorder');
       };
 
-      if (e.altKey && e.key === 'ArrowUp' && state.activeTab === 'slides') {
-        e.preventDefault();
-        moveSelectedSlide(-1);
-      } else if (e.altKey && e.key === 'ArrowDown' && state.activeTab === 'slides') {
-        e.preventDefault();
-        moveSelectedSlide(1);
-      } else if (e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'd' && state.activeTab !== 'editor' && !state.isCheatsheetOpen && state.activeTab === 'slides') {
-        e.preventDefault();
-        onDuplicateSlides?.();
-      } else if (e.key === 'Delete' && state.activeTab !== 'editor' && !state.isCheatsheetOpen && state.activeTab === 'slides' && state.selectedSlideIds.size > 0) {
-        e.preventDefault();
-        onDeleteSlides?.();
-      } else if ((e.key === 'm' || e.key === 'M') && !state.isCheatsheetOpen) {
-        e.preventDefault();
-        const nextMuted = !useStore.getState().isMediaMuted;
-        playSfx(nextMuted ? 'toggle-on' : 'toggle-off');
-        setIsMediaMuted(nextMuted);
-      } else if (NAV_KEYS.NEXT.has(e.key)) {
-        e.preventDefault();
-        navigate(Math.min(selectedIdx + 1, lastIndex));
-      } else if (NAV_KEYS.PREV.has(e.key)) {
-        e.preventDefault();
-        navigate(Math.max(selectedIdx - 1, 0));
-      } else if (NAV_KEYS.HOME.has(e.key)) {
-        e.preventDefault();
-        navigate(0);
-      } else if (NAV_KEYS.END.has(e.key)) {
-        e.preventDefault();
-        navigate(lastIndex);
-      } else if (e.key === 'Enter' && selectedIdx >= 0) {
-        e.preventDefault();
-        // Enter = "Send to Live": moves the selected slide live (staged when broadcast is off, projected when on).
-        // With a broadcast lock the pin is enforced inside setLiveIndex, but we
-        // skip the "go live" sound so feedback stays truthful.
-        if (!isLocked) {
-          setLiveIndex(selectedIdx);
-          playSfx('start');
-        } else {
-          setLiveIndex(selectedIdx);
+      const command = resolveKeyboardCommand(e, { activeTab: state.activeTab, helpOpen: state.isCheatsheetOpen,
+        outputOpen: state.isProjectorWindowOpen, hasSelection: state.selectedSlideIds.size > 0, selectedIndex: selectedIdx });
+      if (!command) return;
+      if (command.type !== 'clear') e.preventDefault();
+      switch (command.type) {
+        case 'undo': dispatchUndo({ type: 'UNDO' }); break;
+        case 'redo': dispatchUndo({ type: 'REDO' }); break;
+        case 'help': setIsCheatsheetOpen(!state.isCheatsheetOpen); playSfx(state.isCheatsheetOpen ? 'close' : 'open'); break;
+        case 'tab':
+          if (state.activeTab !== command.destination) playSfx('forward');
+          setActiveTab(command.destination); notifyPageVisit(command.destination); break;
+        case 'move': moveSelectedSlide(command.direction); break;
+        case 'duplicate': onDuplicateSlides?.(); break;
+        case 'delete': onDeleteSlides?.(); break;
+        case 'mute': { const muted = !state.isMediaMuted; playSfx(muted ? 'toggle-on' : 'toggle-off'); setIsMediaMuted(muted); break; }
+        case 'navigate': {
+          const targets = { next: Math.min(selectedIdx + 1, lastIndex), previous: Math.max(selectedIdx - 1, 0), first: 0, last: lastIndex };
+          navigate(targets[command.direction]); break;
         }
-      } else if (e.key === 'Escape' && state.isProjectorWindowOpen) {
-        e.preventDefault();
-        window.electronAPI?.toggleProjector?.();
-        playSfx('stop');
-      } else if ((e.key === 'b' || e.key === 'B') && state.isProjectorWindowOpen) {
-        e.preventDefault();
-        const nextBlackout = !useStore.getState().isBlackout;
-        playSfx(nextBlackout ? 'lock' : 'unlock');
-        setIsBlackout(nextBlackout);
-      } else if (e.key === 'Escape') {
-        if (state.isCheatsheetOpen) return;
-        if (state.activeTab === 'editor') {
-          e.preventDefault();
-          setActiveTab('slides');
-          return;
-        }
-        setSelectedSlideIds(new Set());
-        setLastSelectedIndex(null);
+        case 'live': setLiveIndex(selectedIdx); if (!isLocked) playSfx('start'); break;
+        case 'close-output':
+          void withSfxOutputTransition(async () => { await window.electronAPI?.toggleProjector?.(); playSfx('stop'); }); break;
+        case 'blackout': { const blackout = !state.isBlackout; playSfx(blackout ? 'lock' : 'unlock'); setIsBlackout(blackout); break; }
+        case 'clear': state.selectSlides({ ids: new Set(), anchorIndex: null }); break;
       }
     };
 
@@ -202,11 +101,8 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     dispatchUndo,
-    setSelectedSlideId,
     setLiveIndex,
     setIsBlackout,
-    setSelectedSlideIds,
-    setLastSelectedIndex,
     setIsCheatsheetOpen,
     setActiveTab,
     setIsMediaMuted,

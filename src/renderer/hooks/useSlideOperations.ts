@@ -1,7 +1,7 @@
 import { restoreLiveSession } from '../liveSession';
 import { moveSectionSlidesOneStep, dropSlidesOnSlide } from '../../shared/sectionModel';
 import { useShallow } from 'zustand/react/shallow';
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../state/useStore';
 import type { Slide, Preset, TransitionType, LoopItem } from '../types';
@@ -42,15 +42,14 @@ function getHymnColor(id: string): string {
 }
 
 export function useSlideOperations() {
+  // Subscribe only to stable actions. Each command snapshots the relevant
+  // domain state when invoked, so selection/editing doesn't invalidate every
+  // callback passed to memoized cards and kept-alive feature screens.
+  // Native double-click includes two clicks: reuse the first selection cue.
+  const firstClickCued = useRef(false);
   const { t } = useTranslation();
   const {
-    presentation,
-    selectedSlideId,
-    selectedSlideIds,
-    lastSelectedIndex,
-    isProjectorWindowOpen,
     setLiveSlideId,
-    presets,
     dispatchUndo,
     setSelectedSlideId,
     setSelectedSlideIds,
@@ -64,13 +63,7 @@ export function useSlideOperations() {
     setPresentationName,
     setSlideZoom,
   } = useStore(useShallow((s) => ({
-    presentation: s.presentation,
-    selectedSlideId: s.selectedSlideId,
-    selectedSlideIds: s.selectedSlideIds,
-    lastSelectedIndex: s.lastSelectedIndex,
-    isProjectorWindowOpen: s.isProjectorWindowOpen,
     setLiveSlideId: s.setLiveSlideId,
-    presets: s.presets,
     dispatchUndo: s.dispatchUndo,
     setSelectedSlideId: s.setSelectedSlideId,
     setSelectedSlideIds: s.setSelectedSlideIds,
@@ -86,6 +79,7 @@ export function useSlideOperations() {
   })));
 
   const addSlide = useCallback(() => {
+    const { presentation } = useStore.getState();
     const newSlide = createSlide('text', { content: t('common.newSlideContent'), sectionId: presentation.slides.at(-1)?.sectionId });
     dispatchUndo({
       type: 'SET',
@@ -95,10 +89,11 @@ export function useSlideOperations() {
       },
     });
     setSelectedSlideId(newSlide.id);
-    playSfx('select');
-  }, [presentation, t, dispatchUndo, setSelectedSlideId]);
+    playSfx('success');
+  }, [t, dispatchUndo, setSelectedSlideId]);
 
   const removeSlide = useCallback((id: string) => {
+    const { presentation, selectedSlideId } = useStore.getState();
     if (presentation.slides.length <= 1) return;
     // A locked slide is pinned to the live output — removing it would leave
     // the broadcast dangling, so it must be unlocked first.
@@ -113,9 +108,10 @@ export function useSlideOperations() {
       payload: { ...presentation, slides },
     });
     playSfx('delete');
-  }, [presentation, selectedSlideId, dispatchUndo, setSelectedSlideId]);
+  }, [dispatchUndo, setSelectedSlideId]);
 
   const moveSelectedSlide = useCallback((direction: -1 | 1) => {
+    const { presentation, selectedSlideId } = useStore.getState();
     const state = useStore.getState();
     if (state.serviceSectionsEnabled && (state.searchQuery.trim() || state.sectionFilterId)) return;
     const idx = presentation.slides.findIndex((s) => s.id === selectedSlideId);
@@ -126,9 +122,10 @@ export function useSlideOperations() {
 
     dispatchUndo({ type: 'SET', payload: moveSectionSlidesOneStep(presentation, new Set([selectedSlideId]), direction) });
     playSfx('reorder');
-  }, [presentation, selectedSlideId, dispatchUndo]);
+  }, [dispatchUndo]);
 
   const reorderSlides = useCallback((fromIndex: number, toIndex: number) => {
+    const { presentation } = useStore.getState();
     const state = useStore.getState();
     if (state.serviceSectionsEnabled && (state.searchQuery.trim() || state.sectionFilterId)) return;
     if (fromIndex === toIndex) return;
@@ -139,9 +136,10 @@ export function useSlideOperations() {
     setSelectedSlideId(moved.id);
     dispatchUndo({ type: 'SET', payload: next });
     playSfx('reorder');
-  }, [presentation, dispatchUndo, setSelectedSlideId]);
+  }, [dispatchUndo, setSelectedSlideId]);
 
   const updateSlideContent = useCallback((content: string) => {
+    const { presentation, selectedSlideIds, selectedSlideId } = useStore.getState();
     const targetIds = selectedSlideIds.size > 0 ? selectedSlideIds : new Set([selectedSlideId]);
     dispatchUndo({
       type: 'SET',
@@ -152,9 +150,10 @@ export function useSlideOperations() {
         ),
       },
     });
-  }, [presentation, selectedSlideIds, selectedSlideId, dispatchUndo]);
+  }, [dispatchUndo]);
 
   const updateSlideStyles = useCallback((styles: Partial<Slide['styles']>) => {
+    const { presentation, selectedSlideIds, selectedSlideId } = useStore.getState();
     const targetIds = selectedSlideIds.size > 0 ? selectedSlideIds : new Set([selectedSlideId]);
     dispatchUndo({
       type: 'SET',
@@ -167,9 +166,10 @@ export function useSlideOperations() {
         ),
       },
     });
-  }, [presentation, selectedSlideIds, selectedSlideId, dispatchUndo]);
+  }, [dispatchUndo]);
 
   const patchSelectedCountdown = useCallback((mutate: (data: CountdownSlideData) => CountdownSlideData) => {
+    const { presentation, selectedSlideId } = useStore.getState();
     dispatchUndo({
       type: 'SET',
       payload: {
@@ -181,12 +181,13 @@ export function useSlideOperations() {
         }),
       },
     });
-  }, [presentation, selectedSlideId, dispatchUndo]);
+  }, [dispatchUndo]);
 
   const updateSlideBackgroundImage = useCallback(async () => {
     const file = await window.electronAPI?.selectMediaFile?.('image');
     if (typeof file === 'string' && file) {
       updateSlideStyles({ backgroundImage: toFileUrl(file) });
+      playSfx('success');
     }
   }, [updateSlideStyles]);
 
@@ -198,6 +199,7 @@ export function useSlideOperations() {
     const file = await window.electronAPI?.selectMediaFile?.('video');
     if (typeof file === 'string' && file) {
       updateSlideStyles({ backgroundVideo: toFileUrl(file) });
+      playSfx('success');
     }
   }, [updateSlideStyles]);
 
@@ -206,6 +208,7 @@ export function useSlideOperations() {
   }, [updateSlideStyles]);
 
   const applyStyleFieldToAll = useCallback((pick: Partial<Slide['styles']> | 'all') => {
+    const { presentation, selectedSlideId } = useStore.getState();
     const sel = presentation.slides.find((s) => s.id === selectedSlideId);
     if (!sel?.styles) return;
 
@@ -228,6 +231,7 @@ export function useSlideOperations() {
       toApply.generatedBackground = sel.styles.generatedBackground;
     }
 
+    if (!presentation.slides.some(slide => Object.entries(toApply).some(([key, value]) => slide.styles?.[key as keyof NonNullable<Slide['styles']>] !== value))) return;
     dispatchUndo({
       type: 'SET',
       payload: {
@@ -243,9 +247,11 @@ export function useSlideOperations() {
         })),
       },
     });
-  }, [presentation, selectedSlideId, dispatchUndo]);
+    playSfx('success');
+  }, [dispatchUndo]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const { presentation, selectedSlideId } = useStore.getState();
     if (e.key !== 'Enter' || !e.altKey) return;
     e.preventDefault();
 
@@ -276,9 +282,10 @@ export function useSlideOperations() {
     });
 
     setTimeout(() => setSelectedSlideId(newId), 0);
-  }, [presentation, selectedSlideId, dispatchUndo, setSelectedSlideId]);
+  }, [dispatchUndo, setSelectedSlideId]);
 
   const updateTransition = useCallback((update: Partial<{ type: TransitionType; duration: number }>) => {
+    const { presentation } = useStore.getState();
     dispatchUndo({
       type: 'SET',
       payload: {
@@ -290,9 +297,10 @@ export function useSlideOperations() {
         },
       },
     });
-  }, [presentation, dispatchUndo]);
+  }, [dispatchUndo]);
 
   const savePresentation = useCallback(async () => {
+    const { presentation } = useStore.getState();
     // Zoom lives in separate UI state; re-attach it to the saved payload so
     // files keep carrying the zoom level (legacy field, read on open).
     const state = useStore.getState();
@@ -314,9 +322,10 @@ export function useSlideOperations() {
       });
       playSfx('complete');
     }
-  }, [presentation, dispatchUndo]);
+  }, [dispatchUndo]);
 
   const handleImportSlides = useCallback((slides: Slide[]) => {
+    const { presentation } = useStore.getState();
     if (slides.length === 0) return;
 
     dispatchUndo({
@@ -329,7 +338,7 @@ export function useSlideOperations() {
 
     setSelectedSlideId(slides[0].id);
     setActiveTab('slides');
-  }, [presentation, dispatchUndo, setSelectedSlideId, setActiveTab]);
+  }, [dispatchUndo, setSelectedSlideId, setActiveTab]);
 
   const openPresentation = useCallback(async () => {
     const result = await window.electronAPI?.openFile?.();
@@ -436,6 +445,7 @@ export function useSlideOperations() {
   }, [dispatchUndo, setPresentationName, setSelectedSlideId, setSlideZoom, setLiveSlideId, setSelectedPresetName, setActiveTab]);
 
   const openSavedPresentationByName = useCallback(async (presentationName: string) => {
+    const { presets } = useStore.getState();
     const loaded = await window.electronAPI?.loadPresets?.(getLiveSaveRetention());
     const list = Array.isArray(loaded) ? loaded : presets;
     if (Array.isArray(loaded)) setPresets(loaded);
@@ -448,9 +458,10 @@ export function useSlideOperations() {
     }
 
     await applyPreset(preset);
-  }, [presets, applyPreset, t, setPresets]);
+  }, [applyPreset, t, setPresets]);
 
   const createNewPresentation = useCallback(async () => {
+    const { isProjectorWindowOpen } = useStore.getState();
     if (!(await confirmDialog(t('warnings.confirmNewPresentation')))) return;
     if (!(await guardEditorReplacement())) return;
 
@@ -475,7 +486,7 @@ export function useSlideOperations() {
     setActiveTab('slides');
     setPanels({ preset: false, remote: false, styles: false, imageStyles: false });
     setSelectedPresetName(null);
-  }, [t, isProjectorWindowOpen, dispatchUndo, setSelectedSlideId, setLiveIndex, setIsBlackout, setActiveTab, setPanels, setSelectedPresetName]);
+  }, [t, dispatchUndo, setSelectedSlideId, setLiveIndex, setIsBlackout, setActiveTab, setPanels, setSelectedPresetName]);
 
   const appendSlides = useCallback((newSlides: Slide[], goLive?: boolean) => {
     if (newSlides.length === 0) return;
@@ -759,64 +770,53 @@ export function useSlideOperations() {
   }, [appendSlides]);
 
   const handleSlideClick = useCallback((id: string, index: number, e?: React.MouseEvent) => {
-    const isShift = e?.shiftKey;
-
-    // Ctrl/Cmd+click toggles a slide in and out of the bulk set — the grid
-    // counterpart of the editor rail. It never moves the live output.
+    const state = useStore.getState();
+    const { presentation, selectedSlideIds, selectedSlideId, lastSelectedIndex } = state;
+    // A queued click can arrive after a reorder but before its DOM commit.
+    // Resolve the card's stable identity against the current deck.
+    index = presentation.slides.findIndex(slide => slide.id === id);
+    if (index < 0) return;
+    if (!e || e.detail < 2) firstClickCued.current = false;
     if (e?.ctrlKey || e?.metaKey) {
       const next = new Set(selectedSlideIds);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       if (next.size === 0) next.add(id);
-      setSelectedSlideIds(next);
-      if (!next.has(selectedSlideId) || next.has(id)) setSelectedSlideId(id);
-      setLastSelectedIndex(index);
-      return;
-    }
-
-    if (isShift && lastSelectedIndex !== null) {
-      const start = Math.min(lastSelectedIndex, index);
-      const end = Math.max(lastSelectedIndex, index);
-      const newSelection = new Set<string>();
-
-      for (let i = start; i <= end; i++) {
-        const slide = presentation.slides[i];
-        if (slide) newSelection.add(slide.id);
+      if (next.has(id) !== selectedSlideIds.has(id)) {
+        playSfx(next.has(id) ? 'focus' : 'deselect');
+        firstClickCued.current = true;
       }
-
-      setSelectedSlideIds(newSelection);
-      setSelectedSlideId(id);
-    } else {
-      setSelectedSlideIds(new Set([id]));
-      setSelectedSlideId(id);
-    }
-
-    setLastSelectedIndex(index);
-    // Live broadcast open: single click sends the selected slide straight to live.
-    // Broadcast closed: click only selects; go live via Enter or double click.
-    // With an active broadcast lock the live output cannot move (setLiveIndex
-    // resolves to the locked slide), so skip the live switch entirely.
-    if (isProjectorWindowOpen && findLockedSlideIndex(presentation.slides) === -1) setLiveIndex(index);
-  }, [presentation.slides, selectedSlideIds, selectedSlideId, lastSelectedIndex, isProjectorWindowOpen, setSelectedSlideIds, setSelectedSlideId, setLastSelectedIndex, setLiveIndex]);
-
-  const handleSlideDoubleClick = useCallback((id: string, index: number) => {
-    // Double click = quick Send to Live, active only while the broadcast is closed (single click already covers it when open).
-    if (isProjectorWindowOpen) return;
-    // Locked slide owns the live output — double-click cannot take it away.
-    if (findLockedSlideIndex(presentation.slides) >= 0) {
-      setSelectedSlideIds(new Set([id]));
-      setSelectedSlideId(id);
-      setLastSelectedIndex(index);
+      state.selectSlides({ ids: next, anchorIndex: index,
+        activeId: !next.has(selectedSlideId) || next.has(id) ? id : undefined });
       return;
     }
-    setSelectedSlideIds(new Set([id]));
-    setSelectedSlideId(id);
-    setLastSelectedIndex(index);
-    setLiveIndex(index);
-    playSfx('start');
-  }, [presentation.slides, isProjectorWindowOpen, setSelectedSlideIds, setSelectedSlideId, setLastSelectedIndex, setLiveIndex]);
+    const next = new Set<string>();
+    if (e?.shiftKey && lastSelectedIndex !== null) {
+      for (let i = Math.min(lastSelectedIndex, index); i <= Math.max(lastSelectedIndex, index); i++) {
+        const slide = presentation.slides[i];
+        if (slide) next.add(slide.id);
+      }
+    } else next.add(id);
+    const selectionChanged = next.size !== selectedSlideIds.size || [...next].some(value => !selectedSlideIds.has(value)) || selectedSlideId !== id;
+    state.selectSlides({ activeId: id, ids: next, anchorIndex: index,
+      liveTargetId: state.isProjectorWindowOpen && findLockedSlideIndex(presentation.slides) === -1 ? presentation.slides[index]?.id : undefined });
+    if (selectionChanged) { playSfx('focus'); firstClickCued.current = true; }
+  }, []);
+
+  const handleSlideDoubleClick = useCallback((id: string, index: number, nativeDoubleClick = false) => {
+    const state = useStore.getState();
+    if (state.isProjectorWindowOpen) return;
+    index = state.presentation.slides.findIndex(slide => slide.id === id);
+    if (index < 0) return;
+    const locked = findLockedSlideIndex(state.presentation.slides) >= 0;
+    state.selectSlides({ activeId: id, ids: new Set([id]), anchorIndex: index,
+      liveTargetId: locked ? undefined : state.presentation.slides[index]?.id });
+    if (locked) return;
+    if (!nativeDoubleClick || !firstClickCued.current) playSfx('start');
+    firstClickCued.current = false;
+  }, []);
 
   const deleteSelectedSlides = useCallback(async () => {
+    const { presentation, selectedSlideIds, selectedSlideId } = useStore.getState();
     if (selectedSlideIds.size === 0) return;
     // The locked slide pins the live output and must not be deleted.
     if (presentation.slides.some((s) => s.locked && selectedSlideIds.has(s.id))) return;
@@ -833,17 +833,14 @@ export function useSlideOperations() {
       payload: { ...presentation, slides },
     });
 
-    setSelectedSlideIds(new Set());
-    setLastSelectedIndex(null);
-
-    if (selectedSlideIds.has(selectedSlideId)) {
-      setSelectedSlideId(slides[0].id);
-    }
+    useStore.getState().selectSlides({ ids: new Set(), anchorIndex: null,
+      activeId: selectedSlideIds.has(selectedSlideId) ? slides[0].id : undefined });
 
     playSfx('delete');
-  }, [presentation, selectedSlideIds, selectedSlideId, t, dispatchUndo, setSelectedSlideIds, setSelectedSlideId, setLastSelectedIndex]);
+  }, [t, dispatchUndo]);
 
   const duplicateSelectedSlides = useCallback(() => {
+    const { presentation, selectedSlideIds } = useStore.getState();
     if (selectedSlideIds.size === 0) return;
 
     const selectedIndices = presentation.slides
@@ -881,21 +878,23 @@ export function useSlideOperations() {
       payload: { ...presentation, slides },
     });
 
-    setSelectedSlideIds(new Set(cloneIds));
-    setLastSelectedIndex(slides.findIndex((s) => s.id === cloneIds[cloneIds.length - 1]));
-    setSelectedSlideId(cloneIds[0]);
-  }, [presentation, selectedSlideIds, dispatchUndo, setSelectedSlideIds, setLastSelectedIndex, setSelectedSlideId]);
+    playSfx('copy');
+    useStore.getState().selectSlides({ ids: new Set(cloneIds), activeId: cloneIds[0],
+      anchorIndex: slides.findIndex(s => s.id === cloneIds[cloneIds.length - 1]) });
+  }, [dispatchUndo]);
 
   const moveSelectedSlides = useCallback((direction: -1 | 1) => {
+    const { presentation, selectedSlideIds } = useStore.getState();
     const state = useStore.getState();
     if (state.serviceSectionsEnabled && (state.searchQuery.trim() || state.sectionFilterId)) return;
     if (selectedSlideIds.size === 0) return;
 
     dispatchUndo({ type: 'SET', payload: moveSectionSlidesOneStep(presentation, selectedSlideIds, direction) });
     playSfx('reorder');
-  }, [presentation, selectedSlideIds, dispatchUndo]);
+  }, [dispatchUndo]);
 
   const replaceSlideMedia = useCallback(async () => {
+    const { presentation, selectedSlideId } = useStore.getState();
     const file = await window.electronAPI?.selectMediaFile?.('image');
     if (typeof file === 'string' && file) {
       dispatchUndo({
@@ -910,9 +909,10 @@ export function useSlideOperations() {
         },
       });
     }
-  }, [presentation, selectedSlideId, dispatchUndo]);
+  }, [dispatchUndo]);
 
   const removeSlideMedia = useCallback(() => {
+    const { presentation, selectedSlideId } = useStore.getState();
     dispatchUndo({
       type: 'SET',
       payload: {
@@ -924,9 +924,10 @@ export function useSlideOperations() {
         ),
       },
     });
-  }, [presentation, selectedSlideId, dispatchUndo]);
+  }, [dispatchUndo]);
 
   const updateLoopItems = useCallback((slideId: string, items: LoopItem[]) => {
+    const { presentation } = useStore.getState();
     dispatchUndo({
       type: 'SET',
       payload: {
@@ -936,9 +937,10 @@ export function useSlideOperations() {
         ),
       },
     });
-  }, [presentation, dispatchUndo]);
+  }, [dispatchUndo]);
 
   const updateSlideProperty = useCallback((slideId: string, props: Record<string, unknown>) => {
+    const { presentation } = useStore.getState();
     dispatchUndo({
       type: 'SET',
       payload: {
@@ -948,9 +950,10 @@ export function useSlideOperations() {
         ),
       },
     });
-  }, [presentation, dispatchUndo]);
+  }, [dispatchUndo]);
 
   const applyStylesToSelected = useCallback((styles: Partial<Slide['styles']>) => {
+    const { presentation, selectedSlideIds } = useStore.getState();
     if (selectedSlideIds.size === 0) return;
 
     dispatchUndo({
@@ -964,7 +967,7 @@ export function useSlideOperations() {
         ),
       },
     });
-  }, [presentation, selectedSlideIds, dispatchUndo]);
+  }, [dispatchUndo]);
 
   return {
     addSlide,

@@ -196,3 +196,9 @@ export async function measureAsync<T>(
     buf.push({ kind, label, ms: Date.now() - t0, bytes: bytes ? bytes() : 0, t: Date.now() });
   }
 }
+
+/** Main uses a small disabled response without collecting any samples. */
+export type MainPerfSnapshot = { enabled: false } | (PerfSnapshot & {
+  enabled: true;
+  meta: { startedAt: number; maxEventLoopLagMs: number; eventLoopLagSamples: number };
+});

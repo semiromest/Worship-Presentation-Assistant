@@ -1,3 +1,4 @@
+import { playSfx } from '../sfx';
 import { MediaPoster } from './MediaPoster';
 import BackgroundDim from './BackgroundDim';
 import { VideoOverlayLayer } from './VideoOverlayLayer';
@@ -46,11 +47,11 @@ export const BackgroundVideoPlayer = memo(({ src, previewScale = 1 }: { src: str
     const video = videoRef.current;
     if (!video) return;
     if (video.paused) {
-      video.play();
-      setPlaying(true);
+      void video.play().then(() => { if (!video.paused) { setPlaying(true); playSfx('play'); } }).catch(() => playSfx('error'));
     } else {
       video.pause();
       setPlaying(false);
+      playSfx('pause');
     }
   }, []);
 

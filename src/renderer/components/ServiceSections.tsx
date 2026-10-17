@@ -1,3 +1,8 @@
+import UiMenu from './UiMenu';
+import { AnimatePresence } from 'motion/react';
+import { useListMotion } from '../hooks/useListMotion';
+import UiCollapse from './UiCollapse';
+import { playSfx } from '../sfx';
 import DeferredSectionSlide from './DeferredSectionSlide';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -67,6 +72,7 @@ export default function ServiceSections({
   const [context, setContext] = useState<string | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [name, setName] = useState('');
+  const [includeSelectedSlides, setIncludeSelectedSlides] = useState(false);
   const [color, setColor] = useState(SECTION_COLORS[0]);
   const [icon, setIcon] = useState('•');
   const [target, setTarget] = useState('');
@@ -80,6 +86,7 @@ export default function ServiceSections({
   const [toolbarHeight, setToolbarHeight] = useState(96);
   const rootRef = useRef<HTMLDivElement>(null);
   const blocks = useMemo(() => getSectionBlocks(deck), [deck]);
+  useListMotion(rootRef, blocks.map(section => section.id), deck.id ?? '', 'section', `${search}:${filter}`);
   const endPoint = useMemo(() => sectionInsertionPoints(deck).at(-1), [deck]);
   const visibleIds = useMemo(() => new Set(slides.map((s) => s.id)), [slides]);
   const slideIndex = useMemo(() => new Map(deck.slides.map((s, i) => [s.id, i])), [deck.slides]);
@@ -89,8 +96,8 @@ export default function ServiceSections({
   const liveSection = blocks.find((b) => b.slides.some((s) => s.id === liveId));
   const restricted = !!search.trim() || !!filter;
   const activeSection = editor && 'sectionId' in editor ? blocks.find((b) => b.id === editor.sectionId) : undefined;
-  const createsEmptySection = !!editor && editor.kind === 'create' && !editor.slideIds.length;
-  const previewIds = useMemo(() => new Set(editor?.kind === 'create' ? editor.slideIds : []), [editor]);
+  const createsEmptySection = !!editor && editor.kind === 'create' && (!includeSelectedSlides || !editor.slideIds.length);
+  const previewIds = useMemo(() => new Set(editor?.kind === 'create' && includeSelectedSlides ? editor.slideIds : []), [editor, includeSelectedSlides]);
 
   useEffect(() => {
     const el = toolbarRef.current;
@@ -145,9 +152,11 @@ export default function ServiceSections({
     };
   }, []);
 
-  function commit(next: Presentation) {
+  function commit(next: Presentation, cue: 'success' | 'delete' | 'reorder' = 'reorder') {
     const state = useStore.getState();
+    if (JSON.stringify(next) === JSON.stringify(state.presentation)) return;
     state.dispatchUndo({ type: 'SET', payload: next });
+    playSfx(cue);
     const remaining = new Set(next.slides.map((s) => s.id));
     state.setSelectedSlideIds(new Set([...state.selectedSlideIds].filter((id) => remaining.has(id))));
     if (!remaining.has(state.selectedSlideId) && next.slides[0]) state.setSelectedSlideId(next.slides[0].id);
@@ -182,10 +191,12 @@ export default function ServiceSections({
     );
   }
   function openEditor(next: Editor) {
+    playSfx('open');
     setMenu(null);
     setContext(null);
     setOutline(false);
     if (next.kind === 'create') {
+      setIncludeSelectedSlides(false);
       setName('');
       setColor(SECTION_COLORS[blocks.length % SECTION_COLORS.length]);
       setIcon('•');
@@ -200,8 +211,7 @@ export default function ServiceSections({
     setPosition('end');
     setEditor(next);
   }
-  // One entry point for "Bölüm Oluştur": the user's own selection decides which
-  // slides are grouped. Nothing is implied from the slide they happen to sit on.
+  // Create an empty section by default; moving the current selection is opt-in.
   function openCreate() {
     const current = useStore.getState();
     const ids = selectedSlideIds(current.presentation, [current.selectedSlideId, ...current.selectedSlideIds]);
@@ -220,13 +230,14 @@ export default function ServiceSections({
     if (!editor) return;
     const section = { id: crypto.randomUUID(), title: name, color, icon };
     if (editor.kind === 'create') {
-      if (editor.slideIds.length) commit(createSectionFromSelection(current, editor.slideIds, section));
-      else commit(normalizeSections(insertEmptySection(current, undefined, section)));
+      if (includeSelectedSlides && editor.slideIds.length) commit(createSectionFromSelection(current, editor.slideIds, section), 'success');
+      else commit(normalizeSections(insertEmptySection(current, undefined, section)), 'success');
+      browse(section.id);
     }
-    if (editor.kind === 'edit') commit(updateSection(current, editor.sectionId, { title: name, color, icon }));
+    if (editor.kind === 'edit') commit(updateSection(current, editor.sectionId, { title: name, color, icon }), 'success');
     if (editor.kind === 'move') commit(moveSlidesToSection(current, new Set(editor.slideIds), target, position));
-    if (editor.kind === 'remove') commit(removeSection(current, editor.sectionId, target));
-    if (editor.kind === 'delete') commit(removeSection(current, editor.sectionId, undefined, true));
+    if (editor.kind === 'remove') commit(removeSection(current, editor.sectionId, target), 'delete');
+    if (editor.kind === 'delete') commit(removeSection(current, editor.sectionId, undefined, true), 'delete');
     setEditor(null);
   }
   function resetDrag() {
@@ -271,7 +282,7 @@ export default function ServiceSections({
     const blockIndex = blocks.findIndex((b) => b.id === sectionId);
     const index = last >= 0 ? last + 1 : blocks.slice(0, blockIndex).reduce((sum, b) => sum + b.slides.length, 0);
     nextSlides.splice(index, 0, slide);
-    commit(normalizeSections({ ...current, slides: nextSlides }));
+    commit(normalizeSections({ ...current, slides: nextSlides }), 'success');
     browse(sectionId, slide.id);
   }
   const editorTitle =
@@ -328,6 +339,7 @@ export default function ServiceSections({
                 setMenu(null);
                 setContext(null);
                 setOutline(!outline);
+                playSfx(outline ? 'close' : 'open');
               }}
             >
               <ListTree className="inline w-4 h-4 mr-1" />
@@ -337,8 +349,8 @@ export default function ServiceSections({
                 aria-hidden="true"
               />
             </button>
-            {outline && (
-              <div
+            <AnimatePresence initial={false}>{outline && (
+              <UiMenu
                 aria-label={t('sections.outline')}
                 className="absolute left-0 top-full z-40 mt-1 max-h-[60vh] w-72 overflow-y-auto rounded-xl border border-white/15 bg-surface-overlay p-2 shadow-xl"
               >
@@ -348,24 +360,22 @@ export default function ServiceSections({
                     key={b.id}
                     className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                     title={t('sections.goTo')}
-                    onClick={() => browse(b.id)}
+                    onClick={() => { browse(b.id); playSfx('forward'); }}
                   >
                     <span style={{ color: b.color }}>{b.icon ?? '•'}</span>
                     <span className="min-w-0 flex-1 truncate">{title(b)}</span>
                     <span className="text-white/40">{t('sections.slideCount', { count: b.slides.length })}</span>
                   </button>
                 ))}
-              </div>
-            )}
+              </UiMenu>
+            )}</AnimatePresence>
           </div>
           <button
             className={cn(button, 'bg-blue-500/15 text-blue-200')}
-            disabled={!selectedId}
             onClick={openCreate}
           >
             <Plus className="inline w-4 h-4 mr-1" />
             {t('sections.create')}
-            {selectedIds.size > 1 && ' (' + selectedIds.size + ')'}
           </button>
           <button className={button} disabled={!selectedId} onClick={openMove}>
             <MoveRight className="inline w-4 h-4 mr-1" />
@@ -378,6 +388,7 @@ export default function ServiceSections({
               setMenu(null);
               setContext(null);
               setOutline(false);
+              playSfx(collapsed.size && collapsed.size === blocks.length ? 'expand' : 'collapse');
               setCollapsed(
                 collapsed.size && collapsed.size === blocks.length ? new Set() : new Set(blocks.map((b) => b.id))
               );
@@ -410,6 +421,8 @@ export default function ServiceSections({
               <section
                 key={b.id}
                 data-section-id={b.id}
+                data-motion-item="section"
+                data-motion-id={b.id}
                 className="scroll-mt-36 rounded-xl border border-white/15 bg-white/[0.015]"
                 aria-label={title(b)}
               >
@@ -452,14 +465,15 @@ export default function ServiceSections({
                     className={cn(button, 'p-1 border-0')}
                     aria-expanded={!collapsed.has(b.id)}
                     aria-label={t('sections.toggle', { name: title(b) })}
-                    onClick={() =>
+                    onClick={() => {
+                      playSfx(collapsed.has(b.id) ? 'expand' : 'collapse');
                       setCollapsed((old) => {
                         const next = new Set(old);
                         if (next.has(b.id)) next.delete(b.id);
                         else next.add(b.id);
                         return next;
-                      })
-                    }
+                      });
+                    }}
                   >
                     {collapsed.has(b.id) ? (
                       <ChevronRight className="w-4 h-4" />
@@ -471,6 +485,31 @@ export default function ServiceSections({
                     <div className="flex items-center gap-2">
                       <span style={{ color: b.color }}>{b.icon ?? '•'}</span>
                       <strong className="text-sm truncate">{title(b)}</strong>
+                      <input
+                        key={`${b.id}:${b.time ?? ''}`}
+                        type="text"
+                        defaultValue={b.time ?? ''}
+                        placeholder="--:--"
+                        maxLength={8}
+                        aria-label={`${title(b)} · ${t('sections.time')}`}
+                        title={t('sections.timeHint')}
+                        className="w-16 shrink-0 rounded border border-transparent bg-transparent px-1.5 py-0.5 text-xs font-mono tabular-nums text-white/60 placeholder:text-white/25 hover:border-white/15 focus:border-blue-400/60 focus:bg-black/20 focus:text-white focus:outline-none"
+                        onBlur={event => {
+                          const time = event.currentTarget.value.trim();
+                          const current = useStore.getState().presentation;
+                          const section = current.sections?.find(section => section.id === b.id);
+                          if (section && time !== (section.time ?? '')) commit(updateSection(current, b.id, { time }), 'success');
+                        }}
+                        onKeyDown={event => {
+                          event.stopPropagation();
+                          if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); }
+                          if (event.key === 'Escape') {
+                            event.preventDefault();
+                            event.currentTarget.value = b.time ?? '';
+                            event.currentTarget.blur();
+                          }
+                        }}
+                      />
                       <button
                         className={cn(button, 'p-1 border-0 opacity-0 group-hover/header:opacity-100 focus-visible:opacity-100')}
                         aria-label={t('sections.rename')}
@@ -509,8 +548,8 @@ export default function ServiceSections({
                     >
                       <MoreHorizontal className="w-4 h-4" />
                     </button>
-                    {menu === b.id && (
-                      <div className="absolute right-0 top-full mt-1 z-40 w-60 p-2 rounded-xl border border-white/15 bg-surface-overlay shadow-xl flex flex-col gap-1">
+                    <AnimatePresence initial={false}>{menu === b.id && (
+                      <UiMenu className="absolute right-0 top-full mt-1 z-40 w-60 p-2 rounded-xl border border-white/15 bg-surface-overlay shadow-xl flex flex-col gap-1">
                         <button className={button} onClick={() => openEditor({ kind: 'edit', sectionId: b.id })}>
                           {t('sections.rename')}
                         </button>
@@ -545,11 +584,11 @@ export default function ServiceSections({
                         >
                           {t('sections.deleteWithSlides')}
                         </button>
-                      </div>
-                    )}
+                      </UiMenu>
+                    )}</AnimatePresence>
                   </div>
                 </div>
-                {!collapsed.has(b.id) && (
+                <UiCollapse open={!collapsed.has(b.id)}>
                   <div
                     className="space-y-3 p-3"
                     onDragOver={(e) => {
@@ -605,8 +644,8 @@ export default function ServiceSections({
                                 })
                               }
                             />
-                            {context === s.id && (
-                              <div
+                            <AnimatePresence initial={false}>{context === s.id && (
+                              <UiMenu
                                 data-section-menu
                                 className="absolute right-1 top-1 z-40 min-w-52 p-2 rounded-xl border border-white/15 bg-surface-overlay shadow-xl flex flex-col gap-1"
                               >
@@ -621,15 +660,15 @@ export default function ServiceSections({
                                 >
                                   {t('sections.move')}
                                 </button>
-                              </div>
-                            )}
+                              </UiMenu>
+                            )}</AnimatePresence>
                           </div>
                         );
                       })}
                     </div>
                     {!b.slides.length && <p className="text-xs text-white/40">{t('sections.emptyHint')}</p>}
                   </div>
-                )}
+                </UiCollapse>
               </section>
             );
           })}
@@ -651,7 +690,7 @@ export default function ServiceSections({
       </div>
       <Dialog
         open={!!editor}
-        onClose={() => setEditor(null)}
+        onClose={() => { setEditor(null); playSfx('close'); }}
         labelledBy="section-dialog-title"
         className="w-[min(92vw,520px)] rounded-2xl border border-white/15 bg-surface-raised p-5 shadow-2xl"
       >
@@ -666,7 +705,7 @@ export default function ServiceSections({
             <h2 id="section-dialog-title" className="text-lg font-semibold">
               {editorTitle}
             </h2>
-            <button type="button" className={button} aria-label={t('common.close')} onClick={() => setEditor(null)}>
+            <button type="button" className={button} aria-label={t('common.close')} onClick={() => { setEditor(null); playSfx('close'); }}>
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -720,6 +759,17 @@ export default function ServiceSections({
           )}
           {editor?.kind === 'create' && (
             <>
+              {editor.slideIds.length > 0 && (
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 p-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={includeSelectedSlides}
+                    onChange={event => setIncludeSelectedSlides(event.target.checked)}
+                    className="h-4 w-4 accent-blue-500"
+                  />
+                  {t('sections.includeSelectedSlides', { count: editor.slideIds.length })}
+                </label>
+              )}
               {createsEmptySection ? (
                 <p className="text-sm text-white/60">
                   {t('sections.emptyScope')}
@@ -775,7 +825,7 @@ export default function ServiceSections({
             </p>
           )}
           <div className="flex justify-end gap-2">
-            <button type="button" className={button} onClick={() => setEditor(null)}>
+            <button type="button" className={button} onClick={() => { setEditor(null); playSfx('close'); }}>
               {t('common.cancel')}
             </button>
             <button

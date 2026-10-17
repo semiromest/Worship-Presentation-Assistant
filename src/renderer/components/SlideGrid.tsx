@@ -1,3 +1,4 @@
+import { useListMotion } from '../hooks/useListMotion';
 import ServiceSections from './ServiceSections';
 import { memo, useMemo, useEffect, useLayoutEffect, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -137,6 +138,8 @@ export default function SlideGrid({
   }, [presentation.slides, draggedSlideId, resetDragState]);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const motionSlideIds = useMemo(() => presentation.slides.map(slide => slide.id), [presentation.slides]);
+  useListMotion(containerRef, motionSlideIds, `${presentation.id ?? ''}:${sectionsEnabled}`, 'slide', `${searchQuery}:${sectionFilterId}`);
   const restoringScrollRef = useRef(true);
   const [containerWidth, setContainerWidth] = useState(800);
 
@@ -387,7 +390,7 @@ export default function SlideGrid({
           {selectedSlideIds.size > 1 && (
             <div
               role="status"
-              className="flex shrink-0 items-center gap-1 rounded-xl border border-blue-500/30 bg-blue-500/15 px-2 py-1.5 text-[11px] font-medium text-blue-100"
+              className="ui-choice-mark flex shrink-0 items-center gap-1 rounded-xl border border-blue-500/30 bg-blue-500/15 px-2 py-1.5 text-[11px] font-medium text-blue-100"
             >
               <Layers2 className="h-3.5 w-3.5" aria-hidden="true" />
               {t('common.slidesSelected', { count: selectedSlideIds.size })}
@@ -446,7 +449,7 @@ export default function SlideGrid({
             <>
               <ServiceSections slides={filteredSlides} columns={columnCount} renderSlide={(slide, drag) => {
                 const index = slideIndexMap.get(slide.id)!;
-                return <div key={slide.id} role="listitem"><SlideCard slide={slide} index={index}
+                return <div key={slide.id} role="listitem" data-motion-item="slide" data-motion-id={slide.id}><SlideCard slide={slide} index={index}
                   isSelected={selectedSlideIds.has(slide.id)} isLive={isProjectorWindowOpen && liveIndex === index}
                   onClick={handleSlideClick} onDoubleClick={handleSlideDoubleClick} {...drag} zoom={slideZoom} /></div>;
               }} />
@@ -471,7 +474,7 @@ export default function SlideGrid({
                     {rowSlides.map((slide) => {
                       const originalIndex = slideIndexMap.get(slide.id)!;
                       return (
-                        <div key={slide.id} className="relative" role="listitem">
+                        <div key={slide.id} className="relative" role="listitem" data-motion-item="slide" data-motion-id={slide.id}>
                           {draggedSlideId && dragOverIndex === originalIndex && (
                             <div className="absolute -left-1.5 top-0 bottom-0 w-1 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.8)] z-20 pointer-events-none" />
                           )}

@@ -1,3 +1,7 @@
+import { useUiMotionEnabled } from './hooks/useUiMotionEnabled';
+import { uiMotion } from './uiMotion';
+import * as m from 'motion/react-m';
+import { playSfx } from './sfx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -113,6 +117,8 @@ export default function CalendarTab({
   onOpenPresentation,
 }: CalendarTabProps) {
   const { t, i18n } = useTranslation();
+  const motionEnabled = useUiMotionEnabled();
+  const [monthDirection, setMonthDirection] = useState(0);
 
   const localeMap: Record<string, string> = {
     tr: 'tr-TR',
@@ -194,18 +200,24 @@ export default function CalendarTab({
 
   const goToToday = useCallback(() => {
     const now = new Date();
+    setMonthDirection(0);
 
+    if (selectedDate !== formatDate(now) || currentDate.getMonth() !== now.getMonth() || currentDate.getFullYear() !== now.getFullYear()) playSfx('select');
     setCurrentDate(now);
     setSelectedDate(formatDate(now));
-  }, []);
+  }, [selectedDate, currentDate]);
 
   const goToPreviousMonth = useCallback(() => {
+    setMonthDirection(-1);
+    playSfx('back');
     setCurrentDate(prev => {
       return new Date(prev.getFullYear(), prev.getMonth() - 1, 1);
     });
   }, []);
 
   const goToNextMonth = useCallback(() => {
+    setMonthDirection(1);
+    playSfx('forward');
     setCurrentDate(prev => {
       return new Date(prev.getFullYear(), prev.getMonth() + 1, 1);
     });
@@ -221,6 +233,7 @@ export default function CalendarTab({
       presentationName: '',
     });
     setIsModalOpen(true);
+    playSfx('open');
   }, []);
 
   const openEditModal = useCallback((event: CalendarEvent) => {
@@ -233,6 +246,7 @@ export default function CalendarTab({
       presentationName: event.presentationName ?? '',
     });
     setIsModalOpen(true);
+    playSfx('open');
   }, []);
 
   const closeModal = useCallback(() => {
@@ -264,10 +278,12 @@ export default function CalendarTab({
     setEvents(prev => [event, ...prev]);
 
     closeModal();
+    playSfx('success');
   }, [newEvent, selectedDate, closeModal]);
 
   const updateEvent = useCallback(() => {
     if (!newEvent.title.trim() || !editingEvent) return;
+    if (editingEvent.title === newEvent.title.trim() && (editingEvent.description ?? '') === newEvent.description.trim() && editingEvent.color === newEvent.color && (editingEvent.time ?? '') === newEvent.time && (editingEvent.presentationName ?? '') === newEvent.presentationName.trim()) { closeModal(); return; }
 
     setEvents(prev =>
       prev.map(event =>
@@ -285,10 +301,12 @@ export default function CalendarTab({
     );
 
     closeModal();
+    playSfx('success');
   }, [newEvent, editingEvent, closeModal]);
 
   const deleteEvent = useCallback((id: string) => {
     setEvents(prev => prev.filter(event => event.id !== id));
+    playSfx('delete');
   }, []);
 
   return (
@@ -380,7 +398,7 @@ export default function CalendarTab({
               </div>
 
               {/* DAYS */}
-              <div className="grid grid-cols-7 gap-1 sm:gap-2">
+              <div key={`${year}-${month}`} className={cn('grid grid-cols-7 gap-1 sm:gap-2', monthDirection < 0 ? 'ui-calendar-previous' : monthDirection > 0 ? 'ui-calendar-next' : 'ui-calendar-static')}>
                 {calendarDays.map((date, index) => {
                   const dateStr = formatDate(date);
 
@@ -396,7 +414,7 @@ export default function CalendarTab({
                   return (
                     <button
                       key={index}
-                      onClick={() => setSelectedDate(dateStr)}
+                      onClick={() => { if (selectedDate !== dateStr) { setSelectedDate(dateStr); playSfx('check'); } }}
                       className={cn(
                         'group relative min-h-[80px] sm:min-h-[120px] rounded-xl sm:rounded-2xl border p-2 sm:p-3 text-left transition-all duration-200 overflow-hidden',
                         isCurrentMonth
@@ -409,6 +427,7 @@ export default function CalendarTab({
                           'ring-1 ring-blue-500/40'
                       )}
                     >
+                      {isSelected && <m.span layoutId="calendar-selected-day" className="pointer-events-none absolute inset-0 rounded-xl bg-blue-500/10 sm:rounded-2xl" transition={{ duration: motionEnabled ? uiMotion.duration.fast : 0, ease: uiMotion.ease }} />}
                       {/* Glow */}
                       <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-br from-blue-500/[0.03] to-violet-500/[0.03]" />
 
@@ -629,7 +648,7 @@ export default function CalendarTab({
                 </div>
 
                 <button
-                  onClick={closeModal}
+                  onClick={() => { closeModal(); playSfx('close'); }}
                   aria-label={t('common.close')}
                   className="w-10 h-10 rounded-xl hover:bg-white/[0.05] flex items-center justify-center transition-all focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
                 >
@@ -763,7 +782,7 @@ export default function CalendarTab({
               {/* FOOTER */}
               <div className="px-4 sm:px-6 py-4 sm:py-5 border-t border-white/5 flex gap-2 sm:gap-3">
                 <button
-                  onClick={closeModal}
+                  onClick={() => { closeModal(); playSfx('close'); }}
                   className="flex-1 h-12 rounded-2xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] transition-all font-medium"
                 >
                   {t('common.calendarCancel')}

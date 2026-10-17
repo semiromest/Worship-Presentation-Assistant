@@ -1079,6 +1079,13 @@
     "flip": "Çevir"
   },
   "watermark": {
+    "unsupportedFormat": "Desteklenmeyen dosya formatı. PNG, JPG veya SVG seçin.",
+    "fileTooLarge": "Dosya çok büyük. En fazla 2 MB desteklenir.",
+    "uploadSuccess": "Logo başarıyla yüklendi.",
+    "uploadError": "Logo yüklenemedi.",
+    "requireLogo": "Önce bir logo yükleyin.",
+    "collapse": "Logo ayarlarını daralt",
+    "expand": "Logo ayarlarını genişlet",
     "title": "Logo Filigran",
     "uploadLogo": "Logo Yükle",
     "replaceLogo": "Logoyu Değiştir",
@@ -1114,6 +1121,9 @@
     "updateDownloadedBadge": "Güncelleme indirildi — yeniden başlat"
   },
   "settings": {
+    "youtubeLoadMore": "Daha fazla",
+    "youtubeSearchingMore": "Diğer sonuçlar yükleniyor…",
+    "youtubeSearchExpired": "Bu arama sonuçlarının süresi doldu. Devam etmek için yeniden arayın.",
     "youtubeAddMusicSlide": "Müzik slaytı ekle",
     "youtubeMusicSlideLabel": "Müzik · YouTube",
     "youtubeMusicSlideHint": "Müzik slaytı canlıya alınınca çalar, başka slayta geçince durur. İnternet gerekir. TV sesi için Windows ses çıkışını HDMI/televizyon olarak seç.",
@@ -1133,6 +1143,8 @@
     "retention30d": "30 gün",
     "liveSaveLastSaved": "Son kayıt: {{time}}",
     "liveSaveEmpty": "Otomatik yedek kayıt yok.",
+    "muteSfxDuringLive": "Canlıda ses efektlerini sustur",
+    "muteSfxDuringLiveDesc": "Projeksiyon veya sahne çıktısı açıkken arayüz seslerini susturur. Medya ve müzik sesini etkilemez.",
     "soundEffects": "Ses Efektleri",
     "backgroundMusic": "Arka Plan Müziği",
     "backgroundMusicDesc": "Seçtiğiniz klasördeki müzikleri kilise ortamında uygulama içinden çalın.",
@@ -1261,6 +1273,11 @@
     "screenSlide": "🖥 Canlı ekran"
   },
   "prepCheck": {
+    "stale": "İçerik değişti; kontrol bekleniyor…",
+    "completed": "Kontrol tamamlandı",
+    "slideErrors": "Hata içeren {{count}} sorun. Slayt raporunu aç.",
+    "slideWarnings": "{{count}} uyarı. Slayt raporunu aç.",
+    "severity": {"error":"Hata","warning":"Uyarı"},
     "title": "Hazırlık Kontrolü",
     "button": "Hazırlık Kontrolü",
     "allClear": "Her şey hazır görünüyor",
@@ -1268,16 +1285,17 @@
     "summary": "Canlıya geçmeden önce {{count}} slayt dikkat gerektirebilir.",
     "issue": {
       "emptyText": "Bu metin slaytı boş.",
-      "longTextSmallFont": "Uzun metin: okunabilirlik için ayeti/metni parçalara bölmeyi değerlendirin.",
+      "longTextSmallFont": "Tahmini risk: uzun metni bölmek gerekebilir. Bu, ölçülmüş bir taşma değildir.",
       "missingImage": "Bu görsel slaytında görsel seçili değil.",
       "missingVideo": "Bu video slaytında video seçili değil.",
       "emptyLoop": "Bu döngü slaytında öğe yok.",
       "emptyPart": "Bir ilahi parçası boş.",
       "onlineResource": "İnternete bağımlı medya var; çevrimdışı kullanım için yerel dosya kullanın.",
-      "safeMargin": "Metin güvenli kenar boşluğuna çok yakın.",
       "inaccessibleMedia": "Medya dosyası bulunamadı veya okunamıyor.",
       "fontUnavailable": "Font çevrimdışı kullanıma hazırlanamadı; farklı bir font seçin veya bağlantıyı kontrol edin.",
-      "textOverflow": "Metin gösterim alanına sığmıyor. Uzun ayeti/metni bölün veya yazı boyutunu azaltın."
+      "textOverflow": "Metin gösterim alanına sığmıyor. Uzun ayeti/metni bölün veya yazı boyutunu azaltın.",
+
+      "duplicateSlide": "Bu slayt bir öncekiyle aynı görünüyor."
     },
     "checking": "Kontrol ediliyor; fontlar çevrimdışı kullanım için hazırlanıyor…",
     "checkFailed": "Kontrol tamamlanamadı. Kaynaklara erişimi kontrol edip yeniden deneyin.",
@@ -1306,6 +1324,9 @@
     "confirmNew": "Yeni sunum açılsın mı? Mevcut çalışmanı korumak için önce kütüphaneye kaydet."
   },
   "sections": {
+    "includeSelectedSlides": "Seçili slaytları yeni bölüme taşı ({{count}})",
+    "time": "Bölüm saati",
+    "timeHint": "Saat yazın (örn. 10:30). Enter ile kaydedin; silerek kaldırın.",
     "emptyScope": "Bu noktada boş bir bölüm oluşturulacak. Mevcut slaytların sırası ve bölümleri korunacak.",
     "create": "Bölüm Oluştur",
     "outline": "Sunum Akışı",
@@ -1502,7 +1523,8 @@
         "body": "Aydınlatılan örnek slaytı diğer aydınlatılan slaytın üzerine sürükleyip bırak. Yerleri gerçekten değiştiğinde bu tek alıştırma tamamlanır."
       },
       "canvas-edit": {
-        "title": "Slayt Editör’de resmi düzenle"
+        "title": "Slayt Editör’de resmi düzenle",
+        "body": "Örnek görseli slayt editöründe seçin, 15 derece döndürün ve değişikliği kaydedin."
       }
     }
   },

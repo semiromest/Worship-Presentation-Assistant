@@ -1,6 +1,6 @@
 /**
  * On-demand, disk-cached UI thumbnails for the media browser panel
- * (MediaTab.tsx) — Phase 7 perf work.
+ * (MediaLoopTab.tsx) — Phase 7 perf work.
  *
  * This is deliberately a separate concern from mediaLibrary.ts:
  *   - mediaLibrary.ts is the persistent, content-hash-addressed store used
@@ -45,7 +45,7 @@
  *   getMediaThumbnail: (filePath: string, maxEdge: number) =>
  *     ipcRenderer.invoke('media:getThumbnail', filePath, maxEdge),
  *
- * Everything on the renderer side (MediaTab.tsx) already calls
+ * Everything on the renderer side (MediaLoopTab.tsx) already calls
  * `window.electronAPI?.getMediaThumbnail?.(...)` defensively and falls back
  * to an in-renderer createImageBitmap downscale when it's absent, so this
  * module is an optional-but-recommended upgrade, not a hard dependency —
@@ -76,7 +76,7 @@ export const THUMB_REF_PREFIX = 'local-resource://thumbs/';
 // At WebP quality 65, cropped-and-shrunk photo content at this size shows
 // no visible banding or blocking — well above WebP's "obviously lossy"
 // threshold, which sits lower, around 40-50 for photographic content.
-// Keep in sync with THUMB_MAX_EDGE in MediaTab.tsx's renderer fallback so
+// Keep in sync with THUMB_MAX_EDGE in MediaLoopTab.tsx's renderer fallback so
 // both paths produce comparably-sized/looking previews for the same file.
 const DEFAULT_MAX_EDGE = 400;
 const DEFAULT_WEBP_QUALITY = 65;

@@ -1,3 +1,5 @@
+import { calculateFit, calculateCover, wrapCanvasText, canvasTypography, canvasLinePlacement } from '../shared/canvasLayout';
+import { readHymnAuthorPosition, readHymnAuthorSize } from './hymnAuthorSettings';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useEffect, useState, useRef } from 'react';
@@ -60,30 +62,6 @@ async function loadImage(
 }
 
 // ─── Aspect ratio fit helpers ─────────────────────────────────────────────
-interface FitRect { dx: number; dy: number; dw: number; dh: number }
-interface CoverRect { sx: number; sy: number; sw: number; sh: number }
-
-function calculateFit(imgW: number, imgH: number, canvasW: number, canvasH: number): FitRect {
-  const imgAr = imgW / imgH;
-  const cAr = canvasW / canvasH;
-  if (imgAr > cAr) {
-    const dh = canvasW / imgAr;
-    return { dx: 0, dy: (canvasH - dh) / 2, dw: canvasW, dh };
-  }
-  const dw = canvasH * imgAr;
-  return { dx: (canvasW - dw) / 2, dy: 0, dw, dh: canvasH };
-}
-
-function calculateCover(imgW: number, imgH: number, canvasW: number, canvasH: number): CoverRect {
-  const imgAr = imgW / imgH;
-  const cAr = canvasW / canvasH;
-  if (imgAr > cAr) {
-    const sw = imgH * cAr;
-    return { sx: (imgW - sw) / 2, sy: 0, sw, sh: imgH };
-  }
-  const sh = imgW / cAr;
-  return { sx: 0, sy: (imgH - sh) / 2, sw: imgW, sh };
-}
 
 function drawImageSafe(
   ctx: CanvasRenderingContext2D,
@@ -202,28 +180,13 @@ async function renderTextSlide(
   const displayContent = getSlideDisplayContent(slide);
   if (!displayContent) return true;
 
-  const ff =
-    styles.fontFamily && styles.fontFamily !== 'inherit'
-      ? styles.fontFamily.split(',')[0].trim()
-      : 'sans-serif';
+  const typography = canvasTypography(styles, W, 8 / outScale);
+  const { fontSize, family: ff, lineHeight, padding, textAlign } = typography;
   const baseScale = W / 1920;
-  const fontSize = Math.max(8 / outScale, (styles.fontSize || 48) * baseScale);
-  const fontWeight = styles.fontWeight || 'bold';
-  const fontStyle = styles.fontStyle || 'normal';
-  const textAlign = styles.textAlign || 'center';
-  const verticalAlign = styles.verticalAlign || 'center';
-  const lineHeight = (styles.lineHeight ?? 1.3) * fontSize;
-  const padding = 20 * baseScale;
-  const textTransform = styles.textTransform || 'none';
-
   let text = displayContent;
-  if (textTransform === 'uppercase') text = text.toUpperCase();
-  else if (textTransform === 'lowercase') text = text.toLowerCase();
-
-  ctx.font = `${fontStyle === 'italic' ? 'italic ' : ''}${fontWeight} ${fontSize}px ${ff}`;
-  // Hymn/scripture slides use textColor: '' (inherits the app's light text on
-  // the live screen) — an empty string is an invalid canvas fillStyle and is
-  // silently ignored, leaving the previous (black) fill → invisible text.
+  if (styles.textTransform === 'uppercase') text = text.toUpperCase();
+  else if (styles.textTransform === 'lowercase') text = text.toLowerCase();
+  ctx.font = typography.font;
   ctx.fillStyle = styles.textColor || '#ffffff';
   ctx.textBaseline = 'top';
 
@@ -231,22 +194,8 @@ async function renderTextSlide(
   const lines = wrapCanvasText(ctx, text, maxWidth);
   if (lines.length === 0) return true;
 
-  const totalH = lines.length * lineHeight;
-  let startY: number;
-  if (verticalAlign === 'top') startY = padding;
-  else if (verticalAlign === 'bottom') startY = H - padding - totalH;
-  else startY = (H - totalH) / 2;
-
-  if (textAlign === 'left') ctx.textAlign = 'left';
-  else if (textAlign === 'right') ctx.textAlign = 'right';
-  else ctx.textAlign = 'center';
-  const x =
-    textAlign === 'center' ? W / 2
-    : textAlign === 'right' ? W - padding
-    : padding;
-
-  // Half-leading so each line sits like a CSS line box (baseline 'top').
-  const leading = (lineHeight - fontSize) / 2;
+  const { startY, x, leading } = canvasLinePlacement(typography, lines.length, W, H);
+  ctx.textAlign = textAlign === 'left' || textAlign === 'right' ? textAlign : 'center';
   for (let i = 0; i < lines.length; i++) {
     const y = startY + i * lineHeight + leading;
     if (y + lineHeight < 0 || y > H) continue; // off-canvas, skip
@@ -267,8 +216,8 @@ async function renderTextSlide(
   // at add-time), positioned according to the hymnAuthorPosition setting.
   const hymnAuthor = slide.group?.author?.trim();
   if (hymnAuthor) {
-    const pos = (() => { try { return localStorage.getItem('hymnAuthorPosition') || 'bottom-center'; } catch { return 'bottom-center'; } })();
-    const sizePct = (() => { try { return Number(localStorage.getItem('hymnAuthorSize') || '28'); } catch { return 28; } })();
+    const pos = readHymnAuthorPosition();
+    const sizePct = readHymnAuthorSize();
     const isTop   = pos.startsWith('top');
     const isLeft  = pos.endsWith('left');
     const isRight = pos.endsWith('right');
@@ -300,28 +249,6 @@ async function renderTextSlide(
 }
 
 /** Word-wrap text onto lines (white-space: pre-wrap equivalent). */
-function wrapCanvasText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  const lines: string[] = [];
-  for (const paragraph of text.split('\n')) {
-    if (paragraph.trim().length === 0) {
-      lines.push('');
-      continue;
-    }
-    const words = paragraph.split(/\s+/).filter(Boolean);
-    let current = '';
-    for (const word of words) {
-      const candidate = current ? `${current} ${word}` : word;
-      if (current && ctx.measureText(candidate).width > maxWidth) {
-        lines.push(current);
-        current = word;
-      } else {
-        current = candidate;
-      }
-    }
-    if (current) lines.push(current);
-  }
-  return lines;
-}
 
 async function renderImageSlide(
   ctx: CanvasRenderingContext2D,

@@ -1,6 +1,6 @@
 {
   "name": "worship-presentation-assistant",
-  "version": "1.4.19",
+  "version": "1.4.20",
   "main": "dist-electron/main.js",
   "description": "Worship Presentation Assistant - Simple Worship Presentation App",
   "author": "IPCA",
@@ -11,12 +11,15 @@
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,html}\"",
+    "test:sfx": "tsx --test src/renderer/sfx.test.ts",
     "test:sections": "tsx --test src/shared/sectionModel.test.ts",
     "test:updater": "tsx --test src/renderer/state/updaterReducer.test.ts",
     "test:presets": "tsx --test src/main/presetStore.test.ts",
     "test:media": "tsx --test src/main/mediaLibrary.test.ts",
     "test:matcher": "tsx --test src/renderer/stt/slideMatcher.test.ts",
     "test:stt": "tsx --test src/renderer/state/useSttStore.test.ts",
+    "test:readiness": "tsx --test src/shared/readiness.test.ts src/main/preparationResources.test.ts src/renderer/preparationCheck.test.ts",
+    "test:recent-ux": "tsx --test src/main/youtubeSearchPager.test.ts src/renderer/hymnAuthorSettings.test.ts",
     "test:canvas": "tsx --test src/renderer/canvasSource.test.ts",
     "test:editor": "tsx --test src/renderer/videoOverlays.test.ts src/renderer/editor/videoTimeline.test.ts src/renderer/videoPlayback.test.ts src/renderer/editor/videoDraft.test.ts src/main/mediaPosterSource.test.ts src/renderer/editor/slideCapabilities.test.ts src/renderer/components/mediaPosterQueue.test.ts src/renderer/editor/editorSelection.test.ts src/renderer/editor/slideDraft.test.ts src/renderer/editor/elementDrag.test.ts src/renderer/editor/useEditorDeck.test.ts src/renderer/editor/editorDeckCommit.test.ts src/renderer/editor/editorWorkspace.test.ts src/renderer/slidePreviewGeometry.test.ts src/renderer/editor/canvasGeometry.test.ts src/renderer/editor/pointerSession.test.ts src/renderer/editor/colors.test.ts src/renderer/imageGeometry.test.ts src/renderer/editor/imageLayout.test.ts",
     "test:zoom": "tsx --test src/renderer/__tests__/slideGridZoom.test.ts",
@@ -26,7 +29,10 @@
     "lint:tour": "eslint \"src/renderer/components/Tour/**/*.{ts,tsx}\" src/renderer/state/useTourStore.ts src/main/tourProfile.ts src/main/tourProfile.test.ts src/main/isolatedLaunch.ts --max-warnings 0 scripts/check-tour-capture.cjs scripts/check-tour-capture.test.cjs tests/tour/packaged.spec.cjs playwright.packaged.config.cjs src/main/launchPolicy.ts src/main/launchPolicy.test.ts src/main/practicePolicy.ts src/main/practiceProgress.ts src/main/practiceProgress.test.ts src/shared/practice.ts src/renderer/components/PracticePanel.tsx src/renderer/hooks/usePractice.ts src/main/practiceSession.ts src/main/practiceWorkspace.ts src/main/practiceWorkspace.test.ts src/renderer/components/PracticeRunner.tsx src/renderer/components/PracticeSpotlight.tsx src/renderer/components/Tour/guideBoundary.ts tests/tour/guide-spike.tsx tests/tour/guided.spec.cjs tests/tour/guide-flow.cjs src/renderer/ScriptureBrowser.tsx src/renderer/MediaLoopTab.tsx src/renderer/CountdownTab.tsx src/renderer/PresentationsTab.tsx src/main/practiceReset.ts src/shared/practiceMerge.ts src/renderer/components/SettingsTab.tsx src/renderer/components/CheatsheetModal.tsx src/renderer/components/PracticeResult.tsx src/main/practiceResult.test.ts",
     "test:tour:packaged": "playwright test --config playwright.packaged.config.cjs",
     "test:tour:isolation": "playwright test --config playwright.packaged.config.cjs --grep \"practice gate\"",
-    "test:gradients": "tsx --test src/shared/generatedBackground.test.ts src/renderer/gradientMedia.test.ts"
+    "test:gradients": "tsx --test src/shared/generatedBackground.test.ts src/renderer/gradientMedia.test.ts",
+    "test:architecture": "tsx --test src/main/previewUpdates.test.ts src/shared/canvasLayout.test.ts src/main/shareTransport.test.ts src/main/preload.test.cjs src/renderer/state/useStore.test.ts src/renderer/keyboardCommands.test.ts",
+    "analyze:fallow": "npx --yes fallow@3.33.1 --format json --quiet --explain",
+    "analyze:source": "npx --yes fallow@3.33.1 --root src --config .fallowrc.source.json dead-code --format json --quiet --explain"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -88,7 +94,9 @@
     "typescript": "^5.4.2",
     "vite": "^5.1.6",
     "vite-plugin-electron": "^0.28.2",
-    "vite-plugin-electron-renderer": "^0.14.5"
+    "vite-plugin-electron-renderer": "^0.14.5",
+    "esbuild": "^0.28.0",
+    "google-auth-library": "^10.5.0"
   },
   "build": {
     "compression": "normal",

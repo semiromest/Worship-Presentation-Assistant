@@ -1,3 +1,4 @@
+import { playSfx } from '../sfx';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Download, Search, Cloud, Loader2, Globe, X } from 'lucide-react';
@@ -261,7 +262,7 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
       onImport(hymns, failedCount);
       onClose?.();
     }
-    // Failures are silent: nothing was imported, nothing to report.
+    if (!hymns.length && failedCount) playSfx('error');
   };
 
   const handleImportAll = async () => {
@@ -310,9 +311,11 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
         onImport(allImported, totalFailed);
         onClose?.();
       } else {
+        playSfx('error');
         setError(t('common.onlineHymnsImportAllFailed') || `Failed to import songs (${totalFailed} failed)`);
       }
     } catch (e: any) {
+      playSfx('error');
       setLoading(false);
       setImportAllProgress(null);
       setError(e.message || 'Failed to import songs');
@@ -333,7 +336,7 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
             {onClose && (
               <button
                 type="button"
-                onClick={onClose}
+                onClick={() => { onClose?.(); playSfx('close'); }}
                 className="p-1.5 rounded-md text-white/50 hover:text-white hover:bg-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
                 aria-label={t('common.onlineHymnsBack')}
                 title={t('common.onlineHymnsBack')}

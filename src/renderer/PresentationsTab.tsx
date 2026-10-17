@@ -1,3 +1,4 @@
+import { useListMotion } from './hooks/useListMotion';
 import { useCallback, useMemo, useState, memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as m from 'motion/react-m';
@@ -35,8 +36,6 @@ import { isLiveSavePreset, getLiveSaveRetention } from './hooks/useLiveSave';
 import DrivePanel from './components/DrivePanel';
 import Dialog from './components/Dialog';
 import { presentationContentKey } from './presentationLibrary';
-import { uiMotion } from './uiMotion';
-import { useUiMotionEnabled } from './hooks/useUiMotionEnabled';
 
 // ─── Shared action/styles (page-scoped) ────────────────────────────────────
 // All actions use the same secondary outline style for a quiet, uniform look;
@@ -76,7 +75,7 @@ const LazyAnimatedPreview = memo(function LazyAnimatedPreview({ slide }: { slide
   return (
     <div ref={ref} className="w-full h-full">
       {visible && slide ? (
-        <AnimatedPreview slide={slide} transitionType="none" duration={0} size="preview" volume={0} muted />
+        <AnimatedPreview slide={slide} transitionType="none" duration={0} size="preview" volume={0} muted isActive={false} />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center text-white/10">
           <Layers className="w-10 h-10" aria-hidden="true" />
@@ -109,7 +108,6 @@ interface PresetCardProps {
 
 const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelete, onRename }: PresetCardProps) {
   const { t, i18n } = useTranslation();
-  const uiMotionEnabled = useUiMotionEnabled();
   const [isEditing, setIsEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -126,14 +124,12 @@ const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelet
 
   return (
     <m.article
-      layout={uiMotionEnabled ? 'position' : false}
-      initial={uiMotionEnabled ? { opacity: 0, y: uiMotion.distance } : false}
-      animate={{ opacity: 1, y: 0 }}
-      exit={uiMotionEnabled ? { opacity: 0, scale: 0.98 } : { opacity: 1 }}
-      transition={{ duration: uiMotionEnabled ? uiMotion.duration.standard : 0, ease: uiMotion.ease }}
+      data-motion-item="preset"
+      data-motion-id={preset.name}
+      initial={false}
       aria-label={`${t('common.openPreset')}: ${preset.name}`}
       className={cn(
-        'group relative rounded-2xl border overflow-hidden transition-all duration-200 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none',
+        'group relative rounded-2xl border overflow-hidden transition-colors duration-[var(--ui-motion-fast,120ms)] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none',
         isLiveSave
           ? 'border-emerald-500/35 bg-emerald-500/[0.05] shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500/20'
           : isActive
@@ -439,6 +435,9 @@ export default function PresentationsTab({
     return arr.sort((a, b) => (sortOrder === 'oldest' ? a.createdAt - b.createdAt : b.createdAt - a.createdAt));
   }, [filteredPresets, sortOrder, i18n.language]);
 
+  const motionRoot = useRef<HTMLDivElement>(null);
+  useListMotion(motionRoot, sortedPresets.map(preset => preset.name), 'library', 'preset', searchQuery);
+
   const startNameEdit = () => {
     setDraftName(presentation.name);
     setIsEditingName(true);
@@ -633,7 +632,7 @@ export default function PresentationsTab({
   }, [onImportSlides, t]);
 
   return (
-    <div className="h-full bg-surface-base text-white overflow-y-auto">
+    <div ref={motionRoot} className="h-full bg-surface-base text-white overflow-y-auto">
       <header className="border-b border-white/10 bg-surface-raised">
         <div className="px-5 py-5 sm:px-6 flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -707,7 +706,7 @@ export default function PresentationsTab({
             <button type="button" onClick={() => setIsAutosaveOpen(true)} aria-haspopup="dialog" className={BTN_SECONDARY}>
               <DatabaseBackup className="w-4 h-4" aria-hidden="true" />{t('nav.autosaves')}
             </button>
-            <button ref={driveButtonRef} type="button" onClick={() => setDrivePanelOpen(true)} aria-haspopup="dialog" aria-expanded={drivePanelOpen} className={BTN_SECONDARY}>
+            <button ref={driveButtonRef} type="button" onClick={() => { setDrivePanelOpen(true); playSfx('open'); }} aria-haspopup="dialog" aria-expanded={drivePanelOpen} className={BTN_SECONDARY}>
               <Cloud className="w-4 h-4" aria-hidden="true" />Google Drive
             </button>
           </div>

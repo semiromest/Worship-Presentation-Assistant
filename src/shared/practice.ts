@@ -13,7 +13,7 @@ export const practiceExercises = ['slide-add', 'slide-reorder', 'slide-delete', 
 export type PracticeExercise = typeof practiceExercises[number];
 export const exercisePage: Record<PracticeExercise, PracticeTask> = { 'slide-add': 'slides', 'slide-reorder': 'slides', 'slide-delete': 'slides', media: 'media', 'image-edit': 'editor', 'canvas-edit': 'editor', bible: 'bible', hymns: 'hymns', countdown: 'countdown', presentations: 'presentations' };
 export interface PracticeProgress { schemaVersion: 2; runId?: string; revision: number; tasks: Partial<Record<PracticeTask, PracticeStatus>>; exercises: Partial<Record<PracticeExercise, PracticeStatus>> }
-export interface PracticeSession { id: string; exercise: PracticeExercise; baseline: string[]; target?: string; peer?: string; fingerprint?: string; importedBible?: boolean; importedMedia?: boolean; paused?: boolean; deckId?: string; saveIntent?: { sessionId: string; name: string; requestedAt: number; deck: import('../renderer/types').Presentation } }
+export interface PracticeSession { id: string; exercise: PracticeExercise; baseline: string[]; target?: string; peer?: string; fingerprint?: string; importedBible?: boolean; importedMedia?: boolean; paused?: boolean; deckId?: string; saveIntent?: { sessionId: string; name: string; requestedAt: number; deck: import('./presentation').Presentation } }
 export const guideSteps = ['welcome', 'presentations', 'sidebar', 'nav-slides', 'add', 'add-result', 'reorder', 'select', 'delete', 'delete-result',
   'nav-bible','bible-intro','bible-source','bible-import','bible-book','bible-chapter','bible-verse','bible-add',
   'bible-result','nav-media','media-intro','media-menu','media-import','media-add','media-result','image-select','image-tools','image-fit','image-grayscale','image-edit-result','nav-hymns','hymns-intro','hymns-online','hymns-author','hymns-mode','hymns-add','hymns-result','hymns-parts','hymns-font',
@@ -29,9 +29,9 @@ export function isGuideResultStep(step: GuideStep): step is GuideResultStep { re
 /** Immutable evidence produced only after main validates the actual operation. */
 export interface GuideResult extends ExerciseResult {
   runId: string; deckId: string; resourceIds: string[];
-  slides: import('../renderer/types').Slide[];
+  slides: import('./presentation').Slide[];
   beforeCount: number; afterCount: number;
-  remaining?: import('../renderer/types').Slide[];
+  remaining?: import('./presentation').Slide[];
   savedName?: string; savedAt?: number;
 }
 export interface PracticeGuide { version: 3; id: string; step: GuideStep; paused: boolean; skipped: GuideStep[]; ui?: GuideUi; result?: GuideResult; focusSlideId?: string }
@@ -47,7 +47,7 @@ export function guideTab(step: GuideStep): PracticeTask {
   return 'slides';
 }
 export function guideNarrative(step: GuideStep) { return ['welcome','presentations','sidebar','hymns-parts','hymns-font','image-tools','hymns-online','hymns-author','hymns-mode','phone-controls'].includes(step) || step.endsWith('-intro'); }
-export interface PracticeWorkspace { schemaVersion: 2; runId?: string; deck: import('../renderer/types').Presentation; active: PracticeSession | null; checkpoints?: Partial<Record<PracticeExercise, PracticeSession>>; guide: PracticeGuide }
+export interface PracticeWorkspace { schemaVersion: 2; runId?: string; deck: import('./presentation').Presentation; active: PracticeSession | null; checkpoints?: Partial<Record<PracticeExercise, PracticeSession>>; guide: PracticeGuide }
 export interface PracticeResult { task: PracticeTask; operation: 'preset-saved'; resourceId: string }
 export const exerciseOperation = { 'slide-add': 'slide-added', 'slide-reorder': 'slides-reordered', 'slide-delete': 'owned-slide-deleted', media: 'media-added', 'image-edit': 'practice-image-edited', 'canvas-edit': 'canvas-image-edited', bible: 'bible-imported-and-added', hymns: 'hymn-added', countdown: 'countdown-added', presentations: 'preset-saved' } as const;
 export interface ExerciseResult { exercise: PracticeExercise; operation: typeof exerciseOperation[PracticeExercise]; sessionId: string; resourceId: string }

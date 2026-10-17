@@ -26,6 +26,7 @@ function environment() {
 }
 async function launch(mode = 'smoke') {
   const app = await electron.launch({ executablePath: await executable(), args: ['--wpa-' + mode], env: environment() });
+  require('./teardown.cjs').trackElectron(app);
   running.push(app);
   logs.set(app, []);
   app.process().stdout?.on('data', chunk => logs.get(app)?.push(String(chunk)));
@@ -33,14 +34,15 @@ async function launch(mode = 'smoke') {
   await app.context().tracing.start({ screenshots: true, snapshots: true });
   await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false }); });
   const page = await app.firstWindow();
-  await page.locator('nav').waitFor();
+  await page.locator('[data-app-shell] > nav').waitFor();
+  if(mode==='practice') await require('./guide-flow.cjs').waitForPractice(page);
   await page.keyboard.press('Escape');
   const profile = await app.evaluate(({ app }) => app.getPath('userData'));
   if (mode === 'smoke') { smokeProfiles.push(profile); smokeBase = profile; smokeSession = await app.evaluate(() => process.env.WPA_SMOKE_SESSION); }
   if (mode === 'practice') expect(path.resolve(profile).toLowerCase().startsWith(path.resolve(smokeBase).toLowerCase() + path.sep)).toBe(true);
   return { app, page, profile };
 }
-async function close(app) { await app.context().tracing.stop().catch(() => {}); await app.close().catch(()=>{}); running = running.filter(item => item !== app); }
+async function close(app) { await app.context().tracing.stop().catch(() => {}); await require('./teardown.cjs').closeElectron(app); running = running.filter(item => item !== app); }
 async function invoke(app, channel, args = [], unauthorized = false) {
   return app.evaluate(async ({ ipcMain, BrowserWindow }, { channel, args, unauthorized }) => {
     const wc = BrowserWindow.getAllWindows()[0].webContents;
@@ -63,7 +65,7 @@ test.afterEach(async ({}, info) => {
     await fs.mkdir(info.outputDir, { recursive: true });
     await fs.writeFile(info.outputPath('process-' + running.indexOf(app) + '.log'), (logs.get(app) ?? []).join(''));
     await app.context().tracing.stop(info.status !== info.expectedStatus ? { path: info.outputPath('trace-' + running.indexOf(app) + '.zip') } : {}).catch(() => {});
-    await app.close().catch(() => {});
+    await require('./teardown.cjs').closeElectron(app);
   }
   running = [];
   for (const profile of smokeProfiles) {
@@ -77,9 +79,9 @@ test.afterEach(async ({}, info) => {
 test('packaged smoke: single help entry and no automatic tour',async()=>{
   const instance=await launch();const {page}=instance;
   expect(await instance.app.evaluate(({app})=>app.isPackaged)).toBe(true);expect(await page.evaluate(()=>'__tourTest' in window)).toBe(false);
-  await page.keyboard.press('Alt+9');await expect(page.getByTestId('practice-open')).toBeVisible();
+  await page.keyboard.press('Alt+9');await require('./guide-flow.cjs').openLearning(page);await expect(page.getByTestId('practice-open')).toBeVisible();
   for(const id of ['tour-map-open','tour-map','tour-card','page-suggestion'])await expect(page.getByTestId(id)).toHaveCount(0);
-  await page.reload();await page.locator('nav').waitFor();await expect(page.getByTestId('tour-map')).toHaveCount(0);
+  await page.reload();await page.locator('[data-app-shell] > nav').waitFor();await expect(page.getByTestId('tour-map')).toHaveCount(0);
 });
 
 test('packaged practice: language isolation, ten paused chapters, archived restart and saved close',async()=>{
@@ -102,7 +104,7 @@ test('packaged practice: language isolation, ten paused chapters, archived resta
   await page.screenshot({path:test.info().outputPath('practice-start-800x600.png')});
   await page.getByTestId('guide-resume').click();await expect(page.locator('[data-guide-step]')).toHaveAttribute('data-guide-step','presentations');
   await page.getByTestId('guide-close').click();await expect.poll(()=>page.isClosed()).toBe(true);await close(candidate.app);
-  await expect(normal.page.locator('nav')).toBeVisible();candidate=await launch('practice');
+  await expect(normal.page.locator('[data-app-shell] > nav')).toBeVisible();candidate=await launch('practice');
   await expect(candidate.page.getByTestId('guide-language')).toHaveValue('tr');await expect(candidate.page.getByTestId('guide-resume')).toBeVisible();
   expect((await candidate.page.evaluate(()=>window.electronAPI.readPracticeWorkspace(null))).runId).toBe(fresh.runId);
 });
@@ -175,18 +177,25 @@ test('practice gate: single writer, verified result, readonly progress, corrupti
   await candidate.page.getByRole('button', { name: 'Add New Slide', exact: true }).click();
   await expect(candidate.page.locator('[data-guide-step]')).toHaveAttribute('data-guide-step', 'add-result');
   await expect.poll(() => normal.page.evaluate(async () => (await window.electronAPI.getPracticeProgress()).guide.step)).toBe('add-result');
-  await normal.page.keyboard.press('Alt+9'); await expect(normal.page.getByTestId('practice-progress')).toContainText('Saved step:');
+  await normal.page.keyboard.press('Alt+9'); await require('./guide-flow.cjs').openLearning(normal.page);
+  await expect(normal.page.getByTestId('practice-open')).toBeVisible();
+  const checkpoint=await normal.page.evaluate(()=>window.electronAPI.getPracticeProgress());
+  expect(checkpoint.ok).toBe(true); expect(checkpoint.guide.step).toBe('add-result');
+  expect(checkpoint.progress.exercises['slide-add']).toBe('completed');
+  const progressBytes=await fs.readFile(path.join(candidate.profile,'practice-progress.json'),'utf8');
+  await normal.page.evaluate(()=>window.electronAPI.getPracticeProgress());
+  expect(await fs.readFile(path.join(candidate.profile,'practice-progress.json'),'utf8')).toBe(progressBytes);
   const recoveredWindow = candidate.app.waitForEvent('window');
   await candidate.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.forcefullyCrashRenderer());
   candidate.page = await recoveredWindow;
-  await candidate.page.locator('nav').waitFor();
+  await candidate.page.locator('[data-app-shell] > nav').waitFor();
   expect(await candidate.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1);
   expect((await candidate.page.evaluate(() => window.electronAPI.getPracticeProgress())).progress.exercises['slide-add']).toBe('completed');
   await close(candidate.app); candidate = await launch('practice');
   expect((await candidate.page.evaluate(() => window.electronAPI.getPracticeProgress())).guide.step).toBe('add-result');
   await fs.writeFile(path.join(candidate.profile, 'practice-progress.json'), '{broken');
-  await expect(normal.page.getByTestId('practice-progress')).toContainText('Progress could not be read');
-  await expect(normal.page.getByTestId('practice-progress')).toContainText('Saved step:');
+  await expect.poll(()=>normal.page.evaluate(()=>window.electronAPI.getPracticeProgress())).toEqual({ok:false,error:'unreadable'});
+  expect(JSON.parse(await fs.readFile(path.join(candidate.profile,'practice-workspace.json'),'utf8')).guide.step).toBe('add-result');
   expect((await invoke(candidate.app, 'practice:set-status', ['media', 'inProgress'])).ok).toBe(false);
   expect(await fs.readFile(path.join(candidate.profile, 'practice-progress.json'), 'utf8')).toBe('{broken');
 });
@@ -222,7 +231,7 @@ test('practice gate: abrupt main loss preserves progress and normal application'
     const exited = new Promise(resolve => main.once('exit', resolve)); process.kill(pid); await exited;
     // Allow Windows to finish releasing its native process-singleton handles.
     await new Promise(resolve => setTimeout(resolve, 2000));
-    await expect(normal.page.locator('nav')).toBeVisible();
+    await expect(normal.page.locator('[data-app-shell] > nav')).toBeVisible();
     const restarted = await launch('practice');
     expect((await restarted.page.evaluate(() => window.electronAPI.getPracticeProgress())).guide.step).toBe('add');
     expect(await restarted.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1);
@@ -254,7 +263,7 @@ test('guided learning: ten sections, real outcomes, Esc resume, crash and retain
   await page.screenshot({ path: test.info().outputPath('guide-add-800x600.png') });
   const before = await page.evaluate(async () => (await window.electronAPI.readPracticeWorkspace(null)).deck);
   await page.keyboard.press('Alt+3'); await page.keyboard.press('Delete'); await step('add');
-  await page.getByRole('button', { name: 'Add New Slide', exact: true }).click(); await require('./guide-flow.cjs').seeResult(page,'add-result'); await step('select');
+  await page.getByRole('button', { name: 'Add New Slide', exact: true }).click(); await require('./guide-flow.cjs').seeResult(page,'add-result'); await require('./guide-flow.cjs').finishReorder(page); await step('select');
   const selection = await page.evaluate(() => window.electronAPI.readPracticeWorkspace(null));
   await page.keyboard.press('Escape'); await expect(page.getByTestId('guide-resume')).toBeVisible();
   await expect(page.locator('[data-app-shell]')).not.toHaveAttribute('inert');
@@ -264,13 +273,14 @@ test('guided learning: ten sections, real outcomes, Esc resume, crash and retain
   const recovery = candidate.app.waitForEvent('window');
   await candidate.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.forcefullyCrashRenderer());
   page = candidate.page = await recovery;
+  await require('./guide-flow.cjs').waitForPractice(page,'select');
   await expect(page.getByTestId('guide-resume')).toBeVisible(); await page.getByTestId('guide-resume').click(); await step('select');
   expect((await page.evaluate(() => window.electronAPI.readPracticeWorkspace(null))).deck.slides.length).toBe(selection.deck.slides.length);
   await page.locator('[data-slide-id="' + selection.active.target + '"]').click(); await step('delete');
-  await page.keyboard.press('Delete'); await require('./guide-flow.cjs').seeResult(page,'delete-result'); await step('nav-bible');
+  await page.keyboard.press('Delete'); await step('nav-bible'); expect((await page.evaluate(()=>window.electronAPI.getPracticeProgress())).progress.exercises['slide-delete']).toBe('completed');
   await require('./guide-flow.cjs').finishRemaining(page, true);
   const kept = await page.evaluate(() => window.electronAPI.readPracticeWorkspace(null));
-  expect(kept.deck.slides.length).toBe(before.slides.length + 5);
+  expect(kept.deck.slides.length).toBe(before.slides.length + 6);
   expect(kept.deck.slides.some(slide => slide.id === selection.active.target)).toBe(false);
   expect(kept.guide.skipped).toEqual([]);
   await candidate.app.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows()[0]; w.unmaximize(); w.setSize(800, 600); });
@@ -279,13 +289,19 @@ test('guided learning: ten sections, real outcomes, Esc resume, crash and retain
   expect((await candidate.page.evaluate(() => window.electronAPI.readPracticeWorkspace(null))).deck).toEqual(kept.deck);
   expect(await normal.page.evaluate(() => window.electronAPI.loadPresets())).toEqual(normalPresets);
   await normal.page.keyboard.press('Alt+9');
-  await expect(normal.page.getByTestId('guide-results')).toContainText('Completed: 8');
+  await require('./guide-flow.cjs').openLearning(normal.page);
+  await expect(normal.page.getByTestId('practice-open')).toBeVisible();
+  const completed=await normal.page.evaluate(()=>window.electronAPI.getPracticeProgress());
+  expect(completed.ok).toBe(true); expect(Object.keys(completed.progress.exercises)).toHaveLength(10);
+  expect(Object.values(completed.progress.exercises)).toEqual(Array(10).fill('completed'));
   expect((await normal.page.evaluate(() => window.electronAPI.getPracticeProgress())).guide.step).toBe('done');
   expect(await candidate.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1);
   await candidate.page.getByTestId('guide-restart').click();
   await expect(candidate.page.locator('[data-guide-step]')).toHaveAttribute('data-guide-step','welcome');
   const fresh=await candidate.page.evaluate(()=>window.electronAPI.readPracticeWorkspace(null));expect(fresh.runId).not.toBe(kept.runId);expect(fresh.deck.slides).toEqual([]);
-  await expect(normal.page.getByTestId('guide-results')).toContainText('Completed: 0');
+  await expect.poll(()=>normal.page.evaluate(async()=>{
+    const value=await window.electronAPI.getPracticeProgress();return value.ok ? value.progress.exercises : null;
+  })).toEqual({});
   expect((await candidate.page.evaluate(()=>window.electronAPI.loadPresets())).some(p=>p.presentation.id===kept.deck.id)).toBe(true);
   await candidate.app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].close());
   await expect.poll(()=>candidate.page.isClosed()).toBe(true);

@@ -1,3 +1,4 @@
+import type { ElectronAPI } from '../shared/electronApi';
 import { contextBridge, ipcRenderer } from 'electron';
 import { PerfBuffer, estimatePayloadBytes, defaultPerfEnabled } from '../shared/perf';
 import type { SttConfig } from '../shared/stt';
@@ -11,10 +12,10 @@ preloadPerf.enabled = defaultPerfEnabled();
 
 type AnyFn = (...args: any[]) => any;
 
-function wrapApi(api: Record<string, AnyFn>): Record<string, AnyFn> {
+function wrapApi<T extends Record<string, AnyFn>>(api: T): T & Pick<ElectronAPI, 'getPerfSnapshot' | 'getPreloadPerfSnapshot' | 'resetPerf'> {
   const wrapped: Record<string, AnyFn> = {};
   for (const [name, fn] of Object.entries(api)) {
-    if (name.startsWith('on')) {
+    if (name.startsWith('on') || ['sttSendAudio', 'sharePublish', 'screenShareFrame', 'notifyProjectorReady'].includes(name)) {
       // Event subscriptions return an unsubscribe function, not a promise.
       wrapped[name] = fn;
       continue;
@@ -42,12 +43,15 @@ function wrapApi(api: Record<string, AnyFn>): Record<string, AnyFn> {
       }
     };
   }
-  wrapped.getPerfSnapshot = () => preloadPerf.snapshot();
+  wrapped.getPreloadPerfSnapshot = () => preloadPerf.snapshot();
+  wrapped.getPerfSnapshot = wrapped.getPreloadPerfSnapshot;
   wrapped.resetPerf = () => preloadPerf.reset();
-  return wrapped;
+  return wrapped as T & Pick<ElectronAPI, 'getPerfSnapshot' | 'getPreloadPerfSnapshot' | 'resetPerf'>;
 }
 
-contextBridge.exposeInMainWorld('electronAPI', wrapApi({
+const api = {
+  getMainPerfSnapshot: () => ipcRenderer.invoke('perf:snapshot'),
+  resetMainPerf: () => ipcRenderer.invoke('perf:reset'),
   generateGradient: (recipe: unknown, regions: unknown) => ipcRenderer.invoke('gradient:generate', recipe, regions),
   saveGradient: (token: string) => ipcRenderer.invoke('gradient:save', token),
   discardGradient: () => ipcRenderer.invoke('gradient:discard'),
@@ -137,7 +141,7 @@ contextBridge.exposeInMainWorld('electronAPI', wrapApi({
   getScreenSources: () => ipcRenderer.invoke('get-screen-sources'),
   captureScreenSource: (sourceId: string) => ipcRenderer.invoke('capture-screen-source', sourceId),
   selectAudioFolder: () => ipcRenderer.invoke('select-audio-folder'),
-  youtubeMusicSearch: (query: string) => ipcRenderer.invoke('youtube-music:search', query),
+  youtubeMusicSearch: (query: string, cursor?: string) => ipcRenderer.invoke('youtube-music:search', query, cursor),
   youtubeMusicPlay: (id: string) => ipcRenderer.invoke('youtube-music:play', id),
   youtubeMusicPrepare: (id: string) => ipcRenderer.invoke('youtube-music:prepare', id),
   youtubeMusicStop: (streamId?: string) => ipcRenderer.invoke('youtube-music:stop', streamId),
@@ -274,4 +278,6 @@ contextBridge.exposeInMainWorld('electronAPI', wrapApi({
     ipcRenderer.on('screen-share:network-changed', subscription);
     return () => ipcRenderer.removeListener('screen-share:network-changed', subscription);
   },
-}));
+} satisfies Omit<ElectronAPI, 'getPerfSnapshot' | 'getPreloadPerfSnapshot' | 'resetPerf'>;
+
+contextBridge.exposeInMainWorld('electronAPI', wrapApi(api));

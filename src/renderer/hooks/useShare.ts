@@ -69,9 +69,7 @@ export function useShare(): { startShare: () => Promise<void>; stopShare: () => 
   const activeRef = useRef(useStore.getState().shareActive);
 
   useEffect(() => {
-    const unsub = useStore.subscribe((s) => {
-      activeRef.current = s.shareActive;
-    });
+    const unsub = useStore.subscribe(s => s.shareActive, active => { activeRef.current = active; });
     return unsub;
   }, [practice]);
 
@@ -87,7 +85,7 @@ export function useShare(): { startShare: () => Promise<void>; stopShare: () => 
       }, 80);
     };
     const unsub = useSttStore.subscribe(publish);
-    const offMotion = useStore.subscribe((state, before) => { if (state.uiMotionEnabled !== before.uiMotionEnabled) publish(); });
+    const offMotion = useStore.subscribe(state => state.uiMotionEnabled, publish);
     publish();
     return () => { unsub(); offMotion(); clearTimeout(timer); };
   }, []);

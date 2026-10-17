@@ -1068,6 +1068,13 @@
     "flip": "Umdrehen"
   },
   "watermark": {
+    "unsupportedFormat": "Nicht unterstütztes Dateiformat. PNG, JPG oder SVG auswählen.",
+    "fileTooLarge": "Die Datei ist zu groß. Maximale Größe: 2 MB.",
+    "uploadSuccess": "Logo erfolgreich hochgeladen.",
+    "uploadError": "Das Logo konnte nicht hochgeladen werden.",
+    "requireLogo": "Zuerst ein Logo hochladen.",
+    "collapse": "Logoeinstellungen einklappen",
+    "expand": "Logoeinstellungen ausklappen",
     "title": "Logo-Wasserzeichen",
     "uploadLogo": "Logo hochladen",
     "replaceLogo": "Logo ersetzen",
@@ -1103,6 +1110,9 @@
     "updateDownloadedBadge": "Update heruntergeladen – Neustart zum Anwenden"
   },
   "settings": {
+    "youtubeLoadMore": "Mehr laden",
+    "youtubeSearchingMore": "Weitere Ergebnisse werden geladen…",
+    "youtubeSearchExpired": "Diese Suchergebnisse sind abgelaufen. Bitte erneut suchen.",
     "youtubeAddMusicSlide": "Musikfolie hinzufügen",
     "youtubeMusicSlideLabel": "Musik · YouTube",
     "youtubeMusicSlideHint": "Eine Musikfolie spielt, sobald sie live geschaltet wird, und stoppt beim Folienwechsel. Internet ist erforderlich. Wähle für TV-Ton HDMI/deinen Fernseher als Windows-Audioausgabe.",
@@ -1122,6 +1132,8 @@
     "retention30d": "30 Tage",
     "liveSaveLastSaved": "Zuletzt gespeichert: {{time}}",
     "liveSaveEmpty": "Keine automatische Sicherung vorhanden.",
+    "muteSfxDuringLive": "Soundeffekte bei Live-Ausgabe stummschalten",
+    "muteSfxDuringLiveDesc": "Schaltet Oberflächentöne stumm, solange eine Projektions- oder Bühnenausgabe geöffnet ist. Medien und Musik bleiben unverändert.",
     "soundEffects": "Soundeffekte",
     "backgroundMusic": "Hintergrundmusik",
     "backgroundMusicDesc": "Musik aus einem ausgewählten Ordner in der App abspielen.",
@@ -1250,20 +1262,25 @@
     "screenSlide": "🖥 Live-Bildschirm"
   },
   "prepCheck": {
+    "stale": "Inhalt geändert; Prüfung steht aus…",
+    "completed": "Prüfung abgeschlossen",
+    "slideErrors": "{{count}} Problem(e), darunter Fehler. Folienbericht öffnen.",
+    "slideWarnings": "{{count}} Warnung(en). Folienbericht öffnen.",
+    "severity": {"error":"Fehler","warning":"Warnung"},
     "title": "Vorbereitungsprüfung",
     "button": "Prüfung",
     "allClear": "Alles bereit",
     "allClearHint": "Keine Lesbarkeits- oder fehlende Medienprobleme gefunden.",
     "summary": "{{count}} Folie(n) brauchen möglicherweise Aufmerksamkeit, bevor Sie live gehen.",
     "issue": {
+      "duplicateSlide": "Diese Folie scheint mit der vorherigen identisch zu sein.",
       "emptyText": "Diese Textfolie ist leer.",
-      "longTextSmallFont": "Langer Text: für bessere Lesbarkeit Vers/Text teilen.",
+      "longTextSmallFont": "Geschätztes Risiko: langer Text sollte eventuell geteilt werden. Kein gemessener Überlauf.",
       "missingImage": "Für diese Bildfolie ist kein Bild ausgewählt.",
       "missingVideo": "Für diese Videofolie ist kein Video ausgewählt.",
       "emptyLoop": "Diese Schleifenfolie hat keine Elemente.",
       "emptyPart": "Ein Liedabschnitt ist leer.",
       "onlineResource": "Medium benötigt Internet; für Offline-Nutzung lokale Datei verwenden.",
-      "safeMargin": "Text liegt zu nah am sicheren Rand.",
       "inaccessibleMedia": "Mediendatei fehlt oder ist nicht lesbar.",
       "fontUnavailable": "Schriftart nicht offline verfügbar; andere Schrift wählen oder Verbindung prüfen.",
       "textOverflow": "Text passt nicht in den Bereich. Vers/Text teilen oder Schrift verkleinern."
@@ -1295,6 +1312,9 @@
     "confirmNew": "Neue Präsentation starten? Aktuelle Arbeit vorher in der Bibliothek speichern."
   },
   "sections": {
+    "includeSelectedSlides": "Ausgewählte Folien in den neuen Abschnitt verschieben ({{count}})",
+    "time": "Abschnittszeit",
+    "timeHint": "Uhrzeit eingeben (z. B. 10:30). Mit Enter speichern; zum Entfernen leeren.",
     "title": "Gottesdienstabschnitte",
     "description": "Folien in einklappbaren Abschnitten organisieren; Ausschalten behält alle Inhalte.",
     "none": "Ohne Abschnitt",
@@ -1442,7 +1462,8 @@
         "body": "Ziehe die hervorgehobene Beispielfolie auf die andere hervorgehobene Folie. Die Übung endet, sobald sich die Positionen tatsächlich ändern."
       },
       "canvas-edit": {
-        "title": "Bild im Folieneditor bearbeiten"
+        "title": "Bild im Folieneditor bearbeiten",
+        "body": "Wähle das Beispielbild im Folieneditor aus, drehe es um 15 Grad und speichere die Änderung."
       }
     }
   },

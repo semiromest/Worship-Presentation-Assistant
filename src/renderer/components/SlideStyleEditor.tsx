@@ -1,3 +1,6 @@
+import UiMenu from './UiMenu';
+import { AnimatePresence } from 'motion/react';
+import { playSfx } from '../sfx';
 import { HexColorPicker } from 'react-colorful';
 import { GradientButton } from './GradientGenerator';
 import { applyGeneratedBackground } from '../gradientBackground';
@@ -9,6 +12,8 @@ import { cn } from '../utils';
 import type { Slide } from '../types';
 import { FONT_PRESETS } from '../editor/editorUtils';
 import { loadGoogleFont } from '../fontLoader';
+import { SettingSlider } from './SettingsControls';
+import { backgroundDim } from '../musicCustomization';
 
 interface SlideStyleEditorProps {
   selectedSlide: Slide;
@@ -79,6 +84,7 @@ export default function SlideStyleEditor({
             <button
               onClick={() => {
                 const next = !partsMode;
+                playSfx(next ? 'toggle-on' : 'toggle-off');
                 if (!next) {
                   updateSlideProperty(selectedSlide.id, { partsMode: next, content: parts.join('\n\n') });
                 } else {
@@ -109,7 +115,7 @@ export default function SlideStyleEditor({
               {parts.map((part, idx) => (
                 <button
                   key={idx}
-                  onClick={() => setActivePart(idx)}
+                  onClick={() => { if ((selectedSlide.activePart ?? 0) !== idx) { setActivePart(idx); playSfx('forward'); } }}
                   className={cn(
                     'w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-lg text-[10px] transition-colors',
                     idx === activePart
@@ -200,7 +206,7 @@ export default function SlideStyleEditor({
         <div className="flex items-center gap-2">
           <input
             type="color"
-            value={selectedSlide.styles?.textHighlight && selectedSlide.styles.textHighlight !== 'transparent' ? selectedSlide.styles.textHighlight : '#ffff00'}
+            value={selectedSlide.styles?.textHighlight && selectedSlide.styles?.textHighlight !== 'transparent' ? selectedSlide.styles?.textHighlight : '#ffff00'}
             onChange={(e) => updateSlideStyles({ textHighlight: e.target.value })}
             className="h-[30px] w-10 cursor-pointer rounded-lg border border-white/10 bg-transparent"
             aria-label={t('common.editorTextHighlight')}
@@ -234,7 +240,7 @@ export default function SlideStyleEditor({
           onChange={(e) => {
             const val = e.target.value === 'inherit' ? undefined : e.target.value;
             if (val) loadGoogleFont(val);
-            updateSlideStyles({ fontFamily: val });
+            if (val !== selectedSlide.styles?.fontFamily) { updateSlideStyles({ fontFamily: val }); playSfx('press'); }
           }}
           className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-xs focus-visible:border-blue-500/60 focus-visible:outline-none transition-colors"
         >
@@ -262,7 +268,7 @@ export default function SlideStyleEditor({
             <button
               key={value}
               type="button"
-              onClick={() => updateSlideStyles({ textAlign: value })}
+              onClick={() => { if (selectedSlide.styles?.textAlign !== value) { updateSlideStyles({ textAlign: value }); playSfx('snap'); } }}
               aria-label={
                 value === 'left'
                   ? t('common.editorAlignLeft')
@@ -299,7 +305,7 @@ export default function SlideStyleEditor({
             <button
               key={value}
               type="button"
-              onClick={() => updateSlideStyles({ verticalAlign: value })}
+              onClick={() => { if (selectedSlide.styles?.verticalAlign !== value) { updateSlideStyles({ verticalAlign: value }); playSfx('snap'); } }}
               aria-label={
                 value === 'top'
                   ? t('common.editorAlignTop')
@@ -336,7 +342,7 @@ export default function SlideStyleEditor({
             <button
               key={value}
               type="button"
-              onClick={() => updateSlideStyles({ textTransform: value })}
+              onClick={() => { if (selectedSlide.styles?.textTransform !== value) { updateSlideStyles({ textTransform: value }); playSfx('snap'); } }}
               aria-label={
                 value === 'none'
                   ? 'None'
@@ -372,7 +378,7 @@ export default function SlideStyleEditor({
           <ImageIcon className="w-3.5 h-3.5" aria-hidden="true" />
           {t('common.image')}
         </button>
-        {selectedSlide.styles?.backgroundImage && (
+        {!selectedSlide.youtubeMusic && selectedSlide.styles?.backgroundImage && (
           <button
             onClick={removeSlideBackgroundImage}
             className="p-2 rounded-lg bg-red-600/20 text-red-400 border border-red-500/20 hover:bg-red-600/30 transition-colors"
@@ -414,10 +420,25 @@ export default function SlideStyleEditor({
           current.dispatchUndo({ type: 'SET', payload: applyGeneratedBackground(current.presentation, ids, image, recipe, groupDefault) });
         }} />
 
+      {/* Music slides use the dim control in MusicSlideEditor. */}
+      {!selectedSlide.youtubeMusic && selectedSlide.styles?.backgroundImage && (
+        <div className="pt-2">
+          <SettingSlider
+            id="background-dim"
+            label={t('musicSlide.dim')}
+            value={Math.round(backgroundDim(selectedSlide.styles.backgroundDim) * 100)}
+            min={0}
+            max={80}
+            suffix="%"
+            onChange={(v) => updateSlideStyles({ backgroundDim: v / 100 })}
+          />
+        </div>
+      )}
+
       {/* Apply to All Dropdown */}
       <div className="relative apply-styles-dropdown">
         <button
-          onClick={() => setPanels((p) => ({ ...p, styles: !p.styles }))}
+          onClick={() => { setPanels(p => ({ ...p, styles: !p.styles })); playSfx(panels.styles ? 'close' : 'open'); }}
           aria-label={t('common.applyToAll')}
           className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-[11px] font-semibold text-white/70 hover:bg-white/10 transition-[background-color] active:scale-[0.97] group"
         >
@@ -433,8 +454,8 @@ export default function SlideStyleEditor({
             )}
           />
         </button>
-        {panels.styles && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
+        <AnimatePresence initial={false}>{panels.styles && (
+          <UiMenu className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
             {[
               {
                 label: t('common.applyBackgroundImage'),
@@ -476,8 +497,8 @@ export default function SlideStyleEditor({
                 {item.label}
               </button>
             ))}
-          </div>
-        )}
+          </UiMenu>
+        )}</AnimatePresence>
       </div>
 
       <div className="space-y-2">

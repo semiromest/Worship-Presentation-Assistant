@@ -1,3 +1,4 @@
+import { playSfx } from '../sfx';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Smartphone, Wrench, CheckCircle2, X, AlertTriangle, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
@@ -49,7 +50,7 @@ export default function RemoteControlModal() {
   return (
     <Dialog
       open={isRemoteOpen}
-      onClose={() => setIsRemoteOpen(false)}
+      onClose={() => { setIsRemoteOpen(false); playSfx('close'); }}
       labelledBy="remote-modal-title"
       className="bg-surface-overlay border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl"
     >
@@ -59,7 +60,7 @@ export default function RemoteControlModal() {
           {t('common.remoteTitle')}
         </h2>
         <button
-          onClick={() => setIsRemoteOpen(false)}
+          onClick={() => { setIsRemoteOpen(false); playSfx('close'); }}
           aria-label={t('common.close')}
           className="p-1 rounded hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
         >

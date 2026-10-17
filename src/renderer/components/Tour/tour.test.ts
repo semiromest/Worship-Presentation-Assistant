@@ -1,4 +1,4 @@
-import { guideSteps, practiceExercises } from '../../../shared/practice';
+import { visibleGuideSteps, practiceExercises } from '../../../shared/practice';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -37,7 +37,7 @@ test('five unique steps and map labels resolve in all five languages', () => {
     const resolve = (key: string) => key.split('.').reduce((node, part) => node?.[part], locale);
     for (const step of TOUR_STEPS) for (const field of ['title', 'body']) assert.equal(typeof resolve(`tour.steps.${step.id}.${field}`), 'string');
     for (const exercise of practiceExercises) for (const field of ['title', 'body']) assert.equal(typeof resolve('practice.exercise.' + exercise + '.' + field), 'string');
-    for (const step of guideSteps) for (const field of ['title','body']) assert.equal(typeof resolve(`guide.steps.${step}.${field}`), 'string');
+    for (const step of visibleGuideSteps) for (const field of ['title','body']) assert.equal(typeof resolve(`guide.steps.${step}.${field}`), 'string');
     for (const key of ['title','description','begin','resume','next','exit','waiting','unavailable','retry','skip','advanced','error','finished','finishedSkipped']) assert.equal(typeof resolve(`guide.${key}`), 'string');
     for (const item of TOUR_MAP) {
       assert.equal(typeof resolve(`nav.${item.id}`), 'string');

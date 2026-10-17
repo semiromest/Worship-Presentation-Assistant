@@ -6,7 +6,7 @@ import os from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { createPracticeWorkspace, exerciseSucceeded, sampleVerse, validateGuide } from './practiceWorkspace';
 import { createProgressStore, parseProgress } from './practiceProgress';
-import type { Presentation } from '../renderer/types';
+import type { Presentation } from '../shared/presentation';
 import { guideChapters, practiceTasks } from '../shared/practice';
 import { recoverPracticeReset } from './practiceReset';
 import { mergePracticeObservation } from '../shared/practiceMerge';
@@ -23,7 +23,8 @@ test('paused chapter destinations work, intermediate steps are denied, and backw
   const progress=createProgressStore(dir),engine=createPracticeWorkspace(dir,progress);let value=await engine.read(seed);
   const input=()=>({deck:value.deck,tab:'slides',selected:[]});
   await assert.rejects(engine.guide(value.guide.id,value.guide.step,'jump',input(),'Sample','select'));
-  for(const page of practiceTasks){value=await engine.guide(value.guide.id,value.guide.step,'jump',input(),'Sample',guideChapters[page]);assert.equal(value.guide.step,guideChapters[page]);assert.equal(value.guide.paused,true);assert.deepEqual(value.deck.slides,seed.slides);}
+  for(const page of practiceTasks){value=await engine.guide(value.guide.id,value.guide.step,'jump',input(),'Sample',guideChapters[page]);assert.equal(value.guide.step,guideChapters[page]);assert.equal(value.guide.paused,true);assert.deepEqual(value.deck.slides.filter(slide=>slide.id==='keep'),seed.slides);
+    if(page==='editor') { assert.equal(value.active?.exercise,'canvas-edit'); assert.equal(value.deck.slides.at(-1)?.items?.[0].rotation,0); }}
   value=await engine.guide(value.guide.id,value.guide.step,'jump',input(),'Sample','add');
   value=await engine.guide(value.guide.id,value.guide.step,'resume',input(),'Sample');
   await assert.rejects(engine.guide(value.guide.id,value.guide.step,'jump',input(),'Sample','presentations'));
@@ -83,6 +84,10 @@ test('expanded guide requires actual sample results, resumes transient menus and
         value=await engine.guide(value.guide.id,value.guide.step,'jump',{deck:value.deck,tab:'bible',selected:[],ui:{}},'Sample',entry);
         value=await engine.guide(value.guide.id,value.guide.step,'resume',{deck:value.deck,tab:'bible',selected:[],ui:{}},'Sample');
         value=await engine.guide(value.guide.id,value.guide.step,'next',{deck:value.deck,tab:'bible',selected:[],ui:{}},'Sample');
+        if(destination==='save') {
+          assert.equal(value.guide.step,'phone-controls');
+          value=await engine.guide(value.guide.id,value.guide.step,'next',{deck:value.deck,tab:'settings',selected:[],ui:{}},'Sample');
+        }
         if(destination==='save')value=await engine.guide(value.guide.id,value.guide.step,'observe',{deck:value.deck,tab:'presentations',selected:[],ui:{}},'Sample');
         return;
       }
@@ -139,7 +144,10 @@ test('independent exercises detect outcomes, preserve changes, skip and ignore s
     const reopened = await createPracticeWorkspace(dir, progress).read(seed);
     assert.deepEqual(reopened.deck, removed);
     const state = await progress.read(); if (!state.ok) throw new Error('Unreadable');
-    assert.equal(state.progress.tasks.slides, 'completed'); assert.equal(state.progress.exercises.media, 'skipped');
+    assert.equal(state.progress.tasks.slides, 'inProgress');
+    assert.equal(state.progress.exercises['slide-add'], 'completed');
+    assert.equal(state.progress.exercises['slide-delete'], 'completed');
+    assert.equal(state.progress.exercises['slide-reorder'], undefined); assert.equal(state.progress.exercises.media, 'skipped');
     assert.equal(state.progress.schemaVersion, 2);
   } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });
@@ -191,7 +199,9 @@ test('guided sequence requires actual outcomes, rejects stale steps and resumes 
     await assert.rejects(command('next'));
     const id = value.guide.id;
     const next = { ...value.deck, slides: [...value.deck.slides, { id: 'added-guided', type: 'text' as const, content: 'Added' }] };
-    await command('observe', input(next, 'slides')); assert.equal(value.guide.step, 'add-result'); assert.equal(value.deck.slides.length,2); await command('next'); assert.equal(value.guide.step,'select');
+    await command('observe', input(next, 'slides')); assert.equal(value.guide.step, 'add-result'); assert.equal(value.deck.slides.length,2); await command('next'); assert.equal(value.guide.step,'reorder');
+    const reordered=[...value.deck.slides]; [reordered[1],reordered[2]]=[reordered[2],reordered[1]];
+    await command('observe',input({...value.deck,slides:reordered},'slides')); assert.equal(value.guide.step,'select');
     const target = value.active!.target;
     assert.equal(value.deck.slides.length, 3);
     await command('pause', input(value.deck, 'slides'));
@@ -201,7 +211,7 @@ test('guided sequence requires actual outcomes, rejects stale steps and resumes 
     assert.equal(value.active!.target, target); assert.equal(value.deck.slides.length, 3);
     await command('observe', input(value.deck, 'slides', [target!])); assert.equal(value.guide.step, 'delete');
     const removed = { ...value.deck, slides: value.deck.slides.filter(slide => slide.id !== target) };
-    await command('observe', input(removed, 'slides', [])); assert.equal(value.guide.step, 'delete-result'); assert.equal(value.guide.result?.slides[0].id,target); await command('next'); assert.equal(value.guide.step,'nav-bible');
+    await command('observe', input(removed, 'slides', [])); assert.equal(value.guide.step,'nav-bible'); assert.equal(value.guide.result,undefined);
     assert.deepEqual(value.deck.slides.map(slide => slide.id), ['keep','added-guided']);
     assert.equal(value.guide.skipped.length, 0);
     const status = await progress.read(); assert.ok(status.ok && status.progress.exercises['slide-delete'] === 'completed');
@@ -249,13 +259,15 @@ test('resume validates before rotating ID and reconciles interrupted deck/result
   value.deck.slides.push({id:'crash-added',type:'text',content:'Keep this'} as Presentation['slides'][number]);
   await fs.writeFile(path.join(dir,'practice-workspace.json'),JSON.stringify(value));
   engine=createPracticeWorkspace(dir,progress);value=await engine.read(seed);
-  value=await engine.guide(value.guide.id,value.guide.step,'resume',input(),'Sample');assert.equal(value.guide.step,'add-result');value=await engine.guide(value.guide.id,value.guide.step,'next',input(),'Sample');assert.equal(value.guide.step,'select');
+  value=await engine.guide(value.guide.id,value.guide.step,'resume',input(),'Sample');assert.equal(value.guide.step,'add-result');value=await engine.guide(value.guide.id,value.guide.step,'next',input(),'Sample');assert.equal(value.guide.step,'reorder');
+  const reordered=[...value.deck.slides];[reordered[1],reordered[2]]=[reordered[2],reordered[1]];
+  value=await engine.guide(value.guide.id,value.guide.step,'observe',input({...value.deck,slides:reordered}),'Sample');assert.equal(value.guide.step,'select');
   const sample=value.active!.target;
   value=await engine.guide(value.guide.id,value.guide.step,'observe',{...input(),selected:[sample!]},'Sample');assert.equal(value.guide.step,'delete');
   value.deck.slides=value.deck.slides.filter(slide=>slide.id!==sample);
   await fs.writeFile(path.join(dir,'practice-workspace.json'),JSON.stringify(value));
   engine=createPracticeWorkspace(dir,progress);value=await engine.read(seed);
-  value=await engine.guide(value.guide.id,value.guide.step,'resume',input(),'Sample');assert.equal(value.guide.step,'delete-result');value=await engine.guide(value.guide.id,value.guide.step,'next',input(),'Sample');assert.equal(value.guide.step,'nav-bible');
+  value=await engine.guide(value.guide.id,value.guide.step,'resume',input(),'Sample');assert.equal(value.guide.step,'nav-bible');assert.equal(value.guide.result,undefined);
   assert.deepEqual(value.deck.slides.map(slide=>slide.id),['keep','crash-added']);
  }finally{await fs.rm(dir,{recursive:true,force:true});}
 });

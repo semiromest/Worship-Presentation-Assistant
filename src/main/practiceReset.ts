@@ -3,7 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { assertNoLinks } from './launchPolicy';
 import { parseProgress } from './practiceProgress';
-import { validateGuide, validatePracticeDeck } from './practiceWorkspace';
+import { validateGuide, validatePracticeDeck } from './practiceValidation';
 import type { PracticeWorkspace, PracticeProgress } from '../shared/practice';
 
 export const resetFile = (profile: string) => path.join(profile, 'practice-reset.json');

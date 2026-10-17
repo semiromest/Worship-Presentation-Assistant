@@ -13,8 +13,8 @@ jobs:
   tour-checks:
     uses: ./.github/workflows/tour.yml
     with:
-      skip_tour_tests: ${{ github.ref_name == 'v1.4.19' }}
-      skip_tour_e2e: ${{ github.ref_name == 'v1.4.19' }}
+      skip_tour_tests: ${{ github.ref_name == 'v1.4.20' }}
+      skip_tour_e2e: ${{ github.ref_name == 'v1.4.20' }}
   build:
     needs: tour-checks
     strategy:

@@ -1,82 +1,87 @@
-import { usePractice } from '../hooks/usePractice';
-import { isHelpActive } from '../components/Tour/tourController';
-import { newVideoOverlay } from '../videoOverlays';
-import VideoEditor from './VideoEditor';
-import { editorFilterTarget, filteredEditorSlides, isEditorEditableSlide, isVideoEditableSlide } from './slideCapabilities';
-import { SlidePreviewAny } from '../components/SlidePreview';
-import { isItemEditableSlide } from './slideDraft';
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import {
-  X,
-  Trash2,
-  Move,
-  Copy,
-  Lock,
-  Unlock,
-  Layers,
-  Image,
-  Type,
-  Palette,
-  Save,
-  RotateCw,
-  LayoutTemplate,
-  Group,
-  Ungroup,
-  Undo2,
-  Redo2,
-  ChevronRight,
-  ClipboardCheck,
-  Paintbrush,
-  Layers2,
-  PanelLeftOpen,
-  PanelRightOpen,
-  Keyboard,
+ChevronRight,
+Copy,
+Group,
+Image,
+Keyboard,
+Layers,
+Layers2,
+LayoutTemplate,
+Lock,
+Move,
+Paintbrush,
+Palette,
+PanelLeftOpen,
+PanelRightOpen,
+Redo2,
+RotateCw,
+Save,
+Trash2,
+Type,
+Undo2,
+Ungroup,
+Unlock,
+X
 } from 'lucide-react';
+import * as m from 'motion/react-m';
+import { useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState,type ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Presentation, Slide, SlideItem } from '../types';
-import { cn } from '../utils';
-import { confirmDialog, alertDialog } from '../dialogs';
-import { getLiveSaveRetention } from '../hooks/useLiveSave';
 import { choiceDialog } from '../choiceDialogState';
+import { GradientButton } from '../components/GradientGenerator';
+import { SlidePreviewAny } from '../components/SlidePreview';
+import { isHelpActive } from '../components/Tour/tourController';
+import { setComponentInert } from '../components/Tour/guideBoundary';
+import { alertDialog,confirmDialog } from '../dialogs';
+import { generatedStyles } from '../gradientBackground';
+import { useContentMotion } from '../hooks/useContentMotion';
+import { useImageSize } from '../hooks/useImageSize';
+import { getLiveSaveRetention } from '../hooks/useLiveSave';
+import { usePractice } from '../hooks/usePractice';
+import { useUiMotionEnabled } from '../hooks/useUiMotionEnabled';
+import { playSfx } from '../sfx';
 import { useStore } from '../state/useStore';
-import { registerEditorGuard } from './editorSessionGuard';
-import { findEditorConflicts } from './editorConflicts';
-import {
-  makeItemId,
-  normalizeItems,
-  deleteItems,
-  duplicateItems,
-  swapLayer,
-  toggleVisibility,
-  toggleLock,
-  clamp,
-  deleteItemAt,
-  duplicateItem,
-  DEFAULT_TEXT_STYLE,
-} from './editorUtils';
-import { useKeyboardShortcuts } from './keyboardShortcuts';
+import type { Presentation,Slide,SlideItem } from '../types';
+import { uiMotion } from '../uiMotion';
+import { cn } from '../utils';
+import { newVideoOverlay } from '../videoOverlays';
+import { AlignmentTools } from './AlignmentTools';
+import { sizeFromCenter,type ItemBounds } from './canvasGeometry';
 import { CanvasStage } from './CanvasStage';
-import { TextStyleEditor } from './styleEditors/TextStyleEditor';
-import { ImageStyleEditor } from './styleEditors/ImageStyleEditor';
+import { findEditorConflicts } from './editorConflicts';
+import { ClipboardChip,PanelShell,ScopeSelector } from './EditorControls';
+import EditorPasteMenu,{ type PasteMenuContext } from './EditorPasteMenu';
+import { registerEditorGuard } from './editorSessionGuard';
+import EditorSlideRail,{ RAIL_COLLAPSED_WIDTH,RAIL_WIDTH } from './EditorSlideRail';
+import {
+DEFAULT_TEXT_STYLE,
+clamp,
+deleteItemAt,
+deleteItems,
+duplicateItem,
+duplicateItems,
+isEditableTarget,
+makeItemId,
+normalizeItems,
+swapLayer,
+toggleLock,
+toggleVisibility,
+} from './editorUtils';
+import { writeElementDrag } from './elementDrag';
+import { createGroup,ungroupGroup } from './groupUtils';
+import { ImageCropDialog } from './ImageCropDialog';
+import { replaceImage,restoreImageRatio } from './imageOperations';
+import { useKeyboardShortcuts } from './keyboardShortcuts';
 import { LayerPanel } from './panels/LayerPanel';
 import { SlideSettingsPanel } from './panels/SlideSettingsPanel';
-import { GradientButton } from '../components/GradientGenerator';
-import { generatedStyles } from '../gradientBackground';
-import { AlignmentTools } from './AlignmentTools';
+import { editorFilterTarget,filteredEditorSlides,isEditorEditableSlide,isVideoEditableSlide } from './slideCapabilities';
+import { isItemEditableSlide,makeClipboard,type SlideDraft } from './slideDraft';
 import { SlideTemplates } from './SlideTemplates';
+import { ImageStyleEditor } from './styleEditors/ImageStyleEditor';
+import { TextStyleEditor } from './styleEditors/TextStyleEditor';
 import { applyTemplate } from './templates';
-import { createGroup, ungroupGroup } from './groupUtils';
-import EditorSlideRail, { RAIL_COLLAPSED_WIDTH, RAIL_WIDTH } from './EditorSlideRail';
-import EditorPasteMenu, { type PasteMenuContext } from './EditorPasteMenu';
-import { useEditorDeck, type EditScope, type EditorClipboard, type EditorNotice } from './useEditorDeck';
-import { makeClipboard, type SlideDraft } from './slideDraft';
-import { isEditableTarget } from './editorUtils';
-import { writeElementDrag } from './elementDrag';
-import { sizeFromCenter, type ItemBounds } from './canvasGeometry';
-import { ImageCropDialog } from './ImageCropDialog';
-import { useImageSize } from '../hooks/useImageSize';
-import { replaceImage, restoreImageRatio } from './imageOperations';
+import { useEditorDeck,type EditScope,type EditorClipboard,type EditorNotice } from './useEditorDeck';
 import { finishEditorGesture } from './usePointerGesture';
+import VideoEditor from './VideoEditor';
 
 interface SlideEditorProps {
   /** Slide the editor opens on. */
@@ -93,134 +98,6 @@ interface SlideEditorProps {
 type InspectorTab = 'item' | 'slide' | 'layers';
 
 const RAIL_STORAGE_KEY = 'editorRailCollapsed';
-
-const PanelShell = memo(function PanelShell({
-  title,
-  icon: Icon,
-  children,
-  className,
-  actions,
-}: {
-  title: string;
-  icon: ComponentType<{ className?: string }>;
-  children: ReactNode;
-  className?: string;
-  actions?: ReactNode;
-}) {
-  return (
-    <div className={cn('space-y-3 rounded-2xl border border-white/10 bg-[#1a1a1a] p-4 shadow-sm', className)}>
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-white/80">
-          <Icon className="h-4 w-4 shrink-0" />
-          <span className="truncate">{title}</span>
-        </div>
-        {actions}
-      </div>
-      {children}
-    </div>
-  );
-});
-
-/**
- * Scope control: the single place that decides whether an edit lands on the
- * working slide only or on every selected slide. It only appears when there is
- * more than one slide selected, and it always defaults to the safe option.
- */
-const ScopeSelector = memo(function ScopeSelector({
-  scope,
-  selectedCount,
-  slideCount,
-  onChange,
-}: {
-  scope: EditScope;
-  selectedCount: number;
-  slideCount: number;
-  onChange: (scope: EditScope) => void;
-}) {
-  const { t } = useTranslation();
-  if (selectedCount <= 1) return null;
-  return (
-    <div className="space-y-1">
-      <div
-        role="radiogroup"
-        aria-label={t('common.editorScopeLabel')}
-        className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-black/25 p-1"
-      >
-        {[
-          { value: 'active' as const, label: t('common.editorScopeActive') },
-          { value: 'selected' as const, label: t('common.editorScopeSelected', { count: selectedCount }) },
-        ].map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            role="radio"
-            aria-checked={scope === option.value}
-            onClick={() => onChange(option.value)}
-            className={cn(
-              'rounded-lg px-2 py-1.5 text-[11px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
-              scope === option.value
-                ? 'bg-blue-600/30 text-blue-100'
-                : 'text-white/55 hover:bg-white/5 hover:text-white/80'
-            )}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-      {scope === 'selected' && (
-        <p
-          role="status"
-          className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-100"
-        >
-          {t('common.editorScopeNotice', { count: Math.min(selectedCount, slideCount) })}
-        </p>
-      )}
-    </div>
-  );
-});
-
-/** Clipboard status + the one-click "apply to the other selected slides". */
-const ClipboardChip = memo(function ClipboardChip({
-  clipboard,
-  targetCount,
-  onApply,
-  onClear,
-}: {
-  clipboard: EditorClipboard;
-  targetCount: number;
-  onApply: () => void;
-  onClear: () => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-white/70">
-      <ClipboardCheck className="h-3.5 w-3.5 text-blue-300" aria-hidden="true" />
-      <span className="truncate">
-        {t('common.editorClipboardLabel')}:{' '}
-        <strong className="font-medium text-white/85">{t(clipboard.labelKey)}</strong>
-        {clipboard.items.length > 1 && ` · ${clipboard.items.length}`}
-      </span>
-      {targetCount > 0 && (
-        <button
-          type="button"
-          onClick={onApply}
-          className="rounded-lg border border-blue-500/30 bg-blue-600/25 px-2 py-1 text-[11px] font-medium text-blue-100 transition hover:bg-blue-600/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-        >
-          {t('common.editorApplyToSelected', { count: targetCount })}
-        </button>
-      )}
-      <button
-        type="button"
-        onClick={onClear}
-        aria-label={t('common.editorClearClipboard')}
-        title={t('common.editorClearClipboard')}
-        className="rounded p-0.5 text-white/40 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-      >
-        <X className="h-3 w-3" aria-hidden="true" />
-      </button>
-    </div>
-  );
-});
 
 export default function SlideEditor({ slide, deck, active, onSave, onClose, onOpenInSlides }: SlideEditorProps) {
   const { t } = useTranslation();
@@ -305,6 +182,18 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
     if (!active || !inspectorOpen) return;
     inspectorRef.current?.querySelector<HTMLElement>('[role=tab][aria-selected=true]')?.focus();
   }, [active, inspectorOpen]);
+  const inspectorContentRef = useRef<HTMLDivElement>(null);
+  const motionEnabled = useUiMotionEnabled();
+  const [desktopInspector, setDesktopInspector] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
+  useEffect(() => {
+    const query = window.matchMedia('(min-width: 1024px)');
+    const update = () => setDesktopInspector(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  const inspectorVisible = inspectorOpen || desktopInspector;
+  useLayoutEffect(() => { if (inspectorRef.current) setComponentInert(inspectorRef.current, !active || !inspectorVisible); }, [active, inspectorVisible, editable]);
+  useContentMotion(inspectorContentRef, tab);
   const closeInspector = () => {
     setInspectorOpen(false);
     inspectorToggleRef.current?.focus();
@@ -596,6 +485,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
       session.updateItems(normalizeItems([...items, ...templateItems]));
       session.setItemSelection(new Set(templateItems.map((item) => item.id)));
       setShowTemplates(false);
+      playSfx('success');
     },
     [items, session]
   );
@@ -735,7 +625,10 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
           !skipped.has(id) && checked.get(id) !== JSON.stringify(latest.slides.find((candidate) => candidate.id === id)));
       }
       const payload = current.buildSavePayload(latest);
-      if (payload) onSave(payload.slides.filter((candidate) => current.touchedIds.has(candidate.id) && !skipped.has(candidate.id)));
+      if (payload) {
+        const changed = payload.slides.filter(candidate => current.touchedIds.has(candidate.id) && !skipped.has(candidate.id));
+        if (changed.length) { onSave(changed); playSfx('success'); }
+      }
       current.reset(useStore.getState().presentation, current.activeId);
       useStore.getState().setEditorDirty(false);
       return true;
@@ -970,7 +863,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
               aria-label={t('common.editorInspector')}
               aria-expanded={inspectorOpen}
               aria-controls="editor-inspector"
-              onClick={() => setInspectorOpen(!inspectorOpen)}
+              onClick={() => { setInspectorOpen(!inspectorOpen); playSfx(inspectorOpen ? 'close' : 'open'); }}
             >
               <PanelRightOpen className="h-5 w-5" aria-hidden="true" />
             </button>
@@ -1199,6 +1092,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
             id="editor-inspector"
             ref={inspectorRef}
             aria-label={t('common.editorInspector')}
+            aria-hidden={!active || !inspectorVisible}
             onKeyDown={(event) => {
               if (event.key === 'Escape' && inspectorOpen) {
                 event.stopPropagation();
@@ -1206,8 +1100,8 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
               }
             }}
             className={cn(
-              'absolute inset-y-0 right-0 z-40 w-80 max-w-[calc(100%_-_40px)] shrink-0 flex-col overflow-hidden border-l border-white/10 bg-[#181818] lg:static lg:flex lg:max-w-none',
-              inspectorOpen ? 'flex' : 'hidden'
+              'absolute inset-y-0 right-0 z-40 flex w-80 max-w-[calc(100%_-_40px)] shrink-0 flex-col overflow-hidden border-l border-white/10 bg-[#181818] lg:static lg:max-w-none lg:translate-x-0 transition-[transform,opacity] duration-[var(--ui-motion-standard,180ms)] ease-[var(--ui-motion-ease)]',
+              inspectorVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'
             )}
           >
             <button
@@ -1250,12 +1144,13 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                     document.getElementById('editor-tab-' + inspectorTabs[next].id)?.focus();
                   }}
                   aria-selected={tab === id}
-                  onClick={() => setTab(id)}
+                  onClick={() => { if (id !== tab) { setTab(id); playSfx('swipe'); } }}
                   className={cn(
-                    'flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[11px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
-                    tab === id ? 'bg-blue-600/25 text-blue-100' : 'text-white/55 hover:bg-white/5 hover:text-white/80'
+                    'relative isolate flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[11px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+                    tab === id ? 'text-blue-100' : 'text-white/55 hover:bg-white/5 hover:text-white/80'
                   )}
                 >
+                  {tab === id && <m.span layoutId="editor-inspector-tab" className="pointer-events-none absolute inset-0 -z-10 rounded-lg bg-blue-600/25" transition={{ duration: motionEnabled ? uiMotion.duration.fast : 0, ease: uiMotion.ease }} />}
                   <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                   <span className="truncate">{label}</span>
                 </button>
@@ -1264,6 +1159,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
 
             <div
               className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3"
+              ref={inspectorContentRef}
               id="editor-inspector-panel"
               role="tabpanel"
               aria-labelledby={'editor-tab-' + tab}

@@ -62,7 +62,12 @@ export default function RightPanel({
   onClose,
 }: RightPanelProps) {
   const { t } = useTranslation();
-  const presentation = useStore((s) => s.presentation);
+  const slideCount = useStore(s => s.presentation.slides.length);
+  const transition = useStore(s => s.presentation.transition);
+  const selectedSlide = useStore(s => s.presentation.slides.find(slide => slide.id === s.selectedSlideId));
+  const selectedSlideIndex = useStore(s => s.presentation.slides.findIndex(slide => slide.id === s.selectedSlideId));
+  const liveSlide = useStore(s => s.presentation.slides[s.liveIndex] ?? s.presentation.slides[0]);
+  const isBroadcastLocked = useStore(s => s.presentation.slides.some(slide => slide.locked));
   const liveIndex = useStore((s) => s.liveIndex);
   const setLiveIndex = useStore((s) => s.setLiveIndex);
   const isBlackout = useStore((s) => s.isBlackout);
@@ -91,14 +96,10 @@ export default function RightPanel({
     setComponentInert(panel, !isRightPanelOpen);
   }, [isRightPanelOpen]);
 
-  const transitionType = presentation.transition?.type ?? DEFAULT__TRANSITION.type;
-  const transitionDuration = presentation.transition?.duration ?? DEFAULT__TRANSITION.duration;
+  const transitionType = transition?.type ?? DEFAULT__TRANSITION.type;
+  const transitionDuration = transition?.duration ?? DEFAULT__TRANSITION.duration;
 
-  const selectedSlide = presentation.slides.find((s) => s.id === selectedSlideId);
-  const selectedSlideIndex = presentation.slides.findIndex((s) => s.id === selectedSlideId);
-  const liveSlide = presentation.slides[liveIndex] ?? presentation.slides[0];
   // Broadcast lock state: single lock, pins the live output to one slide.
-  const isBroadcastLocked = presentation.slides.some((s) => s.locked);
   const selectedSlideLocked = selectedSlide?.locked === true;
   const q = searchQuery.trim().toLowerCase();
   const selectedHidden = !!q && !!selectedSlide && !(
@@ -127,7 +128,7 @@ export default function RightPanel({
         'fixed top-0 right-0 h-full z-50 w-[380px] max-w-[85vw]',
         'lg:relative lg:top-auto lg:right-auto lg:z-auto lg:max-w-none lg:h-full',
         'border-l border-white/10 bg-surface flex flex-col overflow-hidden flex-shrink-0',
-        'transition-[transform,width,opacity,border-color] duration-200 ease-out',
+        'transition-[transform,width,opacity,border-color] duration-[var(--ui-motion-standard,180ms)] ease-[var(--ui-motion-ease)]',
         isRightPanelOpen
           ? 'translate-x-0 lg:w-[380px] lg:opacity-100'
           : 'translate-x-full lg:translate-x-0 lg:w-0 lg:opacity-0 lg:border-transparent',
@@ -136,14 +137,14 @@ export default function RightPanel({
       <div className="h-full w-[380px] max-w-[85vw] lg:max-w-none flex-1 overflow-y-auto overflow-x-hidden">
         {/* Live preview — animated (TOP) */}
         <div className="bg-black aspect-video relative group">
-          <AnimatedPreview
+          {isRightPanelOpen && <AnimatedPreview
             slide={liveSlide}
             transitionType={transitionType}
             duration={transitionDuration}
             size="preview"
             volume={0}
             muted={true}
-          />
+          />}
 
           {/* Overlay Info */}
           <div className="absolute top-0 left-0 right-0 p-3 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
@@ -154,7 +155,7 @@ export default function RightPanel({
                 </span>
               </div>
               <span className="text-[10px] font-mono font-bold bg-black/60 px-2 py-0.5 rounded border border-white/20">
-                {liveIndex + 1}/{presentation.slides.length}
+                {liveIndex + 1}/{slideCount}
               </span>
             </div>
           </div>
@@ -203,11 +204,11 @@ export default function RightPanel({
                 <ChevronLeft className="w-4 h-4" aria-hidden="true" />
               </button>
               <span className="text-xs font-mono font-bold w-12 text-center tabular-nums" aria-live="polite" aria-atomic="true">
-                {liveIndex + 1} / {presentation.slides.length}
+                {liveIndex + 1} / {slideCount}
               </span>
               <button
-                onClick={() => setLiveIndex((p) => Math.min(presentation.slides.length - 1, p + 1))}
-                disabled={liveIndex === presentation.slides.length - 1 || isBroadcastLocked}
+                onClick={() => setLiveIndex((p) => Math.min(slideCount - 1, p + 1))}
+                disabled={liveIndex === slideCount - 1 || isBroadcastLocked}
                 title={isBroadcastLocked ? t('common.slideLockActiveHint') : t('common.nextSlide')}
                 aria-label={t('common.nextSlide')}
                 className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-30 transition-[background-color,border-color,opacity] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92] disabled:active:scale-100"
@@ -240,7 +241,7 @@ export default function RightPanel({
             </button>
             <button
               onClick={() => {
-                const idx = getSlideIndex(presentation.slides, selectedSlideId);
+                const idx = getSlideIndex(useStore.getState().presentation.slides, selectedSlideId);
                 if (idx >= 0 && !isBroadcastLocked) {
                   setLiveIndex(idx);
                   playSfx('start');
@@ -360,7 +361,7 @@ export default function RightPanel({
                 </button>
                 <button
                   onClick={() => moveSelectedSlide(1)}
-                  disabled={sectionOrderRestricted || selectedSlideIndex === presentation.slides.length - 1}
+                  disabled={sectionOrderRestricted || selectedSlideIndex === slideCount - 1}
                   className="p-1.5 rounded-lg bg-white/5 text-white hover:bg-white/10 disabled:opacity-20 border border-white/10 transition-colors"
                   aria-label={t('common.moveDown')}
                 >
@@ -381,7 +382,7 @@ export default function RightPanel({
           </div>
 
           <div className="space-y-4">
-            {selectedSlide?.youtubeMusic && <MusicSlideEditor slide={selectedSlide} onPatch={updateSlideProperty} />}
+            {selectedSlide?.youtubeMusic && <MusicSlideEditor key={selectedSlide.id} slide={selectedSlide} onPatch={updateSlideProperty} />}
             {selectedSlide?.type === 'text' && !selectedSlide.items?.length ? (
               <SlideStyleEditor
                 selectedSlide={selectedSlide}
@@ -553,7 +554,7 @@ function CaptionsSlideEditor({
               <button
                 key={value}
                 type="button"
-                onClick={() => setLayout(value)}
+                onClick={() => { if (value !== layout) { setLayout(value); playSfx('snap'); } }}
                 aria-pressed={layout === value}
                 className={cn(
                   'rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none',
@@ -666,6 +667,7 @@ function LoopEditor({
 
   const removeItem = (itemId: string) => {
     updateLoopItems(slide.id, items.filter((it) => it.id !== itemId));
+    playSfx('delete');
   };
 
   const moveItem = (index: number, direction: -1 | 1) => {
@@ -675,6 +677,7 @@ function LoopEditor({
     const [moved] = next.splice(index, 1);
     next.splice(target, 0, moved);
     updateLoopItems(slide.id, next);
+    playSfx('reorder');
   };
 
   const addMedia = async () => {
@@ -689,6 +692,7 @@ function LoopEditor({
       duration: 5000,
     }));
     updateLoopItems(slide.id, [...items, ...newItems]);
+    playSfx('complete');
   };
 
   const totalSec = Math.round(items.reduce((acc, i) => acc + i.duration, 0) / 1000);

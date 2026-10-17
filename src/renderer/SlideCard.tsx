@@ -1,9 +1,12 @@
+import { playSfx } from './sfx';
 import { RangeVideo } from './components/RangeVideo';
 import { VideoOverlayLayer } from './components/VideoOverlayLayer';
 import { MediaPoster } from './components/MediaPoster';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ListOrdered, Play, Square, Lock } from 'lucide-react';
+import { ListOrdered, Play, Square, Lock, AlertTriangle, AlertCircle } from 'lucide-react';
+import { usePreparationStore } from './state/usePreparationStore';
+import { useStore } from './state/useStore';
 import type { Slide } from './types';
 import { cn } from './utils';
 import { resolveCanvasSource } from './canvasSource';
@@ -19,7 +22,7 @@ interface SlideCardProps {
   isSelected: boolean;
   isLive: boolean;
   onClick: (id: string, index: number, e?: React.MouseEvent) => void;
-  onDoubleClick?: (id: string, index: number) => void;
+  onDoubleClick?: (id: string, index: number, nativeDoubleClick?: boolean) => void;
   onDragStart?: (id: string, index: number) => void;
   onDragOver?: (id: string, index: number) => void;
   onDragEnd?: () => void;
@@ -67,6 +70,7 @@ const VideoPreview = memo(({ thumbnailUrl, objectFit, mediaUrl, playback, slideI
 }) => {
   const { t } = useTranslation();
   const [playing, setPlaying] = useState(false);
+  const previewPlayPending = useRef(false);
   const [position, setPosition] = useState(playback?.startSeconds ?? 0);
 
   if (playing && mediaUrl) {
@@ -79,13 +83,15 @@ const VideoPreview = memo(({ thumbnailUrl, objectFit, mediaUrl, playback, slideI
           autoplay
           muted
           onPosition={overlays?.length ? setPosition : undefined}
+          onPlayingChange={active => { if (active && previewPlayPending.current) { previewPlayPending.current = false; playSfx('play'); } }}
+          onError={() => { if (previewPlayPending.current) { previewPlayPending.current = false; playSfx('error'); } }}
           className={cn('w-full h-full', objectFit === 'cover' ? 'object-cover' : 'object-contain')}
         />
         <VideoOverlayLayer overlays={overlays} position={position} />
         {/* Stop button is its own control: clicks elsewhere on the slide still select it. */}
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); setPlaying(false); }}
+          onClick={(e) => { e.stopPropagation(); previewPlayPending.current = false; setPlaying(false); playSfx('stop'); }}
           className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-black/70 ring-1 ring-white/25 flex items-center justify-center shadow-lg hover:bg-black/85 transition-colors"
           aria-label={t('common.stopVideo')}
         >
@@ -102,7 +108,7 @@ const VideoPreview = memo(({ thumbnailUrl, objectFit, mediaUrl, playback, slideI
       {/* Play button is its own control: clicks elsewhere on the slide still select it. */}
       <button
         type="button"
-        onClick={(e) => { e.stopPropagation(); if (mediaUrl) setPlaying(true); }}
+        onClick={(e) => { e.stopPropagation(); if (mediaUrl) { previewPlayPending.current = true; setPlaying(true); } }}
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/85 hover:bg-white flex items-center justify-center shadow-lg transition-colors"
         aria-label={t('common.playVideo')}
       >
@@ -304,6 +310,32 @@ const LockBadge = memo(() => {
 
 LockBadge.displayName = 'LockBadge';
 
+const PreparationBadge = memo(({ slideId }: { slideId: string }) => {
+  const { t } = useTranslation();
+  const result = usePreparationStore(state => state.results.find(result => result.slideId === slideId));
+  if (!result) return null;
+  const error = result.issues.some(issue => issue.severity === 'error');
+  const Icon = error ? AlertCircle : AlertTriangle;
+  const label = t(error ? 'prepCheck.slideErrors' : 'prepCheck.slideWarnings', { count: result.issues.length });
+  return (
+    <button type="button" draggable={false} aria-label={label} title={label}
+      data-preparation-badge={slideId}
+      className={`absolute bottom-2 right-2 z-20 flex items-center gap-1 rounded-md px-2 py-1 text-xs shadow-md focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none ${error ? 'bg-red-600 text-white' : 'bg-amber-400 text-black'}`}
+      onMouseDown={event => event.stopPropagation()}
+      onKeyDown={event => event.stopPropagation()}
+      onDoubleClick={event => event.stopPropagation()}
+      onClick={event => {
+        event.stopPropagation();
+        usePreparationStore.setState({ focusedSlideId: slideId });
+        useStore.getState().setIsPrepCheckOpen(true);
+      }}>
+      <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+      {result.issues.length}
+    </button>
+  );
+});
+PreparationBadge.displayName = 'PreparationBadge';
+
 // Main SlideCard component
 export const SlideCard = memo(({
   slide,
@@ -327,7 +359,7 @@ export const SlideCard = memo(({
   }, [onClick, slide.id, index]);
 
   const handleDoubleClick = useCallback(() => {
-    onDoubleClick?.(slide.id, index);
+    onDoubleClick?.(slide.id, index, true);
   }, [onDoubleClick, slide.id, index]);
 
   const handleDragStart = useCallback((e: React.DragEvent) => {
@@ -356,7 +388,7 @@ export const SlideCard = memo(({
 
   const groupColor = slide.group?.color;
   const cardClassName = useMemo(() => cn(
-    'relative rounded-xl border text-left transition-[border-color,box-shadow,background-color,opacity] overflow-hidden bg-white/5 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.98]',
+    'ui-selection-surface relative rounded-xl border text-left transition-[border-color,box-shadow,background-color,opacity] overflow-hidden bg-white/5 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.98]',
     isSelected && 'border-blue-500 shadow-[0_0_0_2px_rgba(59,130,246,0.6)]',
     !isSelected && !isLive && 'border-white/10',
     isLive && 'live-border-pulse',
@@ -386,6 +418,7 @@ export const SlideCard = memo(({
     >
       <SlideBadges slide={slide} index={index} isSelected={isSelected} isLive={isLive} />
       {slide.locked && <LockBadge />}
+      <PreparationBadge slideId={slide.id} />
 
       <div className="aspect-video bg-black flex items-center justify-center overflow-hidden">
         <SlideContent slide={slide} cardWidth={cardWidth} />

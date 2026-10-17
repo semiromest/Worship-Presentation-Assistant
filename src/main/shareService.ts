@@ -1,3 +1,4 @@
+import { newToken, tokenMatches, queryToken } from './shareTransport';
 /**
  * Phone captions/translation share service.
  *
@@ -51,25 +52,6 @@ let clientCountListener: ((count: number) => void) | null = null;
 
 export function setClientCountListener(listener: ((count: number) => void) | null): void {
   clientCountListener = listener;
-}
-
-function newToken(): string {
-  return crypto.randomBytes(32).toString('base64url');
-}
-
-function tokenMatches(provided: string | null | undefined): boolean {
-  if (!active.token || !provided) return false;
-  const a = Buffer.from(active.token);
-  const b = Buffer.from(provided);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
-}
-
-function queryToken(url: string | undefined): string | null {
-  try {
-    return new URL(url ?? '/', 'http://localhost').searchParams.get('token');
-  } catch {
-    return null;
-  }
 }
 
 function buildUrl(): string {
@@ -165,7 +147,7 @@ export function getShareStatus(): ShareStatus {
  */
 export function handleShareHttp(req: IncomingMessage, res: ServerResponse): boolean {
   const token = queryToken(req.url);
-  if (!active.token || !tokenMatches(token)) {
+  if (!active.token || !tokenMatches(active.token, token)) {
     res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
     res.end('<!DOCTYPE html><html><body style="background:#000;color:#d6e8ff;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><p>Broadcast ended or invalid link.</p></body></html>');
     return true;
@@ -184,7 +166,7 @@ export function handleShareConnection(client: WsSocket, req: IncomingMessage): b
   if (!url.startsWith('/share')) return false;
 
   const token = queryToken(url);
-  if (!active.token || !tokenMatches(token)) {
+  if (!active.token || !tokenMatches(active.token, token)) {
     // Invalid/expired token — reject before any data is exchanged.
     try { client.close(1008, 'Invalid or expired token'); } catch { /* ignore */ }
     return true;

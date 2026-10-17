@@ -1,3 +1,4 @@
+import { calculateFit, calculateCover, wrapCanvasText, canvasTypography, canvasLinePlacement } from '../../shared/canvasLayout';
 /**
  * Heavy-work UtilityProcess entry (Phase 7).
  *
@@ -109,29 +110,6 @@ function fillFallbackText(
   ctx.fillText(text, W / 2, H / 2, W - 24);
 }
 
-function calculateFit(imgW: number, imgH: number, canvasW: number, canvasH: number) {
-  const imgAr = imgW / imgH;
-  const cAr = canvasW / canvasH;
-  if (imgAr > cAr) {
-    const dh = canvasW / imgAr;
-    return { dx: 0, dy: (canvasH - dh) / 2, dw: canvasW, dh };
-  }
-  const dw = canvasH * imgAr;
-  const dh = canvasH;
-  return { dx: (canvasW - dw) / 2, dy: 0, dw, dh };
-}
-
-function calculateCover(imgW: number, imgH: number, canvasW: number, canvasH: number) {
-  const imgAr = imgW / imgH;
-  const cAr = canvasW / canvasH;
-  if (imgAr > cAr) {
-    const sw = imgH * cAr;
-    return { sx: (imgW - sw) / 2, sy: 0, sw, sh: imgH };
-  }
-  const sh = imgW / cAr;
-  return { sx: 0, sy: (imgH - sh) / 2, sw: imgW, sh };
-}
-
 function drawImageSafe(ctx: any, img: any, fit: 'contain' | 'cover', W: number, H: number): void {
   if (!img || img.width === 0 || img.height === 0) return;
   const iw = img.width;
@@ -145,25 +123,6 @@ function drawImageSafe(ctx: any, img: any, fit: 'contain' | 'cover', W: number, 
   }
 }
 
-function wrapCanvasText(ctx: any, text: string, maxWidth: number): string[] {
-  const lines: string[] = [];
-  for (const paragraph of text.split('\n')) {
-    if (paragraph.trim().length === 0) { lines.push(''); continue; }
-    const words = paragraph.split(/\s+/).filter(Boolean);
-    let current = '';
-    for (const word of words) {
-      const candidate = current ? `${current} ${word}` : word;
-      if (current && ctx.measureText(candidate).width > maxWidth) {
-        lines.push(current);
-        current = word;
-      } else {
-        current = candidate;
-      }
-    }
-    if (current) lines.push(current);
-  }
-  return lines;
-}
 
 async function renderTextSlide(ctx: any, slide: ThumbSlideData, W: number, H: number): Promise<boolean> {
   if (slide.items?.length) return false;
@@ -181,23 +140,12 @@ async function renderTextSlide(ctx: any, slide: ThumbSlideData, W: number, H: nu
   const displayContent = getSlideDisplayContent(slide);
   if (!displayContent) return true;
 
-  const ff = styles.fontFamily && styles.fontFamily !== 'inherit'
-    ? styles.fontFamily.split(',')[0].trim() : 'sans-serif';
-  const baseScale = W / 1920;
-  const fontSize = Math.max(8, (styles.fontSize || 48) * baseScale);
-  const fontWeight = styles.fontWeight || 'bold';
-  const fontStyle = styles.fontStyle || 'normal';
-  const textAlign = styles.textAlign || 'center';
-  const verticalAlign = styles.verticalAlign || 'center';
-  const lineHeight = (styles.lineHeight ?? 1.3) * fontSize;
-  const padding = 20 * baseScale;
-  const textTransform = styles.textTransform || 'none';
-
+  const typography = canvasTypography(styles, W, 8);
+  const { lineHeight, padding, textAlign } = typography;
   let text = displayContent;
-  if (textTransform === 'uppercase') text = text.toUpperCase();
-  else if (textTransform === 'lowercase') text = text.toLowerCase();
-
-  ctx.font = `${fontStyle === 'italic' ? 'italic ' : ''}${fontWeight} ${fontSize}px ${ff}`;
+  if (styles.textTransform === 'uppercase') text = text.toUpperCase();
+  else if (styles.textTransform === 'lowercase') text = text.toLowerCase();
+  ctx.font = typography.font;
   ctx.fillStyle = styles.textColor || '#ffffff';
   ctx.textBaseline = 'top';
 
@@ -205,18 +153,8 @@ async function renderTextSlide(ctx: any, slide: ThumbSlideData, W: number, H: nu
   const lines = wrapCanvasText(ctx, text, maxWidth);
   if (lines.length === 0) return true;
 
-  const totalH = lines.length * lineHeight;
-  let startY: number;
-  if (verticalAlign === 'top') startY = padding;
-  else if (verticalAlign === 'bottom') startY = H - padding - totalH;
-  else startY = (H - totalH) / 2;
-
-  if (textAlign === 'left') ctx.textAlign = 'left';
-  else if (textAlign === 'right') ctx.textAlign = 'right';
-  else ctx.textAlign = 'center';
-  const x = textAlign === 'center' ? W / 2 : textAlign === 'right' ? W - padding : padding;
-
-  const leading = (lineHeight - fontSize) / 2;
+  const { startY, x, leading } = canvasLinePlacement(typography, lines.length, W, H);
+  ctx.textAlign = textAlign === 'left' || textAlign === 'right' ? textAlign : 'center';
   for (let i = 0; i < lines.length; i++) {
     const y = startY + i * lineHeight + leading;
     if (y + lineHeight < 0 || y > H) continue;

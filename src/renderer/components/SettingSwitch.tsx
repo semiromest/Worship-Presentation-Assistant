@@ -1,3 +1,4 @@
+import { playSfx } from '../sfx';
 import { Switch } from '@base-ui/react/switch';
 import { cn } from '../utils';
 
@@ -17,7 +18,7 @@ export default function SettingSwitch({
   return (
     <Switch.Root
       checked={checked}
-      onCheckedChange={onCheckedChange}
+      onCheckedChange={(next) => { if (next === checked) return; onCheckedChange(next); playSfx(next ? 'toggle-on' : 'toggle-off'); }}
       aria-label={label}
       nativeButton
       render={<button type="button" />}

@@ -301,7 +301,7 @@ const [loading, setLoading] = useState(false);
   return (
     <Dialog
       open={drivePanelOpen}
-      onClose={() => setDrivePanelOpen(false)}
+      onClose={() => { setDrivePanelOpen(false); playSfx('close'); }}
       labelledBy="drive-dialog-title"
       returnFocus={returnFocus}
       className="flex flex-col w-[calc(100%-2rem)] max-w-[640px] max-h-[calc(100dvh-2rem)] overflow-hidden rounded-2xl border border-white/10 bg-surface-overlay shadow-2xl"
@@ -316,7 +316,7 @@ const [loading, setLoading] = useState(false);
           </h2>
           <button
             type="button"
-            onClick={() => setDrivePanelOpen(false)}
+            onClick={() => { setDrivePanelOpen(false); playSfx('close'); }}
             className="flex items-center gap-1.5 px-2.5 h-7 rounded-lg text-xs text-white/40 hover:text-white/70 hover:bg-white/5 transition-[color,background-color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50"
             aria-label="Drive panelini kapat"
           >

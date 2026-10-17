@@ -1,3 +1,4 @@
+import { playSfx } from '../sfx';
 import { usePractice } from '../hooks/usePractice';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
@@ -15,7 +16,7 @@ export default function CheatsheetModal() {
   return (
     <Dialog
       open={isCheatsheetOpen}
-      onClose={() => setIsCheatsheetOpen(false)}
+      onClose={() => { setIsCheatsheetOpen(false); playSfx('close'); }}
       labelledBy="cheatsheet-title"
       className="bg-surface-overlay border border-white/10 rounded-2xl p-6 max-w-2xl w-full mx-4 shadow-2xl max-h-[85vh] overflow-y-auto"
     >
@@ -29,7 +30,7 @@ export default function CheatsheetModal() {
           {t('common.cheatsheet.title')}
         </h2>
         <button
-          onClick={() => setIsCheatsheetOpen(false)}
+          onClick={() => { setIsCheatsheetOpen(false); playSfx('close'); }}
           aria-label={t('common.cheatsheet.close')}
           className="p-1 rounded hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
         >

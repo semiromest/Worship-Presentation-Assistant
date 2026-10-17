@@ -137,7 +137,7 @@ html[data-ui-motion='off'] *:not([data-slide-transition])::after {
    closing elements mounted until their ending transition has completed. */
 .base-dialog-backdrop {
   opacity: 1;
-  transition: opacity 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: opacity var(--ui-motion-fast, 120ms) var(--ui-motion-ease, ease-out);
 }
 
 .base-dialog-backdrop[data-starting-style],
@@ -150,8 +150,8 @@ html[data-ui-motion='off'] *:not([data-slide-transition])::after {
   transform: translate(-50%, -50%) scale(1);
   transform-origin: center;
   transition:
-    opacity 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    opacity var(--ui-motion-standard, 180ms) var(--ui-motion-ease, ease-out),
+    transform var(--ui-motion-standard, 180ms) var(--ui-motion-ease, ease-out);
 }
 
 .base-dialog-popup[data-starting-style],
@@ -164,8 +164,8 @@ html[data-ui-motion='off'] *:not([data-slide-transition])::after {
   opacity: 1;
   transform: translateY(0) scale(1);
   transition:
-    opacity 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    opacity var(--ui-motion-standard, 180ms) var(--ui-motion-ease, ease-out),
+    transform var(--ui-motion-standard, 180ms) var(--ui-motion-ease, ease-out);
 }
 
 .base-popover-popup[data-starting-style],
@@ -191,7 +191,7 @@ html[data-ui-motion='off'] *:not([data-slide-transition])::after {
 
 .base-setting-switch-thumb {
   transform: translateX(4px);
-  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform var(--ui-motion-standard, 180ms) var(--ui-motion-ease, ease-out);
 }
 
 .base-setting-switch-thumb[data-checked] {
@@ -203,7 +203,7 @@ html[data-ui-motion='off'] *:not([data-slide-transition])::after {
   opacity: 1;
   overflow: hidden;
   transition:
-    height 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    height var(--ui-motion-standard, 180ms) var(--ui-motion-ease, ease-out),
     opacity 140ms ease;
 }
 
@@ -296,4 +296,44 @@ h1, h2, h3, h4, h5, h6,
 .media-card:has(.bg-amber-500) {
   /* selected state — no hover transition needed */
   transition: none;
+}
+
+/* Control-window motion only. No selector here reaches projected slides. */
+@keyframes uiFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes uiMenuIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes uiMarkIn { from { opacity: 0; scale: 0.75; } to { opacity: 1; scale: 1; } }
+@keyframes uiItemAdded { from { box-shadow: 0 0 0 2px rgb(96 165 250 / .6); } to { box-shadow: 0 0 0 2px transparent; } }
+@keyframes uiErrorBorder { from { box-shadow: 0 0 0 2px rgb(248 113 113 / .45); } to { box-shadow: 0 0 0 2px transparent; } }
+@keyframes uiCalendarNext { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes uiCalendarPrevious { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+[data-app-shell] .ui-fade-enter { animation: uiFadeIn var(--ui-motion-fast, 120ms) var(--ui-motion-ease, ease-out); }
+[data-app-shell] .ui-menu-enter { animation: uiMenuIn var(--ui-motion-standard, 180ms) var(--ui-motion-ease, ease-out); }
+[data-app-shell] .ui-choice-mark,
+[data-app-shell] .ui-control-icon { display: inline-flex; animation: uiMarkIn var(--ui-motion-fast, 120ms) var(--ui-motion-ease, ease-out); }
+[data-app-shell] .ui-item-added { animation: uiItemAdded var(--ui-motion-emphasized, 220ms) ease-out; }
+[data-app-shell] [role='alert'] { animation: uiErrorBorder var(--ui-motion-emphasized, 220ms) ease-out; }
+[data-app-shell] [role='status'] > svg:not(.animate-spin),
+[data-app-shell] [role='status'] > span > svg:not(.animate-spin) { animation: uiMarkIn var(--ui-motion-fast, 120ms) ease-out; }
+[data-app-shell] .ui-calendar-next { animation: uiCalendarNext var(--ui-motion-standard, 180ms) var(--ui-motion-ease, ease-out); }
+[data-app-shell] .ui-calendar-previous { animation: uiCalendarPrevious var(--ui-motion-standard, 180ms) var(--ui-motion-ease, ease-out); }
+[data-app-shell] .ui-calendar-static { animation: uiFadeIn var(--ui-motion-fast, 120ms) ease-out; }
+[data-app-shell] .ui-selection-surface { transition: background-color var(--ui-motion-fast, 120ms), border-color var(--ui-motion-fast, 120ms), box-shadow var(--ui-motion-fast, 120ms); }
+[data-app-shell] button:not(:disabled):not([aria-disabled='true']):not([data-slide-id]):not([data-testid='right-panel-opener']) { transition-property: background-color, border-color, color, box-shadow, opacity, scale; transition-duration: var(--ui-motion-fast, 120ms); }
+[data-app-shell] button:not(:disabled):not([aria-disabled='true']):not([data-slide-id]):active { scale: .98; }
+.ui-removal-shell { position: fixed; z-index: 90; pointer-events: none; overflow: hidden; border: 1px solid rgb(255 255 255 / .15); border-radius: 12px; padding: 12px; background: #181818; color: rgb(255 255 255 / .6); font-size: 12px; }
+/* Explicitly disable individual transforms as well as CSS/JS transitions. */
+html[data-ui-motion='off'] [data-app-shell] button { scale: 1 !important; }
+html[data-ui-motion='off'] .ui-removal-shell { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  [data-app-shell] button { scale: 1 !important; }
+  .ui-removal-shell { display: none; }
+}
+
+[data-app-shell] [aria-invalid='true'] { animation: uiErrorBorder var(--ui-motion-emphasized, 220ms) ease-out; }
+
+/* Avoid multiplying legacy Tailwind press scales with the shared .98 scale. */
+[data-app-shell] button:not([data-slide-id]):active { --tw-scale-x: 1; --tw-scale-y: 1; }
+html[data-ui-motion='off'] [data-app-shell] button { --tw-scale-x: 1 !important; --tw-scale-y: 1 !important; }
+@media (prefers-reduced-motion: reduce) {
+  [data-app-shell] button { --tw-scale-x: 1 !important; --tw-scale-y: 1 !important; }
 }

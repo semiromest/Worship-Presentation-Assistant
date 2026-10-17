@@ -1,5 +1,25 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Shared Electron UI flow. */
 const { expect, test } = require('@playwright/test');
+exports.waitForPractice = async function(page, step = /^[a-z]/) {
+  // A BrowserWindow/load event precedes lazy UI loading and workspace recovery.
+  await expect(page.locator('[data-guide-step]')).toHaveAttribute('data-guide-step',step,{timeout:15000});
+};
+exports.openLearning = async function(page) {
+  const selector=page.locator('#settings-category');
+  if(await selector.isVisible()) await selector.selectOption('learning');
+  else await page.locator('button[aria-controls="settings-panel-learning"]').click();
+  await expect(page.locator('#settings-panel-learning')).toBeVisible();
+};
+exports.finishReorder = async function(page) {
+  await expect(page.locator('[data-guide-step]')).toHaveAttribute('data-guide-step','reorder');
+  const before=await page.evaluate(()=>window.electronAPI.readPracticeWorkspace(null));
+  await page.locator('[data-slide-id="'+before.active.target+'"]').dragTo(page.locator('[data-slide-id="'+before.active.peer+'"]'));
+  await expect(page.locator('[data-guide-step]')).toHaveAttribute('data-guide-step','select');
+  const after=await page.evaluate(()=>window.electronAPI.readPracticeWorkspace(null));
+  expect(after.deck.slides.map(slide=>slide.id)).not.toEqual(before.deck.slides.map(slide=>slide.id));
+  expect([...after.deck.slides.map(slide=>slide.id)].sort()).toEqual([...before.deck.slides.map(slide=>slide.id)].sort());
+  expect((await page.evaluate(()=>window.electronAPI.getPracticeProgress())).progress.exercises['slide-reorder']).toBe('completed');
+};
 exports.seeResult = async function(page, id) {
   await expect(page.locator('[data-guide-step]')).toHaveAttribute('data-guide-step', id);
   await expect(page.getByTestId('guide-result')).toBeVisible();
@@ -39,7 +59,7 @@ exports.finishRemaining = async function(page, checkResume = false) {
   const sampleImage=page.getByAltText('practice-image.svg');
   await expect.poll(()=>sampleImage.evaluate(element=>element.complete && element.naturalWidth>0)).toBe(true);
   if (checkResume) {
-    await page.keyboard.press('Escape'); await page.reload(); await expect(page.getByTestId('guide-resume')).toBeVisible();
+    await page.keyboard.press('Escape'); await page.reload(); await exports.waitForPractice(page,'media-add'); await expect(page.getByTestId('guide-resume')).toBeVisible();
     await expect(anchor('media-add')).toBeVisible(); await page.getByTestId('guide-resume').click(); await step('media-add');
   }
   await anchor('media-add').click(); await step('media-result');
@@ -47,27 +67,45 @@ exports.finishRemaining = async function(page, checkResume = false) {
   const addedImage=page.locator('[data-slide-id="'+mediaWorkspace.guide.result.resourceId+'"] img').first();
   await expect.poll(()=>addedImage.evaluate(element=>element.complete && element.naturalWidth>0)).toBe(true);
   if(checkResume) {
-    await page.keyboard.press('Escape');await page.reload();await page.getByTestId('guide-resume').click();await step('media-result');
+    await page.keyboard.press('Escape');await page.reload();await exports.waitForPractice(page,'media-result');await page.getByTestId('guide-resume').click();await step('media-result');
   }
   await exports.seeResult(page, 'media-result'); await step('image-select');
   const imageTask=await page.evaluate(()=>window.electronAPI.readPracticeWorkspace(null));
-  await page.locator('[data-slide-id="'+imageTask.active.target+'"]').click(); await step('image-fit');
+  await page.locator('[data-slide-id="'+imageTask.active.target+'"]').click(); await step('image-tools');
+  await page.getByTestId('guide-next').click(); await step('image-fit');
   await anchor('image-fit').click(); await step('image-grayscale');
   await anchor('image-grayscale').focus();await page.keyboard.press('End');await exports.seeResult(page,'image-edit-result');await step('nav-hymns');
-  await navigate('hymns','hymns-intro'); await step('hymns-add'); await anchor('hymns-add').click(); await exports.seeResult(page,'hymns-result'); await step('hymns-parts'); await page.getByTestId('guide-next').click(); await step('nav-countdown'); await navigate('countdown','countdown-intro'); await step('countdown-duration');
+  await navigate('hymns','hymns-intro');
+  for(const id of ['hymns-online','hymns-author','hymns-mode']) { await step(id); await page.getByTestId('guide-next').click(); }
+  await step('hymns-add'); await anchor('hymns-add').click(); await exports.seeResult(page,'hymns-result');
+  for(const id of ['hymns-parts','hymns-font']) { await step(id); await page.getByTestId('guide-next').click(); }
+  await step('nav-countdown'); await navigate('countdown','countdown-intro'); await step('countdown-duration');
   await anchor('countdown-duration').focus(); await page.keyboard.press('Control+a'); await page.keyboard.type('2'); await step('countdown-add');
   if (checkResume) {
-    await page.keyboard.press('Escape'); await page.reload(); await expect(page.getByTestId('guide-resume')).toBeVisible();
+    await page.keyboard.press('Escape'); await page.reload(); await exports.waitForPractice(page,'countdown-add'); await expect(page.getByTestId('guide-resume')).toBeVisible();
     await expect(anchor('countdown-duration')).toHaveValue('2'); await page.getByTestId('guide-resume').click(); await step('countdown-add');
   }
   await anchor('countdown-add').click(); await exports.seeResult(page, 'countdown-result'); await step('nav-screen');
   for (const name of ['screen','calendar','editor','settings']) {
     await anchor('nav-' + name).click(); await step(name + '-intro');
-    await expect(page.locator('[data-guide-card]')).toContainText('only introducing');
+    if(name!=='editor') await expect(page.locator('[data-guide-card]')).toContainText('only introducing');
     await page.getByTestId('guide-next').click();
+    if(name==='editor') {
+      await step('editor-select');
+      const workspace=await page.evaluate(()=>window.electronAPI.readPracticeWorkspace(null));
+      await page.locator('[data-editor-item-id="'+workspace.active.peer+'"]').click();
+      await step('editor-rotate');
+      await expect.poll(()=>anchor('editor-rotate').evaluate(el=>!el.closest('[inert]'))).toBe(true);
+      await anchor('editor-rotate').focus(); await expect(anchor('editor-rotate')).toBeFocused();
+      await page.keyboard.press('Control+a'); await page.keyboard.type('15');
+      await expect(anchor('editor-rotate')).toHaveValue('15');
+      await step('editor-save'); await anchor('editor-save').click();
+      await exports.seeResult(page,'editor-result'); await step('nav-settings');
+    }
   }
+  await step('phone-controls'); await page.getByTestId('guide-next').click();
   await step('nav-save'); await anchor('nav-presentations').click(); await step('save'); await anchor('save').click(); await exports.seeResult(page, 'save-result'); await step('done');
   const progress = await page.evaluate(() => window.electronAPI.getPracticeProgress());
   expect(progress.ok).toBe(true);
-  for (const task of ['bible','media','image-edit','hymns','countdown','presentations']) expect(progress.progress.exercises[task], task).toBe('completed');
+  for (const task of ['slide-add','slide-reorder','slide-delete','bible','media','image-edit','canvas-edit','hymns','countdown','presentations']) expect(progress.progress.exercises[task], task).toBe('completed');
 };
