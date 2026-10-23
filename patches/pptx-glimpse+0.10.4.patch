@@ -1,0 +1,947 @@
+diff --git a/node_modules/pptx-glimpse/dist/index.cjs b/node_modules/pptx-glimpse/dist/index.cjs
+index e3f23e6..5e6c9cb 100644
+--- a/node_modules/pptx-glimpse/dist/index.cjs
++++ b/node_modules/pptx-glimpse/dist/index.cjs
+@@ -1055,7 +1055,6 @@ function initWarningLogger(level) {
+   featureCounts.clear();
+ }
+ function warn(feature, message, context) {
+-  if (currentLevel === "off") return;
+   entries.push({ feature, message, ...context !== void 0 && { context } });
+   const existing = featureCounts.get(feature);
+   if (existing) {
+@@ -1095,8 +1094,6 @@ function flushWarnings() {
+       console.warn(`  - ${feature}: ${count} occurrence(s)`);
+     }
+   }
+-  entries = [];
+-  featureCounts.clear();
+   return summary;
+ }
+ function getWarningEntries() {
+@@ -1171,9 +1168,7 @@ var OpentypeTextMeasurer = class {
+       const scale = fontSizePx / font.unitsPerEm;
+       const glyphs = font.stringToGlyphs(char);
+       let charWidth = (glyphs[0]?.advanceWidth ?? font.unitsPerEm * 0.6) * scale;
+-      if (bold && !isEa) {
+-        charWidth *= BOLD_FACTOR2;
+-      }
++      // The registered font face already supplies its real advance widths.
+       totalWidth += charWidth;
+     }
+     return totalWidth;
+@@ -1229,6 +1224,7 @@ var CJK_TTC_PATTERNS = [
+ ];
+ var cachedPaths = null;
+ var cachedAdditionalDirs = null;
++var cachedSkipSystemFonts = false;
+ function getSystemFontDirs() {
+   const os = (0, import_node_os2.platform)();
+   switch (os) {
+@@ -1244,7 +1240,7 @@ function getSystemFontDirs() {
+ }
+ function isCjkTtc(name) {
+   const lower = name.normalize("NFC").toLowerCase();
+-  return lower.endsWith(".ttc") && CJK_TTC_PATTERNS.some((p) => lower.includes(p.toLowerCase()));
++  return lower.endsWith(".ttc");
+ }
+ function walk(dir, result) {
+   if (!(0, import_node_fs.existsSync)(dir)) return;
+@@ -1260,20 +1256,21 @@ function walk(dir, result) {
+   } catch {
+   }
+ }
+-function collectFontFilePaths(additionalDirs) {
++function collectFontFilePaths(additionalDirs, skipSystemFonts = false) {
+   const dirs = additionalDirs ?? [];
+   const dirsKey = dirs.join("\0");
+   const cachedKey = cachedAdditionalDirs?.join("\0") ?? null;
+-  if (cachedPaths !== null && dirsKey === cachedKey) {
++  if (cachedPaths !== null && dirsKey === cachedKey && cachedSkipSystemFonts === skipSystemFonts) {
+     return cachedPaths;
+   }
+-  const allDirs = [...getSystemFontDirs(), ...dirs];
++  const allDirs = skipSystemFonts ? dirs : [...dirs, ...getSystemFontDirs()];
+   const result = [];
+   for (const dir of allDirs) {
+     walk(dir, result);
+   }
+   cachedPaths = result;
+   cachedAdditionalDirs = dirs;
++  cachedSkipSystemFonts = skipSystemFonts;
+   return result;
+ }
+ 
+@@ -1532,16 +1529,15 @@ function registerFont(name, font, reverseMap, measurerFonts, resolverFonts) {
+   }
+ }
+ function collectFontNames(font) {
+-  const names = /* @__PURE__ */ new Set();
+-  if (font.names.fontFamily) {
+-    for (const name of Object.values(font.names.fontFamily)) {
+-      names.add(name);
+-    }
++  const names = new Set();
++  for (const field of ["fullName", "postScriptName"]) for (const name of Object.values(font.names[field] ?? {})) names.add(name);
++  const style = Object.values(font.names.fontSubfamily ?? {})[0] ?? "Regular";
++  for (const name of Object.values(font.names.fontFamily ?? {})) {
++    names.add(/^(regular|normal|roman|book)$/i.test(style) ? name : name + " " + style);
+   }
+-  if (font.names.preferredFamily) {
+-    for (const name of Object.values(font.names.preferredFamily)) {
+-      names.add(name);
+-    }
++  const preferredStyle = Object.values(font.names.preferredSubfamily ?? {})[0] ?? style;
++  for (const name of Object.values(font.names.preferredFamily ?? {})) {
++    names.add(/^(regular|normal|roman|book)$/i.test(preferredStyle) ? name : name + " " + preferredStyle);
+   }
+   return names;
+ }
+@@ -1557,14 +1553,14 @@ function clearFontCache() {
+   cachedSetup = null;
+   cachedSetupKey = null;
+ }
+-async function createOpentypeSetupFromSystem(additionalFontDirs, fontMapping) {
+-  const key = buildCacheKey(additionalFontDirs, fontMapping);
++async function createOpentypeSetupFromSystem(additionalFontDirs, fontMapping, skipSystemFonts = false) {
++  const key = buildCacheKey(additionalFontDirs, fontMapping) + String(skipSystemFonts);
+   if (cachedSetup && cachedSetupKey === key) {
+     return cachedSetup;
+   }
+   const opentype = await tryLoadOpentype();
+   if (!opentype) return null;
+-  const fontFilePaths = collectFontFilePaths(additionalFontDirs);
++  const fontFilePaths = collectFontFilePaths(additionalFontDirs, skipSystemFonts);
+   if (fontFilePaths.length === 0) return null;
+   const mapping = createFontMapping(fontMapping);
+   const reverseMap = buildReverseMapping(mapping);
+@@ -1588,10 +1584,10 @@ async function createOpentypeSetupFromSystem(additionalFontDirs, fontMapping) {
+     }
+   }
+   if (measurerFonts.size === 0 && !firstMeasurerFont) return null;
+-  const measurer = new OpentypeTextMeasurer(measurerFonts, firstMeasurerFont ?? void 0);
++  const measurer = new OpentypeTextMeasurer(measurerFonts, measurerFonts.get("Arial") ?? measurerFonts.get("Liberation Sans") ?? firstMeasurerFont ?? void 0);
+   const fontResolver = new DefaultTextPathFontResolver(
+     resolverFonts,
+-    firstResolverFont ?? void 0
++    resolverFonts.get("Arial") ?? resolverFonts.get("Liberation Sans") ?? firstResolverFont ?? void 0
+   );
+   const setup = { measurer, fontResolver };
+   cachedSetup = setup;
+@@ -2010,6 +2006,7 @@ function parseDefaultRunProperties(defRPr, colorResolver) {
+   if (defRPr["@_sz"] !== void 0) {
+     result.fontSize = hundredthPointToPoint(asHundredthPt(Number(defRPr["@_sz"])));
+   }
++  if (defRPr["@_spc"] !== void 0) result.letterSpacing = Number(defRPr["@_spc"]) / 100;
+   const latin = defRPr.latin;
+   if (latin?.["@_typeface"] !== void 0) {
+     result.fontFamily = latin["@_typeface"];
+@@ -2263,10 +2260,9 @@ function resolveRelationshipTarget(basePath, relTarget) {
+ 
+ // src/utils/base64.ts
+ function uint8ArrayToBase64(data) {
++  if (typeof Buffer !== "undefined") return Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("base64");
+   let binary = "";
+-  for (let i = 0; i < data.length; i++) {
+-    binary += String.fromCharCode(data[i]);
+-  }
++  for (let i = 0; i < data.length; i += 32768) binary += String.fromCharCode(...data.subarray(i, i + 32768));
+   return btoa(binary);
+ }
+ 
+@@ -2326,7 +2322,8 @@ function parseBlipFill(blipFillNode, context) {
+     flip: tileNode["@_flip"] ?? "none",
+     align: tileNode["@_algn"] ?? "tl"
+   } : null;
+-  return { type: "image", imageData, mimeType, tile };
++  const rect = n => ({ l: Number(n?.["@_l"] ?? 0) / 1e5, t: Number(n?.["@_t"] ?? 0) / 1e5, r: Number(n?.["@_r"] ?? 0) / 1e5, b: Number(n?.["@_b"] ?? 0) / 1e5 });
++  return { type: "image", imageData, mimeType, tile, sourceRect: rect(blipFillNode.srcRect), fillRect: rect(blipFillNode.stretch?.fillRect) };
+ }
+ function parseGradientFill(gradNode, colorResolver) {
+   const gsLst = gradNode.gsLst;
+@@ -2835,7 +2832,7 @@ function resolveValue(val, vars) {
+ }
+ 
+ // src/parser/custom-geometry-parser.ts
+-function parseCustomGeometry(custGeom) {
++function parseCustomGeometry(custGeom, orderedPaths) {
+   const pathLst = custGeom.pathLst;
+   if (!pathLst?.path) return null;
+   const avLst = custGeom.avLst;
+@@ -2844,7 +2841,7 @@ function parseCustomGeometry(custGeom) {
+   const gdGd = parseGuideList(gdLst?.gd);
+   const paths = Array.isArray(pathLst.path) ? pathLst.path : [pathLst.path];
+   const result = [];
+-  for (const path of paths) {
++  for (const [pathIndex, path] of paths.entries()) {
+     const w = Number(path["@_w"] ?? 0);
+     const h = Number(path["@_h"] ?? 0);
+     if (w === 0 && h === 0) {
+@@ -2852,7 +2849,8 @@ function parseCustomGeometry(custGeom) {
+       continue;
+     }
+     const vars = evaluateGuides(avGd, gdGd, w, h);
+-    const commands = buildPathCommands(path, vars);
++    const orderedPath = orderedPaths?.filter(p => "path" in p)[pathIndex]?.path;
++    const commands = buildPathCommands(path, vars, orderedPath);
+     if (!commands) {
+       debug("custGeom.path", "path skipped: failed to build path commands");
+       continue;
+@@ -2869,16 +2867,21 @@ function parseGuideList(gd) {
+     fmla: g["@_fmla"] ?? ""
+   })).filter((g) => g.name && g.fmla);
+ }
+-function buildPathCommands(path, vars) {
++function buildPathCommands(path, vars, orderedPath) {
+   const parts = [];
+   let curX = 0;
+   let curY = 0;
+   let startX = 0;
+   let startY = 0;
+-  for (const key of Object.keys(path)) {
++  const counters = {};
++  const keys = orderedPath ? orderedPath.map(p => Object.keys(p)[0]) : Object.keys(path);
++  for (const key of keys) {
+     if (key.startsWith("@_")) continue;
+     const value = path[key];
+-    const items = Array.isArray(value) ? value : [value];
++    const allItems = Array.isArray(value) ? value : [value];
++    const index = counters[key] ?? 0;
++    counters[key] = index + 1;
++    const items = orderedPath ? [allItems[index]] : allItems;
+     for (const item of items) {
+       switch (key) {
+         case "moveTo": {
+@@ -3488,7 +3491,7 @@ function parseShape(sp, colorResolver, rels, fillContext, fontScheme, orderedNod
+   let geometry;
+   if (spPrIsObject) {
+     transform = parseTransform(spPr.xfrm);
+-    geometry = parseGeometry(spPr);
++    geometry = parseGeometry(spPr, orderedNode ? navigateOrdered(orderedNode.sp, ["spPr", "custGeom", "pathLst"]) : void 0);
+   } else {
+     geometry = { type: "preset", preset: "rect", adjustValues: {} };
+   }
+@@ -3859,7 +3862,7 @@ function parseTransform(xfrm) {
+     flipV: xfrm["@_flipV"] === "1" || xfrm["@_flipV"] === "true"
+   };
+ }
+-function parseGeometry(spPr) {
++function parseGeometry(spPr, orderedPaths) {
+   if (spPr.prstGeom) {
+     const prstGeom = spPr.prstGeom;
+     const preset = prstGeom["@_prst"] ?? "rect";
+@@ -3880,7 +3883,7 @@ function parseGeometry(spPr) {
+     return { type: "preset", preset, adjustValues };
+   }
+   if (spPr.custGeom) {
+-    const paths = parseCustomGeometry(spPr.custGeom);
++    const paths = parseCustomGeometry(spPr.custGeom, orderedPaths);
+     if (paths) {
+       return { type: "custom", paths };
+     }
+@@ -4185,6 +4188,7 @@ function parseParagraph(p, colorResolver, rels, fontScheme, lstStyle, orderedPCh
+   const properties = {
+     alignment: pPr?.["@_algn"] ?? lstLevelProps?.alignment ?? null,
+     lineSpacing: lnSpcSpcPct ? Number(lnSpcSpcPct["@_val"]) : null,
++    lineSpacingPoints: lnSpc?.spcPts ? Number(lnSpc.spcPts["@_val"]) / 100 : null,
+     spaceBefore: parseSpacing(pPr?.spcBef),
+     spaceAfter: parseSpacing(pPr?.spcAft),
+     level,
+@@ -4299,6 +4303,7 @@ function mergeDefaultRunProperties(primary, secondary) {
+   if (!primary) return secondary;
+   if (!secondary) return primary;
+   return {
++    letterSpacing: primary.letterSpacing ?? secondary.letterSpacing,
+     fontSize: primary.fontSize ?? secondary.fontSize,
+     fontFamily: primary.fontFamily ?? secondary.fontFamily,
+     fontFamilyEa: primary.fontFamilyEa ?? secondary.fontFamilyEa,
+@@ -4309,13 +4314,20 @@ function mergeDefaultRunProperties(primary, secondary) {
+     strikethrough: primary.strikethrough ?? secondary.strikethrough
+   };
+ }
++function styledFontName(name, bold, italic) {
++  if (!name || (!bold && !italic)) return name;
++  const resolver = getTextPathFontResolver();
++  const suffix = bold && italic ? " Bold Italic" : bold ? " Bold" : " Italic";
++  return resolver?.findFont?.(name + suffix) ? name + suffix : name;
++}
+ function parseRunProperties(rPr, colorResolver, rels, fontScheme, defaults) {
+   if (!rPr) {
+     return {
++      letterSpacing: defaults?.letterSpacing ?? 0,
+       fontSize: defaults?.fontSize ?? null,
+-      fontFamily: resolveThemeFont(defaults?.fontFamily ?? null, fontScheme),
+-      fontFamilyEa: resolveThemeFont(defaults?.fontFamilyEa ?? null, fontScheme),
+-      fontFamilyCs: resolveThemeFont(defaults?.fontFamilyCs ?? null, fontScheme),
++      fontFamily: styledFontName(resolveThemeFont(defaults?.fontFamily ?? null, fontScheme), defaults?.bold ?? false, defaults?.italic ?? false),
++      fontFamilyEa: styledFontName(resolveThemeFont(defaults?.fontFamilyEa ?? null, fontScheme), defaults?.bold ?? false, defaults?.italic ?? false),
++      fontFamilyCs: styledFontName(resolveThemeFont(defaults?.fontFamilyCs ?? null, fontScheme), defaults?.bold ?? false, defaults?.italic ?? false),
+       bold: defaults?.bold ?? false,
+       italic: defaults?.italic ?? false,
+       underline: defaults?.underline ?? false,
+@@ -4380,9 +4392,10 @@ function parseRunProperties(rPr, colorResolver, rels, fontScheme, defaults) {
+   }
+   return {
+     fontSize,
+-    fontFamily,
+-    fontFamilyEa,
+-    fontFamilyCs,
++    fontFamily: styledFontName(fontFamily, bold, italic),
++    fontFamilyEa: styledFontName(fontFamilyEa, bold, italic),
++    fontFamilyCs: styledFontName(fontFamilyCs, bold, italic),
++    letterSpacing: rPr["@_spc"] !== void 0 ? Number(rPr["@_spc"]) / 100 : defaults?.letterSpacing ?? 0,
+     bold,
+     italic,
+     underline,
+@@ -6229,7 +6242,11 @@ function renderFillAttrs(fill) {
+       const defs2 = `<pattern id="${id}" patternUnits="objectBoundingBox" width="${scalePct(t.sx)}" height="${scalePct(t.sy)}"><image href="data:${fill.mimeType};base64,${fill.imageData}" width="100%" height="100%" preserveAspectRatio="none"/></pattern>`;
+       return { attrs: `fill="url(#${id})"`, defs: defs2 };
+     }
+-    const defs = `<pattern id="${id}" patternContentUnits="objectBoundingBox" width="1" height="1"><image href="data:${fill.mimeType};base64,${fill.imageData}" width="1" height="1" preserveAspectRatio="none"/></pattern>`;
++    const src = fill.sourceRect ?? { l: 0, t: 0, r: 0, b: 0 };
++    const dst = fill.fillRect ?? { l: 0, t: 0, r: 0, b: 0 };
++    const iw = (1 - dst.l - dst.r) / Math.max(0.00001, 1 - src.l - src.r);
++    const ih = (1 - dst.t - dst.b) / Math.max(0.00001, 1 - src.t - src.b);
++    const defs = `<pattern id="${id}" patternContentUnits="objectBoundingBox" width="1" height="1"><image href="data:${fill.mimeType};base64,${fill.imageData}" x="${dst.l - src.l * iw}" y="${dst.t - src.t * ih}" width="${iw}" height="${ih}" preserveAspectRatio="none"/></pattern>`;
+     return { attrs: `fill="url(#${id})"`, defs };
+   }
+   if (fill.type === "pattern") {
+@@ -7577,7 +7594,19 @@ function renderCustomGeometry(paths, shapeWidth, shapeHeight) {
+ function renderCustomPath(path, shapeWidth, shapeHeight) {
+   const scaleX = path.width > 0 ? shapeWidth / path.width : 1;
+   const scaleY = path.height > 0 ? shapeHeight / path.height : 1;
+-  return `<path d="${path.commands}" transform="scale(${scaleX}, ${scaleY})"/>`;
++  // Keep image patterns in pixel coordinates, rather than enormous EMU bounds.
++  const commands = path.commands.replace(/([MLCQSTHVAZ])([^MLCQSTHVAZ]*)/gi, (_, command, args) => {
++    let index = 0;
++    const upper = command.toUpperCase();
++    const scaled = args.replace(/[-+]?(?:\d*\.)?\d+(?:e[-+]?\d+)?/gi, value => {
++      const i = index++;
++      let scale = upper === "V" ? scaleY : upper === "H" ? scaleX : i % 2 === 0 ? scaleX : scaleY;
++      if (upper === "A") scale = [scaleX, scaleY, 1, 1, 1, scaleX, scaleY][i % 7];
++      return String(Number(value) * scale);
++    });
++    return command + scaled;
++  });
++  return `<path d="${commands}"/>`;
+ }
+ 
+ // src/utils/text-wrap.ts
+@@ -7666,7 +7695,7 @@ function tokenizeRuns(runs, defaultFontSize, fontScale) {
+           tokens.push({
+             text: fragment,
+             properties: run.properties,
+-            width,
++            width: width + [...fragment].length * (run.properties.letterSpacing ?? 0) * fontScale * 4 / 3,
+             breakable: isFirst ? false : breakable
+           });
+           isFirst = false;
+@@ -7690,7 +7719,7 @@ function tokenizeRuns(runs, defaultFontSize, fontScale) {
+       tokens.push({
+         text: fragment,
+         properties: run.properties,
+-        width,
++        width: width + [...fragment].length * (run.properties.letterSpacing ?? 0) * fontScale * 4 / 3,
+         breakable: isFirst ? false : breakable
+       });
+       isFirst = false;
+@@ -7719,7 +7748,7 @@ function splitTokenByChars(token, availableWidth, defaultFontSize, fontScale) {
+       bold,
+       fontFamily,
+       fontFamilyEa
+-    );
++    ) + (token.properties.letterSpacing ?? 0) * fontScale * 4 / 3;
+     if (currentWidth + charWidth > availableWidth && currentLine.length > 0) {
+       lines.push(currentLine);
+       currentLine = [];
+@@ -8061,6 +8090,13 @@ function renderTextBody(textBody, transform) {
+   const firstParaFontSizePt = getParagraphFontSize(paragraphs[0], defaultFontSize) * fontScale;
+   const firstLineBaselineOffsetPt = firstParaFontSizePt * defaultAscenderRatio;
+   yStart += firstLineBaselineOffsetPt * PX_PER_PT3;
++  const first = paragraphs[0];
++  if (first.properties.lineSpacingPoints != null) {
++    const natural = computeLineNaturalHeight(first.runs, defaultFontSize, fontScale);
++    const leading = first.properties.lineSpacingPoints * fontScale - natural;
++    yStart += Math.max(0, leading) * PX_PER_PT3 / 2;
++  }
++  if (totalTextHeight > height - marginTopPx - marginBottomPx + 1) warn("text.overflow", "Text exceeds its original frame; review wrapping and placement");
+   const textElement = `<text x="0" y="${yStart}" xml:space="preserve">${tspans.join("")}</text>`;
+   if (isVerticalText(bodyProperties.vert)) {
+     return `<g transform="translate(${originalWidth}, 0) rotate(90)">${textElement}</g>`;
+@@ -8176,6 +8212,10 @@ function getAlignmentInfo(alignment, marginLeftPx, textWidth, width, marginRight
+   }
+ }
+ function getLineSpacing(para, lnSpcReduction = 0) {
++  if (para.properties.lineSpacingPoints != null) {
++    const naturalHeight = computeLineNaturalHeight(para.runs, getDefaultFontSize([para]), 1);
++    return Math.max(0, para.properties.lineSpacingPoints) / Math.max(0.01, naturalHeight) * (1 - lnSpcReduction);
++  }
+   let spacing;
+   if (para.properties.lineSpacing !== null) {
+     const factor = para.properties.lineSpacing / 1e5;
+@@ -8482,7 +8522,7 @@ function measureLineWidth(segments, defaultFontSize, fontScale) {
+       seg.properties.bold,
+       seg.properties.fontFamily,
+       seg.properties.fontFamilyEa
+-    );
++    ) + [...seg.text].length * (seg.properties.letterSpacing ?? 0) * fontScale * PX_PER_PT3;
+   }
+   return totalWidth;
+ }
+@@ -8539,7 +8579,7 @@ function renderSegmentAsPath(text, props, x, y, fontScale, defaultFontSize, font
+       props.fontFamilyEa
+     );
+     if (font) {
+-      const path = font.getPath(segText, x + totalWidth, effectiveY, fontSizePx);
++      const path = font.getPath(segText, x + totalWidth, effectiveY, fontSizePx, { letterSpacing: (props.letterSpacing ?? 0) / Math.max(fontSize / fontScale, 0.01) });
+       const pathData = path.toPathData(2);
+       if (pathData && pathData.length > 0) {
+         const fillAttrs = buildPathFillAttrs(props);
+@@ -8549,7 +8589,7 @@ function renderSegmentAsPath(text, props, x, y, fontScale, defaultFontSize, font
+     if (props.underline || props.strikethrough) {
+       parts.push(...renderTextDecorations(x + totalWidth, effectiveY, segWidth, fontSizePx, props));
+     }
+-    totalWidth += segWidth;
++    totalWidth += segWidth + [...segText].length * (props.letterSpacing ?? 0) * fontScale * PX_PER_PT3;
+   };
+   const processCjkUpright = (segText, fontFamily, fontFamilyEa) => {
+     if (segText.length === 0) return;
+@@ -8580,7 +8620,7 @@ function renderSegmentAsPath(text, props, x, y, fontScale, defaultFontSize, font
+           ...renderTextDecorations(x + totalWidth, effectiveY, charWidth, fontSizePx, props)
+         );
+       }
+-      totalWidth += charWidth;
++      totalWidth += charWidth + (props.letterSpacing ?? 0) * fontScale * PX_PER_PT3;
+     }
+   };
+   if (vert === "eaVert") {
+@@ -8617,7 +8657,12 @@ function renderBulletAsPath(bulletText, x, y, paraProps, textFontSizePt, fontSca
+     bulletFontSize = textFontSizePt * (paraProps.bulletSizePct / 1e5);
+   }
+   const fontSizePx = bulletFontSize * PX_PER_PT3;
+-  const font = paraProps.bulletFont ? fontResolver.resolveFont(paraProps.bulletFont, null) : fontResolver.resolveFont(runFontFamily ?? null, runFontFamilyEa ?? null);
++  let font = paraProps.bulletFont ? fontResolver.resolveFont(paraProps.bulletFont, null) : fontResolver.resolveFont(runFontFamily ?? null, runFontFamilyEa ?? null);
++  if (font?.charToGlyphIndex && !font.charToGlyphIndex(bulletText)) {
++    warn("bullet.missingGlyph", "Bullet font has no glyph; using a standard bullet");
++    bulletText = "\u2022";
++    font = fontResolver.resolveFont(runFontFamily ?? null, runFontFamilyEa ?? null);
++  }
+   if (!font) return [];
+   const path = font.getPath(bulletText, x, y, fontSizePx);
+   const pathData = path.toPathData(2);
+@@ -9113,7 +9158,7 @@ function escapeXmlAttr(str) {
+ 
+ // src/converter.ts
+ async function convertPptxToSvg(input, options) {
+-  const setup = await createOpentypeSetupFromSystem(options?.fontDirs, options?.fontMapping);
++  const setup = await createOpentypeSetupFromSystem(options?.fontDirs, options?.fontMapping, options?.skipSystemFonts);
+   if (setup) {
+     setTextMeasurer(setup.measurer);
+     setTextPathFontResolver(setup.fontResolver);
+@@ -9135,7 +9180,9 @@ async function convertPptxToSvg(input, options) {
+       const { slide, layoutElements, layoutShowMasterSp, masterElements } = parsed;
+       const effectiveMasterElements = slide.showMasterSp && layoutShowMasterSp ? masterElements : [];
+       slide.elements = mergeElements(effectiveMasterElements, layoutElements, slide.elements);
++      const warningStart = entries.length;
+       const svg = renderSlideToSvg(slide, data.presInfo.slideSize);
++      for (const entry of entries.slice(warningStart)) if (!entry.context) entry.context = "Slide " + slideNumber;
+       results.push({ slideNumber, svg });
+     }
+     flushWarnings();
+@@ -9195,6 +9242,7 @@ function collectUsedFonts(input) {
+       const parsed = parseSlideWithLayout(slideNumber, path, data);
+       if (!parsed) continue;
+       collectFontsFromElements(parsed.slide.elements, fonts);
++      collectFontsFromElements(parsed.layoutElements, fonts);
+       if (!collectedMasters.has(parsed.masterElements)) {
+         collectedMasters.add(parsed.masterElements);
+         collectFontsFromElements(parsed.masterElements, fonts);
+@@ -9216,6 +9264,8 @@ function collectUsedFonts(input) {
+   }
+ }
+ function collectThemeFonts(fontScheme, fonts) {
++  if (fontScheme.majorFontJpan) fonts.add(fontScheme.majorFontJpan);
++  if (fontScheme.minorFontJpan) fonts.add(fontScheme.minorFontJpan);
+   fonts.add(fontScheme.majorFont);
+   fonts.add(fontScheme.minorFont);
+   if (fontScheme.majorFontEa) fonts.add(fontScheme.majorFontEa);
+diff --git a/node_modules/pptx-glimpse/dist/index.d.ts b/node_modules/pptx-glimpse/dist/index.d.ts
+index 86b7424..434b94b 100644
+--- a/node_modules/pptx-glimpse/dist/index.d.ts
++++ b/node_modules/pptx-glimpse/dist/index.d.ts
+@@ -34,6 +34,8 @@ declare function getWarningSummary(): WarningSummary;
+ declare function getWarningEntries(): readonly WarningEntry[];
+ 
+ interface ConvertOptions {
++    /** Use only caller-provided font directories. */
++    skipSystemFonts?: boolean;
+     /** 変換対象のスライド番号 (1始まり)。未指定で全スライド */
+     slides?: number[];
+     /** 出力画像の幅 (ピクセル)。デフォルト: 960 */
+diff --git a/node_modules/pptx-glimpse/dist/index.js b/node_modules/pptx-glimpse/dist/index.js
+index 05c60e4..b6c5e3e 100644
+--- a/node_modules/pptx-glimpse/dist/index.js
++++ b/node_modules/pptx-glimpse/dist/index.js
+@@ -1018,7 +1018,6 @@ function initWarningLogger(level) {
+   featureCounts.clear();
+ }
+ function warn(feature, message, context) {
+-  if (currentLevel === "off") return;
+   entries.push({ feature, message, ...context !== void 0 && { context } });
+   const existing = featureCounts.get(feature);
+   if (existing) {
+@@ -1058,8 +1057,6 @@ function flushWarnings() {
+       console.warn(`  - ${feature}: ${count} occurrence(s)`);
+     }
+   }
+-  entries = [];
+-  featureCounts.clear();
+   return summary;
+ }
+ function getWarningEntries() {
+@@ -1134,9 +1131,7 @@ var OpentypeTextMeasurer = class {
+       const scale = fontSizePx / font.unitsPerEm;
+       const glyphs = font.stringToGlyphs(char);
+       let charWidth = (glyphs[0]?.advanceWidth ?? font.unitsPerEm * 0.6) * scale;
+-      if (bold && !isEa) {
+-        charWidth *= BOLD_FACTOR2;
+-      }
++      // The registered font face already supplies its real advance widths.
+       totalWidth += charWidth;
+     }
+     return totalWidth;
+@@ -1192,6 +1187,7 @@ var CJK_TTC_PATTERNS = [
+ ];
+ var cachedPaths = null;
+ var cachedAdditionalDirs = null;
++var cachedSkipSystemFonts = false;
+ function getSystemFontDirs() {
+   const os = platform2();
+   switch (os) {
+@@ -1207,7 +1203,7 @@ function getSystemFontDirs() {
+ }
+ function isCjkTtc(name) {
+   const lower = name.normalize("NFC").toLowerCase();
+-  return lower.endsWith(".ttc") && CJK_TTC_PATTERNS.some((p) => lower.includes(p.toLowerCase()));
++  return lower.endsWith(".ttc");
+ }
+ function walk(dir, result) {
+   if (!existsSync(dir)) return;
+@@ -1223,20 +1219,21 @@ function walk(dir, result) {
+   } catch {
+   }
+ }
+-function collectFontFilePaths(additionalDirs) {
++function collectFontFilePaths(additionalDirs, skipSystemFonts = false) {
+   const dirs = additionalDirs ?? [];
+   const dirsKey = dirs.join("\0");
+   const cachedKey = cachedAdditionalDirs?.join("\0") ?? null;
+-  if (cachedPaths !== null && dirsKey === cachedKey) {
++  if (cachedPaths !== null && dirsKey === cachedKey && cachedSkipSystemFonts === skipSystemFonts) {
+     return cachedPaths;
+   }
+-  const allDirs = [...getSystemFontDirs(), ...dirs];
++  const allDirs = skipSystemFonts ? dirs : [...dirs, ...getSystemFontDirs()];
+   const result = [];
+   for (const dir of allDirs) {
+     walk(dir, result);
+   }
+   cachedPaths = result;
+   cachedAdditionalDirs = dirs;
++  cachedSkipSystemFonts = skipSystemFonts;
+   return result;
+ }
+ 
+@@ -1495,16 +1492,15 @@ function registerFont(name, font, reverseMap, measurerFonts, resolverFonts) {
+   }
+ }
+ function collectFontNames(font) {
+-  const names = /* @__PURE__ */ new Set();
+-  if (font.names.fontFamily) {
+-    for (const name of Object.values(font.names.fontFamily)) {
+-      names.add(name);
+-    }
++  const names = new Set();
++  for (const field of ["fullName", "postScriptName"]) for (const name of Object.values(font.names[field] ?? {})) names.add(name);
++  const style = Object.values(font.names.fontSubfamily ?? {})[0] ?? "Regular";
++  for (const name of Object.values(font.names.fontFamily ?? {})) {
++    names.add(/^(regular|normal|roman|book)$/i.test(style) ? name : name + " " + style);
+   }
+-  if (font.names.preferredFamily) {
+-    for (const name of Object.values(font.names.preferredFamily)) {
+-      names.add(name);
+-    }
++  const preferredStyle = Object.values(font.names.preferredSubfamily ?? {})[0] ?? style;
++  for (const name of Object.values(font.names.preferredFamily ?? {})) {
++    names.add(/^(regular|normal|roman|book)$/i.test(preferredStyle) ? name : name + " " + preferredStyle);
+   }
+   return names;
+ }
+@@ -1520,14 +1516,14 @@ function clearFontCache() {
+   cachedSetup = null;
+   cachedSetupKey = null;
+ }
+-async function createOpentypeSetupFromSystem(additionalFontDirs, fontMapping) {
+-  const key = buildCacheKey(additionalFontDirs, fontMapping);
++async function createOpentypeSetupFromSystem(additionalFontDirs, fontMapping, skipSystemFonts = false) {
++  const key = buildCacheKey(additionalFontDirs, fontMapping) + String(skipSystemFonts);
+   if (cachedSetup && cachedSetupKey === key) {
+     return cachedSetup;
+   }
+   const opentype = await tryLoadOpentype();
+   if (!opentype) return null;
+-  const fontFilePaths = collectFontFilePaths(additionalFontDirs);
++  const fontFilePaths = collectFontFilePaths(additionalFontDirs, skipSystemFonts);
+   if (fontFilePaths.length === 0) return null;
+   const mapping = createFontMapping(fontMapping);
+   const reverseMap = buildReverseMapping(mapping);
+@@ -1551,10 +1547,10 @@ async function createOpentypeSetupFromSystem(additionalFontDirs, fontMapping) {
+     }
+   }
+   if (measurerFonts.size === 0 && !firstMeasurerFont) return null;
+-  const measurer = new OpentypeTextMeasurer(measurerFonts, firstMeasurerFont ?? void 0);
++  const measurer = new OpentypeTextMeasurer(measurerFonts, measurerFonts.get("Arial") ?? measurerFonts.get("Liberation Sans") ?? firstMeasurerFont ?? void 0);
+   const fontResolver = new DefaultTextPathFontResolver(
+     resolverFonts,
+-    firstResolverFont ?? void 0
++    resolverFonts.get("Arial") ?? resolverFonts.get("Liberation Sans") ?? firstResolverFont ?? void 0
+   );
+   const setup = { measurer, fontResolver };
+   cachedSetup = setup;
+@@ -1972,6 +1968,7 @@ function parseDefaultRunProperties(defRPr, colorResolver) {
+   if (defRPr["@_sz"] !== void 0) {
+     result.fontSize = hundredthPointToPoint(asHundredthPt(Number(defRPr["@_sz"])));
+   }
++  if (defRPr["@_spc"] !== void 0) result.letterSpacing = Number(defRPr["@_spc"]) / 100;
+   const latin = defRPr.latin;
+   if (latin?.["@_typeface"] !== void 0) {
+     result.fontFamily = latin["@_typeface"];
+@@ -2225,10 +2222,9 @@ function resolveRelationshipTarget(basePath, relTarget) {
+ 
+ // src/utils/base64.ts
+ function uint8ArrayToBase64(data) {
++  if (typeof Buffer !== "undefined") return Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("base64");
+   let binary = "";
+-  for (let i = 0; i < data.length; i++) {
+-    binary += String.fromCharCode(data[i]);
+-  }
++  for (let i = 0; i < data.length; i += 32768) binary += String.fromCharCode(...data.subarray(i, i + 32768));
+   return btoa(binary);
+ }
+ 
+@@ -2288,7 +2284,8 @@ function parseBlipFill(blipFillNode, context) {
+     flip: tileNode["@_flip"] ?? "none",
+     align: tileNode["@_algn"] ?? "tl"
+   } : null;
+-  return { type: "image", imageData, mimeType, tile };
++  const rect = n => ({ l: Number(n?.["@_l"] ?? 0) / 1e5, t: Number(n?.["@_t"] ?? 0) / 1e5, r: Number(n?.["@_r"] ?? 0) / 1e5, b: Number(n?.["@_b"] ?? 0) / 1e5 });
++  return { type: "image", imageData, mimeType, tile, sourceRect: rect(blipFillNode.srcRect), fillRect: rect(blipFillNode.stretch?.fillRect) };
+ }
+ function parseGradientFill(gradNode, colorResolver) {
+   const gsLst = gradNode.gsLst;
+@@ -2797,7 +2794,7 @@ function resolveValue(val, vars) {
+ }
+ 
+ // src/parser/custom-geometry-parser.ts
+-function parseCustomGeometry(custGeom) {
++function parseCustomGeometry(custGeom, orderedPaths) {
+   const pathLst = custGeom.pathLst;
+   if (!pathLst?.path) return null;
+   const avLst = custGeom.avLst;
+@@ -2806,7 +2803,7 @@ function parseCustomGeometry(custGeom) {
+   const gdGd = parseGuideList(gdLst?.gd);
+   const paths = Array.isArray(pathLst.path) ? pathLst.path : [pathLst.path];
+   const result = [];
+-  for (const path of paths) {
++  for (const [pathIndex, path] of paths.entries()) {
+     const w = Number(path["@_w"] ?? 0);
+     const h = Number(path["@_h"] ?? 0);
+     if (w === 0 && h === 0) {
+@@ -2814,7 +2811,8 @@ function parseCustomGeometry(custGeom) {
+       continue;
+     }
+     const vars = evaluateGuides(avGd, gdGd, w, h);
+-    const commands = buildPathCommands(path, vars);
++    const orderedPath = orderedPaths?.filter(p => "path" in p)[pathIndex]?.path;
++    const commands = buildPathCommands(path, vars, orderedPath);
+     if (!commands) {
+       debug("custGeom.path", "path skipped: failed to build path commands");
+       continue;
+@@ -2831,16 +2829,21 @@ function parseGuideList(gd) {
+     fmla: g["@_fmla"] ?? ""
+   })).filter((g) => g.name && g.fmla);
+ }
+-function buildPathCommands(path, vars) {
++function buildPathCommands(path, vars, orderedPath) {
+   const parts = [];
+   let curX = 0;
+   let curY = 0;
+   let startX = 0;
+   let startY = 0;
+-  for (const key of Object.keys(path)) {
++  const counters = {};
++  const keys = orderedPath ? orderedPath.map(p => Object.keys(p)[0]) : Object.keys(path);
++  for (const key of keys) {
+     if (key.startsWith("@_")) continue;
+     const value = path[key];
+-    const items = Array.isArray(value) ? value : [value];
++    const allItems = Array.isArray(value) ? value : [value];
++    const index = counters[key] ?? 0;
++    counters[key] = index + 1;
++    const items = orderedPath ? [allItems[index]] : allItems;
+     for (const item of items) {
+       switch (key) {
+         case "moveTo": {
+@@ -3450,7 +3453,7 @@ function parseShape(sp, colorResolver, rels, fillContext, fontScheme, orderedNod
+   let geometry;
+   if (spPrIsObject) {
+     transform = parseTransform(spPr.xfrm);
+-    geometry = parseGeometry(spPr);
++    geometry = parseGeometry(spPr, orderedNode ? navigateOrdered(orderedNode.sp, ["spPr", "custGeom", "pathLst"]) : void 0);
+   } else {
+     geometry = { type: "preset", preset: "rect", adjustValues: {} };
+   }
+@@ -3821,7 +3824,7 @@ function parseTransform(xfrm) {
+     flipV: xfrm["@_flipV"] === "1" || xfrm["@_flipV"] === "true"
+   };
+ }
+-function parseGeometry(spPr) {
++function parseGeometry(spPr, orderedPaths) {
+   if (spPr.prstGeom) {
+     const prstGeom = spPr.prstGeom;
+     const preset = prstGeom["@_prst"] ?? "rect";
+@@ -3842,7 +3845,7 @@ function parseGeometry(spPr) {
+     return { type: "preset", preset, adjustValues };
+   }
+   if (spPr.custGeom) {
+-    const paths = parseCustomGeometry(spPr.custGeom);
++    const paths = parseCustomGeometry(spPr.custGeom, orderedPaths);
+     if (paths) {
+       return { type: "custom", paths };
+     }
+@@ -4147,6 +4150,7 @@ function parseParagraph(p, colorResolver, rels, fontScheme, lstStyle, orderedPCh
+   const properties = {
+     alignment: pPr?.["@_algn"] ?? lstLevelProps?.alignment ?? null,
+     lineSpacing: lnSpcSpcPct ? Number(lnSpcSpcPct["@_val"]) : null,
++    lineSpacingPoints: lnSpc?.spcPts ? Number(lnSpc.spcPts["@_val"]) / 100 : null,
+     spaceBefore: parseSpacing(pPr?.spcBef),
+     spaceAfter: parseSpacing(pPr?.spcAft),
+     level,
+@@ -4261,6 +4265,7 @@ function mergeDefaultRunProperties(primary, secondary) {
+   if (!primary) return secondary;
+   if (!secondary) return primary;
+   return {
++    letterSpacing: primary.letterSpacing ?? secondary.letterSpacing,
+     fontSize: primary.fontSize ?? secondary.fontSize,
+     fontFamily: primary.fontFamily ?? secondary.fontFamily,
+     fontFamilyEa: primary.fontFamilyEa ?? secondary.fontFamilyEa,
+@@ -4271,13 +4276,20 @@ function mergeDefaultRunProperties(primary, secondary) {
+     strikethrough: primary.strikethrough ?? secondary.strikethrough
+   };
+ }
++function styledFontName(name, bold, italic) {
++  if (!name || (!bold && !italic)) return name;
++  const resolver = getTextPathFontResolver();
++  const suffix = bold && italic ? " Bold Italic" : bold ? " Bold" : " Italic";
++  return resolver?.findFont?.(name + suffix) ? name + suffix : name;
++}
+ function parseRunProperties(rPr, colorResolver, rels, fontScheme, defaults) {
+   if (!rPr) {
+     return {
++      letterSpacing: defaults?.letterSpacing ?? 0,
+       fontSize: defaults?.fontSize ?? null,
+-      fontFamily: resolveThemeFont(defaults?.fontFamily ?? null, fontScheme),
+-      fontFamilyEa: resolveThemeFont(defaults?.fontFamilyEa ?? null, fontScheme),
+-      fontFamilyCs: resolveThemeFont(defaults?.fontFamilyCs ?? null, fontScheme),
++      fontFamily: styledFontName(resolveThemeFont(defaults?.fontFamily ?? null, fontScheme), defaults?.bold ?? false, defaults?.italic ?? false),
++      fontFamilyEa: styledFontName(resolveThemeFont(defaults?.fontFamilyEa ?? null, fontScheme), defaults?.bold ?? false, defaults?.italic ?? false),
++      fontFamilyCs: styledFontName(resolveThemeFont(defaults?.fontFamilyCs ?? null, fontScheme), defaults?.bold ?? false, defaults?.italic ?? false),
+       bold: defaults?.bold ?? false,
+       italic: defaults?.italic ?? false,
+       underline: defaults?.underline ?? false,
+@@ -4342,9 +4354,10 @@ function parseRunProperties(rPr, colorResolver, rels, fontScheme, defaults) {
+   }
+   return {
+     fontSize,
+-    fontFamily,
+-    fontFamilyEa,
+-    fontFamilyCs,
++    fontFamily: styledFontName(fontFamily, bold, italic),
++    fontFamilyEa: styledFontName(fontFamilyEa, bold, italic),
++    fontFamilyCs: styledFontName(fontFamilyCs, bold, italic),
++    letterSpacing: rPr["@_spc"] !== void 0 ? Number(rPr["@_spc"]) / 100 : defaults?.letterSpacing ?? 0,
+     bold,
+     italic,
+     underline,
+@@ -6191,7 +6204,11 @@ function renderFillAttrs(fill) {
+       const defs2 = `<pattern id="${id}" patternUnits="objectBoundingBox" width="${scalePct(t.sx)}" height="${scalePct(t.sy)}"><image href="data:${fill.mimeType};base64,${fill.imageData}" width="100%" height="100%" preserveAspectRatio="none"/></pattern>`;
+       return { attrs: `fill="url(#${id})"`, defs: defs2 };
+     }
+-    const defs = `<pattern id="${id}" patternContentUnits="objectBoundingBox" width="1" height="1"><image href="data:${fill.mimeType};base64,${fill.imageData}" width="1" height="1" preserveAspectRatio="none"/></pattern>`;
++    const src = fill.sourceRect ?? { l: 0, t: 0, r: 0, b: 0 };
++    const dst = fill.fillRect ?? { l: 0, t: 0, r: 0, b: 0 };
++    const iw = (1 - dst.l - dst.r) / Math.max(0.00001, 1 - src.l - src.r);
++    const ih = (1 - dst.t - dst.b) / Math.max(0.00001, 1 - src.t - src.b);
++    const defs = `<pattern id="${id}" patternContentUnits="objectBoundingBox" width="1" height="1"><image href="data:${fill.mimeType};base64,${fill.imageData}" x="${dst.l - src.l * iw}" y="${dst.t - src.t * ih}" width="${iw}" height="${ih}" preserveAspectRatio="none"/></pattern>`;
+     return { attrs: `fill="url(#${id})"`, defs };
+   }
+   if (fill.type === "pattern") {
+@@ -7539,7 +7556,19 @@ function renderCustomGeometry(paths, shapeWidth, shapeHeight) {
+ function renderCustomPath(path, shapeWidth, shapeHeight) {
+   const scaleX = path.width > 0 ? shapeWidth / path.width : 1;
+   const scaleY = path.height > 0 ? shapeHeight / path.height : 1;
+-  return `<path d="${path.commands}" transform="scale(${scaleX}, ${scaleY})"/>`;
++  // Keep image patterns in pixel coordinates, rather than enormous EMU bounds.
++  const commands = path.commands.replace(/([MLCQSTHVAZ])([^MLCQSTHVAZ]*)/gi, (_, command, args) => {
++    let index = 0;
++    const upper = command.toUpperCase();
++    const scaled = args.replace(/[-+]?(?:\d*\.)?\d+(?:e[-+]?\d+)?/gi, value => {
++      const i = index++;
++      let scale = upper === "V" ? scaleY : upper === "H" ? scaleX : i % 2 === 0 ? scaleX : scaleY;
++      if (upper === "A") scale = [scaleX, scaleY, 1, 1, 1, scaleX, scaleY][i % 7];
++      return String(Number(value) * scale);
++    });
++    return command + scaled;
++  });
++  return `<path d="${commands}"/>`;
+ }
+ 
+ // src/utils/text-wrap.ts
+@@ -7628,7 +7657,7 @@ function tokenizeRuns(runs, defaultFontSize, fontScale) {
+           tokens.push({
+             text: fragment,
+             properties: run.properties,
+-            width,
++            width: width + [...fragment].length * (run.properties.letterSpacing ?? 0) * fontScale * 4 / 3,
+             breakable: isFirst ? false : breakable
+           });
+           isFirst = false;
+@@ -7652,7 +7681,7 @@ function tokenizeRuns(runs, defaultFontSize, fontScale) {
+       tokens.push({
+         text: fragment,
+         properties: run.properties,
+-        width,
++        width: width + [...fragment].length * (run.properties.letterSpacing ?? 0) * fontScale * 4 / 3,
+         breakable: isFirst ? false : breakable
+       });
+       isFirst = false;
+@@ -7681,7 +7710,7 @@ function splitTokenByChars(token, availableWidth, defaultFontSize, fontScale) {
+       bold,
+       fontFamily,
+       fontFamilyEa
+-    );
++    ) + (token.properties.letterSpacing ?? 0) * fontScale * 4 / 3;
+     if (currentWidth + charWidth > availableWidth && currentLine.length > 0) {
+       lines.push(currentLine);
+       currentLine = [];
+@@ -8023,6 +8052,13 @@ function renderTextBody(textBody, transform) {
+   const firstParaFontSizePt = getParagraphFontSize(paragraphs[0], defaultFontSize) * fontScale;
+   const firstLineBaselineOffsetPt = firstParaFontSizePt * defaultAscenderRatio;
+   yStart += firstLineBaselineOffsetPt * PX_PER_PT3;
++  const first = paragraphs[0];
++  if (first.properties.lineSpacingPoints != null) {
++    const natural = computeLineNaturalHeight(first.runs, defaultFontSize, fontScale);
++    const leading = first.properties.lineSpacingPoints * fontScale - natural;
++    yStart += Math.max(0, leading) * PX_PER_PT3 / 2;
++  }
++  if (totalTextHeight > height - marginTopPx - marginBottomPx + 1) warn("text.overflow", "Text exceeds its original frame; review wrapping and placement");
+   const textElement = `<text x="0" y="${yStart}" xml:space="preserve">${tspans.join("")}</text>`;
+   if (isVerticalText(bodyProperties.vert)) {
+     return `<g transform="translate(${originalWidth}, 0) rotate(90)">${textElement}</g>`;
+@@ -8138,6 +8174,10 @@ function getAlignmentInfo(alignment, marginLeftPx, textWidth, width, marginRight
+   }
+ }
+ function getLineSpacing(para, lnSpcReduction = 0) {
++  if (para.properties.lineSpacingPoints != null) {
++    const naturalHeight = computeLineNaturalHeight(para.runs, getDefaultFontSize([para]), 1);
++    return Math.max(0, para.properties.lineSpacingPoints) / Math.max(0.01, naturalHeight) * (1 - lnSpcReduction);
++  }
+   let spacing;
+   if (para.properties.lineSpacing !== null) {
+     const factor = para.properties.lineSpacing / 1e5;
+@@ -8444,7 +8484,7 @@ function measureLineWidth(segments, defaultFontSize, fontScale) {
+       seg.properties.bold,
+       seg.properties.fontFamily,
+       seg.properties.fontFamilyEa
+-    );
++    ) + [...seg.text].length * (seg.properties.letterSpacing ?? 0) * fontScale * PX_PER_PT3;
+   }
+   return totalWidth;
+ }
+@@ -8501,7 +8541,7 @@ function renderSegmentAsPath(text, props, x, y, fontScale, defaultFontSize, font
+       props.fontFamilyEa
+     );
+     if (font) {
+-      const path = font.getPath(segText, x + totalWidth, effectiveY, fontSizePx);
++      const path = font.getPath(segText, x + totalWidth, effectiveY, fontSizePx, { letterSpacing: (props.letterSpacing ?? 0) / Math.max(fontSize / fontScale, 0.01) });
+       const pathData = path.toPathData(2);
+       if (pathData && pathData.length > 0) {
+         const fillAttrs = buildPathFillAttrs(props);
+@@ -8511,7 +8551,7 @@ function renderSegmentAsPath(text, props, x, y, fontScale, defaultFontSize, font
+     if (props.underline || props.strikethrough) {
+       parts.push(...renderTextDecorations(x + totalWidth, effectiveY, segWidth, fontSizePx, props));
+     }
+-    totalWidth += segWidth;
++    totalWidth += segWidth + [...segText].length * (props.letterSpacing ?? 0) * fontScale * PX_PER_PT3;
+   };
+   const processCjkUpright = (segText, fontFamily, fontFamilyEa) => {
+     if (segText.length === 0) return;
+@@ -8542,7 +8582,7 @@ function renderSegmentAsPath(text, props, x, y, fontScale, defaultFontSize, font
+           ...renderTextDecorations(x + totalWidth, effectiveY, charWidth, fontSizePx, props)
+         );
+       }
+-      totalWidth += charWidth;
++      totalWidth += charWidth + (props.letterSpacing ?? 0) * fontScale * PX_PER_PT3;
+     }
+   };
+   if (vert === "eaVert") {
+@@ -8579,7 +8619,12 @@ function renderBulletAsPath(bulletText, x, y, paraProps, textFontSizePt, fontSca
+     bulletFontSize = textFontSizePt * (paraProps.bulletSizePct / 1e5);
+   }
+   const fontSizePx = bulletFontSize * PX_PER_PT3;
+-  const font = paraProps.bulletFont ? fontResolver.resolveFont(paraProps.bulletFont, null) : fontResolver.resolveFont(runFontFamily ?? null, runFontFamilyEa ?? null);
++  let font = paraProps.bulletFont ? fontResolver.resolveFont(paraProps.bulletFont, null) : fontResolver.resolveFont(runFontFamily ?? null, runFontFamilyEa ?? null);
++  if (font?.charToGlyphIndex && !font.charToGlyphIndex(bulletText)) {
++    warn("bullet.missingGlyph", "Bullet font has no glyph; using a standard bullet");
++    bulletText = "\u2022";
++    font = fontResolver.resolveFont(runFontFamily ?? null, runFontFamilyEa ?? null);
++  }
+   if (!font) return [];
+   const path = font.getPath(bulletText, x, y, fontSizePx);
+   const pathData = path.toPathData(2);
+@@ -9075,7 +9120,7 @@ function escapeXmlAttr(str) {
+ 
+ // src/converter.ts
+ async function convertPptxToSvg(input, options) {
+-  const setup = await createOpentypeSetupFromSystem(options?.fontDirs, options?.fontMapping);
++  const setup = await createOpentypeSetupFromSystem(options?.fontDirs, options?.fontMapping, options?.skipSystemFonts);
+   if (setup) {
+     setTextMeasurer(setup.measurer);
+     setTextPathFontResolver(setup.fontResolver);
+@@ -9097,7 +9142,9 @@ async function convertPptxToSvg(input, options) {
+       const { slide, layoutElements, layoutShowMasterSp, masterElements } = parsed;
+       const effectiveMasterElements = slide.showMasterSp && layoutShowMasterSp ? masterElements : [];
+       slide.elements = mergeElements(effectiveMasterElements, layoutElements, slide.elements);
++      const warningStart = entries.length;
+       const svg = renderSlideToSvg(slide, data.presInfo.slideSize);
++      for (const entry of entries.slice(warningStart)) if (!entry.context) entry.context = "Slide " + slideNumber;
+       results.push({ slideNumber, svg });
+     }
+     flushWarnings();
+@@ -9157,6 +9204,7 @@ function collectUsedFonts(input) {
+       const parsed = parseSlideWithLayout(slideNumber, path, data);
+       if (!parsed) continue;
+       collectFontsFromElements(parsed.slide.elements, fonts);
++      collectFontsFromElements(parsed.layoutElements, fonts);
+       if (!collectedMasters.has(parsed.masterElements)) {
+         collectedMasters.add(parsed.masterElements);
+         collectFontsFromElements(parsed.masterElements, fonts);
+@@ -9178,6 +9226,8 @@ function collectUsedFonts(input) {
+   }
+ }
+ function collectThemeFonts(fontScheme, fonts) {
++  if (fontScheme.majorFontJpan) fonts.add(fontScheme.majorFontJpan);
++  if (fontScheme.minorFontJpan) fonts.add(fontScheme.minorFontJpan);
+   fonts.add(fontScheme.majorFont);
+   fonts.add(fontScheme.minorFont);
+   if (fontScheme.majorFontEa) fonts.add(fontScheme.majorFontEa);
