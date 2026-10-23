@@ -1,6 +1,6 @@
 {
   "name": "worship-presentation-assistant",
-  "version": "1.4.20",
+  "version": "1.4.21",
   "main": "dist-electron/main.js",
   "description": "Worship Presentation Assistant - Simple Worship Presentation App",
   "author": "IPCA",
@@ -32,7 +32,11 @@
     "test:gradients": "tsx --test src/shared/generatedBackground.test.ts src/renderer/gradientMedia.test.ts",
     "test:architecture": "tsx --test src/main/previewUpdates.test.ts src/shared/canvasLayout.test.ts src/main/shareTransport.test.ts src/main/preload.test.cjs src/renderer/state/useStore.test.ts src/renderer/keyboardCommands.test.ts",
     "analyze:fallow": "npx --yes fallow@3.33.1 --format json --quiet --explain",
-    "analyze:source": "npx --yes fallow@3.33.1 --root src --config .fallowrc.source.json dead-code --format json --quiet --explain"
+    "analyze:source": "npx --yes fallow@3.33.1 --root src --config .fallowrc.source.json dead-code --format json --quiet --explain",
+    "test:music": "tsx --test src/main/youtubeSearchPager.test.ts src/main/youtubeMusicLookup.test.ts src/main/offlineMusicCache.test.ts src/renderer/musicSlides.test.ts src/renderer/audio/musicEnvelope.test.ts && node --test src/main/youtubeMusicContext.test.cjs",
+    "test:workspace:e2e": "playwright test workspace-layout.spec.cjs hymn-part-keys.spec.cjs music-modal.spec.cjs slide-audio.spec.cjs offline-music.spec.cjs",
+    "postinstall": "patch-package --error-on-fail",
+    "test:pptx": "tsx --test src/main/pptxRender.test.ts src/main/pptxFontFiles.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -51,7 +55,7 @@
     "jpeg-js": "0.4.4",
     "lucide-react": "^0.363.0",
     "motion": "^13.4.0",
-    "pptx-glimpse": "^0.10.4",
+    "pptx-glimpse": "0.10.4",
     "pptxgenjs": "^4.0.1",
     "qrcode": "^1.5.1",
     "react": "^18.2.0",
@@ -81,11 +85,14 @@
     "autoprefixer": "^10.4.19",
     "electron": "43.4.0",
     "electron-builder": "26.15.3",
+    "esbuild": "^0.28.0",
     "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.34.1",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
+    "google-auth-library": "^10.5.0",
     "mediabunny": "1.61.3",
+    "patch-package": "8.0.1",
     "postcss": "^8.4.38",
     "prettier": "^3.2.5",
     "rimraf": "^6.1.3",
@@ -94,9 +101,7 @@
     "typescript": "^5.4.2",
     "vite": "^5.1.6",
     "vite-plugin-electron": "^0.28.2",
-    "vite-plugin-electron-renderer": "^0.14.5",
-    "esbuild": "^0.28.0",
-    "google-auth-library": "^10.5.0"
+    "vite-plugin-electron-renderer": "^0.14.5"
   },
   "build": {
     "compression": "normal",

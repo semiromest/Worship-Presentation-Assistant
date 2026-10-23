@@ -9,6 +9,7 @@ const allowed = new Map([
   ['editor/CanvasStage.tsx', 2], // held-modifier state; checks isHelpActive
   ['editor/SlideEditor.tsx', 1], // existing popover Escape; checks isHelpActive
   ['editor/EditorPasteMenu.tsx', 1], // existing paste Escape; checks isHelpActive
+  ['components/HymnLibraryList.tsx', 1], // tooltip Escape dismissal, not application shortcuts
   ['sfx.ts', 1], // one-shot audio unlock, not an application shortcut
 ]);
 function captures(source, file = 'input.ts') {

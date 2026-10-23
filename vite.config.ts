@@ -35,6 +35,7 @@ export default defineConfig({
               input: {
                 main: path.join(__dirname, 'src/main/main.ts'),
                 heavyWorker: path.join(__dirname, 'src/main/utility/heavyWorker.ts'),
+                pptxImportWorker: path.join(__dirname, 'src/main/utility/pptxImportWorker.ts'),
                 gradientWorker: path.join(__dirname, 'src/main/utility/gradientWorker.ts'),
               },
               output: { entryFileNames: '[name].js' },

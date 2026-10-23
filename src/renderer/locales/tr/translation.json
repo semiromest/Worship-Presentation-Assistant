@@ -1,5 +1,7 @@
 {
   "gradient": {
+    "customColors": "Özel renkler",
+    "colorNumber": "Renk {{number}}",
     "animation": "Animasyon",
     "aurora": "Aurora",
     "waves": "Dalgalar",
@@ -35,7 +37,24 @@
       "amber": "Kehribar",
       "rose": "Gül",
       "smoke": "Duman"
-    }
+    },
+    "scopeSlideHint": "Yalnızca düzenlenen slayt.",
+    "scopeNoGroup": "Bu slayt bir gruba ait değil.",
+    "scopeSelectionHint": "Slaytlar alanında seçtiğiniz slaytlar.",
+    "scopeNoSelection": "Önce Slaytlar alanında birden fazla slayt seçin.",
+    "targetCount": "{{count}} slayta uygulanacak",
+    "targetList": "Uygulanacak slaytlar",
+    "untitledSlide": "İçeriksiz slayt",
+    "textOnly": "Yalnızca metin slaytlarının arka planı değişir.",
+    "groupInheritance": "Bu gruba sonradan eklenen uygun slaytlar da aynı arka planı devralır.",
+    "linear": "Düz geçiş",
+    "startColor": "Başlangıç rengi",
+    "endColor": "Bitiş rengi",
+    "angle": "Açı",
+    "remove": "Gradyanı kaldır",
+    "colors": "Renkler",
+    "presets": "Hazır paletler",
+    "appearance": "Görünüm"
   },
   "nav": {
     "editor": "Editör",
@@ -179,10 +198,20 @@
     "remoteLoadingDesc": "QR kodu oluşturuluyor, lütfen bekleyin.",
     "remoteQrAlt": "Uzaktan kontrol QR kodu — telefonunuzla tarayın",
     "remoteDiagTitle": "Bağlantı Sorunlarını Teşhis Et",
+    "remoteDiagFirewallCheck": "Güvenlik duvarı ve ağ izni",
+    "remoteDiagProfilePublic": "Ortak ağ",
+    "remoteDiagProfilePrivate": "Özel ağ",
+    "remoteDiagProfileDomain": "Etki alanı ağı",
+    "remoteDiagFirewallStatusallowed": "Windows kurallarında bağlantıya izin veriliyor. Telefondan erişim ayrıca doğrulanmalıdır.",
+    "remoteDiagFirewallStatusdisabled": "Windows güvenlik duvarı bu ağda kapalı; Windows tarafından bir engel saptanmadı.",
+    "remoteDiagFirewallStatusblocked": "Bu ağda gelen bağlantıları engelleyen bir Windows güvenlik duvarı ayarı bulundu.",
+    "remoteDiagFirewallStatusmissingPermission": "Bu ağ için uygulamaya veya bağlantı noktasına gelen bağlantı izni bulunamadı; Windows bağlantıyı engelleyebilir.",
+    "remoteDiagFirewallStatusunknown": "Windows ağ izinleri doğrulanamadı. Kısıtlı kurallar, erişim yetkisi veya başka bir güvenlik yazılımı nedeniyle sonuç kesinleştirilemedi.",
+    "remoteDiagFirewallPermissionHint": "Telefon, izleyici ve altyazı bağlantıları için Windows Güvenliği > Güvenlik duvarı ve ağ koruması > Güvenlik duvarı üzerinden bir uygulamaya izin ver bölümünden Worship Presentation Assistant uygulamasının kullanılan ağ türündeki (Özel/Ortak) iznini kontrol edin. Güvenlik duvarını açık tutun ve yalnızca güvendiğiniz ağlarda izin verin.",
     "remoteDiagRun": "Teşhisi Başlat",
     "remoteDiagRunning": "Teşhis yapılıyor...",
     "remoteDiagRetry": "Tekrar Dene",
-    "remoteDiagFirewallTitle": "⚠ Güvenlik Duvarı Engel Tespit Edildi",
+    "remoteDiagFirewallTitle": "Güvenlik duvarı engeli olabilir",
     "remoteDiagFirewallStep1": "Windows Güvenlik Duvarı > Gelen Kuralları'nda 'Worship Presentation Assistant' uygulamasına izin verildiğinden emin olun",
     "remoteDiagFirewallStep2": "Antivirüs yazılımınız varsa (Avast, Kaspersky vb.) uygulamayı güvenilir listeye ekleyin",
     "remoteDiagFirewallStep3": "Halka açık Wi-Fi ağlarında (otel, kafe) AP izolasyonu olabilir — mobil hotspot kullanmayı deneyin",
@@ -225,7 +254,7 @@
     "selectedSlideEditor": "Seçili Slayt Düzenleyici",
     "countdownEditor": "Geri Sayım Düzenleyici",
     "detailedEdit": "Detaylı Düzenle",
-    "fontSize": "Punto",
+    "fontSize": "Yazı boyutu",
     "fontFamily": "Font Ailesi",
     "background": "Arka Plan",
     "text": "Metin",
@@ -347,12 +376,12 @@
     "hymnsPartsModeOn": "Parça Modu Açık - İlahi tek slayta bölünür",
     "hymnsPartsModeOff": "Parça Modu Kapalı - İlahi ayrı slaytlara bölünür",
     "hymnsPartsMode": "Parça Modu",
-    "hymnsAuthorOnSlides": "Yazarı göster",
-    "hymnsAuthorOnSlidesOn": "Slaytlarda yazar gösteriliyor",
-    "hymnsAuthorOnSlidesOff": "Slaytlarda yazar gizli",
-    "hymnsAuthorPosition": "Yazar konumu",
-    "hymnsAuthorPositionDesc": "Yazar isminin slayt üzerindeki yeri",
-    "hymnsAuthorSize": "Yazar yazı boyutu",
+    "hymnsAuthorOnSlides": "İlahi adı ve yazarı göster",
+    "hymnsAuthorOnSlidesOn": "Slaytlarda ilahi adı ve yazar gösteriliyor",
+    "hymnsAuthorOnSlidesOff": "Slaytlarda ilahi adı ve yazar gizli",
+    "hymnsAuthorPosition": "İlahi adı ve yazar konumu",
+    "hymnsAuthorPositionDesc": "İlahi adı ve yazarın slayt üzerindeki ortak konumu",
+    "hymnsAuthorSize": "İlahi adı ve yazar yazı boyutu",
     "hymnsAuthorPosBottomLeft": "Sol alt",
     "hymnsAuthorPosBottomCenter": "Alt orta",
     "hymnsAuthorPosBottomRight": "Sağ alt",
@@ -430,6 +459,9 @@
     "calendarUpdate": "Güncelle",
     "clickToRename": "Yeniden adlandırmak için tıklayın",
     "mediaLibrary": "Medya Kütüphanesi",
+    "mediaAddSelected": "Seçilenleri slayta ekle ({{count}})",
+    "mediaClearSelection": "Seçimi temizle",
+    "mediaAddAll": "Tümünü slayta ekle",
     "mediaTabs": "Medya Sekmeleri",
     "mediaVolume": "Medya Ses Seviyesi",
     "mediaAdd": "Medya Ekle",
@@ -1012,7 +1044,9 @@
     "editorAlignToSelection": "Seçime göre",
     "editorSameWidth": "Aynı genişlik",
     "editorSameHeight": "Aynı yükseklik",
-    "editorSafeArea": "Güvenli alanı göster (%5)"
+    "editorSafeArea": "Güvenli alanı göster (%5)",
+    "importCompleteWithWarnings": "Uyarılarla içe aktarıldı",
+    "importReviewWarnings": "Bazı yazı tipleri veya öğeler tam korunamamış olabilir. Yayına göndermeden önce slaytları kontrol edin."
   },
   "warnings": {
     "minSlides": "En az 1 slayt kalmalı!",
@@ -1028,7 +1062,12 @@
     "ko": "Korece"
   },
   "countdown": {
-    "remaining": "{{time}} kaldı"
+    "remaining": "{{time}} kaldı",
+    "preview": "Önizleme",
+    "ready": "Hazır",
+    "running": "Çalışıyor",
+    "previewHint": "Bu deneme sunumdaki sayacı değiştirmez. Slayta Ekle, ayarlanan süreyle yeni bir sayaç başlatır.",
+    "durationLocked": "Süreyi değiştirmek için deneme sayacını sıfırlayın."
   },
   "loop": {
     "noItems": "Loop öğesi yok"
@@ -1064,6 +1103,7 @@
     "error": "Drive hatası"
   },
   "transition": {
+    "label": "Geçiş",
     "settings": "Geçiş Ayarları",
     "type": "Geçiş Türü",
     "duration": "Geçiş Süresi",
@@ -1158,7 +1198,9 @@
     "youtubeLoading": "YouTube müziği hazırlanıyor…",
     "youtubeNoResults": "Sonuç bulunamadı.",
     "youtubeSearch": "YouTube'da ara",
-    "youtubeSearchPlaceholder": "YouTube müziği ara...",
+    "youtubeSearchPlaceholder": "Şarkı adı veya YouTube bağlantısı…",
+    "youtubeInvalidLink": "Geçerli bir YouTube video bağlantısı girin.",
+    "youtubeVideoUnavailable": "Bu videoya erişilemiyor. Bağlantıyı kontrol edin.",
     "youtubeSearchError": "YouTube araması başarısız oldu.",
     "youtubePlayError": "YouTube sesi oynatılamadı.",
     "soundEffectsDesc": "Arayüz ses efektleri (minimal paket)",
@@ -1241,6 +1283,7 @@
         "clear-live-saves": "otomatik kayıt temizle sil yedek",
         "updates": "güncelleme sürüm indir",
         "learn": "alıştırma rehber öğren yardım nasıl kullanılır",
+        "shortcuts": "klavye kısayollar tuşlar yardım",
         "soniox-website": "soniox resmi site hesap ücret kullanım",
         "stt-clear-key": "api anahtar temizle kaldır sil",
         "appearance-preview": "önizleme simülasyon logo yazar boyut konum"
@@ -1277,7 +1320,10 @@
     "completed": "Kontrol tamamlandı",
     "slideErrors": "Hata içeren {{count}} sorun. Slayt raporunu aç.",
     "slideWarnings": "{{count}} uyarı. Slayt raporunu aç.",
-    "severity": {"error":"Hata","warning":"Uyarı"},
+    "severity": {
+      "error": "Hata",
+      "warning": "Uyarı"
+    },
     "title": "Hazırlık Kontrolü",
     "button": "Hazırlık Kontrolü",
     "allClear": "Her şey hazır görünüyor",
@@ -1294,7 +1340,6 @@
       "inaccessibleMedia": "Medya dosyası bulunamadı veya okunamıyor.",
       "fontUnavailable": "Font çevrimdışı kullanıma hazırlanamadı; farklı bir font seçin veya bağlantıyı kontrol edin.",
       "textOverflow": "Metin gösterim alanına sığmıyor. Uzun ayeti/metni bölün veya yazı boyutunu azaltın.",
-
       "duplicateSlide": "Bu slayt bir öncekiyle aynı görünüyor."
     },
     "checking": "Kontrol ediliyor; fontlar çevrimdışı kullanım için hazırlanıyor…",
@@ -1306,16 +1351,19 @@
     "splitAction": "Metni okunabilir parçalara böl"
   },
   "library": {
+    "tools": "Sunum işlemleri",
+    "powerPoint": "PowerPoint",
+    "saveFile": "Dosyaya Kaydet",
     "subtitle": "İbadet sunumunu hazırla, çalışmanı kaydet ve sunumlarını bul.",
     "current": "Üzerinde çalışılan sunum",
     "slideCount": "{{count}} slayt",
-    "saved": "Kütüphaneye kaydedildi",
-    "unsaved": "Kütüphaneye kaydedilmemiş değişiklikler",
+    "saved": "Kayıtlı Sunumlara kaydedildi",
+    "unsaved": "Kayıtlı Sunumlara kaydedilmemiş değişiklikler",
     "backupOn": "Otomatik yedekleme açık",
     "backupOff": "Otomatik yedekleme kapalı",
     "backupAt": "Son yedek: {{time}}",
     "continueEditing": "Slaytları Düzenle",
-    "save": "Kütüphaneye Kaydet",
+    "save": "Kayıtlı Sunumlara Kaydet",
     "fileTools": "Dosya ve PowerPoint İşlemleri",
     "saveFailed": "Kaydedilemedi. Sunumunuz açık duruyor; tekrar deneyin.",
     "operationFailed": "İşlem tamamlanamadı. Tekrar deneyin.",
@@ -1508,7 +1556,7 @@
       },
       "presentations": {
         "title": "Kütüphaneye kaydet",
-        "body": "Sunumlar bölümünde Alıştırma sunumunu kütüphaneye kaydedin. Gerçek dosyaya yazılmaz."
+        "body": "Sunumlar sayfasında “Üzerinde çalışılan sunum” alanındaki Kütüphaneye Kaydet düğmesini kullanın. Bu görev Dosyaya Kaydet işlemini değil, alıştırma kütüphanesine kaydı tamamlar."
       },
       "hymns": {
         "title": "İlahiler",
@@ -1561,7 +1609,7 @@
       },
       "presentations": {
         "title": "Sunumlar",
-        "body": "Burası sunumlarını oluşturabileceğin, kaydedebileceğin ve yönetebileceğin alan. Şimdilik bu bölümü tanıyalım. Birazdan kendi slaytlarını hazırlayacaksın."
+        "body": "Üstte yeni sunum, dosya, yedek, Drive ve PowerPoint işlemleri bir arada. Altındaki “Üzerinde çalışılan sunum” alanında açık sunumun adını ve kayıt durumunu görebilir, slaytlarını düzenleyebilirsin."
       },
       "sidebar": {
         "title": "Uygulamada gezinme",
@@ -1649,7 +1697,7 @@
       },
       "settings-intro": {
         "title": "Bu uygulamayı kendine göre ayarla",
-        "body": "Bu bölümden uygulama dilini ve diğer tercihlerini yönetebilirsin. Ayrıca Yardım bölümünden öğreticileri yeniden başlatabilir ve uygulama bölümlerini tekrar keşfedebilirsin."
+        "body": "Ayarları kategorilerden bulabilir veya arama alanını kullanabilirsin. “Nasıl Kullanılır?” kategorisinden Adım Adım Öğren rehberine yeniden ulaşabilirsin."
       },
       "nav-save": {
         "title": "Sunumlar bölümüne dön",
@@ -1701,7 +1749,7 @@
       },
       "save": {
         "title": "Sunumunu kütüphaneye kaydet",
-        "body": "Kütüphaneye Kaydet düğmesine tıkla. Sunumun yalnızca alıştırma profilinin kütüphanesine kaydedilecek; gerçek sunumların etkilenmeyecek."
+        "body": "“Üzerinde çalışılan sunum” alanındaki mavi “Kütüphaneye Kaydet” düğmesine tıkla. “Dosyaya Kaydet” ayrı bir işlemdir. Bu alıştırmada yalnızca alıştırma kütüphanesine kayıt yapılır; gerçek sunumların etkilenmez."
       },
       "add-result": {
         "title": "İlk slaytın hazır!",
@@ -1837,5 +1885,85 @@
     "volume": "Bu slaydın ses seviyesi",
     "volumeHint": "Genel ses seviyesiyle birlikte uygulanır. Başlık ve görünüm değişiklikleri müziği yeniden başlatmaz.",
     "fadeHint": "Ses 0,5 saniyede açılır. Slayttan ayrılınca 0,8 saniyede azalır. Durdur ve çıktı kapatma sesi anında keser."
+  },
+  "slidesWorkspace": {
+    "readiness": "Hazırlık",
+    "help": "Kısayollar",
+    "music": "Müzik",
+    "viewers": "İzleyiciler",
+    "phone": "Telefon",
+    "locked": "Kilitli",
+    "direct": "Doğrudan yayın",
+    "selectedTitle": "Seçili slayt · {{number}}",
+    "editingLive": "Canlı slayt düzenleniyor",
+    "content": "İçerik",
+    "appearance": "Görünüm",
+    "background": "Arka plan",
+    "selectionTools": "Seçili slayt işlemleri",
+    "displays": "Ekranlar",
+    "openEditor": "Editörde aç",
+    "partsNavigationHint": "↑ ↓: ilahi parçaları · ← →: slaytlar"
+  },
+  "offlineMusic": {
+    "download": "İndir",
+    "downloading": "İndiriliyor",
+    "ready": "Çevrimdışı hazır",
+    "cancel": "İndirmeyi iptal et",
+    "hint": "Müziği bu bilgisayara indir; sonraki oynatmalarda internet gerekmez.",
+    "localHint": "Bu bilgisayarda kayıtlı. Sunum dosyasına gömülmez.",
+    "error": "İndirme tamamlanamadı. İnternet bağlantısını ve disk alanını kontrol edip tekrar deneyin.",
+    "busy": "Başka bir müzik indiriliyor. Tamamlandıktan sonra tekrar deneyin."
+  },
+  "slideAudio": {
+    "add": "Müzik ekle",
+    "dialogTitle": "Seçili slayta müzik ekle",
+    "attach": "Bu slayta bağla",
+    "attachHint": "Slaytın görünümü değişmez. Otomatik oynatma sağ panelden açılır.",
+    "autoPlay": "Otomatik oynat",
+    "autoHint": "Açıkken slayt canlıya geçtiğinde müzik başlar. Seçmek veya bu ayarı değiştirmek başlatmaz.",
+    "play": "Slaytın müziğini oynat",
+    "liveFirst": "Oynatmak için slaytı canlıya gönder",
+    "change": "Müziği değiştir",
+    "remove": "Müziği kaldır"
+  },
+  "hymnLibrary": {
+    "newHymn": "Yeni İlahi",
+    "hymn": "İlahi",
+    "actions": "İşlemler",
+    "searchLyrics": "Sözlerde de ara",
+    "sort": "Sıralama",
+    "original": "Mevcut sıra",
+    "ascending": "İlahi adı: A–Z",
+    "descending": "İlahi adı: Z–A",
+    "clearSearch": "Aramayı temizle",
+    "addHint": "Sunuma eklemek için ilahiye tıklayın.",
+    "resultCount": "{{matched}} / {{total}} ilahi",
+    "noResults": "Aramanızla eşleşen ilahi bulunamadı.",
+    "addNamed": "{{title}} — sunuma ekle",
+    "editNamed": "{{title}} — düzenle",
+    "deleteNamed": "{{title}} — sil"
+  },
+  "gradientLibrary": {
+    "title": "Gradyan",
+    "design": "Tasarla",
+    "library": "Gradientlerim",
+    "quickApply": "Gradyan",
+    "openEditor": "Editörde gradient oluştur",
+    "empty": "Henüz kayıtlı gradient yok. Editörde bir tasarım oluşturup kütüphaneye kaydedin.",
+    "libraryError": "Gradient kütüphanesi yüklenemedi.",
+    "deleteNamed": "{{name}} — kütüphaneden sil",
+    "skipped": "{{count}} uygun olmayan slayt atlanacak.",
+    "liveIncluded": "Canlı slayt dahil",
+    "previewHint": "Tuvaldeki değişiklikler önizlemedir.",
+    "applyDraft": "Taslağa uygula · {{count}} slayt",
+    "appliedDraft": "Sunuma aktarmak için editörün Kaydet düğmesini kullanın.",
+    "saveLibrary": "Kütüphaneye kaydet",
+    "name": "Gradient adı",
+    "confirmSave": "Tasarımı kaydet",
+    "saveHint": "Kütüphaneye kaydetmek slaydı değiştirmez.",
+    "saved": "Gradient kütüphaneye kaydedildi.",
+    "removed": "Kayıt kaldırıldı. Mevcut slaytlardaki arka planlar korundu.",
+    "backgroundOnly": "Arka plan düzenleme",
+    "backgroundOnlyHint": "Bu slaytın metin ve parça ayarları Slaytlar bölümünde kalır. Burada gradient arka planını tasarlayıp uygulayabilirsiniz."
   }
 }

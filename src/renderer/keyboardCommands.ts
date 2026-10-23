@@ -17,14 +17,15 @@ export interface KeyContext {
 export type KeyboardCommand =
   | { type: 'tab'; destination: NonNullable<ReturnType<typeof tabForShortcut>> }
   | { type: 'move'; direction: -1 | 1 }
+  | { type: 'part'; direction: -1 | 1 }
   | { type: 'navigate'; direction: 'next' | 'previous' | 'first' | 'last' }
   | {
       type: 'undo' | 'redo' | 'help' | 'duplicate' | 'delete' | 'mute' | 'live' | 'close-output' | 'blackout' | 'clear';
     };
 
 const navigation = new Map<string, 'next' | 'previous' | 'first' | 'last'>([
-  ...['ArrowRight', 'ArrowDown', ' ', 'PageDown', 'j', 'J'].map((key) => [key, 'next'] as const),
-  ...['ArrowLeft', 'ArrowUp', 'PageUp', 'k', 'K'].map((key) => [key, 'previous'] as const),
+  ...['ArrowRight', ' ', 'PageDown', 'j', 'J'].map((key) => [key, 'next'] as const),
+  ...['ArrowLeft', 'PageUp', 'k', 'K'].map((key) => [key, 'previous'] as const),
   ['Home', 'first'],
   ['End', 'last'],
 ]);
@@ -59,6 +60,10 @@ export function resolveKeyboardCommand(e: KeyInput, state: KeyContext): Keyboard
   if (e.altKey && !e.ctrlKey && !e.metaKey && destination) return { type: 'tab', destination };
   const editing = editingCommand(e, state);
   if (editing) return editing;
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    if (state.activeTab !== 'slides' || state.helpOpen || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return null;
+    return { type: 'part', direction: e.key === 'ArrowDown' ? 1 : -1 };
+  }
   if (e.key.toLowerCase() === 'm' && !state.helpOpen) return { type: 'mute' };
   const direction = navigation.get(e.key);
   if (direction) return { type: 'navigate', direction };

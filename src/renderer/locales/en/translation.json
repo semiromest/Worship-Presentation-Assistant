@@ -1,5 +1,7 @@
 {
   "gradient": {
+    "customColors": "Custom colors",
+    "colorNumber": "Color {{number}}",
     "animation": "Animation",
     "aurora": "Aurora",
     "waves": "Waves",
@@ -35,7 +37,24 @@
       "amber": "Amber",
       "rose": "Rose",
       "smoke": "Smoke"
-    }
+    },
+    "scopeSlideHint": "Only the slide being edited.",
+    "scopeNoGroup": "This slide is not in a group.",
+    "scopeSelectionHint": "Slides selected in the Slides workspace.",
+    "scopeNoSelection": "Select multiple slides in the Slides workspace first.",
+    "targetCount": "Will apply to {{count}} slides",
+    "targetList": "Slides to update",
+    "untitledSlide": "Untitled slide",
+    "textOnly": "Only text slide backgrounds will change.",
+    "groupInheritance": "Eligible slides added to this group later also inherit this background.",
+    "linear": "Linear",
+    "startColor": "Start color",
+    "endColor": "End color",
+    "angle": "Angle",
+    "remove": "Remove gradient",
+    "colors": "Colors",
+    "presets": "Presets",
+    "appearance": "Appearance"
   },
   "nav": {
     "editor": "Editor",
@@ -174,10 +193,20 @@
     "displayStageHint": "Current + next slide, clock and elapsed time",
     "remoteQrAlt": "Remote control QR code — scan with your phone",
     "remoteDiagTitle": "Diagnose Connection Issues",
+    "remoteDiagFirewallCheck": "Firewall and network permission",
+    "remoteDiagProfilePublic": "Public network",
+    "remoteDiagProfilePrivate": "Private network",
+    "remoteDiagProfileDomain": "Domain network",
+    "remoteDiagFirewallStatusallowed": "Windows rules allow the connection. Access from the phone still needs to be verified.",
+    "remoteDiagFirewallStatusdisabled": "Windows Firewall is off for this network; no Windows firewall block was detected.",
+    "remoteDiagFirewallStatusblocked": "A Windows firewall setting blocks incoming connections on this network.",
+    "remoteDiagFirewallStatusmissingPermission": "No inbound permission was found for the app or port on this network; Windows may block the connection.",
+    "remoteDiagFirewallStatusunknown": "Windows network permissions could not be verified. Scoped rules, access restrictions or other security software may prevent a conclusive result.",
+    "remoteDiagFirewallPermissionHint": "For phone, viewer and caption links, open Windows Security > Firewall & network protection > Allow an app through firewall and check Worship Presentation Assistant for the current network type (Private/Public). Keep the firewall on and allow access only on trusted networks.",
     "remoteDiagRun": "Run Diagnostics",
     "remoteDiagRunning": "Running diagnostics...",
     "remoteDiagRetry": "Retry",
-    "remoteDiagFirewallTitle": "⚠ Firewall Block Detected",
+    "remoteDiagFirewallTitle": "A firewall may be blocking the connection",
     "remoteDiagFirewallStep1": "Make sure 'Worship Presentation Assistant' is allowed in Windows Firewall → Inbound Rules",
     "remoteDiagFirewallStep2": "If you have antivirus (Avast, Kaspersky, etc.), add the app to the trusted list",
     "remoteDiagFirewallStep3": "Public Wi-Fi (hotels, cafés) may have AP isolation — try using a mobile hotspot",
@@ -347,12 +376,12 @@
     "hymnsPartsModeOn": "Part Mode ON - Hymn split into one slide",
     "hymnsPartsModeOff": "Part Mode OFF - Hymn split into multiple slides",
     "hymnsPartsMode": "Parts Mode",
-    "hymnsAuthorOnSlides": "Show author",
-    "hymnsAuthorOnSlidesOn": "Author shown on slides",
-    "hymnsAuthorOnSlidesOff": "Author hidden on slides",
-    "hymnsAuthorPosition": "Author position",
-    "hymnsAuthorPositionDesc": "Where the author name appears on the slide",
-    "hymnsAuthorSize": "Author text size",
+    "hymnsAuthorOnSlides": "Show hymn title and author",
+    "hymnsAuthorOnSlidesOn": "Hymn title and author shown on slides",
+    "hymnsAuthorOnSlidesOff": "Hymn title and author hidden on slides",
+    "hymnsAuthorPosition": "Hymn title and author position",
+    "hymnsAuthorPositionDesc": "Where the hymn title and author appear together on the slide",
+    "hymnsAuthorSize": "Hymn title and author text size",
     "hymnsAuthorPosBottomLeft": "Bottom left",
     "hymnsAuthorPosBottomCenter": "Bottom center",
     "hymnsAuthorPosBottomRight": "Bottom right",
@@ -430,6 +459,9 @@
     "calendarUpdate": "Update",
     "clickToRename": "Click to rename",
     "mediaLibrary": "Media Library",
+    "mediaAddSelected": "Add selected to slides ({{count}})",
+    "mediaClearSelection": "Clear selection",
+    "mediaAddAll": "Add all to slides",
     "mediaTabs": "Media Tabs",
     "mediaVolume": "Media Volume",
     "mediaAdd": "Add Media",
@@ -1014,7 +1046,9 @@
     "editorAlignToSelection": "Selection",
     "editorSameWidth": "Same width",
     "editorSameHeight": "Same height",
-    "editorSafeArea": "Show safe area (5%)"
+    "editorSafeArea": "Show safe area (5%)",
+    "importCompleteWithWarnings": "Imported with warnings",
+    "importReviewWarnings": "Some fonts or elements may not be fully preserved. Review the slides before presenting."
   },
   "warnings": {
     "minSlides": "At least 1 slide must remain!",
@@ -1030,7 +1064,12 @@
     "ko": "한국어"
   },
   "countdown": {
-    "remaining": "{{time}} remaining"
+    "remaining": "{{time}} remaining",
+    "preview": "Preview",
+    "ready": "Ready",
+    "running": "Running",
+    "previewHint": "This preview does not change the presentation timer. Add to Slide starts a new timer with the configured duration.",
+    "durationLocked": "Reset the preview timer to change the duration."
   },
   "loop": {
     "noItems": "No loop items"
@@ -1066,6 +1105,7 @@
     "error": "Drive error"
   },
   "transition": {
+    "label": "Transition",
     "settings": "Transition Settings",
     "type": "Transition Type",
     "duration": "Transition Duration",
@@ -1160,7 +1200,9 @@
     "youtubeLoading": "Preparing YouTube audio…",
     "youtubeNoResults": "No results found.",
     "youtubeSearch": "Search YouTube",
-    "youtubeSearchPlaceholder": "Search YouTube music...",
+    "youtubeSearchPlaceholder": "Song name or YouTube link…",
+    "youtubeInvalidLink": "Enter a valid YouTube video link.",
+    "youtubeVideoUnavailable": "This video is unavailable. Check the link.",
     "youtubeSearchError": "YouTube search failed.",
     "youtubePlayError": "Could not play YouTube audio.",
     "soundEffectsDesc": "Interface sound effects (minimal pack)",
@@ -1243,6 +1285,7 @@
         "clear-live-saves": "automatic save clear delete backup",
         "updates": "updates version download",
         "learn": "practice guide learn help tutorial",
+        "shortcuts": "keyboard shortcuts keys help",
         "soniox-website": "soniox official website account billing usage",
         "stt-clear-key": "api key clear remove delete",
         "appearance-preview": "preview simulation logo author size position"
@@ -1279,7 +1322,10 @@
     "completed": "Check complete",
     "slideErrors": "{{count}} issue(s), including errors. Open slide report.",
     "slideWarnings": "{{count}} warning(s). Open slide report.",
-    "severity": {"error":"Error","warning":"Warning"},
+    "severity": {
+      "error": "Error",
+      "warning": "Warning"
+    },
     "title": "Preparation Check",
     "button": "Prep Check",
     "allClear": "Everything looks ready",
@@ -1307,16 +1353,19 @@
     "splitAction": "Split into readable parts"
   },
   "library": {
+    "tools": "Presentation tools",
+    "powerPoint": "PowerPoint",
+    "saveFile": "Save to File",
     "subtitle": "Prepare your service, save your work and find your presentations.",
     "current": "Current presentation",
     "slideCount": "{{count}} slides",
-    "saved": "Saved to library",
-    "unsaved": "Changes not saved to library",
+    "saved": "Saved to Saved Presentations",
+    "unsaved": "Changes not saved to Saved Presentations",
     "backupOn": "Automatic backup on",
     "backupOff": "Automatic backup off",
     "backupAt": "Backup: {{time}}",
     "continueEditing": "Edit slides",
-    "save": "Save to Library",
+    "save": "Save to Saved Presentations",
     "fileTools": "File & PowerPoint tools",
     "saveFailed": "Could not save. Your presentation remains open. Please try again.",
     "operationFailed": "The operation failed. Please try again.",
@@ -1511,7 +1560,7 @@
       },
       "presentations": {
         "title": "Save to library",
-        "body": "Save the practice presentation to the library in Presentations. No external file is written."
+        "body": "In Presentations, use Save to Library in the current presentation area. This task saves to the practice library, not through Save to File."
       },
       "hymns": {
         "title": "Hymns",
@@ -1564,7 +1613,7 @@
       },
       "presentations": {
         "title": "Presentations",
-        "body": "This is where you can create, save, and manage your presentations. For now, let's get to know this section. Soon you'll be making your own slides."
+        "body": "The tools at the top bring together new presentations, files, backups, Drive, and PowerPoint. Below, the current presentation area shows the open presentation’s name and save status and lets you continue editing its slides."
       },
       "sidebar": {
         "title": "Getting around the app",
@@ -1652,7 +1701,7 @@
       },
       "settings-intro": {
         "title": "Make the app your own",
-        "body": "Here you can manage the app's language and other preferences. You can also restart tutorials from the Help section and explore the app's sections again."
+        "body": "Find settings by category or use the search field. You can return to the step-by-step guide from the learning category."
       },
       "nav-save": {
         "title": "Return to Presentations",
@@ -1704,7 +1753,7 @@
       },
       "save": {
         "title": "Save your presentation to the library",
-        "body": "Click Save to Library. Your presentation will be saved only in the practice profile's library; your real presentations won't be affected."
+        "body": "Click the blue Save to Library button in the current presentation area. Save to File is a separate action. This exercise saves only to the practice library; your real presentations are unaffected."
       },
       "add-result": {
         "title": "Your first slide is ready!",
@@ -1840,5 +1889,85 @@
     "volume": "This slide’s volume",
     "volumeHint": "Combined with the master volume. Changing the title or appearance does not restart the music.",
     "fadeHint": "Audio fades in over 0.5 seconds and fades out over 0.8 seconds when leaving the slide. Stop and closing the output silence it immediately."
+  },
+  "slidesWorkspace": {
+    "readiness": "Readiness",
+    "help": "Shortcuts",
+    "music": "Music",
+    "viewers": "Viewers",
+    "phone": "Phone",
+    "locked": "Locked",
+    "direct": "Direct live",
+    "selectedTitle": "Selected slide · {{number}}",
+    "editingLive": "Editing the live slide",
+    "content": "Content",
+    "appearance": "Appearance",
+    "background": "Background",
+    "selectionTools": "Selected slide actions",
+    "displays": "Displays",
+    "openEditor": "Open editor",
+    "partsNavigationHint": "↑ ↓: hymn parts · ← →: slides"
+  },
+  "offlineMusic": {
+    "download": "Download",
+    "downloading": "Downloading",
+    "ready": "Available offline",
+    "cancel": "Cancel download",
+    "hint": "Download audio to this computer for offline playback.",
+    "localHint": "Saved on this computer; not embedded in the presentation file.",
+    "error": "Download failed. Check your connection and free disk space, then try again.",
+    "busy": "Another track is downloading. Try again when it finishes."
+  },
+  "slideAudio": {
+    "add": "Add music",
+    "dialogTitle": "Add music to selected slide",
+    "attach": "Attach to this slide",
+    "attachHint": "The slide appearance stays unchanged. Enable autoplay in the side panel.",
+    "autoPlay": "Autoplay",
+    "autoHint": "Play when the slide goes live. Selection or changing this setting does not start playback.",
+    "play": "Play slide music",
+    "liveFirst": "Send the slide live to play its music",
+    "change": "Change music",
+    "remove": "Remove music"
+  },
+  "hymnLibrary": {
+    "newHymn": "New hymn",
+    "hymn": "Hymn",
+    "actions": "Actions",
+    "searchLyrics": "Also search lyrics",
+    "sort": "Sort order",
+    "original": "Original order",
+    "ascending": "Hymn title: A–Z",
+    "descending": "Hymn title: Z–A",
+    "clearSearch": "Clear search",
+    "addHint": "Click a hymn to add it to the presentation.",
+    "resultCount": "{{matched}} / {{total}} hymns",
+    "noResults": "No hymns match your search.",
+    "addNamed": "{{title}} — add to presentation",
+    "editNamed": "{{title}} — edit",
+    "deleteNamed": "{{title}} — delete"
+  },
+  "gradientLibrary": {
+    "title": "Gradient",
+    "design": "Design",
+    "library": "My gradients",
+    "quickApply": "Gradient",
+    "openEditor": "Create a gradient in the editor",
+    "empty": "No saved gradients yet. Create a design in the editor and save it to your library.",
+    "libraryError": "Could not load the gradient library.",
+    "deleteNamed": "{{name}} — delete from library",
+    "skipped": "{{count}} ineligible slides will be skipped.",
+    "liveIncluded": "Live slide included",
+    "previewHint": "Changes on the canvas are a preview.",
+    "applyDraft": "Apply to draft · {{count}} slides",
+    "appliedDraft": "Use the editor Save button to update the presentation.",
+    "saveLibrary": "Save to library",
+    "name": "Gradient name",
+    "confirmSave": "Save design",
+    "saveHint": "Saving to the library does not change the slide.",
+    "saved": "Gradient saved to the library.",
+    "removed": "Library entry removed. Existing slide backgrounds were preserved.",
+    "backgroundOnly": "Background editing",
+    "backgroundOnlyHint": "Text and part settings stay on the Slides page. You can design and apply a gradient background here."
   }
 }

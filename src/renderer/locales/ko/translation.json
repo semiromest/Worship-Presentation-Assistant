@@ -1,5 +1,7 @@
 {
   "gradient": {
+    "customColors": "사용자 지정 색상",
+    "colorNumber": "색상 {{number}}",
     "animation": "애니메이션",
     "aurora": "오로라",
     "waves": "파도",
@@ -35,7 +37,24 @@
       "amber": "호박색",
       "rose": "장미",
       "smoke": "연기"
-    }
+    },
+    "scopeSlideHint": "현재 편집 중인 슬라이드만 적용합니다.",
+    "scopeNoGroup": "이 슬라이드는 그룹에 속하지 않습니다.",
+    "scopeSelectionHint": "슬라이드 작업 영역에서 선택한 슬라이드입니다.",
+    "scopeNoSelection": "먼저 슬라이드 작업 영역에서 여러 슬라이드를 선택하세요.",
+    "targetCount": "슬라이드 {{count}}개에 적용됩니다",
+    "targetList": "적용할 슬라이드",
+    "untitledSlide": "내용 없는 슬라이드",
+    "textOnly": "텍스트 슬라이드의 배경만 변경됩니다.",
+    "groupInheritance": "나중에 이 그룹에 추가되는 적용 가능한 슬라이드도 이 배경을 상속합니다.",
+    "linear": "선형",
+    "startColor": "시작 색상",
+    "endColor": "끝 색상",
+    "angle": "각도",
+    "remove": "그라데이션 제거",
+    "colors": "색상",
+    "presets": "색상 팔레트",
+    "appearance": "모양"
   },
   "nav": {
     "editor": "편집기",
@@ -178,10 +197,20 @@
     "remoteLoadingDesc": "QR 코드를 생성하고 있습니다. 잠시만 기다려 주세요.",
     "remoteQrAlt": "원격 제어 QR 코드 — 스마트폰으로 스캔하세요",
     "remoteDiagTitle": "연결 문제 진단",
+    "remoteDiagFirewallCheck": "방화벽 및 네트워크 권한",
+    "remoteDiagProfilePublic": "공용 네트워크",
+    "remoteDiagProfilePrivate": "개인 네트워크",
+    "remoteDiagProfileDomain": "도메인 네트워크",
+    "remoteDiagFirewallStatusallowed": "Windows 규칙에서 연결을 허용합니다. 휴대폰의 접속 여부는 별도로 확인해야 합니다.",
+    "remoteDiagFirewallStatusdisabled": "이 네트워크의 Windows 방화벽이 꺼져 있으며 Windows 방화벽 차단은 감지되지 않았습니다.",
+    "remoteDiagFirewallStatusblocked": "Windows 방화벽 설정이 이 네트워크의 인바운드 연결을 차단합니다.",
+    "remoteDiagFirewallStatusmissingPermission": "이 네트워크에서 앱 또는 포트의 인바운드 허용 규칙을 찾지 못했습니다. Windows에서 연결을 차단할 수 있습니다.",
+    "remoteDiagFirewallStatusunknown": "제한된 규칙, 접근 권한 또는 다른 보안 소프트웨어로 인해 Windows 네트워크 권한을 확인하지 못했습니다.",
+    "remoteDiagFirewallPermissionHint": "휴대폰, 시청자 및 자막 링크를 사용하려면 Windows 보안 > 방화벽 및 네트워크 보호 > 방화벽에서 앱 허용에서 Worship Presentation Assistant의 현재 네트워크 유형(개인/공용) 권한을 확인하세요. 방화벽은 켜 두고 신뢰하는 네트워크에서만 허용하세요.",
     "remoteDiagRun": "진단 실행",
     "remoteDiagRunning": "진단 실행 중...",
     "remoteDiagRetry": "재시도",
-    "remoteDiagFirewallTitle": "⚠ 방화벽 차단 감지됨",
+    "remoteDiagFirewallTitle": "방화벽이 연결을 차단할 수 있습니다",
     "remoteDiagFirewallStep1": "Windows 방화벽 → 인바운드 규칙에서 'Worship Presentation Assistant'가 허용되었는지 확인하세요",
     "remoteDiagFirewallStep2": "바이러스 백신(Avast, Kaspersky 등)을 사용 중이라면 앱을 신뢰 목록에 추가하세요",
     "remoteDiagFirewallStep3": "공용 Wi-Fi(호텔, 카페)에서는 AP 격리가 있을 수 있습니다 — 모바일 핫스팟을 사용해 보세요",
@@ -346,12 +375,12 @@
     "hymnsPartsModeOn": "구간 모드 켜짐 - 단락별로 슬라이드를 나눕니다",
     "hymnsPartsModeOff": "구간 모드 꺼짐 - 찬송가 전체를 하나의 슬라이드에 표시합니다",
     "hymnsPartsMode": "구간 모드",
-    "hymnsAuthorOnSlides": "저자 표시",
-    "hymnsAuthorOnSlidesOn": "슬라이드에 저자 표시",
-    "hymnsAuthorOnSlidesOff": "슬라이드에서 저자 숨김",
-    "hymnsAuthorPosition": "저자 위치",
-    "hymnsAuthorPositionDesc": "슬라이드에서 저자 이름이 표시되는 위치",
-    "hymnsAuthorSize": "저자 텍스트 크기",
+    "hymnsAuthorOnSlides": "찬송 제목과 저자 표시",
+    "hymnsAuthorOnSlidesOn": "슬라이드에 찬송 제목과 저자 표시",
+    "hymnsAuthorOnSlidesOff": "슬라이드에서 찬송 제목과 저자 숨김",
+    "hymnsAuthorPosition": "찬송 제목과 저자 위치",
+    "hymnsAuthorPositionDesc": "슬라이드에서 찬송 제목과 저자가 함께 표시되는 위치",
+    "hymnsAuthorSize": "찬송 제목과 저자 텍스트 크기",
     "hymnsAuthorPosBottomLeft": "왼쪽 하단",
     "hymnsAuthorPosBottomCenter": "하단 중앙",
     "hymnsAuthorPosBottomRight": "오른쪽 하단",
@@ -429,6 +458,9 @@
     "calendarUpdate": "수정",
     "clickToRename": "클릭하여 이름 변경",
     "mediaLibrary": "미디어 라이브러리",
+    "mediaAddSelected": "선택 항목을 슬라이드에 추가 ({{count}})",
+    "mediaClearSelection": "선택 해제",
+    "mediaAddAll": "모두 슬라이드에 추가",
     "mediaTabs": "미디어 탭",
     "mediaVolume": "미디어 볼륨",
     "mediaAdd": "미디어 추가",
@@ -999,7 +1031,9 @@
     "editorAlignToSelection": "선택 영역",
     "editorSameWidth": "같은 너비",
     "editorSameHeight": "같은 높이",
-    "editorSafeArea": "안전 영역 표시 (5%)"
+    "editorSafeArea": "안전 영역 표시 (5%)",
+    "importCompleteWithWarnings": "경고와 함께 가져옴",
+    "importReviewWarnings": "일부 글꼴이나 요소가 완전히 유지되지 않았을 수 있습니다. 발표 전에 슬라이드를 확인하세요."
   },
   "warnings": {
     "minSlides": "최소 1개의 슬라이드가 남아 있어야 합니다!",
@@ -1015,7 +1049,12 @@
     "ko": "한국어"
   },
   "countdown": {
-    "remaining": "{{time}} 남음"
+    "remaining": "{{time}} 남음",
+    "preview": "미리보기",
+    "ready": "준비",
+    "running": "실행 중",
+    "previewHint": "이 미리보기는 프레젠테이션 타이머를 변경하지 않습니다. 슬라이드에 추가하면 설정한 시간으로 새 타이머가 시작됩니다.",
+    "durationLocked": "시간을 변경하려면 미리보기 타이머를 초기화하세요."
   },
   "loop": {
     "noItems": "반복 항목 없음"
@@ -1051,6 +1090,7 @@
     "error": "Google Drive 오류"
   },
   "transition": {
+    "label": "전환",
     "settings": "화면 전환 설정",
     "type": "전환 효과",
     "duration": "전환 속도",
@@ -1145,7 +1185,9 @@
     "youtubeLoading": "YouTube 오디오 준비 중…",
     "youtubeNoResults": "검색 결과가 없습니다.",
     "youtubeSearch": "YouTube 검색",
-    "youtubeSearchPlaceholder": "YouTube 음악 검색...",
+    "youtubeSearchPlaceholder": "노래 이름 또는 YouTube 링크…",
+    "youtubeInvalidLink": "올바른 YouTube 동영상 링크를 입력하세요.",
+    "youtubeVideoUnavailable": "이 동영상을 사용할 수 없습니다. 링크를 확인하세요.",
     "youtubeSearchError": "YouTube 검색에 실패했습니다.",
     "youtubePlayError": "YouTube 오디오를 재생할 수 없습니다.",
     "soundEffectsDesc": "인터페이스 사운드 효과 (미니멀 팩)",
@@ -1228,6 +1270,7 @@
         "clear-live-saves": "자동 저장 삭제 지우기",
         "updates": "업데이트 버전 다운로드",
         "learn": "연습 가이드 배우기 도움말 사용법",
+        "shortcuts": "키보드 단축키 키 도움말",
         "soniox-website": "소니옥스 공식 사이트 계정 사용 결제",
         "stt-clear-key": "api 키 지우기 삭제 제거",
         "appearance-preview": "미리보기 시뮬레이션 로고 저자 크기 위치"
@@ -1264,7 +1307,10 @@
     "completed": "확인 완료",
     "slideErrors": "오류를 포함한 문제 {{count}}개. 슬라이드 보고서 열기.",
     "slideWarnings": "경고 {{count}}개. 슬라이드 보고서 열기.",
-    "severity": {"error":"오류","warning":"경고"},
+    "severity": {
+      "error": "오류",
+      "warning": "경고"
+    },
     "title": "준비 확인",
     "button": "준비 확인",
     "allClear": "모두 준비된 것으로 보입니다",
@@ -1292,16 +1338,19 @@
     "splitAction": "읽기 좋은 부분으로 나누기"
   },
   "library": {
+    "tools": "프레젠테이션 도구",
+    "powerPoint": "PowerPoint",
+    "saveFile": "파일로 저장",
     "subtitle": "예배를 준비하고 작업을 저장하며 프레젠테이션을 찾으세요.",
     "current": "현재 프레젠테이션",
     "slideCount": "슬라이드 {{count}}개",
-    "saved": "라이브러리에 저장됨",
-    "unsaved": "라이브러리에 저장하지 않은 변경 사항",
+    "saved": "저장된 프레젠테이션에 저장됨",
+    "unsaved": "저장된 프레젠테이션에 저장하지 않은 변경 사항",
     "backupOn": "자동 백업 켜짐",
     "backupOff": "자동 백업 꺼짐",
     "backupAt": "백업: {{time}}",
     "continueEditing": "슬라이드 편집",
-    "save": "라이브러리에 저장",
+    "save": "저장된 프레젠테이션에 저장",
     "fileTools": "파일 및 PowerPoint 도구",
     "saveFailed": "저장하지 못했습니다. 프레젠테이션은 열려 있습니다. 다시 시도하세요.",
     "operationFailed": "작업에 실패했습니다. 다시 시도하세요.",
@@ -1445,7 +1494,7 @@
       },
       "presentations": {
         "title": "라이브러리에 저장",
-        "body": "연습 프레젠테이션을 라이브러리에 저장하세요. 외부 파일에는 쓰지 않습니다."
+        "body": "프레젠테이션 페이지의 현재 프레젠테이션 영역에서 라이브러리에 저장을 사용하세요. 이 과제는 파일로 저장이 아닌 연습 라이브러리 저장을 완료해요."
       },
       "hymns": {
         "title": "찬송가",
@@ -1498,7 +1547,7 @@
       },
       "presentations": {
         "title": "프레젠테이션",
-        "body": "이곳에서 프레젠테이션을 만들고 저장하고 관리할 수 있어요. 먼저 이 영역을 살펴봐요. 곧 직접 슬라이드를 만들게 될 거예요."
+        "body": "상단 도구 모음에는 새 프레젠테이션, 파일, 백업, Drive 및 PowerPoint 작업이 모여 있어요. 아래의 현재 프레젠테이션 영역에서 이름과 저장 상태를 확인하고 슬라이드를 계속 편집할 수 있어요."
       },
       "sidebar": {
         "title": "앱 둘러보기",
@@ -1586,7 +1635,7 @@
       },
       "settings-intro": {
         "title": "앱을 나에게 맞게 설정하기",
-        "body": "이곳에서 앱 언어와 기타 환경설정을 관리할 수 있어요. 도움말에서 튜토리얼을 다시 시작하고 앱의 여러 영역을 다시 살펴볼 수도 있어요."
+        "body": "카테고리나 검색창으로 설정을 찾아보세요. 학습 카테고리에서 단계별 안내를 다시 열 수 있어요."
       },
       "nav-save": {
         "title": "프레젠테이션으로 돌아가기",
@@ -1638,7 +1687,7 @@
       },
       "save": {
         "title": "프레젠테이션을 라이브러리에 저장하기",
-        "body": "라이브러리에 저장 버튼을 클릭하세요. 프레젠테이션은 연습 프로필의 라이브러리에만 저장되며 실제 프레젠테이션에는 영향을 주지 않아요."
+        "body": "현재 프레젠테이션 영역에서 파란색 라이브러리에 저장 버튼을 클릭하세요. 파일로 저장은 별도의 작업이에요. 이 연습은 연습 라이브러리에만 저장하며 실제 프레젠테이션에는 영향을 주지 않아요."
       },
       "add-result": {
         "title": "첫 슬라이드가 준비됐어요!",
@@ -1774,5 +1823,85 @@
     "volume": "이 슬라이드의 음량",
     "volumeHint": "전체 음량과 함께 적용돼요. 제목이나 디자인을 바꿔도 음악은 다시 시작되지 않아요.",
     "fadeHint": "재생 시 0.5초 동안 소리가 커지고 다른 슬라이드로 이동하면 0.8초 동안 작아져요. 정지하거나 출력을 닫으면 즉시 멈춰요."
+  },
+  "slidesWorkspace": {
+    "readiness": "Readiness",
+    "help": "Shortcuts",
+    "music": "Music",
+    "viewers": "Viewers",
+    "phone": "Phone",
+    "locked": "Locked",
+    "direct": "Direct live",
+    "selectedTitle": "Selected slide · {{number}}",
+    "editingLive": "Editing the live slide",
+    "content": "Content",
+    "appearance": "Appearance",
+    "background": "Background",
+    "selectionTools": "Selected slide actions",
+    "displays": "Displays",
+    "openEditor": "Open editor",
+    "partsNavigationHint": "↑ ↓: 찬양 파트 · ← →: 슬라이드"
+  },
+  "offlineMusic": {
+    "download": "다운로드",
+    "downloading": "다운로드 중",
+    "ready": "오프라인 사용 가능",
+    "cancel": "다운로드 취소",
+    "hint": "오프라인 재생을 위해 이 컴퓨터에 오디오를 저장합니다.",
+    "localHint": "이 컴퓨터에 저장되며 프레젠테이션 파일에는 포함되지 않습니다.",
+    "error": "다운로드하지 못했습니다. 연결과 저장 공간을 확인하고 다시 시도하세요.",
+    "busy": "다른 곡을 다운로드 중입니다. 완료 후 다시 시도하세요."
+  },
+  "slideAudio": {
+    "add": "음악 추가",
+    "dialogTitle": "선택한 슬라이드에 음악 추가",
+    "attach": "이 슬라이드에 연결",
+    "attachHint": "슬라이드 모양은 변경되지 않습니다. 측면 패널에서 자동 재생을 켜세요.",
+    "autoPlay": "자동 재생",
+    "autoHint": "슬라이드가 송출될 때 재생합니다. 선택하거나 이 설정을 변경해도 시작되지 않습니다.",
+    "play": "슬라이드 음악 재생",
+    "liveFirst": "음악을 재생하려면 슬라이드를 송출하세요",
+    "change": "음악 변경",
+    "remove": "음악 제거"
+  },
+  "hymnLibrary": {
+    "newHymn": "새 찬송가",
+    "hymn": "찬송가",
+    "actions": "작업",
+    "searchLyrics": "가사에서도 검색",
+    "sort": "정렬",
+    "original": "기존 순서",
+    "ascending": "제목: 오름차순",
+    "descending": "제목: 내림차순",
+    "clearSearch": "검색 지우기",
+    "addHint": "찬송가를 클릭하면 프레젠테이션에 추가됩니다.",
+    "resultCount": "찬송가 {{matched}} / {{total}}개",
+    "noResults": "검색과 일치하는 찬송가가 없습니다.",
+    "addNamed": "{{title}} — 프레젠테이션에 추가",
+    "editNamed": "{{title}} — 편집",
+    "deleteNamed": "{{title}} — 삭제"
+  },
+  "gradientLibrary": {
+    "title": "그라데이션",
+    "design": "디자인",
+    "library": "내 그라디언트",
+    "quickApply": "그라데이션",
+    "openEditor": "편집기에서 그라디언트 만들기",
+    "empty": "저장된 그라디언트가 없습니다. 편집기에서 디자인을 만들고 라이브러리에 저장하세요.",
+    "libraryError": "그라디언트 라이브러리를 불러올 수 없습니다.",
+    "deleteNamed": "{{name}} — 라이브러리에서 삭제",
+    "skipped": "적용할 수 없는 슬라이드 {{count}}개를 건너뜁니다.",
+    "liveIncluded": "라이브 슬라이드 포함",
+    "previewHint": "캔버스의 변경 사항은 미리 보기입니다.",
+    "applyDraft": "초안에 적용 · 슬라이드 {{count}}개",
+    "appliedDraft": "프레젠테이션에 반영하려면 편집기의 저장 버튼을 사용하세요.",
+    "saveLibrary": "라이브러리에 저장",
+    "name": "그라디언트 이름",
+    "confirmSave": "디자인 저장",
+    "saveHint": "라이브러리에 저장해도 슬라이드는 변경되지 않습니다.",
+    "saved": "라이브러리에 그라디언트를 저장했습니다.",
+    "removed": "라이브러리 항목을 삭제했습니다. 기존 슬라이드 배경은 유지됩니다.",
+    "backgroundOnly": "배경 편집",
+    "backgroundOnlyHint": "텍스트와 파트 설정은 슬라이드 페이지에서 유지됩니다. 여기서 그라데이션 배경을 만들고 적용할 수 있습니다."
   }
 }

@@ -270,3 +270,52 @@ test('guided remaining sections: actual import, selection, keyboard duration and
   await finishRemaining(page);
   await page.screenshot({ path: test.info().outputPath('all-sections-800x600.png') });
 });
+
+test('guided presentation overview and final save follow the reorganized header', async () => {
+  test.setTimeout(90000);
+  await app.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows()[0]; w.unmaximize(); w.setContentSize(800, 600); });
+  await page.getByTestId('guide-resume').click();
+  await step('presentations');
+  await expect(page.locator('[data-guide-anchor="presentations-overview"]')).toBeVisible({timeout:15000});
+  await expect(page.locator('[data-guide-card]')).toContainText('PowerPoint');
+  await chapter('settings');
+  await step('settings-intro');
+  await expect(page.locator('[data-guide-card]')).toContainText('search field');
+  await page.getByTestId('guide-next').click();
+  await step('phone-controls');
+  await page.getByTestId('guide-next').click();
+  await step('nav-save');
+  await page.locator('[data-guide-anchor="nav-presentations"]').click();
+  await step('save');
+  const save = page.locator('.presentation-current [data-guide-anchor="save"]');
+  await expect(save).toHaveAttribute('data-practice-highlight', /./);
+  await expect(page.locator('[data-guide-card]')).toContainText('Save to File is a separate action');
+  await save.click();
+  await seeResult(page, 'save-result');
+  await step('done');
+});
+
+test('guided Bible result keeps inherited slide text visible on the light guide card', async () => {
+  test.setTimeout(90000);
+  await chapter('bible');
+  await step('bible-intro');
+  await page.getByTestId('guide-next').click();
+  await step('bible-source');
+  const anchor = name => page.locator('[data-guide-anchor="'+name+'"]');
+  await anchor('bible-source').click();
+  await expect.poll(() => page.locator('[data-guide-step]').getAttribute('data-guide-step')).toMatch(/^bible-(book|import)$/);
+  if (await page.locator('[data-guide-step]').getAttribute('data-guide-step') === 'bible-import') await anchor('bible-import').click();
+  await step('bible-book');await anchor('bible-book').click();
+  await step('bible-chapter');await anchor('bible-chapter').click();
+  await step('bible-verse');await anchor('bible-verse').click();
+  await step('bible-add');await anchor('bible-add').click();
+  await step('bible-result');
+  const text = page.getByTestId('guide-result-slide').locator('[aria-hidden="true"] p').first();
+  await expect(text).toBeVisible();
+  await expect(text).toHaveCSS('color','rgb(255, 255, 255)');
+  const snapshot = await page.evaluate(() => window.electronAPI.readPracticeWorkspace(null));
+  expect(snapshot.guide.result.slides[0].styles.textColor).toBe('');
+  await page.screenshot({path:test.info().outputPath('bible-result-visible.png')});
+  await seeResult(page,'bible-result');
+  await step('nav-media');
+});

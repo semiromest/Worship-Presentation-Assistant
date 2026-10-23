@@ -49,7 +49,8 @@ test('music slides: add silently, live playback, pause, blackout, cancellation, 
       store.setLiveIndex(0);
       store.setActiveTab('slides');
     });
-    await control.getByTestId('background-music-toggle').click();
+    if (await control.getByTestId('music-dialog-close').isVisible()) await control.getByTestId('music-dialog-close').click();
+    else await control.getByTestId('background-music-toggle').click();
     await control.getByTestId('music-source-youtube').click();
     await control.getByTestId('youtube-music-query').fill('test music');
     await control.getByTestId('youtube-music-query').press('Enter');
@@ -59,7 +60,8 @@ test('music slides: add silently, live playback, pause, blackout, cancellation, 
     const audio = control.getByTestId('background-music-audio');
     expect(await audio.getAttribute('src')).toBeNull();
     expect(await app.evaluate(() => global.__musicRequests.length)).toBe(0);
-    await control.getByTestId('background-music-toggle').click();
+    if (await control.getByTestId('music-dialog-close').isVisible()) await control.getByTestId('music-dialog-close').click();
+    else await control.getByTestId('background-music-toggle').click();
     await control.locator(`[data-slide-id="${musicId}"]`).click();
     expect(await app.evaluate(() => global.__musicRequests.length)).toBe(0);
     const displayId = await control.evaluate(async () => {
@@ -112,7 +114,8 @@ test('music slides: add silently, live playback, pause, blackout, cancellation, 
     await control.locator('nav').getByRole('button', { name: 'Slides', exact: true }).click();
     expect(await app.evaluate(() => global.__musicRequests.length)).toBe(1);
     expect(await control.evaluate(() => window.__musicStore.getState().presentation.slides[1].youtubeMusic.title)).toBe('Practice music');
-    await control.getByTestId('background-music-toggle').click();
+    if (await control.getByTestId('music-dialog-close').isVisible()) await control.getByTestId('music-dialog-close').click();
+    else await control.getByTestId('background-music-toggle').click();
     await control.getByTestId('background-music-play-pause').click();
     await expect.poll(() => audio.evaluate(element => element.paused)).toBe(true);
     await control.getByTestId('background-music-play-pause').click();
@@ -124,7 +127,8 @@ test('music slides: add silently, live playback, pause, blackout, cancellation, 
     await control.getByTestId('youtube-add-slide-SIfMHRHdTAI').click();
     const delayedId = await control.evaluate(() => window.__musicStore.getState().presentation.slides[2].id);
     expect(await app.evaluate(() => global.__musicRequests.length)).toBe(1);
-    await control.getByTestId('background-music-toggle').click();
+    if (await control.getByTestId('music-dialog-close').isVisible()) await control.getByTestId('music-dialog-close').click();
+    else await control.getByTestId('background-music-toggle').click();
     const oldSource = await audio.getAttribute('src');
     await control.locator(`[data-slide-id="${delayedId}"]`).click();
     await control.waitForTimeout(200);
@@ -186,7 +190,8 @@ test('music slides: add silently, live playback, pause, blackout, cancellation, 
       ipcMain.removeHandler('read-audio-folder');
       ipcMain.handle('read-audio-folder', () => ({ paths: [url + '/local-test.wav'] }));
     }, `http://127.0.0.1:${server.address().port}`);
-    await control.getByTestId('background-music-toggle').click();
+    if (await control.getByTestId('music-dialog-close').isVisible()) await control.getByTestId('music-dialog-close').click();
+    else await control.getByTestId('background-music-toggle').click();
     await control.getByTestId('music-source-local').click();
     await control.getByTestId('background-music-menu').getByRole('button', { name: /Choose Folder/ }).click();
     const localTrack = control.getByRole('button', { name: /^local-test\.wav/ });

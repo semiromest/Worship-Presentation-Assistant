@@ -1,4 +1,4 @@
-import { readHymnAuthorPosition, readHymnAuthorSize } from './hymnAuthorSettings';
+import { formatHymnCredit, readHymnAuthorPosition, readHymnAuthorSize } from './hymnAuthorSettings';
 import { RangeVideo } from './components/RangeVideo';
 import BackgroundDim from './components/BackgroundDim';
 import { AnimatedGradientBackground } from './components/AnimatedGradientBackground';
@@ -434,7 +434,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
 
     const styles = (slide.styles || {}) as Record<string, any>;
     const displayContent = getSlideDisplayContent(slide);
-    const hymnAuthor = slide.group?.author?.trim();
+    const hymnCredit = formatHymnCredit(slide.group);
     const fontSize = styles.fontSize || 48;
     const fontWeight = (styles as any).fontWeight || 'bold';
     const textAlign = (styles as any).textAlign || 'center';
@@ -485,7 +485,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
         >
           {displayContent}
         </p>
-        {hymnAuthor && (() => {
+        {hymnCredit && (() => {
           const pos = hymnAuthorPosition ?? readHymnAuthorPosition();
           const sizePct = hymnAuthorSize ?? readHymnAuthorSize();
           const isTop    = pos.startsWith('top');
@@ -514,7 +514,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
             ...(isCenter ? { left: 0, right: 0, textAlign: 'center' as const } : {}),
           };
 
-          return <span style={posStyle}>{hymnAuthor}</span>;
+          return <span style={posStyle}>{hymnCredit}</span>;
         })()}
         <WatermarkOverlay slide={slide!} config={wmConfig} />
       </div>

@@ -34,6 +34,7 @@ function fixture(enabled) {
         },
       },
       ipcRenderer: ipc,
+      webUtils: { getPathForFile: file => file.diskPath ?? '' },
     }),
     process: { env: { WPA_PERF: enabled ? '1' : '0' } },
     performance,
@@ -43,6 +44,15 @@ function fixture(enabled) {
   });
   return { api, ipc, calls };
 }
+
+test('dropped image bridge accepts disk image paths and rejects other files or synthetic files', async () => {
+  for (const enabled of [false, true]) {
+    const { api } = fixture(enabled);
+    assert.equal(await api.getDroppedImagePath({ diskPath: 'C:\\Photos\\a.PNG' }), 'C:\\Photos\\a.PNG');
+    assert.equal(await api.getDroppedImagePath({ diskPath: 'C:\\clip.mp4' }), null);
+    assert.equal(await api.getDroppedImagePath({}), null);
+  }
+});
 
 test('performance bridge distinguishes main and preload buffers and resets each source', async () => {
   for (const enabled of [false, true]) {
@@ -113,4 +123,12 @@ test('every preload request has a compatible main-process channel registration',
   for (const action of family[1].matchAll(/'([^']+)'/g)) handlers.add('handle:practice:workspace:' + action[1]);
   assert.ok(requests.length >= 98);
   for (const request of requests) assert.ok(handlers.has((request.method === 'invoke' ? 'handle:' : 'on:') + request.channel), 'Unregistered channel: ' + request.channel);
+});
+
+test('gradient library exposes typed list, save and delete invocations', async () => {
+  const { api, calls } = fixture(false);
+  const input = { name: 'Ocean', token: 'draft-token', recipe: { seed: 12 } };
+  await api.listGradientLibrary(); await api.saveGradientLibrary(input); await api.deleteGradientLibrary('entry-id');
+  assert.deepEqual(calls.map(c => c.channel), ['gradient-library:list', 'gradient-library:save', 'gradient-library:remove']);
+  assert.deepEqual(calls[1].args, [input]); assert.deepEqual(calls[2].args, ['entry-id']);
 });

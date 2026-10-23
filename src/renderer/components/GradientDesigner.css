@@ -1,0 +1,202 @@
+.gradient-designer {
+  container: gradient-designer / inline-size;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.gradient-designer fieldset {
+  min-width: 0;
+}
+.gradient-designer button,
+.gradient-designer label {
+  overflow-wrap: anywhere;
+}
+.gradient-designer :is(button, input, select):focus-visible {
+  outline: 2px solid #c4b5fd;
+  outline-offset: 2px;
+}
+.gradient-designer :is(button, input, select):disabled {
+  opacity: 0.4;
+}
+.gradient-designer fieldset:disabled button {
+  cursor: default;
+}
+
+.gradient-section {
+  display: grid;
+  gap: 10px;
+}
+.gradient-section > legend {
+  margin-bottom: 8px;
+  padding: 0;
+  color: rgb(255 255 255 / 0.9);
+  font-weight: 600;
+}
+.gradient-control {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: 6px;
+  background: #252733;
+  color: inherit;
+  padding: 7px 8px;
+  font: inherit;
+}
+.gradient-color-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 8px;
+  color: rgb(255 255 255 / 0.65);
+}
+.gradient-palettes,
+.gradient-colors {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.gradient-palette {
+  min-width: 0;
+  min-height: 40px;
+  padding: 5px 6px;
+  border: 1px solid rgb(255 255 255 / 0.15);
+  border-radius: 6px;
+  text-align: left;
+  background: rgb(255 255 255 / 0.025);
+}
+.gradient-palette:hover {
+  background: rgb(255 255 255 / 0.07);
+}
+.gradient-palette[aria-pressed='true'] {
+  border-color: #a78bfa;
+  background: rgb(139 92 246 / 0.12);
+}
+.gradient-palette-strip {
+  display: block;
+  height: 8px;
+  margin-bottom: 4px;
+  border-radius: 3px;
+}
+.gradient-palette-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  line-height: 16px;
+}
+.gradient-palette-name > span {
+  min-width: 0;
+}
+.gradient-color-label {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: rgb(255 255 255 / 0.8);
+}
+.gradient-color {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 2px;
+  cursor: pointer;
+  border: 1px solid rgb(255 255 255 / 0.2);
+  border-radius: 6px;
+  background: transparent;
+}
+.gradient-range {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  color: rgb(255 255 255 / 0.8);
+}
+.gradient-range > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.gradient-range > span > span {
+  flex-shrink: 0;
+  color: rgb(255 255 255 / 0.65);
+  font-variant-numeric: tabular-nums;
+}
+.gradient-range input {
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  accent-color: #a78bfa;
+}
+.gradient-motion-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+}
+.gradient-motion-toggle input {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  accent-color: #8b5cf6;
+}
+.gradient-motion-settings {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+.gradient-regenerate {
+  justify-self: end;
+  min-height: 32px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  color: #ddd6fe;
+  background: rgb(139 92 246 / 0.1);
+}
+.gradient-regenerate:hover {
+  background: rgb(139 92 246 / 0.2);
+}
+.gradient-actions {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  padding-top: 2px;
+}
+.gradient-apply {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px;
+  border-radius: 6px;
+  background: #7c3aed;
+  font-weight: 600;
+}
+.gradient-apply:hover:not(:disabled) {
+  background: #6d28d9;
+}
+.gradient-remove {
+  min-height: 32px;
+  padding: 4px 0;
+  color: rgb(255 255 255 / 0.6);
+  text-align: left;
+}
+.gradient-remove:hover:not(:disabled) {
+  color: #fca5a5;
+}
+.gradient-hint {
+  color: rgb(255 255 255 / 0.6);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+@container gradient-designer (min-width: 16rem) {
+  .gradient-colors:not(.gradient-colors-linear) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@container gradient-designer (min-width: 18rem) {
+  .gradient-palettes {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

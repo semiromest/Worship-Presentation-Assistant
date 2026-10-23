@@ -402,7 +402,7 @@ export function useEditorDeck({ deck, initialSlide, editableOnly = false }: UseE
   }, []);
 
   const slideById = useMemo(() => new Map(deck.slides.map((slide) => [slide.id, slide] as const)), [deck.slides]);
-  const editableIds = useMemo(() => deck.slides.filter(isItemEditableSlide).map(slide => slide.id), [deck.slides]);
+  const editableIds = useMemo(() => deck.slides.filter(slide => isItemEditableSlide(slide) || slide.type === 'text').map(slide => slide.id), [deck.slides]);
   const order = useMemo(() => filteredEditorSlides(deck.slides, editableOnly).map((slide) => slide.id), [deck.slides, editableOnly]);
 
   // A slide deleted while the editor is open must not leave the canvas blank.
@@ -444,7 +444,7 @@ export function useEditorDeck({ deck, initialSlide, editableOnly = false }: UseE
 
   const activateSlide = useCallback(
     (slide: Slide, modifiers?: SelectModifiers) => {
-      dispatch({ type: 'activate', slide, order, editableIds, modifiers: isItemEditableSlide(slide) ? modifiers : undefined });
+      dispatch({ type: 'activate', slide, order, editableIds, modifiers: (isItemEditableSlide(slide) || slide.type === 'text') ? modifiers : undefined });
     },
     [order, editableIds]
   );
@@ -459,7 +459,7 @@ export function useEditorDeck({ deck, initialSlide, editableOnly = false }: UseE
     [order, editableIds]
   );
 
-  const selectEverySlide = useCallback(() => dispatch({ type: 'selectAll', order: order.filter(id => isItemEditableSlide(slideById.get(id)!)) }), [order, slideById]);
+  const selectEverySlide = useCallback(() => dispatch({ type: 'selectAll', order: order.filter(id => editableIds.includes(id)) }), [order, slideById]);
   const collapseSlideSelection = useCallback(() => dispatch({ type: 'clearSlideSelection', order }), [order]);
 
   const setItemSelection = useCallback(
@@ -792,14 +792,15 @@ export function useEditorDeck({ deck, initialSlide, editableOnly = false }: UseE
     [activeSlide, session.drafts, slideById]
   );
   const setNotice = useCallback((notice: EditorNotice | null) => dispatch({ type: 'notice', notice }), []);
-  const applyBackground = useCallback((updates: Record<string, unknown>, ids: string[]) => {
+  const applyBackground = useCallback((updates: Record<string, unknown> | ((styles: Record<string, unknown>) => Record<string, unknown>), ids: string[]) => {
     const drafts = new Map(session.drafts);
     const touched: string[] = [];
     for (const id of ids) {
       const slide = slideById.get(id);
-      if (!slide || slide.type !== 'text') continue;
+      if (!slide || (slide.type !== 'text' && !isItemEditableSlide(slide))) continue;
       const draft = drafts.get(id) ?? createDraft(slide);
-      drafts.set(id, { ...draft, styles: backgroundPatch(draft.styles, updates),
+      const patch = typeof updates === 'function' ? updates(draft.styles) : updates;
+      drafts.set(id, { ...draft, styles: backgroundPatch(draft.styles, patch),
         backgroundOnly: draft.backgroundOnly || (!slide.items?.length && !session.touchedIds.has(id)) || !!slide.partsMode });
       touched.push(id);
     }

@@ -31,6 +31,7 @@ export const settingsItems = [
   { id: 'clear-live-saves', category: 'autosave', titleKey: 'settings.navigation.clearLiveSaves', descriptionKey: 'settings.navigation.descriptions.clear-live-saves' },
   { id: 'updates', category: 'updates', titleKey: 'settings.updates', descriptionKey: 'settings.updatesDesc' },
   { id: 'learn', category: 'learning', titleKey: 'guide.open', descriptionKey: 'tour.helpTitle' },
+  { id: 'shortcuts', category: 'learning', titleKey: 'common.keyboardShortcuts', descriptionKey: 'tour.helpDescription' },
 ] as const satisfies readonly SettingDefinition[];
 
 export type SettingsItemId = typeof settingsItems[number]['id'];

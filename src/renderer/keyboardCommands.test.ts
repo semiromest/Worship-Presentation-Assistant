@@ -29,7 +29,7 @@ test('editor owns editing keys while operator mute and blackout remain available
 
 test('command priority keeps move distinct from navigation, shortcuts and text undo', () => {
   assert.deepEqual(resolveKeyboardCommand(key('ArrowUp', { altKey: true }), context), { type: 'move', direction: -1 });
-  assert.deepEqual(resolveKeyboardCommand(key('ArrowUp'), context), { type: 'navigate', direction: 'previous' });
+  assert.deepEqual(resolveKeyboardCommand(key('ArrowUp'), context), { type: 'part', direction: -1 });
   assert.deepEqual(resolveKeyboardCommand(key('z', { metaKey: true, shiftKey: true }), context), { type: 'redo' });
   assert.deepEqual(resolveKeyboardCommand(key('9', { altKey: true }), context), {
     type: 'tab',
@@ -41,4 +41,17 @@ test('command priority keeps move distinct from navigation, shortcuts and text u
     type: 'close-output',
   });
   assert.equal(resolveKeyboardCommand(key('Escape'), { ...context, helpOpen: true }), null);
+});
+
+test('vertical arrows change parts only on Slides; horizontal arrows navigate slides', () => {
+  assert.deepEqual(resolveKeyboardCommand(key('ArrowDown'), context), { type: 'part', direction: 1 });
+  assert.deepEqual(resolveKeyboardCommand(key('ArrowRight'), context), { type: 'navigate', direction: 'next' });
+  assert.deepEqual(resolveKeyboardCommand(key('ArrowLeft'), context), { type: 'navigate', direction: 'previous' });
+  for (const name of ['ArrowUp', 'ArrowDown']) {
+    assert.equal(resolveKeyboardCommand(key(name), { ...context, helpOpen: true }), null);
+    assert.equal(resolveKeyboardCommand(key(name), { ...context, activeTab: 'hymns' }), null);
+    for (const modifiers of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }])
+      assert.equal(resolveKeyboardCommand(key(name, modifiers), context), null);
+  }
+  assert.deepEqual(resolveKeyboardCommand(key('ArrowDown', { altKey: true }), context), { type: 'move', direction: 1 });
 });

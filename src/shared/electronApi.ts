@@ -21,6 +21,9 @@ export interface ElectronAPI {
   ) => Promise<import('./gradientDraft').GradientDraft>;
   saveGradient: (token: string) => Promise<string>;
   discardGradient: () => Promise<void>;
+  listGradientLibrary: () => Promise<import('./gradientLibrary').GradientLibraryEntry[]>;
+  saveGradientLibrary: (input: import('./gradientLibrary').SaveGradientLibraryInput) => Promise<import('./gradientLibrary').GradientLibraryEntry[]>;
+  deleteGradientLibrary: (id: string) => Promise<import('./gradientLibrary').GradientLibraryEntry[]>;
   onPracticeWorkspaceChanged: (
     callback: (value: { sessionId: string; workspace: import('./practice').PracticeWorkspace }) => void
   ) => () => void;
@@ -67,6 +70,7 @@ export interface ElectronAPI {
   readBibleData: (filePath: string) => Promise<{ content: string } | null>;
   deleteBibleData: (filePath: string) => Promise<boolean | null>;
   selectMediaFile: (type: MediaKind) => Promise<string | null>;
+  getDroppedImagePath: (file: File) => Promise<string | null>;
   selectMediaFilesAll?: () => Promise<string[] | null>;
   importHymnArchive: (dirPath?: string) => Promise<any>;
   selectPptxFile: () => Promise<string | null>;
@@ -96,6 +100,7 @@ export interface ElectronAPI {
     interfaces: Array<{ name: string; address: string; score: number }>;
     selfConnectTest: { tried: boolean; success: boolean; error?: string };
     firewallWarning: boolean;
+    firewall?: import('./remoteDiagnostics').FirewallDiagnostic;
     checks: Array<{ label: string; pass: boolean; detail: string }>;
   }>;
   updateRemoteStatus: (status: any) => Promise<void>;
@@ -165,11 +170,15 @@ export interface ElectronAPI {
   shareGetStatus: () => Promise<{ active: boolean; url: string; clientCount: number }>;
   onShareClientCount: (callback: (count: number) => void) => () => void;
   onShareNetworkChanged: (callback: (data: { url: string }) => void) => () => void;
+  onRemoteUrlChanged: (callback: (data: { url: string }) => void) => () => void;
 
   selectAudioFolder: () => Promise<string | null>;
   youtubeMusicSearch: (query: string, cursor?: string) => Promise<import('./youtubeMusic').YouTubeSearchResponse>;
   youtubeMusicPlay: (id: string) => Promise<import('./youtubeMusic').YouTubePlayResponse>;
   youtubeMusicPrepare: (id: string) => Promise<{ ok: boolean }>;
+  youtubeMusicOfflineStatus: (id: string) => Promise<import('./youtubeMusic').OfflineMusicStatus>;
+  youtubeMusicDownload: (id: string) => Promise<import('./youtubeMusic').OfflineMusicStatus>;
+  youtubeMusicCancelDownload: (id: string) => Promise<void>;
   youtubeMusicStop: (streamId?: string) => Promise<void>;
   readAudioFolder: (folderPath: string, recursive?: boolean) => Promise<{ paths: string[]; missing: boolean } | null>;
   selectAudioFile: () => Promise<string | null>;

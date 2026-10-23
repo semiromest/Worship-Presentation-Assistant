@@ -1,4 +1,6 @@
 import { applyPreviewUpdates } from './previewUpdates';
+import { inspectRemoteFirewall } from './remoteFirewallDiagnostics';
+import type { FirewallDiagnostic } from '../shared/remoteDiagnostics';
 import { launchMode, restricted, practiceProfile, systemTempRoot } from './isolatedLaunch';
 import { restrictPracticeSession } from './practiceSession';
 import { setPracticeControl } from './practicePolicy';
@@ -23,20 +25,19 @@ import {
   dialog,
   screen,
   desktopCapturer,
-  nativeImage,
   shell,
   protocol,
-  net,
   session,
   systemPreferences,
 } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import { createReadStream } from 'node:fs';
+import { createReadStream, type Stats } from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
+import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
-import { WebSocketServer, WebSocket as WsSocket } from 'ws';
+import { WebSocketServer, WebSocket as WsSocket, type RawData } from 'ws';
 import { REMOTE_HTML_NEW } from './remote-html';
 import { driveService } from './driveService';
 import { initUpdater } from './updater';
@@ -116,6 +117,29 @@ let practiceRendererReady=false;
 let practiceClosePending=false;
 let practiceWorkspaceReady=false;
 
+/** Kontrol penceresine güvenli gönderim: yok edilmiş pencere/webContents'e yazmak fırlatır. */
+function sendToControl(channel: string, ...args: unknown[]): void {
+  const target = win;
+  if (!target || target.isDestroyed() || target.webContents.isDestroyed()) return;
+  target.webContents.send(channel, ...args);
+}
+
+function dialogParent(): BrowserWindow | null {
+  return win && !win.isDestroyed() ? win : BrowserWindow.getFocusedWindow();
+}
+
+/** Geçici dosya + rename: yazma yarıda kesilirse mevcut dosya bozulmaz. */
+async function writeFileAtomic(filePath: string, data: string | Uint8Array): Promise<void> {
+  const temp = `${filePath}.${randomUUID()}.tmp`;
+  try {
+    await fs.writeFile(temp, data);
+    await fs.rename(temp, filePath);
+  } catch (error) {
+    await fs.rm(temp, { force: true }).catch(() => {});
+    throw error;
+  }
+}
+
 type ProjectorEntry = {
   displayId: string;
   window: BrowserWindow;
@@ -128,42 +152,19 @@ const projectorWindows = new Map<string, ProjectorEntry>();
 
 function getDisplayInfos(): DisplayInfo[] {
   if (!app.isReady()) return [];
-
   const primaryId = String(screen.getPrimaryDisplay().id);
-  const raw = screen.getAllDisplays().map((display) => ({
-    display,
-    isPrimary: String(display.id) === primaryId,
-  }));
-
-  raw.sort((a, b) => {
-    const left: DisplayInfo = {
-      id: String(a.display.id),
-      label: '',
-      isPrimary: a.isPrimary,
-      bounds: a.display.bounds,
-      workArea: a.display.workArea,
-      scaleFactor: a.display.scaleFactor,
-    };
-    const right: DisplayInfo = {
-      id: String(b.display.id),
-      label: '',
-      isPrimary: b.isPrimary,
-      bounds: b.display.bounds,
-      workArea: b.display.workArea,
-      scaleFactor: b.display.scaleFactor,
-    };
-    return compareDisplays(left, right);
-  });
-
-  let secondaryIndex = 0;
-  return raw.map(({ display, isPrimary }) => ({
+  const infos: DisplayInfo[] = screen.getAllDisplays().map((display) => ({
     id: String(display.id),
-    label: isPrimary ? 'Primary' : `Screen ${++secondaryIndex}`,
-    isPrimary,
+    label: '',
+    isPrimary: String(display.id) === primaryId,
     bounds: display.bounds,
     workArea: display.workArea,
     scaleFactor: display.scaleFactor,
   }));
+  infos.sort(compareDisplays); // nesneler bir kez kurulur, karşılaştırma başına yeniden değil
+  let secondary = 0;
+  for (const info of infos) info.label = info.isPrimary ? 'Primary' : `Screen ${++secondary}`;
+  return infos;
 }
 
 function getRawDisplay(displayId?: string): Electron.Display | undefined {
@@ -190,11 +191,11 @@ function getProjectorOutputStatus(): ProjectorOutputStatus[] {
 }
 
 function sendProjectorOutputStatus(): void {
-  win?.webContents.send('projector-output-status', getProjectorOutputStatus());
+  sendToControl('projector-output-status', getProjectorOutputStatus());
 }
 
 function sendDisplaySnapshot(): void {
-  win?.webContents.send('displays-changed', getDisplayInfos());
+  sendToControl('displays-changed', getDisplayInfos());
   sendProjectorOutputStatus();
 }
 
@@ -210,38 +211,55 @@ function projectorBounds(display: Electron.Display): Electron.Rectangle {
 }
 
 function refreshProjectorWindows(): void {
-  // Publish hotplug before closing its output: the operator must be able to
-  // distinguish a disconnected open display from an intentionally closed one.
+  // Hotplug önce yayımlanır: operatör bağlantısı kopan açık ekranı, bilerek kapatılandan ayırabilsin.
   sendDisplaySnapshot();
   for (const [displayId, entry] of projectorWindows) {
-    const display = getRawDisplay(displayId);
-    if (!display) {
-      if (!entry.window.isDestroyed()) entry.window.close();
-      continue;
-    }
+    if (!getRawDisplay(displayId) && !entry.window.isDestroyed()) entry.window.close();
     // Fullscreen windows auto-position on their display — no reposition needed.
   }
 }
 
-function attachDisplayWatch(): void {
-  screen.on('display-added', () => refreshProjectorWindows());
-  screen.on('display-removed', () => refreshProjectorWindows());
-  screen.on('display-metrics-changed', () => refreshProjectorWindows());
+// Çözünürlük değişiminde `display-metrics-changed` arka arkaya onlarca kez gelebilir.
+let displayTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleDisplayRefresh(): void {
+  if (displayTimer) clearTimeout(displayTimer);
+  displayTimer = setTimeout(() => {
+    displayTimer = null;
+    refreshProjectorWindows();
+  }, 150);
 }
 
-// Remote server state
+function attachDisplayWatch(): void {
+  screen.on('display-added', scheduleDisplayRefresh);
+  screen.on('display-removed', scheduleDisplayRefresh);
+  screen.on('display-metrics-changed', scheduleDisplayRefresh);
+}
+
+// ─── Remote server ──────────────────────────────────────────────────────────
+
+const MAX_CONTROL_BODY = 16 * 1024;
+const WS_MAX_PAYLOAD = 64 * 1024; // yalnızca komut alınır
+const HEARTBEAT_MS = 20_000;
+const SOFT_BUFFER_BYTES = 1024 * 1024; // üstünde: ağır/ikincil mesajlar bu telefon için atlanır
+const HARD_BUFFER_BYTES = 16 * 1024 * 1024; // üstünde: telefon ölü sayılır, bağlantı kesilir
+const MAX_COMMANDS_PER_SECOND = 40;
+const MAX_PREVIEW_CHARS = 4 * 1024 * 1024;
+const MAX_SLIDE_PREVIEWS = 20_000;
+const NETWORK_TTL_MS = 5_000;
+const LOCAL_HOST_RE = /^(?:localhost|\d{1,3}(?:\.\d{1,3}){3}|[^.]+\.local)$/i;
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+} as const;
+const REMOTE_PAGE = Buffer.from(REMOTE_HTML_NEW, 'utf-8');
 
 let remoteServer: http.Server | null = null;
 let wss: WebSocketServer | null = null;
-let remoteServerUrl = '';
+let remoteServerError: string | null = null;
 
-type SlideMeta = {
-  partsMode: boolean;
-  parts: string[] | null;
-  title: string | null;
-};
-
-let remoteStatus: {
+type SlideMeta = { partsMode: boolean; parts: string[] | null; title: string | null };
+interface RemoteStatus {
   slideCount: number;
   currentIndex: number;
   isBlackout: boolean;
@@ -251,7 +269,9 @@ let remoteStatus: {
   activePart: number | null;
   partsCount: number | null;
   slideMeta: SlideMeta[] | null;
-} = {
+}
+
+let remoteStatus: RemoteStatus = {
   slideCount: 0,
   currentIndex: 0,
   isBlackout: false,
@@ -263,104 +283,340 @@ let remoteStatus: {
   slideMeta: null,
 };
 
+/** Her gezinmede giden küçük durum: slideMeta ayrı mesajla, yalnızca değişince yayımlanır. */
+function publicStatus(): Omit<RemoteStatus, 'slideMeta'> {
+  const { slideMeta: _slideMeta, ...rest } = remoteStatus;
+  return rest;
+}
+
 /** Last captured slide preview, sent immediately to new clients. */
 let lastPreviewDataUrl: string | null = null;
+/** Renderer önizlemesi geldikten sonra pencere yakalaması onu asla ezmez. */
+let rendererPreviewSeen = false;
 let allSlidePreviews: string[] = [];
 /** JSON snapshot of the last broadcast slideMeta, used to detect deck changes. */
 let lastSlideMetaJson = '';
 
-/** Connected WebSocket clients (remote phones). */
-const wsClients = new Set<WsSocket>();
+// ── WebSocket istemcileri ──
+interface ClientState { alive: boolean; stale: boolean; windowStart: number; count: number }
+const wsClients = new Map<WsSocket, ClientState>();
+let clientsEverConnected = 0;
+let lastClientConnectedAt = 0;
 
-function broadcast(msg: object): void {
-  const str = JSON.stringify(msg);
-  recordWs(str.length);
-  for (const client of wsClients) {
-    if (client.readyState === WsSocket.OPEN) {
-      try {
-        client.send(str);
-      } catch {
-        /* dead socket, ignore */
+type Priority = 'normal' | 'preview' | 'bulk';
+
+/**
+ * normal: her zaman gider. preview: tampon doluysa atlanır (en yeni kare zaten sonra gelir).
+ * bulk: tampon doluysa atlanır ve telefon "bayat" işaretlenir; boşalınca tam liste yeniden gönderilir.
+ * Tampon HARD sınırı aşarsa telefon ölü sayılır.
+ */
+function broadcast(msg: object, priority: Priority = 'normal'): void {
+  if (wsClients.size === 0) return; // dinleyen yoksa serileştirme yok
+  const text = JSON.stringify(msg);
+  recordWs(text.length);
+  const isFullList = (msg as { type?: string }).type === 'allPreviews';
+  for (const [client, state] of wsClients) {
+    if (client.readyState !== WsSocket.OPEN) continue;
+    const buffered = client.bufferedAmount;
+    if (buffered > HARD_BUFFER_BYTES) {
+      client.terminate();
+      continue;
+    }
+    if (priority !== 'normal' && buffered > SOFT_BUFFER_BYTES) {
+      if (priority === 'bulk') state.stale = true;
+      continue;
+    }
+    try {
+      if (state.stale && !isFullList && buffered < SOFT_BUFFER_BYTES / 4) {
+        state.stale = false;
+        client.send(JSON.stringify({ type: 'allPreviews', data: allSlidePreviews }));
       }
+      client.send(text);
+    } catch {
+      client.terminate();
     }
   }
 }
 
 /** Notify renderer of connected client count. */
 function broadcastClientCount(): void {
-  win?.webContents.send('remote-client-count', wsClients.size);
+  sendToControl('remote-client-count', wsClients.size);
 }
 
-// Slide preview capture (debounced + rate-limited)
-
-let captureTimer: ReturnType<typeof setTimeout> | null = null;
-let lastCaptureTime = 0;
-const CAPTURE_MIN_INTERVAL = 100; // ms, hard floor between captures
-
-/** True if the frame is blank (black/flat color) — e.g. a minimized window. */
-function captureIsBlank(img: Electron.NativeImage): boolean {
-  try {
-    const { width, height } = img.getSize();
-    if (!width || !height) return true;
-    const bmp = img.toBitmap(); // BGRA
-    let sum = 0;
-    const step = Math.max(1, Math.floor(bmp.length / (200_000 * 4)));
-    for (let i = 0; i < bmp.length; i += 4 * step) {
-      sum += bmp[i] + bmp[i + 1] + bmp[i + 2];
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+function startHeartbeat(): void {
+  if (heartbeatTimer) return;
+  // Uykuya geçen/ağdan düşen telefonlar sessizce kalır; pong gelmeyen bir sonraki turda kesilir.
+  heartbeatTimer = setInterval(() => {
+    for (const [client, state] of wsClients) {
+      if (!state.alive) {
+        client.terminate();
+        continue;
+      }
+      state.alive = false;
+      try { client.ping(); } catch { client.terminate(); }
     }
-    const samples = Math.max(1, Math.ceil(bmp.length / (4 * step)));
-    return sum / (samples * 3) < 6;
-  } catch {
-    return true;
-  }
+  }, HEARTBEAT_MS);
+  heartbeatTimer.unref();
+}
+
+// ── İstek güvenliği ──
+function hostnameOf(host: string | undefined): string {
+  if (!host) return '';
+  return (host.startsWith('[') ? host.slice(1, host.indexOf(']')) : host.split(':')[0]).toLowerCase();
 }
 
 /**
- * Captures a downscaled JPEG preview of the projector/main window and
- * broadcasts it. Debounced + rate-limited; fallback only until the renderer
- * delivers its own canvas preview (never overwrites it).
+ * Cloudflare tüneli üzerinden (internetten) gelen istek mi? cloudflared yerel sunucuya 127.0.0.1'den bağlanır,
+ * bu yüzden kaynak adrese bakılamaz. Tünel başlıkları ya da IP/localhost/.local dışı Host yeterli işarettir.
  */
-function scheduleSlideCapture(delayMs = 300): void {
-  if (wsClients.size === 0) return; // no one listening, skip the work
-  if (captureTimer) clearTimeout(captureTimer);
-  captureTimer = setTimeout(async () => {
-    const now = Date.now();
-    if (now - lastCaptureTime < CAPTURE_MIN_INTERVAL) return;
-    lastCaptureTime = now;
-
-    const target = [...projectorWindows.values()].find((entry) => !entry.window.isDestroyed())?.window ?? win;
-    if (!target || target.isDestroyed()) return;
-    try {
-      const img = await target.webContents.capturePage();
-      if (img.isEmpty()) return;
-      if (captureIsBlank(img)) return; // minimized/occluded window → skip
-      const buf = img.resize({ width: 480 }).toJPEG(65);
-      lastPreviewDataUrl = `data:image/jpeg;base64,${buf.toString('base64')}`;
-      broadcast({ type: 'preview', data: lastPreviewDataUrl });
-    } catch {
-      /* window not ready yet */
-    }
-  }, delayMs);
+function isTunneled(req: http.IncomingMessage): boolean {
+  return 'cf-connecting-ip' in req.headers || 'cf-ray' in req.headers || !LOCAL_HOST_RE.test(hostnameOf(req.headers.host));
 }
 
-// Local IPv4 detection (scored, cached for app lifetime)
+/** Tarayıcı kaynaklı istek yalnızca sunucunun kendi sayfasından gelebilir (CSRF / DNS rebinding). */
+function isSameOrigin(req: http.IncomingMessage): boolean {
+  const origin = req.headers.origin;
+  if (!origin) return true; // tarayıcı dışı istemci veya aynı kaynaktan GET
+  try { return new URL(origin).host === req.headers.host; } catch { return false; }
+}
 
-let cachedLocalIP: string | null = null;
-let remoteDebugInfo: {
-  port: number | null;
-  selectedAddress: string;
-  candidates: Array<{ name: string; address: string; cidr: string | null; mac: string; score: number }>;
-  timestamp: string | null;
-} = {
+function forwardRemoteAction(action: unknown, value: unknown): boolean {
+  if (typeof action !== 'string' || action.length === 0 || action.length > 64) return false;
+  if (value !== undefined) {
+    try {
+      if ((JSON.stringify(value)?.length ?? 0) > 4096) return false;
+    } catch { return false; }
+  }
+  sendToControl('remote-action', { action, value });
+  return true;
+}
+
+function readBody(req: http.IncomingMessage, limit = MAX_CONTROL_BODY): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const declared = Number(req.headers['content-length']);
+    if (Number.isFinite(declared) && declared > limit) {
+      req.resume();
+      reject(new Error('Payload too large'));
+      return;
+    }
+    const chunks: Buffer[] = [];
+    let total = 0;
+    let done = false;
+    req.on('data', (chunk: Buffer) => {
+      if (done) return;
+      total += chunk.length;
+      if (total > limit) {
+        done = true;
+        chunks.length = 0;
+        req.destroy();
+        reject(new Error('Payload too large'));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      if (done) return;
+      done = true;
+      resolve(Buffer.concat(chunks).toString('utf-8'));
+    });
+    req.on('error', (error) => {
+      if (done) return;
+      done = true;
+      reject(error);
+    });
+  });
+}
+
+function rawToString(raw: RawData): string {
+  if (Buffer.isBuffer(raw)) return raw.toString('utf-8');
+  if (Array.isArray(raw)) return Buffer.concat(raw).toString('utf-8');
+  return Buffer.from(raw).toString('utf-8');
+}
+
+// ── HTTP ──
+function handleRemoteRequest(req: http.IncomingMessage, res: http.ServerResponse): void {
+  let pathname: string;
+  try {
+    pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
+  } catch {
+    res.writeHead(400, NO_STORE_HEADERS);
+    res.end('Bad Request');
+    return;
+  }
+
+  // Token korumalı paylaşım sayfaları: tünelden de erişilebilen tek yollar.
+  if (pathname === '/share' && handleShareHttp(req, res)) return;
+  if (pathname === '/screen' && handleScreenShareHttp(req, res)) return;
+
+  // Tünelden gelen istek kontrol arayüzüne, komutlara ve tanılamaya ulaşamaz.
+  if (isTunneled(req)) {
+    res.writeHead(404, NO_STORE_HEADERS);
+    res.end('Not Found');
+    return;
+  }
+
+  // Remote control web UI
+  if (pathname === '/' || pathname === '/remote') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': REMOTE_PAGE.length, ...NO_STORE_HEADERS });
+    res.end(REMOTE_PAGE);
+    return;
+  }
+
+  // Legacy REST: status
+  if (pathname === '/api/status') {
+    res.writeHead(200, { 'Content-Type': 'application/json', ...NO_STORE_HEADERS });
+    res.end(JSON.stringify(remoteStatus));
+    return;
+  }
+
+  // Legacy REST: command
+  if (pathname === '/api/control' && req.method === 'POST') {
+    if (!isSameOrigin(req)) {
+      res.writeHead(403, NO_STORE_HEADERS);
+      res.end('Forbidden');
+      return;
+    }
+    readBody(req)
+      .then((body) => {
+        const data = JSON.parse(body) as { action?: unknown; value?: unknown } | null;
+        if (!forwardRemoteAction(data?.action, data?.value)) throw new Error('Bad command');
+        res.writeHead(200, { 'Content-Type': 'application/json', ...NO_STORE_HEADERS });
+        res.end('{"ok":true}');
+      })
+      .catch((error: unknown) => {
+        res.writeHead(error instanceof Error && error.message === 'Payload too large' ? 413 : 400, NO_STORE_HEADERS);
+        res.end('Bad Request');
+      });
+    return;
+  }
+
+  if (pathname === '/api/diagnostics') {
+    res.writeHead(200, { 'Content-Type': 'application/json', ...NO_STORE_HEADERS });
+    res.end(JSON.stringify({ remoteServerUrl: currentRemoteUrl(), debug: remoteDebugInfo, timestamp: new Date().toISOString() }));
+    return;
+  }
+
+  res.writeHead(404, NO_STORE_HEADERS);
+  res.end('Not Found');
+}
+
+function welcomeMessage(): string {
+  return JSON.stringify({
+    type: 'welcome',
+    data: { status: remoteStatus, preview: lastPreviewDataUrl, allPreviews: allSlidePreviews, slideMeta: remoteStatus.slideMeta },
+  });
+}
+
+function handleRemoteConnection(client: WsSocket, req: http.IncomingMessage): void {
+  // Phone captions clients connect to /share?token=… and are handled (and authenticated) by the share service.
+  if (handleShareConnection(client, req)) return;
+  // Phone live-screen clients connect to /screen?token=… (view-only frames).
+  if (handleScreenShareConnection(client, req)) return;
+
+  if (isTunneled(req) || !isSameOrigin(req)) {
+    client.close(1008, 'Forbidden');
+    return;
+  }
+
+  // Bağlantı tanılaması: istemci listesine girmez, hoş geldin mesajı (büyük önizleme listesi) gönderilmez.
+  if (req.url?.startsWith('/diag')) {
+    client.send('{"type":"diag-pong"}', () => client.close(1000));
+    return;
+  }
+
+  const state: ClientState = { alive: true, stale: false, windowStart: Date.now(), count: 0 };
+  wsClients.set(client, state);
+  clientsEverConnected++;
+  lastClientConnectedAt = Date.now();
+  broadcastClientCount();
+
+  try { client.send(welcomeMessage()); } catch { /* ignore */ }
+
+  client.on('pong', () => { state.alive = true; });
+  client.on('message', (raw: RawData) => {
+    state.alive = true;
+    const now = Date.now();
+    if (now - state.windowStart > 1000) {
+      state.windowStart = now;
+      state.count = 0;
+    }
+    if (++state.count > MAX_COMMANDS_PER_SECOND) return; // taşma: renderer'ı IPC ile boğmasın
+    try {
+      const msg = JSON.parse(rawToString(raw)) as { type?: unknown; action?: unknown; value?: unknown };
+      if (msg?.type === 'command') forwardRemoteAction(msg.action, msg.value);
+    } catch {
+      /* invalid JSON, ignore */
+    }
+  });
+
+  // Yalnızca soket gerçekten listedeyse bildirilir: `error` ardından `close` iki kez saymaz.
+  const drop = () => {
+    if (wsClients.delete(client)) broadcastClientCount();
+  };
+  client.on('close', drop);
+  client.on('error', () => {
+    try { client.terminate(); } catch { /* already closed */ }
+    drop();
+  });
+}
+
+function getRemotePort(): number {
+  const address = remoteServer?.address();
+  return address && typeof address === 'object' ? address.port : 0;
+}
+
+function createRemoteServer(): void {
+  const server = http.createServer(handleRemoteRequest);
+  remoteServer = server;
+  // Dinleme hatası (EADDRINUSE/EACCES) süreci düşürmesin; tanılamada gösterilir.
+  server.on('error', (error: NodeJS.ErrnoException) => {
+    remoteServerError = error.code ?? error.message;
+    console.error('[REMOTE SERVER] error:', error);
+  });
+
+  wss = new WebSocketServer({ server, maxPayload: WS_MAX_PAYLOAD });
+  wss.on('error', (error) => console.error('[REMOTE SERVER] websocket error:', error));
+  wss.on('connection', handleRemoteConnection);
+  startHeartbeat();
+
+  // Random port, all interfaces
+  server.listen(0, '0.0.0.0', () => {
+    remoteServerError = null;
+    const scanned = scanNetwork(true);
+    remoteDebugInfo.port = getRemotePort();
+    announcedRemoteUrl = currentRemoteUrl();
+    startNetworkWatch();
+    console.info('[REMOTE SERVER] Listening on all interfaces');
+    console.info('[REMOTE SERVER] URL:', announcedRemoteUrl);
+    console.info('[REMOTE SERVER] Candidates:', scanned.candidates);
+  });
+}
+
+// ─── Yerel IPv4 tespiti (puanlı, kısa ömürlü önbellek) ─────────────────────
+
+interface NetCandidate {
+  name: string;
+  address: string;
+  cidr: string | null;
+  mac: string;
+  score: number;
+  internal: boolean;
+  /** VPN / sanal / bağlantı-yerel: telefonun ulaşamayacağı adaptörler. */
+  virtual: boolean;
+}
+
+let remoteDebugInfo: { port: number | null; selectedAddress: string; candidates: NetCandidate[]; timestamp: string | null } = {
   port: null,
   selectedAddress: '',
   candidates: [],
   timestamp: null,
 };
 
-function isLinkLocalIPv4(address: string): boolean {
-  return /^169\.254\./.test(address);
-}
+const VIRTUAL_NAME_RE =
+  /docker|vmware|virtual|vbox|hyper-?v|vethernet|wsl|default switch|loopback|tun|tap|hamachi|bridge|br-|virbr|utun|wg|wireguard|ppp|vpn|tailscale|zerotier|nordlynx|npcap/;
+
+const isLinkLocalIPv4 = (address: string): boolean => /^169\.254\./.test(address);
 
 /** Higher score = more likely to be the LAN interface the phone can reach. */
 function scoreLocalIPv4Candidate(name: string, address: string): number {
@@ -369,13 +625,8 @@ function scoreLocalIPv4Candidate(name: string, address: string): number {
 
   if (/wi[-_]?fi|wlan|wireless/.test(normalized)) score += 30;
   if (/eth|en\d|ethernet|lan/.test(normalized)) score += 20;
-  if (/realtek|intel|qualcomm|broadcom|bcm|atheros|rtl|marvell|r\d\d/.test(normalized)) score += 10;
-  if (
-    /docker|vmware|virtual|vbox|hyper-?v|loopback|tun|tap|hamachi|bridge|br-|virbr|utun|wg|wireguard|ppp|vpn/.test(
-      normalized
-    )
-  )
-    score -= 100;
+  if (/realtek|intel|qualcomm|broadcom|bcm|atheros|rtl|marvell/.test(normalized)) score += 10;
+  if (VIRTUAL_NAME_RE.test(normalized)) score -= 100;
 
   if (isLinkLocalIPv4(address)) score -= 100;
   if (/^127\./.test(address) || /^0\./.test(address)) score -= 100;
@@ -384,44 +635,136 @@ function scoreLocalIPv4Candidate(name: string, address: string): number {
   if (/^192\.168\./.test(address)) score += 15;
   if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(address)) score += 15;
 
-  if (!/^(?:10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[0-1])\.|169\.254\.)/.test(address)) {
-    score += 5; // public/uncommon subnet, still possibly valid
-  }
-
+  if (!/^(?:10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[0-1])\.|169\.254\.)/.test(address)) score += 5; // public/uncommon, maybe valid
   return score;
 }
 
-function listLocalIPv4Candidates() {
-  const nets = os.networkInterfaces();
-  const candidates: Array<{ name: string; address: string; cidr: string | null; mac: string; score: number }> = [];
-
-  for (const [name, addrs] of Object.entries(nets)) {
-    if (!addrs) continue;
-    for (const iface of addrs) {
-      if (iface.family !== 'IPv4') continue;
+function listLocalIPv4Candidates(): NetCandidate[] {
+  const candidates: NetCandidate[] = [];
+  for (const [name, addrs] of Object.entries(os.networkInterfaces())) {
+    for (const iface of addrs ?? []) {
+      if (iface.family !== 'IPv4' && (iface.family as unknown) !== 4) continue; // eski Node sürümleri sayı döndürür
       candidates.push({
         name,
         address: iface.address,
         cidr: iface.cidr ?? null,
         mac: iface.mac,
         score: scoreLocalIPv4Candidate(name, iface.address),
+        internal: iface.internal,
+        virtual: VIRTUAL_NAME_RE.test(name.toLowerCase()) || isLinkLocalIPv4(iface.address),
       });
     }
   }
-
   return candidates.sort((a, b) => b.score - a.score);
 }
 
-function getLocalIPv4(): string {
-  if (cachedLocalIP) return cachedLocalIP;
+let networkCache: { at: number; ip: string; candidates: NetCandidate[] } | null = null;
 
+/** Önbellek 5 sn geçerli: kalıcı önbellek Wi-Fi değişince bayat URL üretiyordu. */
+function scanNetwork(force = false): { ip: string; candidates: NetCandidate[] } {
+  if (!force && networkCache && Date.now() - networkCache.at < NETWORK_TTL_MS) return networkCache;
   const candidates = listLocalIPv4Candidates();
-  remoteDebugInfo.candidates = candidates;
-
   const best = candidates.find((c) => c.score > -50 && !isLinkLocalIPv4(c.address));
-  cachedLocalIP = best?.address ?? candidates[0]?.address ?? '127.0.0.1';
-  remoteDebugInfo.selectedAddress = cachedLocalIP;
-  return cachedLocalIP;
+  const ip = best?.address ?? candidates[0]?.address ?? '127.0.0.1';
+  networkCache = { at: Date.now(), ip, candidates };
+  remoteDebugInfo = { ...remoteDebugInfo, selectedAddress: ip, candidates, timestamp: new Date().toISOString() };
+  return networkCache;
+}
+
+const getLocalIPv4 = (): string => scanNetwork().ip;
+
+function currentRemoteUrl(): string {
+  const port = getRemotePort();
+  return port ? `http://${getLocalIPv4()}:${port}/remote` : '';
+}
+
+// Ağ izleme: IP değişince (Wi-Fi yeniden bağlanma, kablo takma) uzak URL ve paylaşım URL'leri yenilenir.
+let networkTimer: ReturnType<typeof setInterval> | null = null;
+let announcedRemoteUrl = '';
+
+function startNetworkWatch(): void {
+  if (networkTimer) return;
+  networkTimer = setInterval(() => {
+    const { ip } = scanNetwork(true);
+    const port = getRemotePort();
+
+    const url = currentRemoteUrl();
+    if (url !== announcedRemoteUrl) {
+      announcedRemoteUrl = url;
+      sendToControl('remote-url-changed', { url });
+    }
+    if (isShareActive() && refreshShareHost(ip, port)) {
+      sendToControl('share:network-changed', { url: getShareStatus().url });
+    }
+    if (isScreenShareActive() && refreshScreenShareHost(ip, port)) {
+      sendToControl('screen-share:network-changed', { url: getScreenShareStatus().url });
+    }
+  }, 10_000);
+  networkTimer.unref();
+}
+
+// ─── Slide preview capture (debounced + rate-limited) ───────────────────────
+
+const CAPTURE_MIN_INTERVAL = 100; // ms
+let captureTimer: ReturnType<typeof setTimeout> | null = null;
+let lastCaptureTime = 0;
+let capturing = false;
+
+/** Küçültülmüş görüntüde parlaklık örneği: tam çözünürlükte 8 MB'lık bitmap taramak gerekmez. */
+function captureIsBlank(img: Electron.NativeImage): boolean {
+  try {
+    const { width, height } = img.getSize();
+    if (!width || !height) return true;
+    const bmp = img.toBitmap(); // BGRA
+    let sum = 0;
+    let samples = 0;
+    for (let i = 0; i < bmp.length; i += 4) {
+      sum += bmp[i] + bmp[i + 1] + bmp[i + 2];
+      samples++;
+    }
+    return samples === 0 || sum / (samples * 3) < 6;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Projektör/ana pencerenin küçültülmüş JPEG önizlemesini yayınlar. Yalnızca renderer kendi önizlemesini
+ * göndermeden önceki yedektir; renderer önizlemesi geldikten sonra asla üzerine yazmaz.
+ */
+function scheduleSlideCapture(delayMs = 300): void {
+  if (wsClients.size === 0) return; // dinleyen yok
+  if (captureTimer) clearTimeout(captureTimer);
+  captureTimer = setTimeout(() => {
+    captureTimer = null;
+    void captureSlide();
+  }, delayMs);
+}
+
+async function captureSlide(): Promise<void> {
+  if (capturing || rendererPreviewSeen || wsClients.size === 0) return;
+  const wait = lastCaptureTime + CAPTURE_MIN_INTERVAL - Date.now();
+  if (wait > 0) {
+    scheduleSlideCapture(wait); // hız sınırı yakalamayı düşürmez, erteler
+    return;
+  }
+  capturing = true;
+  lastCaptureTime = Date.now();
+  try {
+    const target = [...projectorWindows.values()].find((entry) => !entry.window.isDestroyed())?.window ?? win;
+    if (!target || target.isDestroyed() || target.webContents.isDestroyed()) return;
+    const full = await target.webContents.capturePage();
+    if (full.isEmpty()) return;
+    const small = full.resize({ width: 480, quality: 'good' });
+    if (captureIsBlank(small)) return; // minimized/occluded window → skip
+    if (rendererPreviewSeen) return; // yakalama sürerken renderer önizlemesi geldi
+    lastPreviewDataUrl = `data:image/jpeg;base64,${small.toJPEG(65).toString('base64')}`;
+    broadcast({ type: 'preview', data: lastPreviewDataUrl }, 'preview');
+  } catch {
+    /* window not ready yet */
+  } finally {
+    capturing = false;
+  }
 }
 
 // Preset store (Phase 5): per-preset files under userData/presets/, see
@@ -430,7 +773,7 @@ const presetStore = createPresetStore(app.getPath('userData'), mainPerf);
 
 // Persistent media library (Phase 6): userData/media/, see mediaLibrary.ts.
 const mediaLibrary = getMediaLibrary();
-registerGradientService(mediaLibrary);
+registerGradientService(mediaLibrary, app.getPath('userData'));
 
 // Generic recursive file finder
 // One directory walker, parametrized by a filter, replaces two near-identical
@@ -443,15 +786,40 @@ interface ScanFolderOptions {
   includeVideos?: boolean;
 }
 
+const READDIR_CONCURRENCY = 8;
+const MAX_WALK_DEPTH = 32;
+let activeReaddirs = 0;
+const readdirWaiters: Array<() => void> = [];
+
+/** Aynı anda en fazla 8 `readdir`: büyük ağaçlarda `EMFILE` önlenir. Sonuç sırası değişmez. */
+async function readdirLimited(dir: string) {
+  if (activeReaddirs >= READDIR_CONCURRENCY) await new Promise<void>((resolve) => readdirWaiters.push(resolve));
+  else activeReaddirs++;
+  try {
+    return await fs.readdir(dir, { withFileTypes: true });
+  } finally {
+    const next = readdirWaiters.shift();
+    if (next) next(); // yuva beklemedeki işe devredilir
+    else activeReaddirs--;
+  }
+}
+
 async function walkFiles(
   dir: string,
   matches: (name: string, ext: string) => boolean,
-  recursive = true
+  recursive = true,
+  depth = 0
 ): Promise<string[]> {
-  const entries = await fs.readdir(dir, { withFileTypes: true });
+  let entries;
+  try {
+    entries = await readdirLimited(dir);
+  } catch (error) {
+    if (depth === 0) throw error; // okunamayan KÖK klasör "eksik" sayılır
+    return []; // okunamayan alt klasör (izin hatası) tüm taramayı düşürmesin
+  }
   const tasks = entries.map(async (entry): Promise<string[]> => {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) return recursive ? walkFiles(full, matches, true) : [];
+    if (entry.isDirectory()) return recursive && depth < MAX_WALK_DEPTH ? walkFiles(full, matches, true, depth + 1) : [];
     if (entry.isFile() && matches(entry.name, path.extname(full).toLowerCase())) return [full];
     return [];
   });
@@ -471,26 +839,6 @@ const walkMediaFiles = (dir: string, opts: ScanFolderOptions = {}): Promise<stri
     recursive
   );
 };
-
-// HTTP body reader
-
-function readBody(req: http.IncomingMessage): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    let totalLength = 0;
-    req.on('data', (c) => {
-      chunks.push(c);
-      totalLength += c.length;
-      if (totalLength > 1024 * 1024 * 10) {
-        // 10 MB limit
-        req.destroy();
-        reject(new Error('Payload too large'));
-      }
-    });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString()));
-    req.on('error', reject);
-  });
-}
 
 // Window creation
 
@@ -530,48 +878,50 @@ const QUIT_CONFIRM_TEXTS: Record<string, { message: string; detail: string; canc
 let rendererLanguageCache = 'tr';
 
 /** Best-effort read of the renderer's chosen language (localStorage persisted by i18next). */
-function refreshRendererLanguage(): void {
-  const lng = win?.webContents.executeJavaScript(`localStorage.getItem('i18nextLng') || 'tr'`);
-  if (lng && typeof (lng as unknown as Promise<string>).then === 'function') {
-    (lng as unknown as Promise<string>)
-      .then((value) => {
-        rendererLanguageCache = String(value).split('-')[0] ?? 'tr';
-      })
-      .catch(() => {
-        /* default stays */
-      });
+async function readRendererLanguage(window: BrowserWindow): Promise<string> {
+  try {
+    if (window.isDestroyed() || window.webContents.isDestroyed()) return rendererLanguageCache;
+    const value = await Promise.race([
+      window.webContents.executeJavaScript(`localStorage.getItem('i18nextLng') || 'tr'`) as Promise<unknown>,
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 500)),
+    ]);
+    rendererLanguageCache = String(value).split('-')[0] || 'tr';
+  } catch {
+    /* önbellekteki dil kalır */
   }
+  return rendererLanguageCache;
 }
 
 /** Quit confirm: blocks window close until the user confirms in a native dialog. */
 function attachQuitConfirm(window: BrowserWindow): void {
   let quitConfirmed = false;
+  let dialogOpen = false;
 
   window.on('close', (e) => {
     if (quitConfirmed) return;
     e.preventDefault();
-
-    const texts = QUIT_CONFIRM_TEXTS[rendererLanguageCache] ?? QUIT_CONFIRM_TEXTS.en;
-    dialog
-      .showMessageBox(window, {
-        type: 'question',
-        title: 'Worship Presentation Assistant',
-        message: texts.message,
-        detail: texts.detail,
-        buttons: [texts.cancel, texts.confirm],
-        defaultId: 0,
-        cancelId: 0,
-      })
-      .then(({ response }) => {
-        if (response === 1) {
-          quitConfirmed = true;
-          if (!window.isDestroyed()) window.close();
-        }
-      })
-      .catch(() => {
+    if (dialogOpen) return; // kapat tuşuna tekrar basınca ikinci diyalog açılmaz
+    dialogOpen = true;
+    void (async () => {
+      try {
+        const texts = QUIT_CONFIRM_TEXTS[await readRendererLanguage(window)] ?? QUIT_CONFIRM_TEXTS.en;
+        const { response } = await dialog.showMessageBox(window, {
+          type: 'question',
+          title: 'Worship Presentation Assistant',
+          message: texts.message,
+          detail: texts.detail,
+          buttons: [texts.cancel, texts.confirm],
+          defaultId: 0,
+          cancelId: 0,
+        });
+        if (response === 1) quitConfirmed = true;
+      } catch {
         quitConfirmed = true;
-        if (!window.isDestroyed()) window.close();
-      });
+      } finally {
+        dialogOpen = false;
+      }
+      if (quitConfirmed && !window.isDestroyed()) window.close();
+    })();
   });
 }
 
@@ -596,6 +946,7 @@ function createWindow(): void {
       webSecurity: true,
     },
   });
+  const controlWindow = win;
 
   setPracticeControl(win.webContents);
   if (restricted) restrictPracticeSession(win.webContents, DIST);
@@ -612,9 +963,8 @@ function createWindow(): void {
   if (restricted) win.on('close', event => { if(!closingPractice){event.preventDefault();if(practiceRendererReady)win?.webContents.send('practice:close-request');else practiceClosePending=true;} });
   else attachQuitConfirm(win);
 
-  win.webContents.once('did-finish-load', refreshRendererLanguage);
+  win.webContents.once('did-finish-load', () => void readRendererLanguage(controlWindow));
 
-  const controlWindow = win;
   controlWindow.once('closed', () => musicForWindow.dispose());
   if (restricted) controlWindow.webContents.on('render-process-gone', (_event, details) => {
     if (closingPractice || details.reason === 'clean-exit' || controlWindow.isDestroyed()) return;
@@ -622,6 +972,17 @@ function createWindow(): void {
     createWindow();
     controlWindow.destroy();
   });
+  if (!restricted) {
+    // Kontrol penceresi çökerse beyaz ekranda kalmasın; döngüye girmesin diye dakikada en çok 3 deneme.
+    const crashes: number[] = [];
+    controlWindow.webContents.on('render-process-gone', (_event, details) => {
+      if (details.reason === 'clean-exit' || controlWindow.isDestroyed()) return;
+      const now = Date.now();
+      while (crashes.length && now - crashes[0] > 60_000) crashes.shift();
+      crashes.push(now);
+      if (crashes.length <= 3) controlWindow.webContents.reload();
+    });
+  }
   win.on('closed', () => {
     for (const entry of projectorWindows.values()) {
       if (!entry.window.isDestroyed()) entry.window.close();
@@ -629,6 +990,9 @@ function createWindow(): void {
     if (win === controlWindow) win = null;
   });
 }
+
+const PROJECTOR_NAV_NEXT = new Set(['ArrowRight', 'ArrowDown', ' ', 'PageDown', 'j', 'J']);
+const PROJECTOR_NAV_PREV = new Set(['ArrowLeft', 'ArrowUp', 'PageUp', 'k', 'K']);
 
 function createProjectorWindow(requestedDisplayId?: string, initialData?: any): boolean {
   if (restricted) return false;
@@ -674,7 +1038,20 @@ function createProjectorWindow(requestedDisplayId?: string, initialData?: any): 
   };
   projectorWindows.set(displayId, entry);
   remoteStatus.isProjectorOpen = true;
-  broadcast({ type: 'status', data: remoteStatus });
+  broadcast({ type: 'status', data: publicStatus() });
+
+  // Çöken projektör renderer'ı yeniden yüklenir: ekran canlı yayında kara kalmasın.
+  // Yeniden yüklenince 'projector-ready' tam durumu yeniden kurar. Döngüye girmesin diye dakikada en çok 3 deneme.
+  const crashTimes: number[] = [];
+  projectorWindow.webContents.on('render-process-gone', (_event, details) => {
+    if (details.reason === 'clean-exit' || projectorWindow.isDestroyed()) return;
+    const now = Date.now();
+    while (crashTimes.length && now - crashTimes[0] > 60_000) crashTimes.shift();
+    crashTimes.push(now);
+    entry.ready = false;
+    sendProjectorOutputStatus();
+    if (crashTimes.length <= 3) projectorWindow.webContents.reload();
+  });
 
   // Projector windows on external displays open in true fullscreen (no window
   // chrome, no taskbar — the full display area is used). On the primary display
@@ -701,15 +1078,10 @@ function createProjectorWindow(requestedDisplayId?: string, initialData?: any): 
   // Keyboard bridge: the projector window frequently holds focus. Keep the
   // existing global navigation behavior so the normal single-screen workflow
   // remains unchanged.
-  const PROJECTOR_NAV_NEXT = new Set(['ArrowRight', 'ArrowDown', ' ', 'PageDown', 'j', 'J']);
-  const PROJECTOR_NAV_PREV = new Set(['ArrowLeft', 'ArrowUp', 'PageUp', 'k', 'K']);
-
   projectorWindow.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown' || input.isAutoRepeat) return;
     if (input.control || input.alt || input.meta) return;
-    const sendRemote = (action: string, value?: unknown) => {
-      if (win && !win.isDestroyed()) win.webContents.send('remote-action', { action, value });
-    };
+    const sendRemote = (action: string, value?: unknown) => sendToControl('remote-action', { action, value });
 
     const key = input.key;
     let handled = false;
@@ -739,9 +1111,9 @@ function createProjectorWindow(requestedDisplayId?: string, initialData?: any): 
     if (projectorWindows.get(displayId)?.window === projectorWindow) {
       projectorWindows.delete(displayId);
     }
-    win?.webContents.send('projector-closed', { displayId });
+    sendToControl('projector-closed', { displayId });
     remoteStatus.isProjectorOpen = projectorWindows.size > 0;
-    broadcast({ type: 'status', data: remoteStatus });
+    broadcast({ type: 'status', data: publicStatus() });
     sendProjectorOutputStatus();
     scheduleSlideCapture(120);
   });
@@ -762,173 +1134,9 @@ ipcMain.on('projector-ready', (event) => {
 
   // Acknowledge the exact output so the control renderer can establish a
   // fresh full-snapshot base after every output open/reload.
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('projector-ready-ack', { displayId: entry.displayId });
-  }
+  sendToControl('projector-ready-ack', { displayId: entry.displayId });
   sendProjectorOutputStatus();
 });
-
-// HTTP + WebSocket remote control server
-
-function createRemoteServer(): void {
-  remoteServer = http.createServer(async (req, res) => {
-    const { pathname } = new URL(req.url ?? '/', 'http://localhost');
-
-    // Phone captions/translation share (token-guarded, only while active)
-    if (pathname === '/share') {
-      if (handleShareHttp(req, res)) return;
-    }
-
-    // Phone live-screen share (token-guarded, only while active)
-    if (pathname === '/screen') {
-      if (handleScreenShareHttp(req, res)) return;
-    }
-
-    // Remote control web UI
-    if (pathname === '/' || pathname === '/remote') {
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(REMOTE_HTML_NEW);
-      return;
-    }
-
-    // Legacy REST: status
-    if (pathname === '/api/status') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(remoteStatus));
-      return;
-    }
-
-    // Legacy REST: command
-    if (pathname === '/api/control' && req.method === 'POST') {
-      try {
-        const data = JSON.parse(await readBody(req));
-        win?.webContents.send('remote-action', { action: data.action, value: data.value });
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end('{"ok":true}');
-      } catch {
-        res.writeHead(400);
-        res.end('Bad Request');
-      }
-      return;
-    }
-
-    if (pathname === '/api/diagnostics') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(
-        JSON.stringify({
-          remoteServerUrl,
-          debug: remoteDebugInfo,
-          timestamp: new Date().toISOString(),
-        })
-      );
-      return;
-    }
-
-    res.writeHead(404);
-    res.end('Not Found');
-  });
-
-  wss = new WebSocketServer({ server: remoteServer, maxPayload: 1024 * 512 }); // 512KB cap (DoS guard)
-
-  wss.on('connection', (client: WsSocket, req: http.IncomingMessage) => {
-    // Phone captions clients connect to /share?token=… and are handled (and
-    // authenticated) entirely by the share service.
-    if (handleShareConnection(client, req)) return;
-
-    // Phone live-screen clients connect to /screen?token=… (view-only frames).
-    if (handleScreenShareConnection(client, req)) return;
-
-    wsClients.add(client);
-    broadcastClientCount();
-
-    // Send current state to the newly connected client immediately.
-    try {
-      client.send(
-        JSON.stringify({
-          type: 'welcome',
-          data: {
-            status: remoteStatus,
-            preview: lastPreviewDataUrl,
-            allPreviews: allSlidePreviews,
-            slideMeta: remoteStatus.slideMeta,
-          },
-        })
-      );
-    } catch {
-      /* ignore */
-    }
-
-    client.on('message', (raw: WsSocket) => {
-      try {
-        const msg = JSON.parse(raw.toString()) as { type: string; action?: string; value?: unknown };
-        if (msg.type === 'command' && msg.action) {
-          win?.webContents.send('remote-action', { action: msg.action, value: msg.value });
-        }
-      } catch {
-        /* invalid JSON, ignore */
-      }
-    });
-
-    client.on('close', () => {
-      wsClients.delete(client);
-      broadcastClientCount();
-    });
-    client.on('error', () => {
-      try {
-        client.terminate();
-      } catch {
-        /* already closed */
-      }
-      wsClients.delete(client);
-      broadcastClientCount();
-    });
-  });
-
-  // Random port, all interfaces
-  remoteServer.listen(0, '0.0.0.0', () => {
-    const addr = remoteServer?.address();
-    if (addr && typeof addr === 'object') {
-      const selectedIp = getLocalIPv4();
-      remoteServerUrl = `http://${selectedIp}:${addr.port}/remote`;
-      remoteDebugInfo.port = addr.port;
-      remoteDebugInfo.timestamp = new Date().toISOString();
-      remoteDebugInfo.selectedAddress = selectedIp;
-      remoteDebugInfo.candidates = listLocalIPv4Candidates();
-      console.info('[REMOTE SERVER] Listening on all interfaces');
-      console.info('[REMOTE SERVER] URL:', remoteServerUrl);
-      console.info('[REMOTE SERVER] Candidates:', remoteDebugInfo.candidates);
-    }
-  });
-}
-
-// Phone captions share: network re-resolution while a broadcast is live.
-// The LAN IP can change (Wi-Fi reconnect, cable swap); when it does we rebuild
-// the share URL and tell the renderer so it can regenerate the QR code.
-let shareNetworkTimer: ReturnType<typeof setInterval> | null = null;
-
-function startShareNetworkWatch(): void {
-  if (shareNetworkTimer) return;
-  shareNetworkTimer = setInterval(() => {
-    const addr = remoteServer?.address();
-    const port = addr && typeof addr === 'object' ? addr.port : 0;
-    cachedLocalIP = null; // force a fresh scan
-    const ip = getLocalIPv4();
-
-    if (isShareActive()) {
-      const shareChanged = refreshShareHost(ip, port);
-      if (shareChanged) {
-        win?.webContents.send('share:network-changed', { url: getShareStatus().url });
-      }
-    }
-
-    if (isScreenShareActive()) {
-      const screenChanged = refreshScreenShareHost(ip, port);
-      if (screenChanged) {
-        win?.webContents.send('screen-share:network-changed', { url: getScreenShareStatus().url });
-      }
-    }
-  }, 10000);
-}
 
 // App lifecycle
 
@@ -985,13 +1193,12 @@ const MEDIAFILE_CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'Range, Content-Type',
   'Access-Control-Expose-Headers': 'Accept-Ranges, Content-Length, Content-Range, Content-Type',
 };
+const IMMUTABLE_CACHE = 'public, max-age=31536000, immutable';
 
-async function serveMediaFile(url: string, request: Request): Promise<Response | null> {
+async function serveMediaFile(url: string, request: Request, immutable = false): Promise<Response | null> {
   if (!url.startsWith(MEDIAFILE_REF_PREFIX)) return null;
   const encoded = url.slice(MEDIAFILE_REF_PREFIX.length);
-  if (!encoded || encoded.length > 4096) {
-    return new Response('Bad request', { status: 400 });
-  }
+  if (!encoded || encoded.length > 4096) return new Response('Bad request', { status: 400 });
   let filePath: string;
   try {
     filePath = decodeURIComponent(encoded);
@@ -1000,17 +1207,29 @@ async function serveMediaFile(url: string, request: Request): Promise<Response |
   }
   const resolved = path.resolve(filePath);
   const ext = path.extname(resolved).toLowerCase();
-  if (!path.isAbsolute(resolved) || !MEDIAFILE_ALLOWED_EXTS.has(ext)) {
-    return new Response('Forbidden', { status: 403 });
-  }
+  if (!path.isAbsolute(resolved) || !MEDIAFILE_ALLOWED_EXTS.has(ext)) return new Response('Forbidden', { status: 403 });
 
-  let stat: Awaited<ReturnType<typeof fs.stat>>;
+  let stat: Stats;
   try {
     stat = await fs.stat(resolved);
   } catch {
     return new Response('Not found', { status: 404 });
   }
-  const mime = MIME_BY_EXT[ext] || 'application/octet-stream';
+  if (!stat.isFile()) return new Response('Not found', { status: 404 }); // dizin: createReadStream EISDIR verir
+
+  const headersBase = {
+    ...MEDIAFILE_CORS_HEADERS,
+    'Content-Type': MIME_BY_EXT[ext] || 'application/octet-stream',
+    'Accept-Ranges': 'bytes',
+    ...(immutable ? { 'Cache-Control': IMMUTABLE_CACHE } : {}),
+  };
+
+  const open = (options?: { start: number; end: number }): ReadableStream => {
+    const stream = createReadStream(resolved, options);
+    // İstek iptal edilirse (video atlandı, sayfa kapandı) dosya tutamacı hemen bırakılır.
+    request.signal.addEventListener('abort', () => stream.destroy(), { once: true });
+    return Readable.toWeb(stream) as unknown as ReadableStream;
+  };
 
   // Range support: video elements issue byte-range requests when seeking and
   // even for metadata (moov atom at the end of non-faststart files). Without
@@ -1022,27 +1241,19 @@ async function serveMediaFile(url: string, request: Request): Promise<Response |
       let start = m[1] === '' ? null : parseInt(m[1], 10);
       let end = m[2] === '' ? null : parseInt(m[2], 10);
       if (start === null) {
-        // Suffix range: last N bytes
-        const n = end ?? 0;
-        start = Math.max(0, stat.size - n);
+        start = Math.max(0, stat.size - (end ?? 0)); // suffix range: son N bayt
         end = stat.size - 1;
       } else if (end === null) {
         end = stat.size - 1;
       }
       if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= stat.size) {
-        return new Response('Range not satisfiable', {
-          status: 416,
-          headers: { 'Content-Range': `bytes */${stat.size}` },
-        });
+        return new Response('Range not satisfiable', { status: 416, headers: { 'Content-Range': `bytes */${stat.size}` } });
       }
       end = Math.min(end, stat.size - 1);
-      const stream = createReadStream(resolved, { start, end });
-      return new Response(Readable.toWeb(stream) as unknown as ReadableStream, {
+      return new Response(open({ start, end }), {
         status: 206,
         headers: {
-          ...MEDIAFILE_CORS_HEADERS,
-          'Content-Type': mime,
-          'Accept-Ranges': 'bytes',
+          ...headersBase,
           'Content-Range': `bytes ${start}-${end}/${stat.size}`,
           'Content-Length': String(end - start + 1),
         },
@@ -1050,15 +1261,7 @@ async function serveMediaFile(url: string, request: Request): Promise<Response |
     }
   }
 
-  const stream = createReadStream(resolved);
-  return new Response(Readable.toWeb(stream) as unknown as ReadableStream, {
-    headers: {
-      ...MEDIAFILE_CORS_HEADERS,
-      'Content-Type': mime,
-      'Accept-Ranges': 'bytes',
-      'Content-Length': String(stat.size),
-    },
-  });
+  return new Response(open(), { headers: { ...headersBase, 'Content-Length': String(stat.size) } });
 }
 
 // Microphone / media permission handling.
@@ -1116,9 +1319,9 @@ app.whenReady().then(async () => {
     } else {
       const mediaName = mediaRefToName(request.url);
       if (mediaName) {
-        // Phase 6 media library: userData/media/<name>, name validated above.
+        // Phase 6 media library: userData/media/<name>, name validated above. Içerik adresli: değişmez.
         filePath = path.join(mediaLibrary.dir, mediaName);
-        const mediaResponse = await serveMediaFile(`${MEDIAFILE_REF_PREFIX}${encodeURIComponent(filePath)}`, request);
+        const mediaResponse = await serveMediaFile(`${MEDIAFILE_REF_PREFIX}${encodeURIComponent(filePath)}`, request, true);
         if (mediaResponse) return mediaResponse;
       } else {
         // Arbitrary media files (folder-scanned images/videos) streamed with
@@ -1154,6 +1357,8 @@ app.whenReady().then(async () => {
         headers: {
           'Content-Type': MIME_BY_EXT[ext] || 'application/octet-stream',
           'Access-Control-Allow-Origin': '*',
+          // Küçük resim adı kaynak dosyanın boyut ve mtime'ını içerir: değişen kaynak yeni ad alır.
+          'Cache-Control': thumbPath ? IMMUTABLE_CACHE : 'no-cache',
         },
       });
     } catch (err) {
@@ -1166,11 +1371,12 @@ app.whenReady().then(async () => {
   if (restricted) ipcMain.handle('updater:get-info', () => ({ version: app.getVersion(), updaterActive: false }));
   attachDisplayWatch();
   if (!restricted) createRemoteServer();
-  setPublicTunnelStatusListener((next) => win?.webContents.send('public-tunnel:status', next));
-  setClientCountListener((count) => win?.webContents.send('share:client-count', count));
-  setScreenShareClientCountListener((count) => win?.webContents.send('screen-share:client-count', count));
+  setPublicTunnelStatusListener((next) => sendToControl('public-tunnel:status', next));
+  setClientCountListener((count) => sendToControl('share:client-count', count));
+  setScreenShareClientCountListener((count) => sendToControl('screen-share:client-count', count));
   if (!restricted) registerSttIpc(() => win);
   void pruneThumbnailCache();
+  void cleanupTempDir(); // kapanışta bekletilmeden çağrılıyordu ve yarım kalabilirdi
 });
 
 app.on('window-all-closed', () => {
@@ -1182,15 +1388,17 @@ app.on('activate', () => {
 
 app.on('will-quit', () => {
   youtubeMusicService.dispose();
-  cleanupTempDir();
-  if (shareNetworkTimer) clearInterval(shareNetworkTimer);
+  for (const timer of [captureTimer, displayTimer]) if (timer) clearTimeout(timer);
+  for (const timer of [heartbeatTimer, networkTimer]) if (timer) clearInterval(timer);
   disposeShare();
   disposeScreenShare();
   disposePublicTunnel();
+  for (const client of wsClients.keys()) client.terminate();
+  wsClients.clear();
   wss?.close();
+  remoteServer?.closeAllConnections(); // bekleyen keep-alive bağlantıları kapanışı geciktirmesin
   remoteServer?.close();
   cleanupStt();
-  if (captureTimer) clearTimeout(captureTimer);
   for (const entry of projectorWindows.values()) {
     if (!entry.window.isDestroyed()) entry.window.close();
   }
@@ -1240,20 +1448,22 @@ ipcMain.handle('cache-google-font', async (_, family: unknown) => {
   return cacheGoogleFont(family, path.join(app.getPath('userData'), 'fonts'));
 });
 
-ipcMain.handle('save-file', async (_, content: string) => {
+ipcMain.handle('save-file', async (_, content: unknown) => {
+  if (typeof content !== 'string') throw new Error('Invalid presentation data');
   const { filePath, canceled } = await dialog.showSaveDialog({
     defaultPath: lastDialogDir,
     filters: [{ name: 'Worship Presentation Assistant Files', extensions: ['gpres'] }],
   });
   if (canceled || !filePath) return null;
-  rememberDir(filePath);
+  const target = /\.gpres$/i.test(filePath) ? filePath : `${filePath}.gpres`; // Linux iletişim kutusu uzantı eklemez
+  rememberDir(target);
 
   // Phase 7: zip build (deflate CPU) runs in the heavy UtilityProcess.
   const { embeddedCount, zipBuffer } = await heavyClient.buildGpres(content, mediaLibrary.dir);
-  await fs.writeFile(filePath, zipBuffer);
+  await writeFileAtomic(target, zipBuffer); // yazma yarıda kesilse mevcut dosya bozulmaz
 
-  console.info(`[save-file] Saved ${filePath} (${embeddedCount} media files embedded)`);
-  return filePath;
+  console.info(`[save-file] Saved ${target} (${embeddedCount} media files embedded)`);
+  return target;
 });
 
 ipcMain.handle('open-file', async () => {
@@ -1272,7 +1482,7 @@ ipcMain.handle('open-file', async () => {
     // Phase 7: unzip + media externalization run in the heavy UtilityProcess.
     const { data, mediaCount } = await heavyClient.extractGpres(raw, mediaLibrary.dir);
     console.info(`[open-file] ${filePath}: ${mediaCount} media refs externalized`);
-    return { path: filePath, content: JSON.stringify(data, null, 2) };
+    return { path: filePath, content: JSON.stringify(data) };
   }
 
   // Legacy plain-JSON format
@@ -1287,7 +1497,7 @@ ipcMain.handle(
     _,
     options: { message: string; title?: string; detail?: string; confirmLabel?: string; cancelLabel?: string }
   ) => {
-    const parent = win ?? BrowserWindow.getFocusedWindow();
+    const parent = dialogParent();
     const boxOptions = {
       type: 'question' as const,
       buttons: [options.cancelLabel ?? 'Cancel', options.confirmLabel ?? 'Confirm'],
@@ -1307,7 +1517,7 @@ ipcMain.handle(
 ipcMain.handle(
   'show-alert-dialog',
   async (_, options: { message: string; title?: string; detail?: string; okLabel?: string }) => {
-    const parent = win ?? BrowserWindow.getFocusedWindow();
+    const parent = dialogParent();
     const boxOptions = {
       type: 'info' as const,
       buttons: [options.okLabel ?? 'OK'],
@@ -1330,7 +1540,7 @@ ipcMain.handle('save-preset', async (_, preset: { name: string; presentation: un
   if (restricted && !isLiveSavePresetName(preset.name)) {
     const record = saved.find(item => item.name === preset.name);
     const workspace = await practiceWorkspace.saved(preset.presentation, practiceSessionId, record);
-    if (workspace) win?.webContents.send('practice:workspace-changed', { sessionId: practiceSessionId, workspace });
+    if (workspace) sendToControl('practice:workspace-changed', { sessionId: practiceSessionId, workspace });
   }
 
   return saved;
@@ -1458,9 +1668,9 @@ ipcMain.handle('update-projector', (_, data: unknown) => {
     if (entry.window.isDestroyed()) continue;
 
     const output = outputs?.[entry.displayId];
+    const { outputs: _outputs, ...base } = payload;
     const frame = {
-      ...payload,
-      ...(outputs ? { outputs: undefined } : {}),
+      ...base,
       ...(output && typeof output === 'object'
         ? {
             liveIndex: output.slideIndex,
@@ -1471,7 +1681,6 @@ ipcMain.handle('update-projector', (_, data: unknown) => {
           }
         : { outputDisplayId: entry.displayId }),
     };
-    delete frame.outputs;
 
     if (!entry.ready) {
       // Keep the initial full snapshot when a newly opened output receives a
@@ -1492,159 +1701,259 @@ ipcMain.handle('get-projector-status', () => {
   const defaultId = getDefaultDisplayId();
   return defaultId ? projectorWindows.has(defaultId) : projectorWindows.size > 0;
 });
-ipcMain.handle('cleanup-temp-dir', () => {
-  cleanupTempDir();
+ipcMain.handle('cleanup-temp-dir', async () => {
+  await cleanupTempDir();
   return true;
 });
 
 // IPC: remote control
 
-ipcMain.handle('get-remote-url', () => remoteServerUrl);
+ipcMain.handle('get-remote-url', () => currentRemoteUrl());
 
 ipcMain.handle('public-tunnel:start', async () => {
-  const addr = remoteServer?.address();
-  const port = addr && typeof addr === 'object' ? addr.port : 0;
+  const port = getRemotePort();
   if (!port) return { active: false, url: '', state: 'error', error: 'server-not-ready' };
   return startPublicTunnel(port);
 });
 ipcMain.handle('public-tunnel:stop', () => stopPublicTunnel());
 ipcMain.handle('public-tunnel:status', () => getPublicTunnelStatus());
-ipcMain.handle('get-remote-debug', () => ({ remoteServerUrl, debug: remoteDebugInfo }));
+ipcMain.handle('get-remote-debug', () => ({ remoteServerUrl: currentRemoteUrl(), debug: remoteDebugInfo }));
+
+// ─── Bağlantı tanılaması ────────────────────────────────────────────────────
+
+interface DiagnosticCheck {
+  label: string;
+  pass: boolean;
+  detail: string;
+  /** Arayüz kırmızı/sarı/gri ayrımı için; eski arayüz yok sayabilir. */
+  severity: 'info' | 'warning' | 'error';
+  hint?: string;
+}
+interface ProbeResult { ok: boolean; ms: number; status?: number; error?: string }
+
+/** Tek bir HTTP isteği; `json` verilirse gövdenin geçerli JSON olması da gerekir. */
+function httpProbe(host: string, port: number, urlPath: string, json = false, timeoutMs = 3000): Promise<ProbeResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    let settled = false;
+    const finish = (result: Omit<ProbeResult, 'ms'>) => {
+      if (settled) return;
+      settled = true;
+      resolve({ ...result, ms: Date.now() - started });
+    };
+    const req = http.get({ host, port, path: urlPath, timeout: timeoutMs, agent: false }, (res) => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk: string) => { if (json && body.length < 65536) body += chunk; });
+      res.on('error', (error: NodeJS.ErrnoException) => finish({ ok: false, error: error.code ?? error.message }));
+      res.on('end', () => {
+        if (res.statusCode !== 200) return finish({ ok: false, status: res.statusCode, error: `http-${res.statusCode}` });
+        if (json) {
+          try { JSON.parse(body); } catch { return finish({ ok: false, status: 200, error: 'invalid-json' }); }
+        }
+        finish({ ok: true, status: 200 });
+      });
+    });
+    req.on('timeout', () => { req.destroy(); finish({ ok: false, error: 'timeout' }); });
+    req.on('error', (error: NodeJS.ErrnoException) => finish({ ok: false, error: error.code ?? error.message }));
+  });
+}
+
+/** WebSocket el sıkışması + sunucudan ilk mesaj. /diag yolu istemci listesine girmez. */
+function wsProbe(host: string, port: number, timeoutMs = 3000): Promise<ProbeResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const socket = new WsSocket(`ws://${host}:${port}/diag`, { handshakeTimeout: timeoutMs });
+    const finish = (result: Omit<ProbeResult, 'ms'>) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { socket.terminate(); } catch { /* already closed */ }
+      resolve({ ...result, ms: Date.now() - started });
+    };
+    timer = setTimeout(() => finish({ ok: false, error: 'timeout' }), timeoutMs);
+    socket.on('message', () => finish({ ok: true }));
+    socket.on('error', (error: NodeJS.ErrnoException) => finish({ ok: false, error: error.code ?? error.message }));
+    socket.on('close', () => finish({ ok: false, error: 'closed' }));
+  });
+}
 
 ipcMain.handle('get-remote-diagnostics', async () => {
-  const result: {
-    ok: boolean;
-    serverRunning: boolean;
-    serverUrl: string | null;
-    port: number | null;
-    selectedAddress: string;
-    interfaces: Array<{ name: string; address: string; score: number }>;
-    selfConnectTest: { tried: boolean; success: boolean; error?: string };
-    firewallWarning: boolean;
-    checks: Array<{ label: string; pass: boolean; detail: string }>;
-  } = {
-    ok: false,
-    serverRunning: false,
-    serverUrl: null,
-    port: null,
-    selectedAddress: '',
-    interfaces: [],
-    selfConnectTest: { tried: false, success: false },
-    firewallWarning: false,
-    checks: [],
-  };
+  const port = getRemotePort();
+  const listening = port > 0;
+  const netInfo = scanNetwork(true);
+  const ip = netInfo.ip;
+  const selected = netInfo.candidates.find((c) => c.address === ip);
+  const viable = netInfo.candidates.filter((c) => !c.internal && !c.virtual && c.score > -50);
 
-  // 1. Check if the HTTP server is listening
-  const addr = remoteServer?.address();
-  const listening = !!(addr && typeof addr === 'object');
-  result.serverRunning = listening;
-  result.port = listening ? (addr as any).port : null;
-
-  // 2. Get address info
-  const ip = getLocalIPv4();
-  result.selectedAddress = ip;
-  result.serverUrl = remoteServerUrl;
-
-  // 3. List interfaces
-  const candidates = listLocalIPv4Candidates();
-  result.interfaces = candidates.slice(0, 6).map((c) => ({
-    name: c.name,
-    address: c.address,
-    score: c.score,
-  }));
-
-  // 4. Self-connect test
+  let loopback: ProbeResult | null = null;
+  let lan: ProbeResult | null = null;
+  let page: ProbeResult | null = null;
+  let socket: ProbeResult | null = null;
+  let firewall: FirewallDiagnostic | undefined;
   if (listening) {
-    const testUrl = `http://${ip}:${addr.port}/api/status`;
-    try {
-      const testResult = await new Promise<{ ok: boolean; error?: string }>((resolve) => {
-        const req = http.get(testUrl, { timeout: 3000 }, (res) => {
-          let body = '';
-          res.on('data', (chunk: Buffer) => {
-            body += chunk.toString();
-          });
-          res.on('end', () => {
-            try {
-              JSON.parse(body);
-              resolve({ ok: true });
-            } catch {
-              resolve({ ok: false, error: 'invalid-json' });
-            }
-          });
-        });
-        req.on('error', (err: NodeJS.ErrnoException) => {
-          resolve({ ok: false, error: err.code ?? err.message });
-        });
-        req.on('timeout', () => {
-          req.destroy();
-          resolve({ ok: false, error: 'timeout' });
-        });
-      });
-      result.selfConnectTest = {
-        tried: true,
-        success: testResult.ok,
-        ...(testResult.error ? { error: testResult.error } : {}),
-      };
-    } catch {
-      result.selfConnectTest = { tried: true, success: false, error: 'unexpected-error' };
-    }
+    // Dört yol paralel: yerel döngü, LAN IP üzerinden HTTP, uzak sayfa, WebSocket; güvenlik duvarı sorgusu da aynı anda.
+    [loopback, lan, page, socket, firewall] = await Promise.all([
+      httpProbe('127.0.0.1', port, '/api/status', true),
+      httpProbe(ip, port, '/api/status', true),
+      httpProbe(ip, port, '/remote'),
+      wsProbe(ip, port),
+      inspectRemoteFirewall(ip, port).catch(() => undefined),
+    ]);
   }
 
-  // 5. Build checks
-  result.checks.push({
-    label: 'serverListening',
-    pass: listening,
-    detail: listening ? `Listening on port ${result.port ?? '?'}` : 'Server could not start — try restarting the app',
-  });
+  const checks: DiagnosticCheck[] = [];
+  const add = (label: string, pass: boolean, detail: string, severity?: DiagnosticCheck['severity'], hint?: string) => {
+    const level = severity ?? (pass ? 'info' : 'error');
+    checks.push({
+      label,
+      // Eski arayüz yalnızca label/pass/detail okur: uyarı düzeyi kırmızı hata gibi görünmesin diye pass true yapılır.
+      pass: pass || level === 'warning',
+      // Öneri eski arayüzde de görünsün diye detail'e eklenir. Arayüz `hint` alanını okumaya başlayınca bu birleştirme kaldırılmalı.
+      detail: hint ? `${detail} — ${hint}` : detail,
+      severity: level,
+      ...(hint ? { hint } : {}),
+    });
+  };
 
-  const hasGoodInterface = candidates.some((c) => c.score > -50);
-  result.checks.push({
-    label: 'networkInterface',
-    pass: hasGoodInterface,
-    detail: hasGoodInterface
-      ? `Active interface: ${ip}`
+  add(
+    'serverListening',
+    listening,
+    listening ? `Listening on port ${port}` : `Server could not start${remoteServerError ? ` (${remoteServerError})` : ''} — try restarting the app`
+  );
+
+  const hasGoodInterface = netInfo.candidates.some((c) => c.score > -50);
+  add(
+    'networkInterface',
+    hasGoodInterface,
+    hasGoodInterface
+      ? `Active interface: ${selected?.name ?? '?'} (${ip})`
       : 'No suitable network interface found — check your Wi-Fi or Ethernet connection',
-  });
+    undefined,
+    hasGoodInterface ? undefined : 'Connect this computer to the same Wi-Fi or router as the phone.'
+  );
 
   const isPrivateIP = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(ip);
-  result.checks.push({
-    label: 'privateSubnet',
-    pass: isPrivateIP,
-    detail: isPrivateIP
-      ? `IP is on a local network (${ip})`
+  add(
+    'privateSubnet',
+    isPrivateIP,
+    isPrivateIP
+      ? `IP is on a local network (${ip}${selected?.cidr ? `, ${selected.cidr}` : ''})`
       : `IP (${ip}) does not appear to be on a local network — phone must be on the same network`,
-  });
+    undefined,
+    isLinkLocalIPv4(ip) ? 'A 169.254.x.x address means this computer received no address from the router (DHCP failure).' : undefined
+  );
 
-  result.checks.push({
-    label: 'selfConnect',
-    pass: result.selfConnectTest.success,
-    detail: result.selfConnectTest.success
-      ? 'App can connect to itself — server is working'
-      : result.selfConnectTest.error === 'timeout'
+  if (netInfo.candidates.some((c) => c.virtual && !c.internal)) {
+    add(
+      'virtualAdapter',
+      !selected?.virtual,
+      selected?.virtual
+        ? `Only a virtual/VPN adapter is available (${selected.name}) — the phone cannot reach it`
+        : 'VPN or virtual adapters detected; they are ignored when choosing the address',
+      selected?.virtual ? 'error' : 'info',
+      selected?.virtual ? 'Disconnect the VPN or connect to Wi-Fi/Ethernet.' : undefined
+    );
+  }
+
+  if (viable.length > 1) {
+    add(
+      'multipleNetworks',
+      false,
+      `${viable.length} usable networks found (${viable.map((c) => `${c.name} ${c.address}`).join(', ')}); the phone must be on the one using ${ip}`,
+      'warning',
+      'If the phone cannot connect, check which network it is on, or disable the unused adapter.'
+    );
+  }
+
+  if (listening && loopback && lan && page && socket) {
+    add(
+      'loopbackConnect',
+      loopback.ok,
+      loopback.ok ? `Server answers locally (${loopback.ms} ms)` : `Server does not answer on 127.0.0.1 (${loopback.error ?? 'unknown'})`
+    );
+
+    const lanDetail = lan.ok
+      ? `App can reach itself over the network address (${lan.ms} ms)`
+      : lan.error === 'timeout'
         ? 'Self-connect timed out — firewall or antivirus may be blocking'
-        : result.selfConnectTest.error === 'ECONNREFUSED'
+        : lan.error === 'ECONNREFUSED'
           ? 'Connection refused — firewall may be blocking the port'
-          : `Self-test failed (${result.selfConnectTest.error || 'unknown error'}) — check your firewall`,
-  });
+          : `Self-test failed (${lan.error || 'unknown error'}) — check your firewall`;
+    add(
+      'selfConnect',
+      lan.ok,
+      lanDetail,
+      undefined,
+      !lan.ok && loopback.ok ? 'Works locally but not on the network address: a firewall, antivirus or security suite is likely filtering it.' : undefined
+    );
 
-  // Firewall warning: self-connect fails but server is listening
-  result.firewallWarning = !!(listening && !result.selfConnectTest.success);
+    add(
+      'remotePage',
+      page.ok,
+      page.ok ? 'Remote control page is served' : `Remote control page failed (${page.error ?? 'unknown'})`
+    );
 
-  // Overall ok: server running AND self-test passed (means firewall isn't blocking)
-  result.ok = !!(listening && result.selfConnectTest.success && hasGoodInterface && isPrivateIP);
+    add(
+      'webSocket',
+      socket.ok,
+      socket.ok ? `Live connection works (${socket.ms} ms)` : `WebSocket failed (${socket.error ?? 'unknown'})`,
+      undefined,
+      !socket.ok && page.ok ? 'The page loads but live connections are blocked — usually a security suite or proxy filtering WebSocket traffic.' : undefined
+    );
+  }
 
-  return result;
+  // Yerel testler geçse bile telefon bağlanamayabilir: bilgi amaçlı, ok'u etkilemez.
+  add(
+    'phoneConnections',
+    true,
+    wsClients.size > 0
+      ? `${wsClients.size} phone(s) connected now`
+      : clientsEverConnected > 0
+        ? `No phone is connected now (last connection ${Math.round((Date.now() - lastClientConnectedAt) / 1000)} s ago)`
+        : 'No phone has connected yet',
+    'info',
+    wsClients.size === 0 && clientsEverConnected === 0
+      ? 'If every check above passes but the phone cannot open the page: it must be on the same Wi-Fi, and the router must not isolate clients ("AP/client isolation", guest networks).'
+      : undefined
+  );
+
+  const tunnel = getPublicTunnelStatus();
+  add('publicTunnel', true, `Public tunnel: ${tunnel.state}${tunnel.error ? ` (${tunnel.error})` : ''}`, 'info');
+
+  // A local self-test cannot establish whether inbound LAN traffic is allowed.
+  const firewallWarning = !!(
+    listening &&
+    (!lan?.ok || firewall?.status === 'blocked' || firewall?.status === 'missingPermission')
+  );
+
+  return {
+    ok: !!(listening && lan?.ok && socket?.ok && hasGoodInterface && isPrivateIP && !firewallWarning),
+    serverRunning: listening,
+    serverUrl: currentRemoteUrl() || null,
+    port: listening ? port : null,
+    selectedAddress: ip,
+    interfaces: netInfo.candidates.slice(0, 6).map((c) => ({ name: c.name, address: c.address, score: c.score, cidr: c.cidr, virtual: c.virtual })),
+    selfConnectTest: { tried: listening, success: !!lan?.ok, ...(lan && !lan.ok && lan.error ? { error: lan.error } : {}) },
+    loopbackTest: loopback ? { success: loopback.ok, ms: loopback.ms } : null,
+    webSocketTest: socket ? { success: socket.ok, ms: socket.ms, ...(socket.error ? { error: socket.error } : {}) } : null,
+    clientCount: wsClients.size,
+    firewallWarning,
+    ...(firewall ? { firewall } : {}),
+    checks,
+  };
 });
 
 // ─── Phone captions/translation share IPC ──────────────────────────────────
 ipcMain.handle('share:start', async (_, subdomain?: string) => {
   try {
-    const addr = remoteServer?.address();
-    const port = addr && typeof addr === 'object' ? addr.port : 0;
+    const port = getRemotePort();
     if (!port) return { ok: false, error: 'server-not-ready' };
     const result = startShare(getLocalIPv4(), port);
     if (!result) return { ok: false, error: 'already-active' };
-    startShareNetworkWatch();
+    startNetworkWatch();
     if (process.platform === 'darwin') {
       return { ok: true, url: result.url, localOnly: true };
     }
@@ -1683,12 +1992,11 @@ ipcMain.handle('share:get-status', () => {
 
 // ─── Live-screen phone broadcast IPC ────────────────────────────────────────
 ipcMain.handle('screen-share:start', () => {
-  const addr = remoteServer?.address();
-  const port = addr && typeof addr === 'object' ? addr.port : 0;
+  const port = getRemotePort();
   if (!port) return { ok: false, error: 'server-not-ready' };
   const result = startScreenShare(getLocalIPv4(), port);
   if (!result) return { ok: false, error: 'already-active' };
-  startShareNetworkWatch();
+  startNetworkWatch();
   return { ok: true, url: result.url };
 });
 
@@ -1709,9 +2017,12 @@ ipcMain.handle('quit-app', () => {
   return true;
 });
 
-ipcMain.handle('update-all-slide-previews', (_, previews: string[]) => {
-  allSlidePreviews = Array.isArray(previews) ? previews : [];
-  broadcast({ type: 'allPreviews', data: allSlidePreviews });
+ipcMain.handle('update-all-slide-previews', (_, previews: unknown) => {
+  // Küçük resmi henüz üretilmemiş slaytlar için renderer null gönderir; bu girdiler geçerlidir.
+  // (Telefona JSON'da null olarak gider, uygulamanın önceki davranışıyla aynı.)
+  if (!Array.isArray(previews) || previews.length > MAX_SLIDE_PREVIEWS || !previews.every((p) => p == null || typeof p === 'string')) return false;
+  allSlidePreviews = previews as string[];
+  broadcast({ type: 'allPreviews', data: allSlidePreviews }, 'bulk');
   return true;
 });
 
@@ -1722,7 +2033,7 @@ ipcMain.handle('update-all-slide-previews', (_, previews: string[]) => {
 ipcMain.handle('update-slide-previews-delta', (_, updates: { i: number; url: string }[]) => {
   if (!Array.isArray(updates) || updates.length === 0) return false;
   const applied = applyPreviewUpdates(allSlidePreviews, updates);
-  if (applied.length > 0) broadcast({ type: 'previewsDelta', data: applied });
+  if (applied.length > 0) broadcast({ type: 'previewsDelta', data: applied }, 'bulk');
   return true;
 });
 
@@ -1745,61 +2056,48 @@ ipcMain.handle('generate-thumbnail', async (_event, slide: any) => {
  * Renderer hook on slide change / blackout / etc: broadcasts status to
  * phones, then schedules a throttled preview capture after the transition.
  */
-ipcMain.handle('update-remote-status', (_, status: Partial<typeof remoteStatus> & { slidePreviews?: SlideMeta[] }) => {
+ipcMain.handle('update-remote-status', (_, input: unknown) => {
+  if (!input || typeof input !== 'object') return false;
+  const status = input as Record<string, unknown>;
+  const num = (value: unknown, fallback: number) => (typeof value === 'number' && Number.isFinite(value) ? value : fallback);
+  const previews = Array.isArray(status.slidePreviews) && status.slidePreviews.length <= MAX_SLIDE_PREVIEWS
+    ? (status.slidePreviews as SlideMeta[])
+    : null;
+
   remoteStatus = {
-    slideCount: typeof status.slideCount === 'number' ? status.slideCount : remoteStatus.slideCount,
-    currentIndex: typeof status.currentIndex === 'number' ? status.currentIndex : remoteStatus.currentIndex,
+    slideCount: num(status.slideCount, remoteStatus.slideCount),
+    currentIndex: num(status.currentIndex, remoteStatus.currentIndex),
     isBlackout: !!status.isBlackout,
     isProjectorOpen: !!status.isProjectorOpen,
-    slideTransition:
-      typeof (status as any).slideTransition === 'string'
-        ? (status as any).slideTransition
-        : remoteStatus.slideTransition,
-    transitionDurationMs:
-      typeof (status as any).transitionDurationMs === 'number'
-        ? (status as any).transitionDurationMs
-        : remoteStatus.transitionDurationMs,
+    slideTransition: typeof status.slideTransition === 'string' ? status.slideTransition.slice(0, 32) : remoteStatus.slideTransition,
+    transitionDurationMs: num(status.transitionDurationMs, remoteStatus.transitionDurationMs),
     // partsMode fields — null when live slide is not a partsMode slide
-    activePart: typeof (status as any).activePart === 'number' ? (status as any).activePart : null,
-    partsCount: typeof (status as any).partsCount === 'number' ? (status as any).partsCount : null,
-    slideMeta: Array.isArray((status as any).slidePreviews) ? (status as any).slidePreviews : remoteStatus.slideMeta,
+    activePart: typeof status.activePart === 'number' ? status.activePart : null,
+    partsCount: typeof status.partsCount === 'number' ? status.partsCount : null,
+    slideMeta: previews ?? remoteStatus.slideMeta,
   };
 
-  // slideMeta rides its own message (broadcast only when it changes), so strip
-  // it from the per-navigation status payload to keep traffic minimal.
-  const statusPayload = {
-    slideCount: remoteStatus.slideCount,
-    currentIndex: remoteStatus.currentIndex,
-    isBlackout: remoteStatus.isBlackout,
-    isProjectorOpen: remoteStatus.isProjectorOpen,
-    slideTransition: remoteStatus.slideTransition,
-    transitionDurationMs: remoteStatus.transitionDurationMs,
-    activePart: remoteStatus.activePart,
-    partsCount: remoteStatus.partsCount,
-  };
-  broadcast({ type: 'status', data: statusPayload });
+  // slideMeta rides its own message (broadcast only when it changes), so it is
+  // stripped from the per-navigation status payload to keep traffic minimal.
+  broadcast({ type: 'status', data: publicStatus() });
 
   // Per-slide metadata (partsMode flags + part texts) changes only when the
-  // deck changes, so broadcast it as its own message only on change to keep
-  // traffic minimal on every slide navigation.
-  if (Array.isArray(remoteStatus.slideMeta)) {
-    const metaJson = JSON.stringify(remoteStatus.slideMeta);
-    if (metaJson !== lastSlideMetaJson) {
-      lastSlideMetaJson = metaJson;
-      broadcast({ type: 'slideMeta', data: remoteStatus.slideMeta });
+  // deck changes; it arrives only in those calls, so skip serialization otherwise.
+  if (previews) {
+    const json = JSON.stringify(previews);
+    if (json !== lastSlideMetaJson) {
+      lastSlideMetaJson = json;
+      broadcast({ type: 'slideMeta', data: previews });
     }
   }
 
   const duration = Math.max(0, remoteStatus.transitionDurationMs || 0);
   const transitionDelay = remoteStatus.slideTransition !== 'none' && duration > 0 ? Math.max(300, duration + 120) : 300;
 
-  // Renderer thumbnails (send-slide-preview) are the accurate preview source
-  // for parts/lyrics changes; the window capture is only a first-connect
-  // fallback until the first renderer preview arrives, so it can never race
-  // and overwrite a fresh part preview with a stale or black frame.
-  if (lastPreviewDataUrl === null) {
-    scheduleSlideCapture(transitionDelay);
-  }
+  // Renderer thumbnails (send-slide-preview) are the accurate preview source;
+  // the window capture is only a fallback until the first renderer preview arrives,
+  // so it can never race and overwrite a fresh part preview with a stale or black frame.
+  if (!rendererPreviewSeen) scheduleSlideCapture(transitionDelay);
   return true;
 });
 
@@ -1808,10 +2106,11 @@ ipcMain.handle('update-remote-status', (_, status: Partial<typeof remoteStatus> 
  * More accurate and cheaper than capturePage(). Renderer usage:
  *   await window.electronAPI.sendSlidePreview(canvas.toDataURL('image/jpeg', 0.8));
  */
-ipcMain.handle('send-slide-preview', (_, dataUrl: string) => {
-  if (!dataUrl) return false;
+ipcMain.handle('send-slide-preview', (_, dataUrl: unknown) => {
+  if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/') || dataUrl.length > MAX_PREVIEW_CHARS) return false;
   lastPreviewDataUrl = dataUrl;
-  broadcast({ type: 'preview', data: dataUrl });
+  rendererPreviewSeen = true;
+  broadcast({ type: 'preview', data: dataUrl }, 'preview');
   return true;
 });
 
@@ -1862,7 +2161,7 @@ function getBiblesDir(): string {
   return path.join(app.getPath('userData'), 'bibles');
 }
 
-ipcMain.handle('save-bible-data', async (_, id: string, data: unknown) => {
+ipcMain.handle('save-bible-data', async (_, id: unknown, data: unknown) => {
   try {
     const dir = getBiblesDir();
     await fs.mkdir(dir, { recursive: true });
@@ -1871,7 +2170,7 @@ ipcMain.handle('save-bible-data', async (_, id: string, data: unknown) => {
         .replace(/[^a-zA-Z0-9_.\-]/g, '_')
         .replace(/\.\./g, '_') || 'bible';
     const filePath = path.join(dir, `${safeName}.json`);
-    await fs.writeFile(filePath, JSON.stringify(data), 'utf-8');
+    await writeFileAtomic(filePath, JSON.stringify(data));
     return filePath;
   } catch (error) {
     console.error('[save-bible-data] failed:', error);
@@ -1956,6 +2255,13 @@ ipcMain.handle('youtube-music:play', (event, id: unknown) => isMusicControl(even
   ? youtubeMusicService.play(id) : { ok: false, error: 'unavailable' });
 ipcMain.handle('youtube-music:prepare', (event, id: unknown) => isMusicControl(event)
   ? youtubeMusicService.prepare(id) : { ok: false });
+ipcMain.handle('youtube-music:offline-status', (event, id: unknown) => isMusicControl(event)
+  ? youtubeMusicService.offlineStatus(id) : { state: 'error', error: 'unavailable' });
+ipcMain.handle('youtube-music:download', (event, id: unknown) => isMusicControl(event)
+  ? youtubeMusicService.download(id) : { state: 'error', error: 'unavailable' });
+ipcMain.handle('youtube-music:cancel-download', (event, id: unknown) => {
+  if (isMusicControl(event)) youtubeMusicService.cancelDownload(id);
+});
 ipcMain.handle('youtube-music:stop', (event, streamId?: unknown) => {
   if (isMusicControl(event) && (streamId === undefined || typeof streamId === 'string'))
     youtubeMusicService.stop(streamId);
@@ -2094,14 +2400,6 @@ ipcMain.handle('import-hymn-archive', async (_, dirPath?: string) => {
 
 // IPC: screen capture
 
-interface ScreenSource {
-  id: string;
-  name: string;
-  thumbnail: string;
-  display_id: string;
-  appIcon?: string;
-}
-
 ipcMain.handle('get-screen-sources', async () => {
   try {
     const sources = await desktopCapturer.getSources({
@@ -2112,7 +2410,8 @@ ipcMain.handle('get-screen-sources', async () => {
     return sources.map((source) => ({
       id: source.id,
       name: source.name,
-      thumbnail: source.thumbnail.toDataURL(),
+      // Seçici küçük resimleri için JPEG, PNG'den çok daha küçük
+      thumbnail: `data:image/jpeg;base64,${source.thumbnail.toJPEG(75).toString('base64')}`,
       display_id: source.display_id,
     }));
   } catch (error) {
@@ -2121,15 +2420,17 @@ ipcMain.handle('get-screen-sources', async () => {
   }
 });
 
-ipcMain.handle('capture-screen-source', async (_, sourceId: string) => {
+ipcMain.handle('capture-screen-source', async (_, sourceId: unknown) => {
+  if (typeof sourceId !== 'string') return null;
   try {
-    const sources = await desktopCapturer.getSources({
-      types: ['window', 'screen'],
-      thumbnailSize: { width: 1920, height: 1080 },
-      fetchWindowIcons: false,
-    });
-    const source = sources.find((s) => s.id === sourceId);
-    return source ? source.thumbnail.toDataURL() : null;
+    // Kimliğin öneki türü verir: tüm pencereleri 1920×1080 yakalamak yerine yalnızca ilgili tür.
+    const types: Array<'window' | 'screen'> = sourceId.startsWith('screen:')
+      ? ['screen']
+      : sourceId.startsWith('window:')
+        ? ['window']
+        : ['window', 'screen'];
+    const sources = await desktopCapturer.getSources({ types, thumbnailSize: { width: 1920, height: 1080 }, fetchWindowIcons: false });
+    return sources.find((s) => s.id === sourceId)?.thumbnail.toDataURL() ?? null;
   } catch (error) {
     console.error('Error capturing screen source:', error);
     return null;
@@ -2166,7 +2467,8 @@ ipcMain.handle('drive-list-files', async () => {
   }
 });
 
-ipcMain.handle('drive-upload', async (_, name: string, content: string) => {
+ipcMain.handle('drive-upload', async (_, name: unknown, content: unknown) => {
+  if (typeof name !== 'string' || typeof content !== 'string') return { ok: false, error: 'Invalid upload' };
   try {
     const id = await driveService.uploadFile(name, content);
     return { ok: true, id };
@@ -2184,7 +2486,7 @@ ipcMain.handle('drive-download', async (_, fileId: string) => {
       // Phase 7: unzip + media externalization run in the heavy UtilityProcess.
       const { data, mediaCount } = await heavyClient.extractGpres(buffer, mediaLibrary.dir);
       console.log(`[drive-download] ${mediaCount} media refs externalized`);
-      return { ok: true, data: JSON.stringify(data, null, 2) };
+      return { ok: true, data: JSON.stringify(data) };
     }
 
     // Plain JSON (legacy or non-ZIP)
@@ -2205,16 +2507,17 @@ ipcMain.handle('drive-delete-file', async (_, fileId: string) => {
   }
 });
 
-ipcMain.handle('drive-save-presentation', async (_, content: string, customName?: string) => {
+ipcMain.handle('drive-save-presentation', async (_, content: unknown, customName?: string) => {
+  if (typeof content !== 'string') return { ok: false, error: 'Invalid presentation data' };
   try {
     const data = JSON.parse(content);
 
     const trimmed = (customName ?? '').trim();
     if (trimmed) data.name = trimmed;
 
-    // Phase 7: zip build (deflate CPU) runs in the heavy UtilityProcess; the
-    // renamed presentation (customName) must reach the worker, so re-serialize.
-    const { embeddedCount, zipBuffer } = await heavyClient.buildGpres(JSON.stringify(data), mediaLibrary.dir);
+    // Phase 7: zip build (deflate CPU) runs in the heavy UtilityProcess. Yeniden serileştirme yalnızca ad değiştiyse gerekir.
+    const payload = trimmed ? JSON.stringify(data) : content;
+    const { embeddedCount, zipBuffer } = await heavyClient.buildGpres(payload, mediaLibrary.dir);
 
     // Strip characters invalid in filenames / Drive names.
     const baseName =

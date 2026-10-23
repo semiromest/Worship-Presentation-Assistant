@@ -3,6 +3,13 @@ import type { Position } from './types';
 const POSITIONS: Position[] = ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'];
 export const DEFAULT_AUTHOR_POSITION: Position = 'bottom-center';
 export const DEFAULT_AUTHOR_SIZE = 28;
+/** Keep the existing author visibility rule and render one shared title/author label. */
+export function formatHymnCredit(group?: { title?: string; author?: string }): string {
+  const author = group?.author?.trim();
+  if (!author) return '';
+  const title = group?.title?.trim();
+  return title ? `${title} - ${author}` : author;
+}
 export function normalizeAuthorPosition(value: unknown): Position {
   return POSITIONS.includes(value as Position) ? (value as Position) : DEFAULT_AUTHOR_POSITION;
 }

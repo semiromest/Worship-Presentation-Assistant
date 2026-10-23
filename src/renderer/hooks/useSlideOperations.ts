@@ -354,7 +354,10 @@ export function useSlideOperations() {
             ? { id: s.youtubeMusic.id, title: s.youtubeMusic.title, duration: s.youtubeMusic.duration }
             : undefined,
           musicSettings: s.musicSettings && typeof s.musicSettings === 'object'
-            ? { volume: musicGain(s.musicSettings.volume) } : undefined,
+            ? { volume: musicGain(s.musicSettings.volume),
+                ...(typeof s.musicSettings.autoPlay === 'boolean' ? { autoPlay: s.musicSettings.autoPlay } : {}),
+                ...(s.musicSettings.attachment === true ? { attachment: true } : {}),
+              } : undefined,
           mediaUrl: typeof s.mediaUrl === 'string' ? s.mediaUrl : undefined,
           thumbnailUrl: typeof s.thumbnailUrl === 'string' ? s.thumbnailUrl : undefined,
           loopItems: Array.isArray(s.loopItems)
@@ -376,6 +379,7 @@ export function useSlideOperations() {
                 parts: typeof s.group.parts === 'number' ? s.group.parts : 1,
                 color: typeof s.group.color === 'string' ? s.group.color : undefined,
                 author: typeof s.group.author === 'string' ? s.group.author : undefined,
+                kind: s.group.kind === 'hymn' ? 'hymn' : undefined,
               }
             : undefined,
           captions: s.captions && typeof s.captions === 'object' ? { ...s.captions } : undefined,
@@ -658,6 +662,7 @@ export function useSlideOperations() {
           group: {
             id: groupId,
             title: hymn.title,
+            kind: 'hymn',
             author: hymn.showAuthorOnSlides ? hymn.author : undefined,
             part: idx + 1,
             parts: split.parts.length,
@@ -683,6 +688,7 @@ export function useSlideOperations() {
         group: {
           id: groupId,
           title: hymn.title,
+          kind: 'hymn',
           author: hymn.showAuthorOnSlides ? hymn.author : undefined,
           part: 1,
           parts: split.parts.length,

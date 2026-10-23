@@ -14,7 +14,6 @@ import { SlideTextItem as TextItem } from './SlideTextItem';
 export { SlideTextItem as TextItem } from './SlideTextItem';
 import { SLIDE_REFERENCE_HEIGHT, SLIDE_REFERENCE_WIDTH } from '../editor/editorUtils';
 import { slidePreviewGeometry } from '../slidePreviewGeometry';
-import { isYouTubeMusicResult } from '../../shared/youtubeMusic';
 
 /**
  * Shared slide previews.
@@ -193,7 +192,6 @@ SlideItemsPreview.displayName = 'SlideItemsPreview';
 
 // Legacy (item-less) text slide preview
 export const TextSlidePreview = memo(({ slide, cardWidth = 320, staticMedia = false, enabled = true }: { slide: Slide; cardWidth?: number; staticMedia?: boolean; enabled?: boolean }) => {
-  const music = isYouTubeMusicResult(slide.youtubeMusic);
   const displayContent = getSlideDisplayContent(slide);
   const bgColor = slide.styles?.backgroundColor ?? '#000000';
   const bgImage = slide.styles?.backgroundImage;
@@ -210,21 +208,20 @@ export const TextSlidePreview = memo(({ slide, cardWidth = 320, staticMedia = fa
         .join(', ')})`
     : undefined;
 
-  // Font size scales with card width — at the reference card width (320px
-  // at zoom=1 in a ~1200px container) the baseline is 16px, proportional
-  // elsewhere. Clamped so text is never illegible or absurdly large.
-  const fontSize = music ? Math.max(1, (slide.styles?.fontSize ?? 76) * cardWidth / SLIDE_REFERENCE_WIDTH) : Math.round(Math.max(7, Math.min(42, cardWidth / 20)));
+  // Match slide typography without a minimum thumbnail font size.
+  const previewScale = cardWidth / SLIDE_REFERENCE_WIDTH;
+  const fontSize = (slide.styles?.fontSize || 48) * previewScale;
 
   return (
     <div
-      className={cn('w-full h-full flex items-center justify-center text-center relative overflow-hidden', !music && 'p-4')}
+      className="w-full h-full flex items-center justify-center text-center relative overflow-hidden"
       style={{
         backgroundColor: bgColor,
         backgroundImage: bgImage ? `url(${bgImage})` : undefined,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         filter: bgBlur && bgBlur > 0 ? `blur(${bgBlur}px)` : undefined,
-        ...(music ? { alignItems: slide.styles?.verticalAlign === 'top' ? 'flex-start' : slide.styles?.verticalAlign === 'bottom' ? 'flex-end' : 'center' } : {}),
+        alignItems: slide.styles?.verticalAlign === 'top' ? 'flex-start' : slide.styles?.verticalAlign === 'bottom' ? 'flex-end' : 'center',
       }}
     >
       {/* Background video — show first frame, play on click */}
@@ -237,21 +234,19 @@ export const TextSlidePreview = memo(({ slide, cardWidth = 320, staticMedia = fa
       }} />
       <BackgroundDim value={slide.styles?.backgroundDim} />
       <p
-        className={cn('font-bold whitespace-pre-wrap text-white/90 leading-snug relative z-10', !music && 'line-clamp-6')}
+        className="whitespace-pre-wrap relative z-10"
         style={{
           color: slide.styles?.textColor ?? '#ffffff',
           fontSize: `${fontSize}px`,
           fontFamily: slide.styles?.fontFamily || 'inherit',
-          ...(music ? {
-            width: '100%', boxSizing: 'border-box' as const,
-            padding: `${54 * cardWidth / SLIDE_REFERENCE_WIDTH}px ${96 * cardWidth / SLIDE_REFERENCE_WIDTH}px`,
-            textAlign: (slide.styles?.textAlign ?? 'center') as 'center',
-            textTransform: slide.styles?.textTransform ?? 'none',
-            fontWeight: slide.styles?.fontWeight ?? 'bold',
-            fontStyle: slide.styles?.fontStyle ?? 'normal',
-            lineHeight: slide.styles?.lineHeight ?? 1.3,
-            backgroundColor: slide.styles?.textHighlight && slide.styles.textHighlight !== 'transparent' ? slide.styles.textHighlight : undefined,
-          } : {}),
+          width: '100%', boxSizing: 'border-box' as const,
+          padding: `${54 * previewScale}px ${96 * previewScale}px`,
+          textAlign: (slide.styles?.textAlign ?? 'center') as 'center',
+          textTransform: slide.styles?.textTransform ?? 'none',
+          fontWeight: slide.styles?.fontWeight ?? 'bold',
+          fontStyle: slide.styles?.fontStyle ?? 'normal',
+          lineHeight: slide.styles?.lineHeight ?? 1.3,
+          backgroundColor: slide.styles?.textHighlight && slide.styles.textHighlight !== 'transparent' ? slide.styles.textHighlight : undefined,
         }}
       >
         {displayContent}

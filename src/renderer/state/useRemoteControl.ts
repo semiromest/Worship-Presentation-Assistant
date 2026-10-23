@@ -347,7 +347,9 @@ export function useRemoteControl() {
     let removeOutputStatusListener: (() => void) | undefined;
 
     if (IS_PROJECTOR_MODE) {
-      setProjectorReady(true);
+      // Listener readiness is not frame readiness: keep the output black until
+      // its first snapshot, navigation, blackout and mode have all been applied.
+      setProjectorReady(false);
 
   removeProjectorUpdate = window.electronAPI?.onProjectorUpdate?.((data: any) => {
     if (data && typeof data === 'object') {
@@ -355,7 +357,11 @@ export function useRemoteControl() {
         // Initial snapshot (open) or re-sync after reload: replace the state
         // and clear history — the projector never uses undo, so SET used to
         // grow an unbounded history on every sync (wasted memory).
-        dispatchUndo({ type: 'RESET', payload: data.fullPresentation });
+        dispatchUndo({ type: 'RESET', payload: {
+          ...data.fullPresentation,
+          ...(typeof data.liveIndex === 'number' && { liveIndex: data.liveIndex }),
+          ...(typeof data.liveSlideId === 'string' && { liveSlideId: data.liveSlideId }),
+        } });
       } else if (data.patch) {
         // Delta sync (Phase 4): apply without touching the undo history.
         useStore.getState().applyProjectorDelta(data.patch);
@@ -386,6 +392,7 @@ export function useRemoteControl() {
       if (typeof data.outputMode === 'string') {
         setOutputWindowMode(data.outputMode as any);
       }
+      if (data.fullPresentation) setProjectorReady(true);
     }
   });
 

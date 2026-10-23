@@ -1,3 +1,4 @@
+import './slides-workspace.css';
 import { PracticeFrame } from './components/PracticePanel';
 import React, { Profiler } from 'react';
 import ReactDOM from 'react-dom/client';

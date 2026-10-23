@@ -10,7 +10,6 @@ import {
   ChevronDown,
   Copy,
   Trash2,
-  HelpCircle,
   Monitor,
   Play,
   Smartphone,
@@ -54,12 +53,12 @@ export default function Toolbar({
   const { t } = useTranslation();
   const practice = usePractice();
 
+  const activeTab = useStore(s => s.activeTab);
   const presentationName = useStore(s => s.presentation.name);
   const canUndo = useStore(s => s.undoState.past.length > 0);
   const canRedo = useStore(s => s.undoState.future.length > 0);
   const dispatchUndo = useStore((s) => s.dispatchUndo);
   const selectedCount = useStore(s => s.selectedSlideIds.size);
-  const setIsCheatsheetOpen = useStore((s) => s.setIsCheatsheetOpen);
   const isProjectorWindowOpen = useStore((s) => s.isProjectorWindowOpen);
   const setPresentationName = useStore((s) => s.setPresentationName);
   const isRightPanelOpen = useStore((s) => s.isRightPanelOpen);
@@ -130,9 +129,8 @@ export default function Toolbar({
   const readinessLabel = t(readinessStatus === 'checking' ? 'prepCheck.checking' : readinessStatus === 'stale' ? 'prepCheck.stale' : readinessStatus === 'failed' ? 'prepCheck.checkFailed' : 'prepCheck.completed');
 
 
-  return (
-    <div className="shrink-0"><header ref={element => registerTourAnchor('toolbar', element)} className="h-14 bg-surface-raised border-b border-white/10 flex items-center justify-between px-6 flex-shrink-0">
-      <div className="flex items-center gap-2 min-w-0">
+  return <div className="design-toolbar-wrap"><header ref={element => registerTourAnchor('toolbar', element)} className={activeTab === 'slides' ? 'design-toolbar' : 'design-toolbar design-toolbar-legacy'}>
+    <div className="design-doc">      <div className="flex items-center gap-2 min-w-0">
         {editingName ? (
           <input
             ref={inputRef}
@@ -189,74 +187,7 @@ export default function Toolbar({
             {savedAgoLabel}
           </span>
         )}
-      </div>{' '}
-      <div className="flex items-center gap-2">
-        <div className="w-px h-6 bg-white/10 mx-1" />
-
-        {!practice && <>
-        {/* Live Captions console (labeled; reflects the running session) */}
-        <button
-          type="button"
-          onClick={() => setIsSttPanelOpen(!isSttPanelOpen)}
-          aria-pressed={isSttPanelOpen}
-          title={t('common.sttPanelTitle')}
-          aria-label={t('common.sttPanelTitle')}
-          className={cn(
-            'flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border font-medium text-sm transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.94]',
-            sttLive
-              ? 'bg-red-600/20 hover:bg-red-600/30 border-red-500/40 text-red-300'
-              : isSttPanelOpen
-                ? 'bg-blue-600/20 hover:bg-blue-600/30 border-blue-500/40 text-blue-300'
-                : 'bg-white/5 hover:bg-white/10 border-white/10 text-white/60 hover:text-white'
-          )}
-        >
-          <Captions className="w-4 h-4 shrink-0" aria-hidden="true" />
-          <span className="hidden lg:inline truncate">{t('common.sttToolbarButton')}</span>
-          {sttLive && (
-            <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse shrink-0" aria-hidden="true" />
-          )}
-        </button>
-
-        {/* Multi-display output selector — hidden automatically on one-display machines. */}
-        <DisplayOutputsPopover openOutput={openOutput} closeOutput={closeOutput} />
-
-        {/* Phone viewers (live-slide broadcast) */}
-        <div className="relative shrink-0">
-          <button
-            onClick={() => { setIsLiveShareOpen(true); playSfx('open'); }}
-            aria-haspopup="dialog"
-            aria-pressed={screenShareActive}
-            className={`flex items-center justify-center w-[150px] py-1.5 rounded-md transition-colors text-sm font-medium focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.97] ${
-              screenShareActive
-                ? 'bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300'
-                : 'bg-white/5 hover:bg-white/10 text-white'
-            }`}
-          >
-            <Tv className="w-4 h-4 shrink-0" aria-hidden="true" />
-            <span className="truncate">{t('common.liveShareButton')}</span>
-            {screenShareActive && (
-              <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-pulse" aria-hidden="true" />
-            )}
-          </button>
-        </div>
-
-        {/* Remote Panel */}
-        <div className="relative shrink-0">
-          <button
-            onClick={() => { setIsRemoteOpen(true); playSfx('open'); }}
-            aria-haspopup="dialog"
-            className="flex items-center justify-center w-[150px] py-1.5 rounded-md transition-colors text-sm font-medium focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.97] bg-white/5 hover:bg-white/10 text-white"
-          >
-            <Smartphone className="w-4 h-4 shrink-0" aria-hidden="true" />
-            <span className="truncate">{t('common.remoteControl')}</span>
-          </button>
-        </div>
-
-        <div className="w-px h-6 bg-white/10 mx-1" />
-
-        </>}
-        {practice && <button type="button" disabled data-guide-anchor="phone-controls" aria-label={t('common.remoteControl')} className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/60"><Smartphone className="h-4 w-4" aria-hidden="true" /><span>{t('common.remoteControl')}</span></button>}
-        <button
+      </div><div className="design-undo">        <button
           onClick={() => dispatchUndo({ type: 'UNDO' })}
           disabled={!canUndo}
           title={t('common.undo')}
@@ -275,7 +206,7 @@ export default function Toolbar({
           <Redo2 className="w-4 h-4" aria-hidden="true" />
         </button>
 
-        {selectedCount > 1 && (
+</div><div className="design-multi">        {activeTab !== 'slides' && selectedCount > 1 && (
           <>
             <div className="w-px h-6 bg-white/10 mx-1" aria-hidden="true" />
             <span className="text-xs text-white/55 font-medium" aria-live="polite">
@@ -316,17 +247,72 @@ export default function Toolbar({
           </>
         )}
 
-        <div className="w-px h-6 bg-white/10 mx-1" />
+</div></div>
+    <div className="design-secondary"><div className="design-connections">{!practice && <><DisplayOutputsPopover label={activeTab === 'slides' ? t('slidesWorkspace.displays') : undefined} openOutput={openOutput} closeOutput={closeOutput} />        {/* Phone viewers (live-slide broadcast) */}
+        <div className="relative shrink-0">
+          <button
+            onClick={() => { setIsLiveShareOpen(true); playSfx('open'); }}
+            aria-haspopup="dialog"
+            aria-pressed={screenShareActive}
+            className={`flex items-center justify-center w-[150px] py-1.5 rounded-md transition-colors text-sm font-medium focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.97] ${
+              screenShareActive
+                ? 'bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300'
+                : 'bg-white/5 hover:bg-white/10 text-white/60 hover:text-white'
+            }`}
+          >
+            <Tv className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <span className="truncate">{t(activeTab === 'slides' ? 'slidesWorkspace.viewers' : 'common.liveShareButton')}</span>
+            {screenShareActive && (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-pulse" aria-hidden="true" />
+            )}
+          </button>
+        </div>
 
+        {/* Remote Panel */}
+        <div className="relative shrink-0">
+          <button
+            onClick={() => { setIsRemoteOpen(true); playSfx('open'); }}
+            aria-haspopup="dialog"
+            className="flex items-center justify-center w-[150px] py-1.5 rounded-md transition-colors text-sm font-medium focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.97] bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
+          >
+            <Smartphone className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <span className="truncate">{t('common.remoteControl')}</span>
+          </button>
+        </div>
+
+</>}{practice && <button disabled data-guide-anchor="phone-controls">{t('common.remoteControl')}</button>}</div>
+    <div className="design-utilities">{!practice && <>        {/* Live Captions console (labeled; reflects the running session) */}
         <button
+          type="button"
+          onClick={() => setIsSttPanelOpen(!isSttPanelOpen)}
+          aria-pressed={isSttPanelOpen}
+          title={t('common.sttPanelTitle')}
+          aria-label={t('common.sttPanelTitle')}
+          className={cn(
+            'flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border font-medium text-sm transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.94]',
+            sttLive
+              ? 'bg-red-600/20 hover:bg-red-600/30 border-red-500/40 text-red-300'
+              : isSttPanelOpen
+                ? 'bg-blue-600/20 hover:bg-blue-600/30 border-blue-500/40 text-blue-300'
+                : 'bg-white/5 hover:bg-white/10 border-white/10 text-white/60 hover:text-white'
+          )}
+        >
+          <Captions className="w-4 h-4 shrink-0" aria-hidden="true" />
+          <span className="hidden lg:inline truncate">{t('common.sttToolbarButton')}</span>
+          {sttLive && (
+            <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse shrink-0" aria-hidden="true" />
+          )}
+        </button>
+
+</>}        <button
           onClick={() => { usePreparationStore.setState({ focusedSlideId: null }); setIsPrepCheckOpen(true); playSfx('open'); }}
           title={t('prepCheck.title') + ': ' + readinessLabel}
           aria-label={t('prepCheck.title')}
           aria-describedby="preparation-toolbar-status"
           data-preparation-status={readinessStatus}
-          className="relative p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]"
+          className="relative p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]"
         >
-          <ClipboardCheck className={readinessStatus === 'checking' ? 'w-4 h-4 animate-pulse' : 'w-4 h-4'} aria-hidden="true" />
+          <span className="design-action-label">{t('slidesWorkspace.readiness')}</span><ClipboardCheck className={readinessStatus === 'checking' ? 'w-4 h-4 animate-pulse' : 'w-4 h-4'} aria-hidden="true" />
           <span id="preparation-toolbar-status" className="sr-only">{readinessLabel}{readinessIssueCount > 0 ? ': ' + t('prepCheck.summary', { count: readinessIssueCount }) : ''}</span>
           {readinessStatus !== 'complete' && <span aria-hidden="true" className="absolute -top-1 -right-1 h-4 min-w-4 rounded-full bg-amber-500 text-black text-[10px]">{readinessStatus === 'failed' ? '!' : '…'}</span>}
           {readinessIssueCount > 0 && (
@@ -339,24 +325,14 @@ export default function Toolbar({
           )}
         </button>
 
-        <button
-          onClick={() => { setIsCheatsheetOpen(true); playSfx('open'); }}
-          title={t('common.keyboardShortcuts')}
-          aria-label={t('common.keyboardShortcuts')}
-          className="p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]"
-        >
-          <HelpCircle className="w-4 h-4" aria-hidden="true" />
-        </button>
+        <BackgroundMusicPopover label={t('slidesWorkspace.music')} onAddSlide={practice ? undefined : addYouTubeMusicSlide} />
 
-        <BackgroundMusicPopover onAddSlide={practice ? undefined : addYouTubeMusicSlide} />
-
-        <div className="w-px h-6 bg-white/10 mx-1" />
-
-        {!practice && <button
+</div></div>
+    <div className="design-output">        {!practice && <button
           onClick={startLive}
           aria-label={isProjectorWindowOpen ? t('common.stopBroadcast') : t('common.startBroadcast')}
           className={cn(
-            'flex items-center justify-center w-[190px] py-1.5 rounded-md transition-colors text-sm font-bold shadow-lg focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1e1e1e] focus-visible:outline-none active:scale-[0.97]',
+            'design-broadcast-button flex items-center justify-center w-[190px] py-1.5 rounded-md transition-colors text-sm font-bold shadow-lg focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1e1e1e] focus-visible:outline-none active:scale-[0.97]',
             isProjectorWindowOpen
               ? 'bg-red-600 hover:bg-red-700 shadow-red-900/20 focus-visible:ring-red-400'
               : 'bg-green-600 hover:bg-green-700 shadow-green-900/20 focus-visible:ring-green-400'
@@ -375,8 +351,6 @@ export default function Toolbar({
           )}
         </button>}
 
-        <div className="w-px h-6 bg-white/10 mx-1" />
-
         <button
           onClick={() => { setIsRightPanelOpen(!isRightPanelOpen); playSfx(isRightPanelOpen ? 'close' : 'open'); }}
           title={isRightPanelOpen ? t('common.panelClose') : t('common.panelOpen')}
@@ -391,7 +365,7 @@ export default function Toolbar({
         >
           {isRightPanelOpen ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
         </button>
-      </div>
-    </header><OutputStatus /></div>
-  );
+</div>
+    </header><OutputStatus /></div>;
+
 }

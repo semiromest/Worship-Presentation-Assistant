@@ -190,15 +190,15 @@ function useSourceSelection(sources: ScreenSource[]) {
 
 function Header({ onRefresh, isLoading, t }: { onRefresh: () => void; isLoading: boolean; t: (key: string) => string }) {
   return (
-    <div className="flex items-center justify-between p-4 border-b border-white/10">
+    <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-white/10">
       <div className="flex items-center gap-2">
         <Monitor size={16} className="text-blue-500" />
-        <span className="text-sm font-semibold text-white">{t('common.screenTitle')}</span>
+        <h2 className="text-lg font-semibold text-white">{t('common.screenTitle')}</h2>
       </div>
       <button
         onClick={onRefresh}
         disabled={isLoading}
-        className="flex items-center gap-2 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-xs hover:bg-white/10 transition-colors disabled:opacity-50"
+        className="workspace-secondary-action transition-colors"
       >
         <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
         <span>{t('common.screenRefresh')}</span>

@@ -1,6 +1,6 @@
 import { playSfx } from './sfx';
 import { memo, useCallback } from 'react';
-import { Settings2, ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import type { TransitionType } from './types';
 import { TRANSITION_OPTIONS, DURATION_OPTIONS } from './constants';
 import { useTranslation } from 'react-i18next';
@@ -36,23 +36,15 @@ export const TransitionSelector = memo(({
   );
 
   return (
-    <div className="px-4 py-3 border-b border-white/10 bg-[#161616] space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Settings2 className="w-3 h-3 text-white/40" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-            {t('transition.settings')}
-          </span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
+    <div className="design-transition-controls" role="group" aria-label={t('transition.settings')}>
+      <span>{t('transition.label')}</span>
+      <div className="design-transition-selects">
         <div className="relative">
           <select
             value={transitionType}
             onChange={handleTransitionChange}
             aria-label={t('transition.type')}
-            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 outline-none hover:bg-white/10 transition-colors appearance-none cursor-pointer"
+            className="w-full bg-white/5 border border-white/10 rounded-lg pl-2 pr-6 text-xs text-white/80 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 hover:bg-white/10 transition-colors appearance-none cursor-pointer"
           >
             {TRANSITION_OPTIONS.map(({ type, label }) => (
               <option key={type} value={type} className="bg-[#181818]">
@@ -70,7 +62,7 @@ export const TransitionSelector = memo(({
             value={duration}
             onChange={handleDurationChange}
             aria-label={t('transition.duration')}
-            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 outline-none hover:bg-white/10 transition-colors appearance-none cursor-pointer font-mono"
+            className="w-full bg-white/5 border border-white/10 rounded-lg pl-2 pr-6 text-xs text-white/80 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 hover:bg-white/10 transition-colors appearance-none cursor-pointer font-mono"
           >
             {DURATION_OPTIONS.map(ms => (
               <option key={ms} value={ms} className="bg-[#181818]">

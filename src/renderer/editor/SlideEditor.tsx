@@ -3,7 +3,6 @@ ChevronRight,
 Copy,
 Group,
 Image,
-Keyboard,
 Layers,
 Layers2,
 LayoutTemplate,
@@ -11,7 +10,6 @@ Lock,
 Move,
 Paintbrush,
 Palette,
-PanelLeftOpen,
 PanelRightOpen,
 Redo2,
 RotateCw,
@@ -27,7 +25,8 @@ import * as m from 'motion/react-m';
 import { useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState,type ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 import { choiceDialog } from '../choiceDialogState';
-import { GradientButton } from '../components/GradientGenerator';
+import { GradientDesigner, type GradientPreview } from '../components/GradientDesigner';
+import { consumeGradientEditorRequest } from '../gradientEditorRequest';
 import { SlidePreviewAny } from '../components/SlidePreview';
 import { isHelpActive } from '../components/Tour/tourController';
 import { setComponentInert } from '../components/Tour/guideBoundary';
@@ -122,6 +121,13 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
     }
   };
   const activeDraft: SlideDraft | null = session.activeDraft;
+  const gradientOnly = activeSlide?.type === 'text' && !editable;
+  const [gradientPreview, setGradientPreview] = useState<GradientPreview | null>(null);
+  const canvasStyles = useMemo(() => ({ ...activeDraft?.styles, ...(gradientPreview?.slideId === activeSlide?.id ? gradientPreview?.styles : {}) }), [activeDraft?.styles, gradientPreview, activeSlide?.id]);
+  const applyGradient = useCallback((ids: string[], image: string, recipe: import('../../shared/generatedBackground').GeneratedBackground) => {
+    sessionRef.current.applyBackground(generatedStyles(image, recipe), ids);
+    setGradientPreview(null);
+  }, []);
   const addVideoText = () => {
     if (!videoEditable) return;
     finishInteraction();
@@ -134,7 +140,6 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
 
   const [tab, setTab] = useState<InspectorTab>('item');
   const [showTemplates, setShowTemplates] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
   const [cropTarget, setCropTarget] = useState<{ slideId: string; itemId: string } | null>(null);
   const [lockedRatioKeys, setLockedRatioKeys] = useState<Set<string>>(new Set());
   const [safeAreaEnabled, setSafeAreaEnabled] = useState(false);
@@ -145,8 +150,12 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
   const inspectorRef = useRef<HTMLElement>(null);
   const [clipboard, setClipboard] = useState<EditorClipboard | null>(null);
   const [pasteMenu, setPasteMenu] = useState<PasteMenuContext | null>(null);
-  const shortcutsEnabled = active && !showTemplates && !showHelp && !pasteMenu && !confirming && !cropTarget;
+  const shortcutsEnabled = active && !showTemplates && !pasteMenu && !confirming && !cropTarget;
   const [scope, setScope] = useState<EditScope>('active');
+  useEffect(() => {
+    if (active && activeSlide && consumeGradientEditorRequest(activeSlide.id)) { setTab('slide'); setInspectorOpen(true); }
+  }, [active, activeSlide?.id]);
+  useEffect(() => { if (gradientOnly) setTab('slide'); }, [gradientOnly]);
   const [railCollapsed, setRailCollapsed] = useState(() => {
     try {
       return localStorage.getItem(RAIL_STORAGE_KEY) === '1';
@@ -156,18 +165,16 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
   });
 
   useEffect(() => {
-    if (!active || (!showHelp && !showTemplates)) return;
+    if (!active || !showTemplates) return;
     const keydown = (event: KeyboardEvent) => {
       if (isHelpActive()) return;
       if (event.key !== 'Escape') return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      setShowHelp(false);
       setShowTemplates(false);
     };
     const outside = (event: PointerEvent) => {
       if (!(event.target as Element).closest('[data-editor-popover]')) {
-        setShowHelp(false);
         setShowTemplates(false);
       }
     };
@@ -177,7 +184,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
       window.removeEventListener('keydown', keydown, true);
       window.removeEventListener('pointerdown', outside);
     };
-  }, [active, showHelp, showTemplates]);
+  }, [active, showTemplates]);
   useEffect(() => {
     if (!active || !inspectorOpen) return;
     inspectorRef.current?.querySelector<HTMLElement>('[role=tab][aria-selected=true]')?.focus();
@@ -201,13 +208,15 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
 
   const slideOrder = session.order;
   const selectedSlideIds = session.selection.selectedIds.filter(id => { const candidate = session.slideById.get(id); return !!candidate && isItemEditableSlide(candidate); });
+  const gradientSelection = session.selection.selectedIds.filter(id => { const slide = session.slideById.get(id); return !!slide && (slide.type === 'text' || isItemEditableSlide(slide)); });
+  const gradientIds = (scope === 'selected' && gradientSelection.length > 1 ? gradientSelection : [activeSlide?.id]).filter((id): id is string => !!id && !!session.slideById.get(id) && (session.slideById.get(id)!.type === 'text' || isItemEditableSlide(session.slideById.get(id)!)));
   const multiSlide = selectedSlideIds.length > 1;
   const effectiveScope: EditScope = multiSlide ? scope : 'active';
 
   // A bulk scope left over from a wider selection must never silently persist.
   useEffect(() => {
-    if (!multiSlide && scope !== 'active') setScope('active');
-  }, [multiSlide, scope]);
+    if (!multiSlide && !(tab === 'slide' && gradientSelection.length > 1) && scope !== 'active') setScope('active');
+  }, [multiSlide, gradientSelection.length, tab, scope]);
 
   useEffect(() => {
     try {
@@ -701,7 +710,6 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
     if (active) return;
     finishInteraction();
     setShowTemplates(false);
-    setShowHelp(false);
     setPasteMenu(null);
     setCropTarget(null);
     setInspectorOpen(false);
@@ -813,9 +821,9 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
   const snapEnabled = activeDraft?.snapEnabled ?? false;
 
   const inspectorTabs: Array<{ id: InspectorTab; label: string; icon: ComponentType<{ className?: string }> }> = [
-    { id: 'item', label: t('common.editorTabItem'), icon: Move },
+    ...(!gradientOnly ? [{ id: 'item' as const, label: t('common.editorTabItem'), icon: Move }] : []),
     { id: 'slide', label: t('common.editorTabSlide'), icon: Palette },
-    { id: 'layers', label: t('common.editorTabLayers'), icon: Layers },
+    ...(!gradientOnly ? [{ id: 'layers' as const, label: t('common.editorTabLayers'), icon: Layers }] : []),
   ];
 
   if (!activeSlide || !activeDraft) return (
@@ -826,17 +834,23 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
   );
 
   return (
-    <section ref={editorRootRef} data-guide-state={practice && active ? JSON.stringify({ editorSlideId:activeSlide.id,editorItemId:primarySelected?.id ?? '',editorSelected:selectedIds.size === 1,editorRotation:primarySelected?.rotation ?? 0 }) : undefined} aria-labelledby="slide-editor-title" className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface-base">
+    <section ref={editorRootRef} data-guide-state={practice && active ? JSON.stringify({ editorSlideId:activeSlide.id,editorItemId:primarySelected?.id ?? '',editorSelected:selectedIds.size === 1,editorRotation:primarySelected?.rotation ?? 0 }) : undefined} aria-labelledby="slide-editor-title" className="editor-workspace flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface-base">
       <div
-        className="flex h-full min-h-0 w-full flex-col"
+        className="editor-workspace-layout flex h-full min-h-0 w-full flex-col"
         onKeyDown={(event) => {
+          if (gradientOnly && (event.ctrlKey || event.metaKey) && ['z', 'y'].includes(event.key.toLowerCase())
+            && !(event.target as Element).closest('input,textarea,select,[contenteditable="true"]')) {
+            event.preventDefault(); event.stopPropagation(); setGradientPreview(null);
+            if (event.shiftKey || event.key.toLowerCase() === 'y') session.redo(); else session.undo();
+            return;
+          }
           if (!((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a' && (event.target as Element).closest('[data-editor-rail]'))) handleEditorShortcuts(event.nativeEvent);
           handleNavigationKeyDown(event.nativeEvent);
           event.stopPropagation();
         }}
       >
         {/* Header */}
-        <header className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-surface-raised px-3 py-2">
+        <header className="editor-workspace-header flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-surface-raised px-3 py-2">
           <div className="flex min-w-0 items-center gap-3">
             <div className="min-w-0">
               <h2 id="slide-editor-title" className="truncate text-lg font-semibold text-blue-400">
@@ -855,7 +869,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="editor-workspace-tools flex flex-wrap items-center gap-2">
             <button
               ref={inspectorToggleRef}
               type="button"
@@ -867,18 +881,6 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
             >
               <PanelRightOpen className="h-5 w-5" aria-hidden="true" />
             </button>
-            {!railCollapsed && (
-              <button
-                type="button"
-                onClick={() => setRailCollapsed(true)}
-                aria-label={t('common.editorRailCollapse')}
-                title={t('common.editorRailCollapse')}
-                className="hidden rounded-xl p-2 text-white/50 transition hover:bg-white/5 hover:text-white lg:inline-flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              >
-                <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
-              </button>
-            )}
-
             <button
               type="button"
               disabled={!editable && !videoEditable}
@@ -903,7 +905,6 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
               <button
                 type="button"
                 onClick={() => {
-                  setShowHelp(false);
                   setShowTemplates(!showTemplates);
                 }}
                 disabled={!editable}
@@ -931,35 +932,6 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
               )}
             </div>
 
-            <div className="relative" data-editor-popover>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowTemplates(false);
-                  setShowHelp(!showHelp);
-                }}
-                aria-expanded={showHelp}
-                aria-controls="editor-shortcut-help"
-                aria-label={t('common.editorShortcuts')}
-                title={t('common.editorShortcuts')}
-                className="rounded-xl p-2 text-white/60 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500"
-              >
-                <Keyboard className="h-5 w-5" aria-hidden="true" />
-              </button>
-              {showHelp && (
-                <div
-                  id="editor-shortcut-help"
-                  role="region"
-                  aria-label={t('common.editorShortcuts')}
-                  className="absolute right-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-24px)] rounded-xl border border-white/15 bg-surface-overlay p-3 text-xs text-white/80 shadow-xl"
-                >
-                  <p className="font-semibold">{t('common.editorShortcuts')}</p>
-                  <p className="mt-2">{t('common.editorGestureHelp')}</p>
-                  <p className="mt-2">{t('common.editorNavigationHelp')}</p>
-                  <p className="mt-2">{t('common.editorHistoryHelp')}</p>
-                </div>
-              )}
-            </div>
 
             <button
               type="button"
@@ -1001,7 +973,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
         </header>
 
         {/* Body */}
-        <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        <div className="editor-workspace-body relative flex min-h-0 flex-1 overflow-hidden">
           {railCollapsed ? (
             <div
               className="flex h-full shrink-0 flex-col items-center gap-2 border-r border-white/10 bg-[#151515] py-2"
@@ -1030,7 +1002,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                 onFilterChange={changeFilter}
                 drafts={session.drafts}
                 activeId={session.activeId}
-                selectedIds={selectedSlideIds}
+                selectedIds={session.selection.selectedIds}
                 liveSlideId={liveSlideId}
                 onActivate={activateSlide}
                 onSelectAll={session.selectEverySlide}
@@ -1048,13 +1020,13 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
             onSelectOverlay={id => session.setItemSelection(new Set(id ? [id] : []))} onAddOverlay={addVideoText}
             onOverlaysChange={session.updateVideoOverlays} onGestureStart={beginGesture} onGestureEnd={endGesture} /> : !editable ? <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-4 overflow-auto p-4">
             <div className="aspect-video w-full max-w-5xl overflow-hidden rounded-xl border border-white/15 bg-black">
-              <SlidePreviewAny slide={activeSlide} cardWidth={800} enabled={active} />
+              <SlidePreviewAny slide={{ ...activeSlide, styles: canvasStyles as Slide['styles'] }} cardWidth={800} enabled={active} />
             </div>
-            <p className="text-sm font-semibold text-white/90">{t('common.editorRailReadOnly')}</p>
-            <p className="max-w-xl text-center text-sm text-white/60">{t('common.editorReadOnlyExplanation')}</p>
+            <p className="text-sm font-semibold text-white/90">{t(gradientOnly ? 'gradientLibrary.backgroundOnly' : 'common.editorRailReadOnly')}</p>
+            <p className="max-w-xl text-center text-sm text-white/60">{t(gradientOnly ? 'gradientLibrary.backgroundOnlyHint' : 'common.editorReadOnlyExplanation')}</p>
             <button type="button" onClick={() => onOpenInSlides?.(activeSlide.id)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white">{t('common.editorOpenInSlides')}</button>
           </div> : <CanvasStage
-            slideStyles={activeDraft.styles}
+            slideStyles={canvasStyles}
             items={items}
             selectedIds={selectedIds}
             onSelect={handleSelect}
@@ -1088,7 +1060,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
               onClick={closeInspector}
             />
           )}
-          {editable && <aside
+          {(editable || gradientOnly) && <aside
             id="editor-inspector"
             ref={inspectorRef}
             aria-label={t('common.editorInspector')}
@@ -1104,16 +1076,9 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
               inspectorVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'
             )}
           >
-            <button
-              type="button"
-              onClick={closeInspector}
-              className="self-end rounded-lg p-2 text-white/70 lg:hidden focus-visible:ring-2 focus-visible:ring-blue-500"
-              aria-label={t('common.editorCloseInspector')}
-            >
-              <X className="h-4 w-4" aria-hidden="true" />
-            </button>
+            <div className="flex shrink-0 items-center border-b border-white/10">
             <div
-              className="flex items-center gap-1 border-b border-white/10 p-2"
+              className="flex min-w-0 flex-1 items-center gap-1 p-2"
               role="tablist"
               aria-label={t('common.editorInspector')}
             >
@@ -1156,6 +1121,15 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                 </button>
               ))}
             </div>
+            <button
+              type="button"
+              onClick={closeInspector}
+              className="mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/70 lg:hidden focus-visible:ring-2 focus-visible:ring-blue-500"
+              aria-label={t('common.editorCloseInspector')}
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+            </div>
 
             <div
               className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3"
@@ -1167,9 +1141,10 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
             >
               {tab === 'slide' && (
                 <>
+                  {gradientOnly ? <ScopeSelector scope={scope} selectedCount={gradientSelection.length} slideCount={slideOrder.length} onChange={setScope} /> : <>
                   <ScopeSelector
-                    scope={effectiveScope}
-                    selectedCount={selectedSlideIds.length}
+                    scope={scope}
+                    selectedCount={new Set([...selectedSlideIds, ...gradientSelection]).size}
                     slideCount={slideOrder.length}
                     onChange={setScope}
                   />
@@ -1193,8 +1168,12 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                     onGridColorChange={(value) => session.setGridField('gridColor', value)}
                     onSnapToggle={(value) => session.setGridField('snapEnabled', value)}
                   />
-                  <GradientButton slides={(session.buildSavePayload() ?? deck).slides} activeId={activeSlide.id} selectedIds={selectedSlideIds}
-                    onApply={(ids, image, recipe, groupDefault) => session.applyBackground(generatedStyles(image, recipe, groupDefault), ids)} />
+                  </>}
+                  {(activeSlide.type === 'text' || activeSlide.type === 'image') && <GradientDesigner key={activeSlide.id} slideId={activeSlide.id} initial={activeDraft.styles.generatedBackground as import('../../shared/generatedBackground').GeneratedBackground | undefined}
+                    legacy={activeDraft.styles.backgroundGradient as import('../../shared/presentation').GradientStyle | undefined}
+                    canClear={!!(activeDraft.styles.backgroundGradient || activeDraft.styles.generatedBackground)}
+                    onClear={() => { session.applyBackground(styles => ({ backgroundGradient: undefined, ...(styles.generatedBackground ? { generatedBackground: undefined, backgroundImage: undefined, backgroundBlur: 0, generatedGroupBackground: undefined } : {}) }), gradientIds); setGradientPreview(null); }}
+                    targetIds={gradientIds} enabled={active && tab === 'slide'} onPreview={setGradientPreview} onApply={applyGradient} />}
                 </>
               )}
 
@@ -1626,7 +1605,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
           {t('common.editorSelectedSlidesStatus', { count: selectedSlideIds.length })}
         </span>
         {/* Footer */}
-        <footer className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-t border-white/10 bg-[#1e1e1e] px-4 py-2">
+        <footer className="editor-workspace-footer flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-t border-white/10 bg-[#1e1e1e] px-4 py-2">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
             <span className="hidden shrink-0 items-center gap-2 text-xs text-white/40 xl:flex">
               <span>{t('common.editorRailHint')}</span>

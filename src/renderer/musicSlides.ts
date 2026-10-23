@@ -1,5 +1,5 @@
 import { chooseDefaultOutputDisplay, effectiveOutputSlideIndex } from '../shared/displays';
-import { isYouTubeMusicResult } from '../shared/youtubeMusic';
+import { canAttachSlideMusic, isYouTubeMusicResult } from '../shared/youtubeMusic';
 import type { useStore } from './state/useStore';
 import type { Slide } from './types';
 
@@ -25,15 +25,18 @@ function audienceSlide(state: MusicState): Slide | null {
 
 export function activeMusicSlide(state: MusicState): Slide | null {
   const slide = audienceSlide(state);
-  return slide?.type === 'text' && isYouTubeMusicResult(slide.youtubeMusic) ? slide : null;
+  return canAttachSlideMusic(slide ?? undefined) && isYouTubeMusicResult(slide?.youtubeMusic) ? slide : null;
 }
 
 export function hasAudienceOutput(state: MusicState): boolean { return audienceSlide(state) !== null; }
 
+/** Physical audience cue, including slides without music, so metadata edits cannot start audio. */
+export function audienceMusicCue(state: MusicState): string | null { return audienceSlide(state)?.id ?? null; }
+
 export function musicPreparationIds(slides: Slide[], selectedId: string | null, liveIndex: number, liveVideoId?: string): string[] {
   const selected = slides.find(slide => slide.id === selectedId);
   const upcoming = [...slides.slice(liveIndex + 1), ...slides.slice(0, liveIndex + 1)]
-    .find(slide => isYouTubeMusicResult(slide.youtubeMusic) && slide.youtubeMusic.id !== liveVideoId);
-  return [...new Set([selected?.youtubeMusic, upcoming?.youtubeMusic]
+    .find(slide => canAttachSlideMusic(slide) && isYouTubeMusicResult(slide.youtubeMusic) && slide.youtubeMusic.id !== liveVideoId);
+  return [...new Set([selected && canAttachSlideMusic(selected) ? selected.youtubeMusic : undefined, upcoming?.youtubeMusic]
     .filter(isYouTubeMusicResult).map(track => track.id))].filter(id => id !== liveVideoId);
 }

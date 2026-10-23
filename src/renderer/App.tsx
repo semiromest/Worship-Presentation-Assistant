@@ -14,6 +14,7 @@ import {
   PanelRightOpen,
   Settings,
   Paintbrush,
+  Loader2,
 } from 'lucide-react';
 
 import SlideEditor from './SlideEditor';
@@ -66,6 +67,7 @@ import LiveShareModal from './components/LiveShareModal';
 import LiveCaptionsConsole from './components/LiveCaptionsConsole';
 import LiveCaptionsSessionBar from './components/LiveCaptionsSessionBar';
 import Toast from './components/Toast';
+import PptxImportWarnings from './components/PptxImportWarnings';
 
 import { registerTourAnchor, notifyPageVisit } from './components/Tour/tourController';
 
@@ -131,6 +133,8 @@ function RuntimeSync() {
 }
 
 function ControlApp({ commands }: { commands: AppCommands }) {
+  const [pptxWarnings, setPptxWarnings] = useState<string[]>([]);
+  const [pptxImporting, setPptxImporting] = useState(false);
   const { t } = useTranslation();
   const { openLive, closeLive, openOutput, closeOutput, startScreenShare, stopScreenShare } = commands;
   // Layout-only subscriptions. Deck and live state belong to local connectors.
@@ -336,7 +340,7 @@ function ControlApp({ commands }: { commands: AppCommands }) {
             >
           {activeTab === 'presentations' && (
             <div ref={element => registerTourAnchor('page-presentations', element)} className="h-full">
-              <PresentationLibrary operations={operations} />
+              <PresentationLibrary operations={operations} onImportWarnings={setPptxWarnings} onImportingChange={setPptxImporting} />
             </div>
           )}
 
@@ -345,6 +349,10 @@ function ControlApp({ commands }: { commands: AppCommands }) {
               <div className="h-full flex flex-col lg:flex-row">
                 <div className="flex-1 min-w-0 overflow-hidden">
                   <SlideGrid
+                    updateTransition={updateTransition}
+                    moveSelectedSlides={moveSelectedSlides}
+                    deleteSelectedSlides={deleteSelectedSlides}
+                    duplicateSelectedSlides={duplicateSelectedSlides}
                     addSlide={addSlide}
                     reorderSlides={reorderSlides}
                     handleSlideClick={handleSlideClick}
@@ -365,12 +373,10 @@ function ControlApp({ commands }: { commands: AppCommands }) {
                     removeSlideBackgroundVideo={removeSlideBackgroundVideo}
                     applyStyleFieldToAll={applyStyleFieldToAll}
                     handleKeyDown={handleKeyDown}
-                    updateTransition={updateTransition}
                     replaceSlideMedia={replaceSlideMedia}
                     removeSlideMedia={removeSlideMedia}
                     updateLoopItems={updateLoopItems}
                     updateSlideProperty={updateSlideProperty}
-                    onClose={() => { setIsRightPanelOpen(false); playSfx('close'); }}
                 />
                 <button
                   data-testid="right-panel-opener"
@@ -475,12 +481,19 @@ function ControlApp({ commands }: { commands: AppCommands }) {
 
       {/* Undo/Redo Toast */}
       <Toast />
+      {pptxImporting && (
+        <div role="status" aria-live="polite" data-testid="pptx-import-status"
+          className="pointer-events-none fixed bottom-6 left-1/2 z-[90] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-3 rounded-xl border border-blue-400/50 bg-surface-raised px-5 py-4 text-sm font-medium text-white shadow-xl">
+          <Loader2 className="h-5 w-5 shrink-0 animate-spin motion-reduce:animate-none text-blue-400" aria-hidden="true" />
+          <span>PowerPoint · {t('common.importing')}</span>
+        </div>
+      )}
+      <PptxImportWarnings warnings={pptxWarnings} onClose={() => setPptxWarnings([])} />
     </div>
   );
 }
 
 function ProjectorView() {
-  const { t } = useTranslation();
   // Keep the focused output window's existing keyboard behavior (including
   // local mute/Enter); moving the visual branch must not remove its listener.
   const { deleteSelectedSlides, duplicateSelectedSlides } = useSlideOperations();
@@ -496,21 +509,7 @@ function ProjectorView() {
   const isMediaMuted = useStore(s => s.isMediaMuted);
   const outputMode = useStore(s => s.outputMode);
   if (!projectorReady) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center overflow-hidden bg-black">
-        <AnimatedPreview
-          slide={liveSlide}
-          transitionType={transitionType}
-          duration={transitionDuration}
-          size="projector"
-          volume={mediaVolume}
-          muted={isMediaMuted}
-        />
-        <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-white text-sm">
-          {t('common.loading') || 'Yükleniyor...'}
-        </div>
-      </div>
-    );
+    return <div className="fixed inset-0 bg-black" data-projector-loading />;
   }
 
   if (isBlackout) {
@@ -549,7 +548,7 @@ function ProjectorView() {
 
 }
 
-function PresentationLibrary({ operations }: { operations: Operations }) {
+function PresentationLibrary({ operations, onImportWarnings, onImportingChange }: { operations: Operations; onImportWarnings: (warnings: string[]) => void; onImportingChange: (importing: boolean) => void }) {
   const presentation = useStore(s => s.presentation);
   const presets = useStore(s => s.presets);
   const selectedPresetName = useStore(s => s.selectedPresetName);
@@ -558,7 +557,7 @@ function PresentationLibrary({ operations }: { operations: Operations }) {
   return <PresentationsTab
     presentation={presentation} presets={presets} selectedPresetName={selectedPresetName}
     onPresetsChange={setPresets} onApplyPreset={applyPreset} onSelectedPresetNameChange={setSelectedPresetName}
-    onOpenFile={openPresentation} onSaveFile={savePresentation} onImportSlides={handleImportSlides}
+    onOpenFile={openPresentation} onSaveFile={savePresentation} onImportSlides={handleImportSlides} onImportWarnings={onImportWarnings} onImportingChange={onImportingChange}
     onNewPresentation={createNewPresentation} />;
 }
 

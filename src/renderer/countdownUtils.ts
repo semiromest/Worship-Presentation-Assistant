@@ -98,8 +98,8 @@ export const COUNTDOWN_QUICK_PRESETS = [
 ] as const;
 
 export const COUNTDOWN_THEMES = [
-  { id: 'dark', name: 'Karanlık', backgroundColor: '#000000', textColor: '#ffffff' },
-  { id: 'blue', name: 'Mavi', backgroundColor: '#1e3a8a', textColor: '#60a5fa' },
-  { id: 'gold', name: 'Altın', backgroundColor: '#1c1917', textColor: '#f59e0b' },
-  { id: 'clean', name: 'Açık', backgroundColor: '#f8fafc', textColor: '#0f172a' },
+  { id: 'dark', name: 'countdownThemeDark', backgroundColor: '#000000', textColor: '#ffffff' },
+  { id: 'blue', name: 'countdownThemeBlue', backgroundColor: '#1e3a8a', textColor: '#60a5fa' },
+  { id: 'gold', name: 'countdownThemeGold', backgroundColor: '#1c1917', textColor: '#f59e0b' },
+  { id: 'clean', name: 'countdownThemeClean', backgroundColor: '#f8fafc', textColor: '#0f172a' },
 ] as const;

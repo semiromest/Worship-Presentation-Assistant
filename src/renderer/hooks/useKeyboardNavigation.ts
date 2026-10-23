@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { useStore } from '../state/useStore';
 import { playSfx, withSfxOutputTransition } from '../sfx';
 import { resolveKeyboardCommand } from '../keyboardCommands';
+import { getNextPartIndex, getPreviousPartIndex, getSlideDisplayContent } from '../../shared/slideContent';
 
 interface KeyboardNavigationOptions {
   /** Delete selected slides (Delete) */
@@ -82,6 +83,17 @@ export function useKeyboardNavigation(options?: KeyboardNavigationOptions) {
           if (state.activeTab !== command.destination) playSfx('forward');
           setActiveTab(command.destination); notifyPageVisit(command.destination); break;
         case 'move': moveSelectedSlide(command.direction); break;
+        case 'part': {
+          const slide = slides[selectedIdx];
+          if (!slide) break;
+          const next = command.direction === 1 ? getNextPartIndex(slide) : getPreviousPartIndex(slide);
+          if (next === null || next === (slide.activePart ?? 0)) break;
+          const updated = { ...slide, activePart: next };
+          dispatchUndo({ type: 'SET', payload: { ...state.presentation,
+            slides: slides.map(s => s.id === slide.id ? { ...updated, content: getSlideDisplayContent(updated) } : s),
+          } });
+          break;
+        }
         case 'duplicate': onDuplicateSlides?.(); break;
         case 'delete': onDeleteSlides?.(); break;
         case 'mute': { const muted = !state.isMediaMuted; playSfx(muted ? 'toggle-on' : 'toggle-off'); setIsMediaMuted(muted); break; }

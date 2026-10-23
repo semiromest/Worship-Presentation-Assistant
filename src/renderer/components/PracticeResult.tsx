@@ -20,7 +20,9 @@ function ResultSlidePreview({ slide }: { slide: GuideResult['slides'][number] })
     return () => observer.disconnect();
   }, []);
   const scale = Math.min(size.width / PREVIEW_WIDTH, size.height / PREVIEW_HEIGHT);
-  return <div ref={containerRef} className="absolute inset-0 overflow-hidden">
+  // Legacy slides use an empty textColor to inherit the dark app's white text.
+  // Keep that fallback inside the preview rather than inheriting the light guide card.
+  return <div ref={containerRef} className="absolute inset-0 overflow-hidden text-white">
     {scale > 0 && <div className="absolute" style={{
       width: PREVIEW_WIDTH, height: PREVIEW_HEIGHT,
       left: (size.width - PREVIEW_WIDTH * scale) / 2,

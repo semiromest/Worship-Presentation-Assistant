@@ -1,4 +1,6 @@
 import { useListMotion } from './hooks/useListMotion';
+import { Menu } from '@base-ui/react/menu';
+import './PresentationsHeader.css';
 import { useCallback, useMemo, useState, memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as m from 'motion/react-m';
@@ -41,9 +43,8 @@ import { presentationContentKey } from './presentationLibrary';
 // All actions use the same secondary outline style for a quiet, uniform look;
 // wider variants add extra horizontal padding for emphasis.
 const BTN_BASE =
-  'inline-flex items-center gap-2 h-10 rounded-xl text-sm font-medium transition-all active:scale-[0.98] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50 disabled:pointer-events-none';
-const BTN_SECONDARY = `${BTN_BASE} border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] text-white/70 hover:text-white px-4`;
-const BTN_SECONDARY_WIDE = `${BTN_BASE} border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] text-white/70 hover:text-white px-6`;
+  'inline-flex items-center gap-2 min-h-9 rounded-lg text-sm font-medium transition-all active:scale-[0.98] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50 disabled:pointer-events-none';
+const BTN_SECONDARY_WIDE = `${BTN_BASE} workspace-secondary-action px-6`;
 
 type SortOrder = 'newest' | 'oldest' | 'name';
 
@@ -95,6 +96,8 @@ export interface PresentationsTabProps {
   onOpenFile?: () => void;
   onSaveFile?: () => void;
   onImportSlides?: (slides: import('./types').Slide[]) => void;
+  onImportWarnings?: (warnings: string[]) => void;
+  onImportingChange?: (importing: boolean) => void;
   onNewPresentation?: () => void;
 }
 
@@ -206,12 +209,12 @@ const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelet
             }}
             title={t('common.rename')}
             aria-label={t('common.rename')}
-            className="opacity-60 group-hover:opacity-100 focus-visible:opacity-100 transition-all w-7 h-7 rounded-lg hover:bg-white/10 text-white/40 hover:text-white flex items-center justify-center shrink-0"
+            className="opacity-75 group-hover:opacity-100 focus-visible:opacity-100 transition-all w-8 h-8 rounded-lg hover:bg-white/10 text-white/65 hover:text-white flex items-center justify-center shrink-0"
           >
             <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
         </div>
-        <div className="flex items-center gap-3 text-xs text-white/45">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/65">
           <span className="flex items-center gap-1">
             <LayoutGrid className="w-3 h-3" />
             {t('library.slideCount', { count: preset.presentation.slides.length })}
@@ -236,7 +239,7 @@ const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelet
             e.stopPropagation();
             openPreset();
           }}
-          className="flex-1 h-9 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] text-white/70 hover:text-white text-sm font-medium transition-all"
+          className="workspace-secondary-action flex-1 font-medium transition-colors"
         >
           {t('common.openPreset')}
         </button>
@@ -248,7 +251,7 @@ const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelet
           }}
           title={t('common.deletePreset')}
           aria-label={t('common.deletePreset')}
-          className="w-7 h-7 self-center rounded-lg text-white/40 opacity-60 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-red-500/15 hover:text-red-300 text-red-400/70 flex items-center justify-center transition-all"
+          className="w-8 h-8 self-center rounded-lg opacity-75 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-red-500/15 hover:text-red-300 text-red-400/80 flex items-center justify-center transition-colors"
         >
           <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
         </button>
@@ -313,6 +316,8 @@ export default function PresentationsTab({
   onOpenFile,
   onSaveFile,
   onImportSlides,
+  onImportWarnings,
+  onImportingChange,
   onNewPresentation,
 }: PresentationsTabProps) {
   const { t, i18n } = useTranslation();
@@ -325,6 +330,8 @@ export default function PresentationsTab({
   const [isAutosaveOpen, setIsAutosaveOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
+  const [importCount, setImportCount] = useState(0);
   const [importError, setImportError] = useState<string | null>(null);
   const [importDuration, setImportDuration] = useState<number | null>(null);
   const importStartTimeRef = useRef<number>(0);
@@ -361,7 +368,6 @@ export default function PresentationsTab({
   const operationRef = useRef(false);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [savedSnapshot, setSavedSnapshot] = useState<Presentation | null>(null);
-  const setActiveTab = useStore((s) => s.setActiveTab);
   const liveSaveEnabled = useStore((s) => s.liveSaveEnabled);
   const liveSaveLastSaved = useStore((s) => s.liveSaveLastSaved);
   const visiblePresets = useMemo(() => presets.filter((p) => !isLiveSavePreset(p.name)), [presets]);
@@ -580,6 +586,9 @@ export default function PresentationsTab({
     importLoopRef.current = playSfx('processing');
     try {
       setImportError(null);
+      setImportWarnings([]);
+      onImportWarnings?.([]);
+      setImportCount(0);
       setImportDuration(null);
       setIsImporting(true);
       setImportProgress({ current: 0, total: 0 });
@@ -594,6 +603,7 @@ export default function PresentationsTab({
         return;
       }
 
+      onImportingChange?.(true);
       const result: PptxImportResult = await window.electronAPI?.importPptx?.(filePath);
 
       if (!result.success || !result.slides) {
@@ -604,6 +614,9 @@ export default function PresentationsTab({
       importLoopRef.current = null;
 
       const slides = convertPptxToSlides(result);
+      setImportCount(slides.length);
+      setImportWarnings(result.warnings ?? []);
+      onImportWarnings?.(result.warnings ?? []);
 
       if (onImportSlides && slides.length > 0) {
         onImportSlides(slides);
@@ -628,90 +641,96 @@ export default function PresentationsTab({
         setImportDuration(Math.round(duration));
       }
       playSfx('error');
+    } finally {
+      onImportingChange?.(false);
     }
-  }, [onImportSlides, t]);
+  }, [onImportSlides, onImportWarnings, onImportingChange, t]);
 
   return (
     <div ref={motionRoot} className="h-full bg-surface-base text-white overflow-y-auto">
-      <header className="border-b border-white/10 bg-surface-raised">
-        <div className="px-5 py-5 sm:px-6 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-semibold tracking-tight">{t('common.presetsTitle')}</h2>
-            <p className="text-sm text-white/60 mt-1">{t('library.subtitle')}</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {onOpenFile && <button type="button" onClick={onOpenFile} className={BTN_SECONDARY}>
-              <FolderOpen className="w-4 h-4" aria-hidden="true" />{t('common.openFromFile')}
-            </button>}
-            {onNewPresentation && <button type="button" className={BTN_SECONDARY} disabled={isSaving}
+      <header data-guide-anchor="presentations-overview" className="presentations-header border-b border-white/10 bg-surface-raised"
+        onKeyDown={(event) => {
+          const target = event.target as Element;
+          if (target.closest('[role="menu"]') ||
+              ((event.key === 'Enter' || event.key === ' ') && target.closest('button'))) event.stopPropagation();
+        }}>
+        <div className="presentations-header-title">
+          <h2 className="text-xl font-semibold tracking-tight">{t('common.presetsTitle')}</h2>
+          <p className="text-sm text-white/60 mt-0.5">{t('library.subtitle')}</p>
+        </div>
+        <div className="presentations-tools" role="group" aria-label={t('library.tools')}>
+          <div className="presentations-tool-group">
+            {onNewPresentation && <button type="button" className="presentation-action" disabled={isSaving}
               onClick={async () => {
                 if (!saved && !(await confirmDialog(t('library.confirmNew'), { title: t('common.newPresentation') }))) return;
                 onNewPresentation();
-              }}><Plus className="w-4 h-4" aria-hidden="true" />{t('common.newPresentation')}</button>}
+              }}><Plus aria-hidden="true" />{t('common.newPresentation')}</button>}
+            {onOpenFile && <button type="button" onClick={onOpenFile} className="presentation-action">
+              <FolderOpen aria-hidden="true" />{t('common.openFromFile')}
+            </button>}
           </div>
+          <div className="presentations-tool-group">
+            <button type="button" onClick={() => setIsAutosaveOpen(true)} aria-haspopup="dialog" className="presentation-action">
+              <DatabaseBackup aria-hidden="true" />{t('nav.autosaves')}
+            </button>
+            <button ref={driveButtonRef} type="button" onClick={() => { setDrivePanelOpen(true); playSfx('open'); }} aria-haspopup="dialog" aria-expanded={drivePanelOpen} className="presentation-action">
+              <Cloud aria-hidden="true" />Google Drive
+            </button>
+          </div>
+          <Menu.Root>
+            <Menu.Trigger className="presentation-action">
+              <FileUp aria-hidden="true" />{t('library.powerPoint')}<ChevronDown aria-hidden="true" />
+            </Menu.Trigger>
+            <Menu.Portal>
+              <Menu.Positioner side="bottom" align="start" sideOffset={6} className="presentation-ppt-menu">
+                <Menu.Popup className="presentation-ppt-popup" aria-label={t('library.powerPoint')}>
+                  {onImportSlides && <Menu.Item onClick={() => void handleImportPptx()} disabled={isImporting || isExporting} className="presentation-ppt-item">
+                    <FileUp aria-hidden="true" />{isImporting ? t('common.importing') : t('common.importPptx')}
+                  </Menu.Item>}
+                  <Menu.Item onClick={() => void handleExportPptx()} disabled={isExporting || isImporting} className="presentation-ppt-item">
+                    <FileDown aria-hidden="true" />{isExporting ? t('common.exporting') : t('common.exportPptx')}
+                  </Menu.Item>
+                </Menu.Popup>
+              </Menu.Positioner>
+            </Menu.Portal>
+          </Menu.Root>
         </div>
-        <section aria-label={t('library.current')} className="mx-5 mb-4 rounded-2xl border border-blue-400/20 bg-blue-500/[0.05] p-4 sm:mx-6 sm:p-5">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-blue-300 mb-2">{t('library.current')}</p>
+        <section aria-label={t('library.current')} className="presentation-current">
+          <div className="presentation-current-layout">
+            <div className="presentation-current-info">
+              <p className="text-xs font-medium text-blue-300 mb-1">{t('library.current')}</p>
               {isEditingName ? <input ref={nameInputRef} autoFocus type="text" value={draftName}
                 onChange={(e) => setDraftName(e.target.value)} onBlur={commitName}
                 onKeyDown={(e) => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') setIsEditingName(false); }}
-                aria-label={t('common.presetName')}
-                className="w-full max-w-md rounded-lg bg-black/20 border border-blue-400 px-3 py-2 text-lg outline-none" />
-                : <button type="button" onClick={startNameEdit} title={t('common.clickToRename')}
-                    className="flex items-center gap-2 max-w-full text-lg font-semibold text-left rounded focus-visible:ring-2 focus-visible:ring-blue-400">
-                    <span className="truncate">{presentation.name}</span><Pencil className="w-4 h-4 shrink-0 text-white/50" aria-hidden="true" />
+                aria-label={t('common.presetName')} className="presentation-name-input" />
+                : <button type="button" onClick={startNameEdit} title={t('common.clickToRename')} className="presentation-name">
+                    <span className="truncate" title={presentation.name}>{presentation.name}</span><Pencil className="w-4 h-4 shrink-0 text-white/50" aria-hidden="true" />
                   </button>}
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/65" role="status">
-                <span>{t('library.slideCount', { count: presentation.slides.length })}</span>
-                <span className={saved ? 'text-emerald-300' : 'text-amber-200'}>{saved ? t('library.saved') : t('library.unsaved')}</span>
-                <span>{liveSaveEnabled
+              <div className="presentation-current-status" role="status">
+                <span><Layers aria-hidden="true" />{t('library.slideCount', { count: presentation.slides.length })}</span>
+                <span className={saved ? 'text-emerald-300' : 'text-amber-200'}>
+                  {saved ? <ShieldCheck aria-hidden="true" /> : <AlertCircle aria-hidden="true" />}
+                  {saved ? t('library.saved') : t('library.unsaved')}
+                </span>
+                <span><DatabaseBackup aria-hidden="true" />{liveSaveEnabled
                   ? liveSaveLastSaved ? t('library.backupAt', { time: new Date(liveSaveLastSaved).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' }) }) : t('library.backupOn')
                   : t('library.backupOff')}</span>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={() => setActiveTab('slides')} className={BTN_SECONDARY}>
-                <Pencil className="w-4 h-4" aria-hidden="true" />{t('library.continueEditing')}
-              </button>
-              <button data-guide-anchor="save" type="button" onClick={saveCurrentPreset} disabled={isSaving}
-                className={`${BTN_BASE} px-5 bg-blue-600 hover:bg-blue-500 text-white shadow-sm`}>
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Save className="w-4 h-4" aria-hidden="true" />}
+            <div className="presentation-current-actions">
+              <button data-guide-anchor="save" type="button" onClick={saveCurrentPreset} disabled={isSaving} className="presentation-action">
+                {isSaving ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Save aria-hidden="true" />}
                 {isSaving ? t('common.saving') : t('library.save')}
               </button>
+              {onSaveFile && <button type="button" onClick={onSaveFile} className="presentation-action">
+                <HardDrive aria-hidden="true" />{t('library.saveFile')}
+              </button>}
             </div>
           </div>
-          {operationError && <p role="alert" className="mt-3 rounded-lg border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">{operationError}</p>}
         </section>
-        <div className="px-5 pb-4 sm:px-6 flex flex-wrap items-start justify-between gap-2">
-          <details className="group max-w-full">
-            <summary className={`${BTN_SECONDARY} cursor-pointer list-none`}>
-              <FileUp className="w-4 h-4" aria-hidden="true" />{t('library.fileTools')}
-              <ChevronDown className="w-4 h-4 group-open:rotate-180" aria-hidden="true" />
-            </summary>
-            <div className="flex flex-wrap gap-2 mt-3 p-3 border border-white/10 rounded-xl bg-black/10">
-              {onSaveFile && <button type="button" onClick={onSaveFile} className={BTN_SECONDARY}>
-                <HardDrive className="w-4 h-4" aria-hidden="true" />{t('common.saveToFile')}
-              </button>}
-              {onImportSlides && <button type="button" onClick={handleImportPptx} disabled={isImporting || isExporting} className={BTN_SECONDARY}>
-                <FileUp className="w-4 h-4" aria-hidden="true" />{isImporting ? t('common.importing') : t('common.importPptx')}
-              </button>}
-              <button type="button" onClick={handleExportPptx} disabled={isExporting || isImporting} className={BTN_SECONDARY}>
-                <FileDown className="w-4 h-4" aria-hidden="true" />{isExporting ? t('common.exporting') : t('common.exportPptx')}
-              </button>
-            </div>
-          </details>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => setIsAutosaveOpen(true)} aria-haspopup="dialog" className={BTN_SECONDARY}>
-              <DatabaseBackup className="w-4 h-4" aria-hidden="true" />{t('nav.autosaves')}
-            </button>
-            <button ref={driveButtonRef} type="button" onClick={() => { setDrivePanelOpen(true); playSfx('open'); }} aria-haspopup="dialog" aria-expanded={drivePanelOpen} className={BTN_SECONDARY}>
-              <Cloud className="w-4 h-4" aria-hidden="true" />Google Drive
-            </button>
-          </div>
-        </div>
-        {(isImporting || isExporting) && <p role="status" className="px-6 pb-3 text-sm text-blue-300">
+        <div className="presentation-header-notices">
+          {operationError && <p role="alert" className="rounded-lg border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">{operationError}</p>}
+        {((isImporting && !onImportingChange) || isExporting) && <p role="status" className="px-6 pb-3 text-sm text-blue-300">
           {isImporting ? t('common.importing') : t('common.exporting')}{' '}
           {isImporting && importProgress.total > 0 && `${importProgress.current}/${importProgress.total}`}
           {isExporting && exportProgress.total > 0 && `${exportProgress.current}/${exportProgress.total}`}
@@ -725,22 +744,31 @@ export default function PresentationsTab({
                     <Timer className="w-4 h-4 text-emerald-400" aria-hidden="true" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-emerald-300 font-medium">{t('common.importComplete')}</p>
+                    <p className="text-sm text-emerald-300 font-medium">{t(importWarnings.length ? 'common.importCompleteWithWarnings' : 'common.importComplete')}</p>
                     <p className="text-xs text-emerald-200/70 mt-0.5">
                       {t('common.importSlidesCount', {
-                        count: importProgress.total,
+                        count: importCount,
                         duration: formatDuration(importDuration),
                       })}
                     </p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setImportDuration(null)}
+                    onClick={() => { setImportDuration(null); setImportWarnings([]); }}
                     className="text-emerald-400 hover:text-emerald-300 shrink-0"
                     aria-label={t('common.clearSearch')}
                   >
                     <X className="w-4 h-4" aria-hidden="true" />
                   </button>
+                </div>
+              )}
+
+              {importWarnings.length > 0 && !onImportWarnings && !importError && (
+                <div role="status" className="rounded-lg border border-amber-400/30 bg-amber-500/10 p-3 text-sm text-amber-100">
+                  <p>{t('common.importReviewWarnings')}</p>
+                  <ul className="mt-2 list-disc pl-5 space-y-1 break-words">
+                    {importWarnings.map((warning, index) => <li key={index}>{warning}</li>)}
+                  </ul>
                 </div>
               )}
 
@@ -840,6 +868,7 @@ export default function PresentationsTab({
             </div>
           )}
         </div>
+        </div>
       </header>
 
       <Dialog open={isAutosaveOpen} onClose={() => setIsAutosaveOpen(false)} labelledBy="autosave-title"
@@ -918,7 +947,7 @@ export default function PresentationsTab({
       </Dialog>
 
       <div className="flex flex-col min-h-0">
-        <div className="flex-shrink-0 p-5 pb-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex-shrink-0 px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-semibold flex items-center gap-2">
               <LayoutGrid className="w-4 h-4 text-blue-400" aria-hidden="true" />
@@ -930,13 +959,13 @@ export default function PresentationsTab({
             </p>
           </div>
 
-          <div className="flex items-center gap-2 w-full xl:w-auto">
+          <div className="flex min-w-0 flex-1 basis-80 flex-wrap items-center justify-end gap-2 sm:max-w-lg">
             <div className="relative shrink-0">
               <select
                 value={sortOrder}
                 onChange={(e) => setSortOrder(e.target.value as SortOrder)}
                 aria-label={t('common.sortBy')}
-                className="h-10 rounded-xl bg-white/[0.04] border border-white/10 text-sm text-white/70 outline-none focus:border-blue-500/30 transition-all pl-3 pr-9 appearance-none cursor-pointer"
+                className="h-10 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-white/70 outline-none focus-visible:ring-2 focus-visible:ring-blue-400 transition-all pl-3 pr-9 appearance-none cursor-pointer"
               >
                 <option value="newest" className="bg-surface-overlay text-white">
                   {t('common.sortNewest')}
@@ -954,15 +983,15 @@ export default function PresentationsTab({
               />
             </div>
 
-            <div className="relative w-full xl:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25" aria-hidden="true" />
+            <div className="relative min-w-0 flex-1 basis-40">
+              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/55" aria-hidden="true" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t('common.searchPresets')}
                 aria-label={t('common.searchPresets')}
-                className="w-full h-10 pl-10 pr-9 rounded-xl bg-white/[0.04] border border-white/10 text-sm outline-none focus:border-blue-500/30 transition-all placeholder:text-white/25"
+                className="workspace-search-input transition-colors"
               />
               {searchQuery && (
                 <button
@@ -978,13 +1007,13 @@ export default function PresentationsTab({
           </div>
         </div>
 
-        <div className="p-5 pt-1">
+        <div className="px-4 sm:px-5 pb-4 pt-1">
           {visiblePresets.length === 0 ? (
             <EmptyLibrary onSave={saveCurrentPreset} />
           ) : sortedPresets.length === 0 ? (
             <EmptySearch onClear={clearSearch} />
           ) : (
-            <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))' }}>
                 {sortedPresets.map((preset) => (
                   <PresetCard
                     key={preset.name}

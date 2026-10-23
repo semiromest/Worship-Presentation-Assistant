@@ -204,42 +204,6 @@ export const SlideSettingsPanel = memo(function SlideSettingsPanel({
         />
       </label>
 
-      {/* Gradient */}
-      <div className="space-y-1">
-        <span className="block text-[10px] uppercase tracking-wide text-white/40">
-          {t('common.editorBgGradient')}
-        </span>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() =>
-              onChange({
-                backgroundGradient: {
-                  type: 'linear',
-                  angle: 90,
-                  stops: [
-                    { color: '#000000', position: 0 },
-                    { color: '#1f2937', position: 100 },
-                  ],
-                },
-              })
-            }
-            className="flex-1 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/70 transition hover:bg-black/30"
-          >
-            {t('common.editorAddGradient')}
-          </button>
-          {!!styles.backgroundGradient && (
-            <button
-              type="button"
-              onClick={() => onChange({ backgroundGradient: undefined })}
-              className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/60 transition hover:bg-black/30"
-            >
-              {t('common.editorRemove')}
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* Grid & Snap settings */}
       {onGridToggle && (
         <div className="space-y-2 pt-1">

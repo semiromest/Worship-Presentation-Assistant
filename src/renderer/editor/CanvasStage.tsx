@@ -312,7 +312,7 @@ export function CanvasStage({
   // The onDrag/onResize/onRotate callbacks are typed to match CanvasItem's expectations
 
   return (
-    <div className="flex min-w-0 flex-1 items-center justify-center bg-[#0a0a0a] p-3 lg:p-6 overflow-hidden">
+    <div className="isolate flex min-w-0 flex-1 items-center justify-center bg-[#0a0a0a] p-3 lg:p-6 overflow-hidden">
       <div
         ref={outerRef}
         className="relative w-full max-w-5xl select-none touch-none overflow-clip rounded-2xl border border-white/10 bg-black shadow-2xl"
@@ -332,6 +332,7 @@ export function CanvasStage({
         >
           {/* Background */}
           <div
+            data-testid="editor-canvas-background"
             className="absolute inset-0"
             style={{
               backgroundColor: bgColor,

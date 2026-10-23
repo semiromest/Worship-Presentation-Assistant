@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { canAttachSlideMusic, slideMusicAutoPlay } from '../shared/youtubeMusic';
 import assert from 'node:assert/strict';
 import { activeMusicSlide, musicPreparationIds } from './musicSlides';
 import { computePatch, applyProjectorPatch } from './state/undoReducer';
@@ -90,4 +91,37 @@ test('presets retain typography and clamp optional legacy settings safely', () =
   assert.equal(backgroundDim(1), 0.8);
   assert.equal(musicGain(undefined), 1);
   assert.equal(musicGain(-1), 0);
+});
+
+test('attachments support visual slides but exclude all hymn variants, video and screen sources', () => {
+  const base = fixture().presentation.slides[0];
+  for (const type of ['text', 'image', 'countdown', 'captions', 'loop'] as const)
+    assert.equal(canAttachSlideMusic({ ...base, type }), true);
+  assert.equal(canAttachSlideMusic({ ...base, group: { id: 'bible', title: 'Genesis', part: 1, parts: 2 } }), true);
+  for (const slide of [
+    { ...base, type: 'video' as const }, { ...base, type: 'screen' as const },
+    { ...base, partsMode: true }, { ...base, parts: ['a', 'b'] },
+    { ...base, group: { id: 'h', title: 'Hymn', part: 1, parts: 1, kind: 'hymn' as const } },
+    { ...base, group: { id: 'h', title: 'Hymn', part: 1, parts: 1, color: '#abc' } },
+    { ...base, styles: { fontSize: 48, textColor: '#fff', backgroundColor: '#000', backgroundVideo: 'video.mp4' } },
+    { ...base, type: 'loop' as const, loopItems: [{ id: 'v', type: 'video' as const, mediaUrl: 'v.mp4', duration: 10 }] },
+  ]) {
+    assert.equal(canAttachSlideMusic(slide), false);
+    const state = fixture();state.outputAssignments.tv.isOpen = true;state.presentation.slides[0] = { ...slide, youtubeMusic: state.presentation.slides[1].youtubeMusic };
+    assert.equal(activeMusicSlide(state), null);
+  }
+});
+
+test('autoplay is opt-in for attachments, preserves legacy music, and persists through deltas', () => {
+  const slide = fixture().presentation.slides[1];
+  assert.equal(slideMusicAutoPlay(slide), true);
+  assert.equal(slideMusicAutoPlay({ ...slide, musicSettings: { attachment: true } }), false);
+  for (const autoPlay of [true, false]) {
+    const previous = fixture().presentation;
+    const next = structuredClone(previous);next.slides[1].musicSettings = { attachment: true, autoPlay, volume: 0.4 };
+    assert.equal(slideMusicAutoPlay(next.slides[1]), autoPlay);
+    const patch = computePatch(previous, next);
+    const actual = applyProjectorPatch(previous, { slidesPatch: patch.slidesPatch.map(({ id, nextSlide }) => ({ id, nextSlide })) });
+    assert.deepEqual(JSON.parse(JSON.stringify(actual)).slides[1].musicSettings, { attachment: true, autoPlay, volume: 0.4 });
+  }
 });

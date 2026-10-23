@@ -344,7 +344,7 @@ export default function CountdownSlideEditor({
                 color: theme.textColor,
               }}
             >
-              {t(`common.${theme.name}` as any)}
+              {t(`common.${theme.name}`)}
             </button>
           ))}
         </div>

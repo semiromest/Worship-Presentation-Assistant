@@ -43,6 +43,8 @@ const THUMB_CACHE_LIMIT = 800;
 
 const MIN_CARD_WIDTH = 320;
 const GRID_GAP = 8;
+// Keep the card and virtual row heights stable as the preview fills its column.
+const CARD_PREVIEW_HEIGHT = 180;
 const CARD_HEIGHT = 228;
 const ROW_HEIGHT = CARD_HEIGHT + GRID_GAP;
 const OVERSCAN_ROWS = 2;
@@ -685,16 +687,12 @@ const MediaCard = memo(function MediaCard({
   const pillBg = isImage ? 'rgba(184,134,11,0.85)' : 'rgba(106,79,200,0.85)';
   return (
     <div
-      onClick={() => onToggleSelect(item.id)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onToggleSelect(item.id);
-        }
+      className="group relative rounded-lg border overflow-hidden media-card"
+      onKeyDown={(event) => {
+        // Let the focused button activate natively without also navigating or
+        // sending a slide through the global operator shortcuts.
+        if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
       }}
-      className="group rounded-lg border overflow-hidden cursor-pointer media-card"
-      role="button"
-      tabIndex={0}
       style={{
         height: CARD_HEIGHT,
         contain: 'layout paint style',
@@ -704,7 +702,15 @@ const MediaCard = memo(function MediaCard({
         background: selected ? (isImage ? 'rgba(184,134,11,0.15)' : 'rgba(106,79,200,0.15)') : undefined,
       }}
     >
-      <div className="relative h-[180px] bg-black overflow-hidden" style={{ aspectRatio: `${MIN_CARD_WIDTH} / 180` }}>
+      <button
+        type="button"
+        onClick={() => onToggleSelect(item.id)}
+        aria-label={item.name}
+        aria-pressed={selected}
+        title={item.name}
+        className="absolute inset-0 z-10 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400"
+      />
+      <div className="pointer-events-none relative w-full bg-black overflow-hidden" style={{ height: CARD_PREVIEW_HEIGHT }}>
         {thumbUrl ? (
           <img
             src={thumbUrl}
@@ -753,32 +759,34 @@ const MediaCard = memo(function MediaCard({
           <div className="absolute top-1 right-1 w-5 h-5 rounded-full border-2 border-white/0 group-hover:border-white/50 flex items-center justify-center" />
         )}
       </div>
-      <div className="flex items-center gap-1 px-2 py-1.5 bg-black/30" style={{ height: CARD_HEIGHT - 180 - 2 }}>
-        <span className="text-[10px] text-white/45 font-semibold flex-1 min-w-0 truncate" title={item.name}>
+      <div className="pointer-events-none flex items-center gap-1 px-2 py-1.5 bg-black/30" style={{ height: CARD_HEIGHT - CARD_PREVIEW_HEIGHT - 2 }}>
+        <span className="text-xs text-white/70 font-medium flex-1 min-w-0 truncate" title={item.name}>
           {item.name}
         </span>
         <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation();
             onAdd(item, thumbUrl);
           }}
-          className="w-7 h-7 flex items-center justify-center rounded border border-white/[0.13] bg-white/[0.06] text-white/55 hover:bg-amber-500 hover:text-white hover:border-transparent transition-colors shrink-0"
+          className="pointer-events-auto relative z-20 w-8 h-8 flex items-center justify-center rounded border border-white/[0.13] bg-white/[0.06] text-white/70 hover:bg-amber-500 hover:text-white hover:border-transparent transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
           data-guide-anchor={item.name === 'practice-image.svg' ? 'media-add' : undefined}
           title={t('common.mediaAddToSlide')}
           aria-label={t('common.mediaAddToSlide')}
         >
-          <Plus size={11} aria-hidden="true" />
+          <Plus size={14} aria-hidden="true" />
         </button>
         <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation();
             onRemove(item.id);
           }}
-          className="w-7 h-7 flex items-center justify-center rounded border border-white/[0.13] bg-white/[0.06] text-white/55 hover:bg-red-600 hover:text-white hover:border-transparent transition-colors shrink-0"
+          className="pointer-events-auto relative z-20 w-8 h-8 flex items-center justify-center rounded border border-white/[0.13] bg-white/[0.06] text-white/70 hover:bg-red-600 hover:text-white hover:border-transparent transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
           title={t('common.mediaRemove')}
           aria-label={t('common.mediaRemove')}
         >
-          <Trash2 size={11} aria-hidden="true" />
+          <Trash2 size={14} aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -1207,7 +1215,7 @@ export default function MediaLoopTab({
         <div
           role="tablist"
           aria-label={t('common.mediaTabs')}
-          className="flex items-center gap-1.5 p-1 rounded-xl bg-white/[0.03] border border-white/[0.06]"
+          className="inline-flex max-w-full flex-wrap items-center gap-1 p-1 rounded-lg bg-white/[0.03] border border-white/[0.06]"
         >
           <button
             role="tab"
@@ -1216,7 +1224,7 @@ export default function MediaLoopTab({
             aria-controls="media-panel"
             onClick={() => { if (activeSub !== 'media') { setActiveSub('media'); playSfx('swipe'); } }}
             className={cn(
-              'relative isolate flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-colors',
+              'relative isolate min-h-9 min-w-0 flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
               activeSub === 'media'
                 ? 'text-white shadow-lg shadow-blue-900/30'
                 : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'
@@ -1245,7 +1253,7 @@ export default function MediaLoopTab({
             aria-controls="loop-panel"
             onClick={() => { if (activeSub !== 'loop') { setActiveSub('loop'); playSfx('swipe'); } }}
             className={cn(
-              'relative isolate flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-colors',
+              'relative isolate min-h-9 min-w-0 flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
               activeSub === 'loop'
                 ? 'text-white shadow-lg shadow-blue-900/30'
                 : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'
@@ -1277,11 +1285,11 @@ export default function MediaLoopTab({
           aria-labelledby="media-tab"
           className="ui-fade-enter flex flex-col flex-1 overflow-hidden"
         >
-          <div className="shrink-0 px-3 py-2.5 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+          <div className="shrink-0 px-3 py-2.5 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
               <div className="flex items-center gap-1.5">
                 <Film className="w-3 h-3 text-amber-500" />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-white/45">
+                <span className="text-sm font-semibold text-white/80">
                   {t('common.mediaLibrary')}
                 </span>
               </div>
@@ -1289,33 +1297,33 @@ export default function MediaLoopTab({
                 <>
                   <button
                     onClick={handleAddSelected}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black text-[10px] font-bold uppercase tracking-wider transition-all"
+                    className="inline-flex min-h-9 max-w-full items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                   >
-                    <Plus size={11} /> Seçilenleri Slayta Ekle ({selectedIds.length})
+                    <Plus size={14} className="shrink-0" aria-hidden="true" /> {t('common.mediaAddSelected', { count: selectedIds.length })}
                   </button>
                   <button
                     onClick={clearSelection}
-                    className="text-[10px] text-white/30 hover:text-white/60 transition-colors px-1"
+                    className="min-h-9 px-2 rounded-lg text-sm text-white/65 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                   >
-                    Seçimi Temizle
+                    {t('common.mediaClearSelection')}
                   </button>
                 </>
               ) : (
                 mediaItems.length > 0 && (
                   <button
                     onClick={handleAddAllMediaClick}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.08] text-[10px] font-bold uppercase tracking-wider text-white/40 hover:text-white/70 transition-all"
+                    className="workspace-secondary-action max-w-full transition-colors"
                   >
-                    <Plus size={11} /> Tümünü Slayta Ekle
+                    <Plus size={14} className="shrink-0" aria-hidden="true" /> {t('common.mediaAddAll')}
                   </button>
                 )
               )}
             </div>
-            <div ref={menuRef} className="relative">
+            <div ref={menuRef} className="relative shrink-0">
               <button
                 data-guide-anchor="media-menu"
                 onClick={() => { setMenuOpen(!menuOpen); playSfx(menuOpen ? 'close' : 'open'); }}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] text-[11px] font-bold uppercase tracking-wider transition-all"
+                className="workspace-secondary-action transition-colors"
               >
                 <Plus size={13} /> {t('common.mediaAdd')} <ChevronDown size={12} className="opacity-60" />
               </button>
@@ -1506,7 +1514,7 @@ export default function MediaLoopTab({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <Repeat className="w-3 h-3 text-amber-400" />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-white/45">
+                <span className="text-sm font-semibold text-white/80">
                   {t('common.loopTitle')}
                 </span>
               </div>
@@ -1515,7 +1523,8 @@ export default function MediaLoopTab({
                   onClick={addLoopFiles}
                   disabled={isLoading}
                   title={t('common.loopAddMedia')}
-                  className="flex items-center justify-center w-7 h-7 rounded border bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/20 disabled:opacity-40 transition-colors"
+                  aria-label={t('common.loopAddMedia')}
+                  className="flex items-center justify-center w-8 h-8 rounded-lg border bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/20 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   {isLoading ? (
                     <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
@@ -1527,23 +1536,25 @@ export default function MediaLoopTab({
                   onClick={clearLoop}
                   disabled={loopItems.length === 0}
                   title={t('common.loopClearAll')}
-                  className="flex items-center justify-center w-7 h-7 rounded border bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/20 disabled:opacity-40 transition-colors"
+                  aria-label={t('common.loopClearAll')}
+                  className="flex items-center justify-center w-8 h-8 rounded-lg border bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/20 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Clock className="w-3 h-3 text-zinc-600 shrink-0" />
-              <label className="text-[10px] text-zinc-500 shrink-0">{t('common.loopDefaultDuration')}</label>
+            <div className="flex flex-wrap items-center gap-2">
+              <Clock className="w-3.5 h-3.5 text-white/55 shrink-0" aria-hidden="true" />
+              <label htmlFor="loop-default-duration" className="text-sm text-white/65">{t('common.loopDefaultDuration')}</label>
               <div className="flex items-center gap-1 ml-auto">
                 <input
+                  id="loop-default-duration"
                   type="number"
                   min={1}
                   max={300}
                   value={defaultDuration}
                   onChange={handleDefaultDuration}
-                  className="w-14 bg-zinc-900 border border-zinc-700 rounded px-2 py-0.5 text-xs text-white text-center font-mono focus:outline-none focus:border-amber-500/70 transition-colors"
+                  className="min-h-9 w-16 bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-sm text-white text-center font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 transition-colors"
                 />
                 <span className="text-[10px] text-zinc-500 select-none">s</span>
               </div>

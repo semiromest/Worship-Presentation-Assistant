@@ -4,7 +4,8 @@ export interface GeneratedBackground {
   seed: number;
   colors: string[];
   palette: string;
-  style: 'soft' | 'flow';
+  style: 'soft' | 'flow' | 'linear';
+  angle?: number;
   darkness: number;
   width: 1920;
   height: 1080;
@@ -24,11 +25,23 @@ export const GRADIENT_PALETTES = {
 
 export function validateGradient(value: unknown): GeneratedBackground {
   const r = value as GeneratedBackground;
+  if (r?.angle !== undefined && (!Number.isInteger(r.angle) || r.angle < 0 || r.angle > 360)) {
+    throw new Error('Invalid gradient angle');
+  }
+  if (r?.style === 'linear' && r.motion?.enabled) throw new Error('Linear gradients are static');
   if (r?.motion?.type !== undefined && !['flow', 'aurora', 'waves', 'fog'].includes(r.motion.type)) {
     throw new Error('Invalid gradient animation');
   }
-  if (r?.motion && (typeof r.motion.enabled !== 'boolean' || !Number.isInteger(r.motion.speed) ||
-    r.motion.speed < 1 || r.motion.speed > 100 || !Number.isInteger(r.motion.amount) || r.motion.amount < 1 || r.motion.amount > 100)) {
+  if (
+    r?.motion &&
+    (typeof r.motion.enabled !== 'boolean' ||
+      !Number.isInteger(r.motion.speed) ||
+      r.motion.speed < 1 ||
+      r.motion.speed > 100 ||
+      !Number.isInteger(r.motion.amount) ||
+      r.motion.amount < 1 ||
+      r.motion.amount > 100)
+  ) {
     throw new Error('Invalid gradient motion');
   }
   if (
@@ -42,11 +55,11 @@ export function validateGradient(value: unknown): GeneratedBackground {
     !Number.isInteger(r.darkness) ||
     r.darkness < 0 ||
     r.darkness > 85 ||
-    !['soft', 'flow'].includes(r.style) ||
+    !['soft', 'flow', 'linear'].includes(r.style) ||
     typeof r.palette !== 'string' ||
     r.palette.length > 32 ||
     !Array.isArray(r.colors) ||
-    r.colors.length !== 4 ||
+    r.colors.length !== (r.style === 'linear' ? 2 : 4) ||
     !r.colors.every((c) => /^#[0-9a-f]{6}$/i.test(c))
   ) {
     throw new Error('Invalid gradient recipe');
@@ -60,6 +73,7 @@ export function validateGradient(value: unknown): GeneratedBackground {
     palette: r.palette,
     style: r.style,
     darkness: r.darkness,
+    ...(r.style === 'linear' ? { angle: r.angle ?? 90 } : {}),
     ...(r.motion ? { motion: { ...r.motion } } : {}),
   };
 }
@@ -90,6 +104,22 @@ export function renderGradient(input: GeneratedBackground): Uint8Array {
   const r = validateGradient(input);
   const colors = r.colors.map((c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)));
   const data = new Uint8Array(r.width * r.height * 4);
+  if (r.style === 'linear') {
+    // Match CSS linear-gradient: 0° points up, 90° points right.
+    const radians = ((r.angle ?? 90) * Math.PI) / 180;
+    const dx = Math.sin(radians),
+      dy = -Math.cos(radians);
+    const span = Math.abs(r.width * dx) + Math.abs(r.height * dy);
+    const shade = (100 - r.darkness) / 100;
+    for (let y = 0; y < r.height; y++)
+      for (let x = 0; x < r.width; x++) {
+        const t = Math.max(0, Math.min(1, 0.5 + ((x + 0.5 - r.width / 2) * dx + (y + 0.5 - r.height / 2) * dy) / span));
+        const i = (y * r.width + x) * 4;
+        for (let c = 0; c < 3; c++) data[i + c] = Math.round((colors[0][c] * (1 - t) + colors[1][c] * t) * shade);
+        data[i + 3] = 255;
+      }
+    return data;
+  }
   // Compute a smooth field on a fixed 241 × 136 lattice, then interpolate explicitly.
   const gw = 241,
     gh = 136;

@@ -40,6 +40,7 @@ async function main() {
     },
     bundle: true,
     format: 'iife',
+    outfile: path.join(root, 'harness.js'),
     write: false,
     define: { 'import.meta.env.DEV': 'false' },
   });
@@ -110,21 +111,23 @@ async function main() {
       console.log('Window ready');
       await page.waitForLoadState('domcontentloaded');
       await page.addStyleTag({ content: css });
-      await page.addScriptTag({ content: bundle.outputFiles[0].text });
+      await page.addScriptTag({ content: bundle.outputFiles.find((file) => file.path.endsWith('.js')).text });
       await page.evaluate(({ deck, advanced }) => window.mountGradient(deck, advanced), { deck, advanced });
-      await expect(page.getByRole('button', { name: 'Create gradient', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Generate again', exact: true })).toBeVisible();
       const bg = await page
         .getByTestId('regression-item-background')
         .locator('[style*="background-image"]')
         .first()
         .evaluate((el) => getComputedStyle(el).backgroundImage);
       expect(bg).toContain('data:image/jpeg');
-      await page.getByRole('button', { name: 'Create gradient', exact: true }).click();
-      await expect(page.getByText(/Minimum contrast:/)).toBeVisible({ timeout: 30000 });
+      await page.getByRole('button', { name: 'Generate again', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Apply to draft · 2 slides', exact: true })).toBeEnabled({
+        timeout: 30000,
+      });
       const mediaDir = path.join(await app.evaluate(({ app }) => app.getPath('userData')), 'media');
       const before = await fs.readdir(mediaDir).catch(() => []);
       expect(before).toHaveLength(0);
-      const apply = page.getByRole('button', { name: 'Apply (2 slides)', exact: true });
+      const apply = page.getByRole('button', { name: 'Apply to draft · 2 slides', exact: true });
       await expect(apply).toBeEnabled();
       const image = await page
         .getByTestId('gradient-preview')
@@ -133,7 +136,7 @@ async function main() {
         .evaluate((el) => el.style.backgroundImage);
       await page.screenshot({ path: path.join(root, `panel-${advanced ? 'advanced' : 'simple'}.png`) });
       await apply.click();
-      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expect.poll(() => page.evaluate(() => window.gradientHarness.past)).toBe(1);
       const applied = await page.evaluate(() => window.gradientHarness.read());
       expect(applied.slides[0].styles.backgroundImage).toBe(applied.slides[1].styles.backgroundImage);
       expect(applied.slides[1].partsMode).toBe(true);
@@ -165,9 +168,11 @@ async function main() {
         bytes: bytes.length,
       });
       // Cancel never writes a second asset.
-      await page.getByRole('button', { name: 'Create gradient', exact: true }).click();
-      await expect(page.getByText(/Minimum contrast:/)).toBeVisible({ timeout: 30000 });
-      await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await page.getByRole('button', { name: 'Generate again', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Apply to draft · 2 slides', exact: true })).toBeEnabled({
+        timeout: 30000,
+      });
+      await page.evaluate(() => window.gradientHarness.cancelPreview());
       expect((await fs.readdir(mediaDir)).length).toBe(1);
     } catch (error) {
       console.error('Integration failure', error);

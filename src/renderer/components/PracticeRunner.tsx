@@ -33,7 +33,7 @@ function findGuideTarget(step: GuideStep, sample?: string, peer?: string): HTMLE
   switch (step) {
     case 'welcome':
     case 'done': return null;
-    case 'presentations': return getTourAnchor('page-presentations');
+    case 'presentations': return anchor('presentations-overview');
     case 'sidebar': return getTourAnchor('sidebar');
     case 'delete': return anchor('delete-slide');
     case 'editor-select': return peer ? document.querySelector<HTMLElement>(`[data-editor-item-id="${CSS.escape(peer)}"]`) : null;

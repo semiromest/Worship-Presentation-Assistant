@@ -1,6 +1,6 @@
-import { ipcMain, BrowserWindow } from 'electron';
+import { ipcMain, BrowserWindow, type IpcMainInvokeEvent, type WebContents } from 'electron';
 import { SonioxNodeClient, type RealtimeSttSession } from '@soniox/node';
-import crypto from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { CaptionTimeline } from '../shared/captions';
 import { SttSessionGroup, finishSttSession } from './sttSessionGroup';
 import { getApiKey as keyStoreGetApiKey, hasApiKey as keyStoreHasApiKey, keyHint as keyStoreKeyHint, setApiKey as keyStoreSetApiKey, deleteApiKey as keyStoreDeleteApiKey } from './sonioxKeyStore';
@@ -10,22 +10,43 @@ const MODEL = 'stt-rt-v5';
 const MAX_ENDPOINT_DELAY_MS = 800;
 const ENDPOINT_LATENCY_ADJUSTMENT_LEVEL = 1;
 const ENDPOINT_SENSITIVITY = 0;
-
+const CONNECT_TIMEOUT_MS = 15_000;
+const FINISH_TIMEOUT_MS = 3_000;
+/** Altyazı anlık görüntüleri en sık bu aralıkla yayımlanır (ilk olay hemen gider). */
+const CAPTION_PUBLISH_INTERVAL_MS = 33;
+/** 16 kHz s16 mono için ~32 sn; bunun üstü hatalı istemci demektir. */
+const MAX_AUDIO_CHUNK_BYTES = 1024 * 1024;
+const MAX_API_KEY_LENGTH = 512;
 const ORIGINAL_KEY = '__original__';
 
-const sessions = new Map<string, RealtimeSttSession>();
-let sessionId: string | null = null;
-let sessionConfig: SttSessionConfig | null = null;
-let sessionState: SttSessionStatus = 'idle';
-let audioSenderId: number | null = null;
-let audioGroup: SttSessionGroup | null = null;
+const ERROR_CODES = new Map<string, SttErrorCode>([
+  ['auth_error', 'INVALID_API_KEY'],
+  ['quota_exceeded', 'QUOTA_EXCEEDED'],
+  ['connection_error', 'CONNECTION_FAILED'],
+  ['network_error', 'CONNECTION_FAILED'],
+]);
+const mapErrorCode = (code?: string): SttErrorCode => ERROR_CODES.get(code ?? '') ?? 'UNKNOWN';
+
+const isLanguage = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
+
+type StartResult = { ok: boolean; code?: SttErrorCode; message?: string };
+
+/** Canlı oturuma ait tüm durum tek yerde; `run === null` boşta demektir. */
+interface Run {
+  id: string;
+  config: SttSessionConfig;
+  sessions: Map<string, RealtimeSttSession>;
+  group: SttSessionGroup;
+  /** Ses kabul edilen pencere; durdurma başlayınca null olur. */
+  senderId: number | null;
+  connectTimer: ReturnType<typeof setTimeout> | undefined;
+}
+
+let run: Run | null = null;
+let state: SttSessionStatus = 'idle';
 let timeline: CaptionTimeline | null = null;
 let stopping: Promise<void> | null = null;
 let closing = false;
-let connectTimer: ReturnType<typeof setTimeout> | undefined;
-function publishCaptions(): void {
-  if (timeline) broadcast({ type: 'captions', sessionId, captions: timeline.snapshot() });
-}
 
 function broadcast(event: SttEvent): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -33,89 +54,122 @@ function broadcast(event: SttEvent): void {
   }
 }
 
-function mapErrorCode(code?: string): SttErrorCode {
-  if (code === 'auth_error') return 'INVALID_API_KEY';
-  if (code === 'quota_exceeded') return 'QUOTA_EXCEEDED';
-  if (code === 'connection_error' || code === 'network_error') return 'CONNECTION_FAILED';
-  return 'UNKNOWN';
+// ─── Altyazı yayını ─────────────────────────────────────────
+// Olay tam anlık görüntü taşıdığı için ara değerler atlanabilir: aralık dolmadan gelen olaylar
+// tek bir sonraki gönderimde birleşir. Durum değiştiren yollar (başlat/durdur/hata/temizle) hemen yayımlar.
+let lastPublish = 0;
+let publishTimer: ReturnType<typeof setTimeout> | undefined;
+
+function flushCaptions(): void {
+  clearTimeout(publishTimer);
+  publishTimer = undefined;
+  lastPublish = Date.now();
+  if (timeline) broadcast({ type: 'captions', sessionId: run?.id ?? null, captions: timeline.snapshot() });
 }
 
-function sanitize(message: string): string {
-  const key = keyStoreGetApiKey();
-  return key ? message.split(key).join('[redacted]') : message;
+function publishCaptions(): void {
+  if (!timeline || publishTimer) return; // bekleyen gönderim en güncel durumu taşıyacak
+  const wait = lastPublish + CAPTION_PUBLISH_INTERVAL_MS - Date.now();
+  if (wait <= 0) flushCaptions();
+  else publishTimer = setTimeout(flushCaptions, wait);
 }
 
-function teardown(closeSessions: boolean): void {
-  const active = [...sessions.values()];
-  sessions.clear();
-  sessionId = null;
-  sessionConfig = null;
-  audioSenderId = null;
-  audioGroup = null;
-  sessionState = 'idle';
-  clearTimeout(connectTimer);
-  if (closeSessions) {
-    for (const s of active) {
-      try { s.close(); } catch { /* already closed */ }
-    }
+/** Bütün oturumları kapatır ve durumu sıfırlar. Çağıran, gerekiyorsa altyazıyı önceden yayımlamalı. */
+function teardown(): void {
+  const current = run;
+  run = null;
+  state = 'idle';
+  clearTimeout(publishTimer);
+  publishTimer = undefined;
+  if (!current) return;
+  clearTimeout(current.connectTimer);
+  const active = [...current.sessions.values()];
+  current.sessions.clear();
+  for (const s of active) {
+    try { s.close(); } catch { /* already closed */ }
   }
 }
 
-function stopSession(broadcastIdle: boolean): Promise<void> {
+function stopSession(): Promise<void> {
   if (stopping) return stopping;
-  const sid = sessionId;
-  const active = [...sessions.entries()];
-  const group = audioGroup;
+  const current = run;
   closing = true;
-  audioSenderId = null;
-  clearTimeout(connectTimer);
-  stopping = Promise.all(active.map(([key, s]) => finishSttSession(s, 3000, group?.waitReady(key)))).then(() => {
-    timeline?.finish();
-    publishCaptions();
-    teardown(true);
-    if (sid) broadcast({ type: 'finished', sessionId: sid });
-    if (broadcastIdle) broadcast({ type: 'status', sessionId: null, status: 'idle', config: null });
-  }).finally(() => { closing = false; stopping = null; });
+  if (current) {
+    current.senderId = null; // yeni ses kabul edilmez
+    clearTimeout(current.connectTimer);
+  }
+  stopping = (async () => {
+    try {
+      try {
+        // Koşulsuz await: oturum yokken bile bir mikro görev beklenir, böylece aşağıdaki `finally`
+        // `stopping` atamasından önce çalışıp onu kalıcı olarak dolu bırakamaz.
+        await Promise.allSettled(
+          current
+            ? [...current.sessions].map(async ([key, s]) => finishSttSession(s, FINISH_TIMEOUT_MS, current.group.waitReady(key)))
+            : [],
+        );
+        timeline?.finish();
+        flushCaptions();
+      } finally {
+        teardown(); // bitirme hatası olsa bile oturumlar mutlaka kapanır
+      }
+      if (current) broadcast({ type: 'finished', sessionId: current.id });
+      broadcast({ type: 'status', sessionId: null, status: 'idle', config: null });
+    } finally {
+      closing = false;
+      stopping = null;
+    }
+  })();
   return stopping;
 }
 
-function startSession(config: SttConfig): { ok: boolean; code?: SttErrorCode; message?: string } {
-  if (sessions.size > 0 || closing) return { ok: false, code: 'SESSION_ACTIVE', message: 'A Soniox session is already running.' };
+function startSession(input: unknown, senderId: number): StartResult {
+  if (run || closing) return { ok: false, code: 'SESSION_ACTIVE', message: 'A Soniox session is already running.' };
   const apiKey = keyStoreGetApiKey();
   if (!apiKey) return { ok: false, code: 'NO_API_KEY', message: 'Soniox API key is not configured.' };
+  if (!input || typeof input !== 'object') return { ok: false, code: 'UNKNOWN', message: 'Invalid configuration.' };
 
+  const config = input as SttConfig;
   const translationEnabled = Boolean(config.translationEnabled);
-  const sttLanguage = config.sttLanguage && config.sttLanguage !== 'auto' ? config.sttLanguage : null;
-  const targetLanguages = [...new Set((config.targetLanguages?.length ? config.targetLanguages : [config.targetLanguage]).filter(Boolean))];
+  const sttLanguage = isLanguage(config.sttLanguage) && config.sttLanguage !== 'auto' ? config.sttLanguage : null;
+  const requested: unknown[] = Array.isArray(config.targetLanguages) && config.targetLanguages.length
+    ? config.targetLanguages
+    : [config.targetLanguage];
+  const targetLanguages = [...new Set(requested.filter(isLanguage))];
   if (translationEnabled && targetLanguages.length === 0) return { ok: false, code: 'UNKNOWN', message: 'Missing target language.' };
 
-  const sid = crypto.randomUUID();
+  const sid = randomUUID();
   const cfg: SttSessionConfig = {
     sttLanguage: sttLanguage ?? 'auto',
     targetLanguages,
     targetLanguage: targetLanguages[0] ?? config.targetLanguage,
     translationEnabled,
   };
-  sessionId = sid;
-  sessionConfig = cfg;
-  sessionState = 'connecting';
-  broadcast({ type: 'status', sessionId: sid, status: 'connecting', config: cfg });
-
-  const client = new SonioxNodeClient({ api_key: apiKey });
   const keys = translationEnabled ? targetLanguages : [ORIGINAL_KEY];
-  timeline = new CaptionTimeline(sid, keys[0]);
-  publishCaptions();
+  // Anahtar bu oturum için yakalanır: her hatada anahtar deposundan yeniden okunmaz.
+  const redact = (text: string) => text.split(apiKey).join('[redacted]');
+
   const fail = (code: SttErrorCode, message: string) => {
-    if (sessionId !== sid || closing) return;
+    if (run !== current || closing) return; // eski oturumun gecikmiş olayları yok sayılır
     timeline?.finish();
-    publishCaptions();
-    teardown(true);
-    broadcast({ type: 'error', code, message: sanitize(message), sessionId: sid });
+    flushCaptions();
+    teardown();
+    broadcast({ type: 'error', code, message: redact(message), sessionId: sid });
     broadcast({ type: 'status', sessionId: null, status: 'idle', config: null });
   };
-  audioGroup = new SttSessionGroup(message => fail('CONNECTION_FAILED', message));
-  connectTimer = setTimeout(() => fail('CONNECTION_FAILED', 'Connection timed out.'), 15000);
+  const group = new SttSessionGroup(message => fail('CONNECTION_FAILED', message));
+  const current: Run = { id: sid, config: cfg, sessions: new Map(), group, senderId, connectTimer: undefined };
+
+  run = current;
+  state = 'connecting';
+  broadcast({ type: 'status', sessionId: sid, status: 'connecting', config: cfg });
+
   try {
+    const client = new SonioxNodeClient({ api_key: apiKey });
+    timeline = new CaptionTimeline(sid, keys[0]);
+    flushCaptions();
+    current.connectTimer = setTimeout(() => fail('CONNECTION_FAILED', 'Connection timed out.'), CONNECT_TIMEOUT_MS);
+
     for (const key of keys) {
       const s = client.realtime.stt({
         model: MODEL,
@@ -130,20 +184,20 @@ function startSession(config: SttConfig): { ok: boolean; code?: SttErrorCode; me
         ...(sttLanguage ? { language_hints: [sttLanguage] } : {}),
         ...(translationEnabled ? { translation: { type: 'one_way', target_language: key } } : {}),
       });
-      sessions.set(key, s);
+      current.sessions.set(key, s);
+      group.add(key, chunk => s.sendAudio(chunk));
 
-      audioGroup.add(key, chunk => s.sendAudio(chunk));
       s.on('connected', () => {
-        if (sessions.get(key) !== s) return;
-        audioGroup?.ready(key);
-        if (audioGroup?.connected && !closing) {
-          clearTimeout(connectTimer);
-          sessionState = 'connected';
+        if (current.sessions.get(key) !== s) return;
+        group.ready(key);
+        if (group.connected && !closing) {
+          clearTimeout(current.connectTimer);
+          state = 'connected';
           broadcast({ type: 'status', sessionId: sid, status: 'connected', config: cfg });
         }
       });
       s.on('result', (result) => {
-        if (sessions.get(key) !== s) return;
+        if (current.sessions.get(key) !== s) return;
         const tokens: SttToken[] = (result.tokens ?? []).map(token => ({
           text: token.text, isFinal: token.is_final,
           translationStatus: token.translation_status ?? 'none',
@@ -154,7 +208,7 @@ function startSession(config: SttConfig): { ok: boolean; code?: SttErrorCode; me
         publishCaptions();
       });
       s.on('endpoint', () => {
-        if (sessions.get(key) !== s) return;
+        if (current.sessions.get(key) !== s) return;
         timeline?.endpoint(key);
         publishCaptions();
       });
@@ -164,61 +218,86 @@ function startSession(config: SttConfig): { ok: boolean; code?: SttErrorCode; me
       });
       s.on('disconnected', (reason) => fail('CONNECTION_FAILED', reason ?? 'Connection lost.'));
       s.on('finished', () => {
-        if (sessions.get(key) !== s) return;
+        if (current.sessions.get(key) !== s) return;
         timeline?.endpoint(key);
         publishCaptions();
-        if (!closing) void stopSession(true);
+        if (!closing) void stopSession();
       });
       s.connect().catch(err => fail('CONNECTION_FAILED', String(err)));
-
     }
   } catch (err) {
-    fail('UNKNOWN', err instanceof Error ? err.message : 'Failed to create session.');
-    return { ok: false, code: 'UNKNOWN', message: sanitize(err instanceof Error ? err.message : 'Failed to create session.') };
+    const message = err instanceof Error ? err.message : 'Failed to create session.';
+    fail('UNKNOWN', message);
+    return { ok: false, code: 'UNKNOWN', message: redact(message) };
   }
   return { ok: true };
 }
 
 function getStatus(): SttStatus {
-  return { hasKey: keyStoreHasApiKey(), keyHint: keyStoreKeyHint(), sessionStatus: sessionState, sessionId, config: sessionConfig, captions: timeline?.snapshot() };
+  return {
+    hasKey: keyStoreHasApiKey(),
+    keyHint: keyStoreKeyHint(),
+    sessionStatus: state,
+    sessionId: run?.id ?? null,
+    config: run?.config ?? null,
+    captions: timeline?.snapshot(),
+  };
+}
+
+// Ses gönderen pencere kapanırsa oturum açık kalıp boşuna bağlantı tutmasın.
+const watchedSenders = new WeakSet<WebContents>();
+function stopWhenSenderDies(sender: WebContents): void {
+  if (watchedSenders.has(sender)) return;
+  watchedSenders.add(sender);
+  const id = sender.id; // 'destroyed' sonrası özelliğe erişmek yerine baştan yakalanır
+  sender.once('destroyed', () => {
+    if (run?.senderId === id) void stopSession();
+  });
 }
 
 export function registerSttIpc(getControlWindow: () => BrowserWindow | null): void {
-  ipcMain.handle('stt:delete-api-key', (event) => {
+  const isControlSender = (event: IpcMainInvokeEvent): boolean => {
     const control = getControlWindow();
-    if (!control || control.isDestroyed() || event.sender !== control.webContents || event.senderFrame !== control.webContents.mainFrame)
-      return { ok: false, code: 'UNKNOWN' as SttErrorCode };
-    if (sessions.size > 0 || closing) return { ok: false, code: 'SESSION_ACTIVE' as SttErrorCode };
+    return !!control && !control.isDestroyed()
+      && event.sender === control.webContents && event.senderFrame === control.webContents.mainFrame;
+  };
+
+  ipcMain.handle('stt:delete-api-key', (event) => {
+    if (!isControlSender(event)) return { ok: false, code: 'UNKNOWN' as SttErrorCode };
+    if (run || closing) return { ok: false, code: 'SESSION_ACTIVE' as SttErrorCode };
     try { keyStoreDeleteApiKey(); return { ok: true }; }
     catch { return { ok: false, code: 'UNKNOWN' as SttErrorCode }; }
   });
   ipcMain.handle('stt:get-status', () => getStatus());
   ipcMain.handle('stt:clear', () => {
-    timeline = new CaptionTimeline(crypto.randomUUID(), sessionConfig?.translationEnabled ? sessionConfig.targetLanguages[0] : ORIGINAL_KEY);
-    publishCaptions();
+    const current = run;
+    timeline = new CaptionTimeline(randomUUID(), current?.config.translationEnabled ? current.config.targetLanguages[0] : ORIGINAL_KEY);
+    flushCaptions();
   });
-  ipcMain.handle('stt:set-api-key', (_event, key: unknown) => {
-    if (typeof key !== 'string' || !key.trim()) return { ok: false, code: 'UNKNOWN' as SttErrorCode, message: 'Empty API key.' };
-    if (sessions.size > 0 || closing) return { ok: false, code: 'SESSION_ACTIVE' as SttErrorCode, message: 'Stop the current session before changing the key.' };
-    keyStoreSetApiKey(key);
-    return { ok: true };
+  ipcMain.handle('stt:set-api-key', (event, key: unknown) => {
+    if (!isControlSender(event)) return { ok: false, code: 'UNKNOWN' as SttErrorCode, message: 'Not allowed.' };
+    const trimmed = typeof key === 'string' ? key.trim() : '';
+    if (!trimmed) return { ok: false, code: 'UNKNOWN' as SttErrorCode, message: 'Empty API key.' };
+    if (trimmed.length > MAX_API_KEY_LENGTH) return { ok: false, code: 'UNKNOWN' as SttErrorCode, message: 'API key is too long.' };
+    if (run || closing) return { ok: false, code: 'SESSION_ACTIVE' as SttErrorCode, message: 'Stop the current session before changing the key.' };
+    try { keyStoreSetApiKey(trimmed); return { ok: true }; }
+    catch { return { ok: false, code: 'UNKNOWN' as SttErrorCode, message: 'Could not store the API key.' }; }
   });
-  ipcMain.handle('stt:start', (event, config: SttConfig) => {
-    const result = startSession(config);
-    if (result.ok) audioSenderId = event.sender.id;
+  ipcMain.handle('stt:start', (event, config: unknown) => {
+    const result = startSession(config, event.sender.id);
+    if (result.ok) stopWhenSenderDies(event.sender);
     return result;
   });
   ipcMain.on('stt:audio', (event, chunk: unknown) => {
-    if (sessions.size === 0 || event.sender.id !== audioSenderId) return;
+    const current = run;
+    if (!current || closing || event.sender.id !== current.senderId) return;
     const bytes = chunk instanceof Uint8Array ? new Uint8Array(chunk) : chunk instanceof ArrayBuffer ? new Uint8Array(chunk) : null;
-    if (!bytes) return;
-    if (!closing) audioGroup?.send(bytes);
+    if (bytes && bytes.byteLength > 0 && bytes.byteLength <= MAX_AUDIO_CHUNK_BYTES) current.group.send(bytes);
   });
-  ipcMain.handle('stt:stop', async () => { await stopSession(true); return { ok: true }; });
+  ipcMain.handle('stt:stop', async () => { await stopSession(); return { ok: true }; });
 }
 
+/** Uygulama kapanırken: oturumları beklemeden kapatır. */
 export function cleanupStt(): void {
-  const active = [...sessions.values()];
-  teardown(false);
-  for (const s of active) { try { s.close(); } catch { /* already closed */ } }
+  teardown();
 }

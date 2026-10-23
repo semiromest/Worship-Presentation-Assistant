@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Smartphone, Wrench, CheckCircle2, X, AlertTriangle, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import Dialog from './Dialog';
+import type { FirewallDiagnostic } from '../../shared/remoteDiagnostics';
 
 interface DiagResult {
   ok: boolean;
@@ -14,6 +15,7 @@ interface DiagResult {
   interfaces: Array<{ name: string; address: string; score: number }>;
   selfConnectTest: { tried: boolean; success: boolean; error?: string };
   firewallWarning: boolean;
+  firewall?: FirewallDiagnostic;
   checks: Array<{ label: string; pass: boolean; detail: string }>;
 }
 
@@ -52,7 +54,7 @@ export default function RemoteControlModal() {
       open={isRemoteOpen}
       onClose={() => { setIsRemoteOpen(false); playSfx('close'); }}
       labelledBy="remote-modal-title"
-      className="bg-surface-overlay border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl"
+      className="bg-surface-overlay border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto"
     >
       <div className="flex items-center justify-between mb-4">
         <h2 id="remote-modal-title" className="text-lg font-bold flex items-center gap-2">
@@ -140,8 +142,18 @@ export default function RemoteControlModal() {
                       ))}
                     </div>
 
-                    {/* Firewall warning */}
-                    {diag.firewallWarning && (
+                    {diag.firewall && diag.firewall.status !== 'unsupported' && (
+                      <div className="rounded-md bg-white/[0.03] border border-white/10 px-2.5 py-2 text-[11px] text-white/60 space-y-1">
+                        <p className="font-semibold text-white/80">{t('common.remoteDiagFirewallCheck')}{diag.firewall.profile && ` · ${t(`common.remoteDiagProfile${diag.firewall.profile}`)}`}</p>
+                        <p>{t(`common.remoteDiagFirewallStatus${diag.firewall.status}`)}</p>
+                        {(diag.firewall.status === 'blocked' || diag.firewall.status === 'missingPermission') && (
+                          <p className="text-yellow-300/90">{t('common.remoteDiagFirewallPermissionHint')}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Self-connect failures only suggest a firewall cause. */}
+                    {diag.firewallWarning && diag.firewall?.status !== 'blocked' && diag.firewall?.status !== 'missingPermission' && (
                       <div className="flex items-start gap-2 rounded-md bg-yellow-600/10 border border-yellow-500/20 p-2.5 text-[11px] text-yellow-300">
                         <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
                         <div>

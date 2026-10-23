@@ -1,5 +1,5 @@
 import { calculateFit, calculateCover, wrapCanvasText, canvasTypography, canvasLinePlacement } from '../shared/canvasLayout';
-import { readHymnAuthorPosition, readHymnAuthorSize } from './hymnAuthorSettings';
+import { formatHymnCredit, readHymnAuthorPosition, readHymnAuthorSize } from './hymnAuthorSettings';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useEffect, useState, useRef } from 'react';
@@ -211,11 +211,11 @@ async function renderTextSlide(
     ctx.fillText(lines[i], x, y);
   }
 
-  // ── Hymn author overlay — mirrors LivePreview.tsx author rendering ──
+  // ── Hymn title/author overlay — mirrors LivePreview.tsx rendering ──
   // Rendered only when group.author is set (i.e. showAuthorOnSlides was on
   // at add-time), positioned according to the hymnAuthorPosition setting.
-  const hymnAuthor = slide.group?.author?.trim();
-  if (hymnAuthor) {
+  const hymnCredit = formatHymnCredit(slide.group);
+  if (hymnCredit) {
     const pos = readHymnAuthorPosition();
     const sizePct = readHymnAuthorSize();
     const isTop   = pos.startsWith('top');
@@ -234,13 +234,13 @@ async function renderTextSlide(
 
     if (isLeft) {
       ctx.textAlign = 'left';
-      ctx.fillText(hymnAuthor, pad, isTop ? edgeOffset + pad : H - edgeOffset - pad, W - pad * 2);
+      ctx.fillText(hymnCredit, pad, isTop ? edgeOffset + pad : H - edgeOffset - pad, W - pad * 2);
     } else if (isRight) {
       ctx.textAlign = 'right';
-      ctx.fillText(hymnAuthor, W - pad, isTop ? edgeOffset + pad : H - edgeOffset - pad, W - pad * 2);
+      ctx.fillText(hymnCredit, W - pad, isTop ? edgeOffset + pad : H - edgeOffset - pad, W - pad * 2);
     } else {
       ctx.textAlign = 'center';
-      ctx.fillText(hymnAuthor, W / 2, isTop ? edgeOffset + pad : H - edgeOffset - pad, W - pad * 2);
+      ctx.fillText(hymnCredit, W / 2, isTop ? edgeOffset + pad : H - edgeOffset - pad, W - pad * 2);
     }
     ctx.restore();
   }
@@ -909,6 +909,7 @@ export interface PptxSlideResult {
 }
 
 export interface PptxImportResult {
+  warnings?: string[];
   success: boolean;
   slides?: PptxSlideResult[];
   error?: string;

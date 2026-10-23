@@ -42,6 +42,7 @@ export default function CheatsheetModal() {
       <Section title={t('common.cheatsheet.navigation')}>
         <ShortcutRow keys="→ / Space / J / PageDown" label={t('common.cheatsheet.next')} />
         <ShortcutRow keys="← / K / PageUp" label={t('common.cheatsheet.previous')} />
+        <ShortcutRow keys="↑ / ↓" label={t('common.partsMode')} />
         <ShortcutRow keys="Home" label={t('common.cheatsheet.firstSlide')} />
         <ShortcutRow keys="End" label={t('common.cheatsheet.lastSlide')} />
         <ShortcutRow keys="Enter" label={t('common.cheatsheet.goLive')} />

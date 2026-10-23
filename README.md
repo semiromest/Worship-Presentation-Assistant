@@ -53,13 +53,14 @@ A modern desktop app for displaying song lyrics, scriptures, media and announcem
 
 **Presentation tools**
 - 🎚️ **Slide editor** — edit text and image elements on a canvas, manage layers, rotate and resize elements, and save changes back to the presentation. Slide selection and editing support undo/redo.
-- 🌈 **Generated backgrounds** — create gradient backgrounds with palettes, soft/flow styles and darkness controls. Optional Flow, Aurora, Waves and Fog animations have speed and amount controls; apply a background to a slide, selection or hymn group.
+- 🌈 **Generated backgrounds** — create gradient backgrounds with palettes, soft/flow styles and darkness controls. Optional Flow, Aurora, Waves and Fog animations have speed and amount controls; design on the editor canvas, save named gradients and apply them to selected text slides.
 - ✅ **Preparation check** — review missing or inaccessible media, unavailable fonts, measured text overflow, empty content, online resources and adjacent duplicate slides. Open the report from the toolbar or a slide badge; warnings do not block live output.
 - 🧭 **Guided practice** — learn through ten sections in a separate practice profile, using sample content and real editing actions. Pause, resume or restart the guide without changing your normal presentation library; live output and sharing are disabled in practice.
 - 🎬 **Transitions** — fade, slide (left/right/up/down), zoom, blur and flip, with durations from 150–800 ms.
 - 📖 **Bible** — browse scriptures from an online Bible API or import your own **Zefania XML** Bibles, and send any passage to the presentation as a slide.
 - 🎵 **Hymns** — import hymn lyric archives (folders of XML files), auto-split lyrics into parts and slides, and add them to your presentation.
-- 🎶 **Music slides** — add YouTube music results to a presentation, control playback and volume, and dim the background. Seeking is available for sources that support it.
+- 🎶 **Music** — search by song name or paste a YouTube video link in the music window. Add a music slide or attach music to an eligible existing slide, with optional autoplay on live entry. Download individual tracks for offline playback on this computer; downloads are not embedded in presentation files. Video, hymn and screen slides do not support music attachments.
+- 🎛️ **Slides workspace** — fixed live preview and essential broadcast controls, an independently scrolling editor, compact formatting controls and selection tools beside slide search.
 - 🖼️ **Media library** — a persistent library of images and videos; drop them onto slides, use them as backgrounds, or build **loop slides** that cycle automatically.
 - ⏱️ **Countdown** — add countdown timer slides for breaks and transitions during the service.
 - 🖥️ **Screen capture** — present a live view of any open window or screen (e.g. a live camera feed or another application).
@@ -158,7 +159,9 @@ The sidebar contains ten pages. Press `?` outside a text field to open the short
 
 Select a slide and open **Editor**. Supported slide types expose canvas elements and layers; editing controls let you move, resize, rotate and style those elements. Use **Save** to commit editor changes to the presentation. The editor has its own selection and keyboard behavior while it is active.
 
-Open the gradient generator from the background controls. Choose a palette, style and darkness, or regenerate a different arrangement. Enable motion and choose Flow, Aurora, Waves or Fog, then adjust speed and amount. The preview uses the current slide so you can judge text contrast before applying the result to a slide, selection or hymn group. The background recipe retains its motion settings; a static image is also saved for export.
+In the editor’s **Slide** inspector, open **Gradient → Design**. Palette, style, darkness and optional Flow, Aurora, Waves or Fog motion preview on the main canvas without changing the draft. **Apply to draft** uses the editor’s active/selected scope and creates one editor undo step; the editor’s **Save** commits those changes to the presentation. **Save to library** instead stores a named reusable design in **My gradients**, independently of the current presentation. Library cards use static thumbnails and retain motion settings. Deleting a library entry leaves applied backgrounds intact.
+
+For quick application, select text slides on the **Slides** page and choose **Background** in the selection toolbar. Clicking a saved gradient applies it to those selected text slides in one presentation undo step. Other slide types are skipped; hymn groups do not expand the selection or inherit a new default. The gallery also links to the editor. The local library belongs to this computer’s user profile; applied images and recipes still travel with presentation exports.
 
 ### Preparation Check
 
@@ -214,6 +217,7 @@ By default, sharing is available only on the local network. Public sharing can o
 |------|--------|
 | `→` / `Space` / `J` / `PageDown` | Next slide |
 | `←` / `K` / `PageUp` | Previous slide |
+| `↑` / `↓` | Previous / next part of the selected hymn in the Slides page; does not change slides |
 | `Home` / `End` | First / last slide |
 | `Enter` | Send the selected slide live |
 | `?` | Toggle shortcut cheatsheet |
@@ -235,7 +239,7 @@ Text fields, dialogs and the editor handle their own keys. During guided practic
 
 ## File Formats & Data
 
-- **`.gpres`** — the native format. A ZIP archive containing the presentation JSON and embedded local images and videos. Online resources such as YouTube still require connectivity. Legacy plain-JSON presentations are opened automatically.
+- **`.gpres`** — the native format. A ZIP archive containing the presentation JSON and embedded local images and videos. YouTube tracks require connectivity unless downloaded on this computer. Offline music stays in the local application profile and is not embedded in `.gpres`; another computer needs its own download. Legacy plain-JSON presentations are opened automatically.
 - **`.pptx` / `.pptm`** — import PowerPoint presentations; export the current presentation as `.pptx`. App-specific live features, such as animated gradients, do not become equivalent PowerPoint animations.
 - **Data locations** — saved presentations live in the app's user-data folder; the media library is stored under `userData/media/` and downloaded/imported Bibles under `userData/bibles/`.
 - **Media storage** — imported media is stored using content-addressed files and referenced from presentations, which avoids duplicating the same bytes in undo history and autosaves.
@@ -331,11 +335,13 @@ npm run test:sfx        # interface sound behavior
 npm run test:zoom       # slide grid zoom behavior
 npm run test:tour       # guide, practice, persistence and isolation unit checks
 npm run test:architecture # IPC, preview updates, canvas layout and store contracts
+npm run test:music      # YouTube links, paging, offline downloads and playback contracts
 
 npx tsc --noEmit --incremental false
 npx vite build         # build Electron entry points before source E2E/worker checks
 npm run smoke:worker
 npm run test:tour:e2e   # all configured source Electron E2E groups
+npm run test:workspace:e2e # workspace layout, hymn keys, music window, attachments and offline restart
 ```
 
 There is no combined `npm test` script. Source E2E uses isolated profiles and starts its own renderer server. Packaged E2E requires a built Windows unpacked app:

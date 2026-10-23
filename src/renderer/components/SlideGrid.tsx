@@ -1,11 +1,16 @@
 import { useListMotion } from '../hooks/useListMotion';
 import ServiceSections from './ServiceSections';
+import { TransitionSelector } from '../TransitionSelector';
+import { DEFAULT__TRANSITION } from '../constants';
+import type { TransitionType } from '../types';
+import { GradientQuickApply } from './GradientQuickApply';
 import { memo, useMemo, useEffect, useLayoutEffect, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, X, Plus, ZoomIn, ZoomOut, Layers2, Lock } from 'lucide-react';
+import { Search, X, Plus, ZoomIn, ZoomOut, Layers2, Lock, ChevronUp, ChevronDown, Copy, Trash2 } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { SlideCard } from '../SlideCard';
 import { useDragAndDrop } from '../hooks/useDragAndDrop';
+import { useImageDrop } from '../hooks/useImageDrop';
 import { getSectionBlocks } from '../../shared/sectionModel';
 
 const MIN_ZOOM = 0.4;
@@ -23,6 +28,10 @@ const ROW_GAP = 12; // gap-3 = 12px
 const scrollPositions = new Map<string, number>();
 
 interface SlideGridProps {
+  updateTransition: (update: Partial<{ type: TransitionType; duration: number }>) => void;
+  moveSelectedSlides: (direction: -1 | 1) => void;
+  deleteSelectedSlides: () => void;
+  duplicateSelectedSlides: () => void;
   addSlide: () => void;
   reorderSlides: (from: number, to: number) => void;
   handleSlideClick: (id: string, index: number, e?: React.MouseEvent) => void;
@@ -94,12 +103,15 @@ const GhostSlide = memo(({ onClick, zoom }: { onClick: () => void; zoom: number 
 GhostSlide.displayName = 'GhostSlide';
 
 export default function SlideGrid({
+  moveSelectedSlides, deleteSelectedSlides, duplicateSelectedSlides,
   addSlide,
   reorderSlides,
   handleSlideClick,
   handleSlideDoubleClick,
+  updateTransition,
 }: SlideGridProps) {
   const { t } = useTranslation();
+  const dropImages = useImageDrop();
   const sectionsEnabled = useStore(s => s.serviceSectionsEnabled);
   const presentation = useStore((s) => s.presentation);
   const searchQuery = useStore((s) => s.searchQuery);
@@ -319,11 +331,11 @@ export default function SlideGrid({
   }, [scrollKey]);
 
   return (
-    <div className="flex flex-col overflow-hidden h-full flex-1">
+    <div className="design-slide-grid flex flex-col overflow-hidden h-full flex-1">
       {/* Search Bar */}
-      <div className="p-4 border-b border-white/5 bg-surface-raised flex-shrink-0">
+      <div className="design-searchbar border-b border-white/5 bg-surface-raised flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="relative group flex-1">
+          <div className="design-slide-search relative group flex-1">
             <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/45 group-focus-within:text-blue-500 transition-colors"
               aria-hidden="true"
@@ -406,6 +418,7 @@ export default function SlideGrid({
             </div>
           )}
 
+          <div className="design-slide-view-tools">
           {/* Zoom Controls */}
           <div className="flex items-center gap-1 shrink-0" role="group" aria-label={t('common.zoomControls')}>
             <button
@@ -434,11 +447,37 @@ export default function SlideGrid({
               <ZoomIn className="w-4 h-4 text-white/60" aria-hidden="true" />
             </button>
           </div>
+          <TransitionSelector
+            transitionType={presentation.transition?.type ?? DEFAULT__TRANSITION.type}
+            duration={presentation.transition?.duration ?? DEFAULT__TRANSITION.duration}
+            onChange={updateTransition}
+          />
+          </div>
+        </div>
+        <div className="design-selection-tools" role="group" aria-label={t('slidesWorkspace.selectionTools')}>
+          <span className="design-selection-count">{selectedSlideIds.size} {t('common.selected')}</span>
+          <GradientQuickApply />
+          <button onClick={()=>moveSelectedSlides(-1)} disabled={orderRestricted || !selectedSlideIds.size} title={t('common.moveSelectedUp')} aria-label={t('common.moveSelectedUp')}><ChevronUp /></button>
+          <button onClick={()=>moveSelectedSlides(1)} disabled={orderRestricted || !selectedSlideIds.size} title={t('common.moveSelectedDown')} aria-label={t('common.moveSelectedDown')}><ChevronDown /></button>
+          <button onClick={duplicateSelectedSlides} disabled={!selectedSlideIds.size} title={t('common.duplicateSelected')} aria-label={t('common.duplicateSelected')}><Copy /></button>
+          <button onClick={deleteSelectedSlides} disabled={!selectedSlideIds.size} title={t('common.deleteSelected')} aria-label={t('common.deleteSelected')} className="design-delete"><Trash2 /></button>
         </div>
       </div>
 
       {/* Virtual scroll container */}
-      <div ref={containerRef} data-guide-scroll className="flex-1 overflow-y-auto p-4" role="list" aria-label={t('common.slideList')}>
+      <div ref={containerRef} data-guide-scroll className="flex-1 overflow-y-auto p-4" role="list" aria-label={t('common.slideList')}
+        onDragOverCapture={event => {
+          if (!event.dataTransfer.types.includes('Files') || (event.target as Element).closest('[data-slide-id]')) return;
+          event.preventDefault();
+          event.stopPropagation();
+          event.dataTransfer.dropEffect = 'copy';
+        }}
+        onDropCapture={event => {
+          if (!event.dataTransfer.types.includes('Files') || (event.target as Element).closest('[data-slide-id]')) return;
+          event.preventDefault();
+          event.stopPropagation();
+          void dropImages(Array.from(event.dataTransfer.files));
+        }}>
         <div aria-live="polite">
           {!sectionsEnabled && filteredSlides.length === 0 && searchQuery ? (
             <div className="h-64 flex flex-col items-center justify-center text-center opacity-30 space-y-4">

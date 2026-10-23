@@ -1,4 +1,3 @@
-import { calculateFit, calculateCover, wrapCanvasText, canvasTypography, canvasLinePlacement } from '../../shared/canvasLayout';
 /**
  * Heavy-work UtilityProcess entry (Phase 7).
  *
@@ -17,7 +16,8 @@ import { calculateFit, calculateCover, wrapCanvasText, canvasTypography, canvasL
  */
 
 import AdmZip from 'adm-zip';
-import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
+import { createCanvas, loadImage, type Image, type SKRSContext2D } from '@napi-rs/canvas';
+import { calculateFit, calculateCover, wrapCanvasText, canvasTypography, canvasLinePlacement } from '../../shared/canvasLayout';
 import { getPptxService } from '../pptxService';
 import { exportPresentationToPptx } from '../pptxExportService';
 import { buildGpresZip } from '../../shared/mediaTree';
@@ -35,7 +35,20 @@ type HeavyRequest =
   | { id: number; type: 'extract-gpres'; payload: { buffer: ArrayBuffer; mediaDir: string } }
   | { id: number; type: 'generate-thumbnail'; payload: { slide: ThumbSlideData } };
 
-interface ProgressMsg { id: number; type: 'progress'; current: number; total: number }
+type Ctx = SKRSContext2D;
+type ThumbItem = NonNullable<ThumbSlideData['items']>[number];
+
+/** Aynı anda en fazla bu kadar küçük resim işlenir; decode edilen görseller bellekte birikmesin. */
+const THUMBNAIL_CONCURRENCY = 4;
+/** İlerleme mesajları en sık bu aralıkla gönderilir (son adım hariç). */
+const PROGRESS_INTERVAL_MS = 50;
+const IMAGE_FETCH_TIMEOUT_MS = 5_000;
+/** Çözülmüş data: görsellerinden son kullanılan kadarı tutulur. */
+const IMAGE_CACHE_MAX = 4;
+/** Bundan büyük görseller (≈ 4K) önbelleğe alınmaz; decode edilmiş bitmap'i yüzlerce MB tutabilir. */
+const IMAGE_CACHE_MAX_PIXELS = 4096 * 2304;
+const FALLBACK_COLOR = 'rgba(255,255,255,0.45)';
+const FALLBACK_FONT = 'bold 14px sans-serif';
 
 // UtilityProcess child side: Electron exposes process.parentPort (a
 // MessagePortMain) — not worker_threads' parentPort. @types/node's Process
@@ -49,60 +62,121 @@ if (!rawPort) throw new Error('heavyWorker: process.parentPort unavailable — n
 // Non-optional alias so closures see a narrowed type.
 const port: ParentPortLike = rawPort;
 
-function postProgress(id: number, current: number, total: number): void {
-  const msg: ProgressMsg = { id, type: 'progress', current, total };
-  port.postMessage(msg);
+/** Büyük içe aktarmalarda her slayt için mesaj göndermek yerine sıklığı sınırlar; son adım her zaman gider. */
+function progressReporter(id: number): (current: number, total: number) => void {
+  let last = 0;
+  return (current, total) => {
+    const now = Date.now();
+    if (current < total && now - last < PROGRESS_INTERVAL_MS) return;
+    last = now;
+    port.postMessage({ id, type: 'progress', current, total });
+  };
 }
+
+/** Slot devri ile çalışır: bekleyen varsa slot ona geçer, böylece sınır hiçbir an aşılmaz. */
+function createLimiter(max: number) {
+  let active = 0;
+  const waiting: Array<() => void> = [];
+  return async function run<T>(task: () => Promise<T>): Promise<T> {
+    if (active < max) active++;
+    else await new Promise<void>(resolve => waiting.push(resolve));
+    try {
+      return await task();
+    } finally {
+      const next = waiting.shift();
+      if (next) next();
+      else active--;
+    }
+  };
+}
+const thumbnailLimit = createLimiter(THUMBNAIL_CONCURRENCY);
 
 async function handle(req: HeavyRequest): Promise<unknown> {
   switch (req.type) {
     case 'import-pptx': {
       // getPptxService() is process-local; the worker is kept alive so the
       // resvg WASM warm-up happens once, not per import.
-      return getPptxService().importPptx(
-        req.payload.filePath,
-        (current, total) => postProgress(req.id, current, total),
-        req.payload.mediaDir,
-      );
+      return getPptxService().importPptx(req.payload.filePath, progressReporter(req.id), req.payload.mediaDir);
     }
     case 'export-pptx': {
       const data = JSON.parse(req.payload.content);
-      return exportPresentationToPptx(
-        data,
-        req.payload.filePath,
-        (current, total) => postProgress(req.id, current, total),
-        req.payload.mediaDir,
-      );
+      return exportPresentationToPptx(data, req.payload.filePath, progressReporter(req.id), req.payload.mediaDir);
     }
     case 'build-gpres': {
       const data = JSON.parse(req.payload.content);
       const { zip, embeddedCount } = await buildGpresZip(data, { mediaDir: req.payload.mediaDir });
-      const buffer = Buffer.from(zip.toBuffer());
-      return { embeddedCount, zipBuffer: buffer };
+      // toBuffer() zaten Buffer döndürüyorsa ikinci bir kopya üretme.
+      const out = zip.toBuffer();
+      return { embeddedCount, zipBuffer: Buffer.isBuffer(out) ? out : Buffer.from(out) };
     }
     case 'extract-gpres': {
-      const buffer = Buffer.from(req.payload.buffer);
-      const zip = new AdmZip(buffer);
+      const zip = new AdmZip(Buffer.from(req.payload.buffer)); // ArrayBuffer'dan Buffer.from kopyalamaz.
       const jsonEntry = zip.getEntry('presentation.json');
       if (!jsonEntry) throw new Error('Corrupt .gpres file: missing presentation.json');
       const data = JSON.parse(zip.readAsText(jsonEntry));
       const mediaCount = await rewriteGpresMedia(zip, data, createMediaLibrary(req.payload.mediaDir));
       return { data, mediaCount };
     }
-    case 'generate-thumbnail': {
-      return generateThumbnail(req.payload.slide);
-    }
+    case 'generate-thumbnail':
+      return thumbnailLimit(() => generateThumbnail(req.payload.slide));
     default:
-      throw new Error(`Unknown heavy request type: ${(req as HeavyRequest & { type: string }).type}`);
+      throw new Error(`Unknown heavy request type: ${(req as { type: string }).type}`);
   }
+}
+
+// ─── Image loading ──────────────────────────────────────────────────────────
+
+/** Asla reddetmez; çözülemeyen kaynak null olur. */
+async function decodeSource(src: string): Promise<Image | null> {
+  try {
+    if (src.startsWith('data:')) {
+      const comma = src.indexOf(','); // split(',') tüm veriyi parçalara bölerdi
+      if (comma < 0) return null;
+      const payload = src.slice(comma + 1);
+      if (!payload) return null;
+      const isBase64 = /;base64$/i.test(src.slice(0, comma));
+      return await loadImage(isBase64 ? Buffer.from(payload, 'base64') : Buffer.from(decodeURIComponent(payload)));
+    }
+    if (src.startsWith('http://') || src.startsWith('https://')) {
+      const res = await fetch(src, { signal: AbortSignal.timeout(IMAGE_FETCH_TIMEOUT_MS) });
+      if (!res.ok) return null;
+      return await loadImage(Buffer.from(await res.arrayBuffer()));
+    }
+  } catch { /* undecodable or unreachable: caller falls back */ }
+  // local-resource:// or file paths — skip in worker, renderer handles fallback
+  return null;
+}
+
+// data: URL'ler içerik adresli olduğu için güvenle önbelleğe alınır. Promise saklandığı için
+// aynı görseli isteyen eşzamanlı küçük resimler tek decode'u paylaşır. http(s) kaynaklar değişebilir, önbelleğe alınmaz.
+const imageCache = new Map<string, Promise<Image | null>>();
+
+function loadImageFromSource(src: string | null | undefined): Promise<Image | null> {
+  if (typeof src !== 'string' || !src) return Promise.resolve(null);
+  if (!src.startsWith('data:')) return decodeSource(src);
+
+  let pending = imageCache.get(src);
+  if (pending) imageCache.delete(src); // en son kullanılana taşı
+  else {
+    const created = decodeSource(src);
+    created.then(img => {
+      if (!img || img.width * img.height > IMAGE_CACHE_MAX_PIXELS) imageCache.delete(src);
+    });
+    pending = created;
+  }
+  imageCache.set(src, pending);
+  while (imageCache.size > IMAGE_CACHE_MAX) imageCache.delete(imageCache.keys().next().value!);
+  return pending;
 }
 
 // ─── Thumbnail rendering (utility process, @napi-rs/canvas) ────────────────
 
-function fillFallbackText(
-  ctx: any, text: string, color = 'rgba(255,255,255,0.45)',
-  font = 'bold 14px sans-serif', W = THUMB_W, H = THUMB_H,
-): void {
+function fillBackground(ctx: Ctx, color: string, W: number, H: number): void {
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawCenteredText(ctx: Ctx, text: string, color: string, font: string, W: number, H: number): void {
   ctx.fillStyle = color;
   ctx.font = font;
   ctx.textAlign = 'center';
@@ -110,236 +184,194 @@ function fillFallbackText(
   ctx.fillText(text, W / 2, H / 2, W - 24);
 }
 
-function drawImageSafe(ctx: any, img: any, fit: 'contain' | 'cover', W: number, H: number): void {
-  if (!img || img.width === 0 || img.height === 0) return;
-  const iw = img.width;
-  const ih = img.height;
+/** Düz renk arka plan + ortada tek satır etiket: ekran, altyazı, döngü ve yedek slaytların ortak çizimi. */
+function paintLabelSlide(ctx: Ctx, W: number, H: number, background: string, label: string, color: string, font: string): void {
+  fillBackground(ctx, background, W, H);
+  drawCenteredText(ctx, label, color, font, W, H);
+}
+
+function drawImageSafe(ctx: Ctx, img: Image, fit: 'contain' | 'cover', W: number, H: number): void {
+  if (img.width === 0 || img.height === 0) return;
   if (fit === 'cover') {
-    const { sx, sy, sw, sh } = calculateCover(iw, ih, W, H);
+    const { sx, sy, sw, sh } = calculateCover(img.width, img.height, W, H);
     ctx.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
   } else {
-    const { dx, dy, dw, dh } = calculateFit(iw, ih, W, H);
+    const { dx, dy, dw, dh } = calculateFit(img.width, img.height, W, H);
     ctx.drawImage(img, dx, dy, dw, dh);
   }
 }
 
+function applyTextTransform(text: string, transform: unknown): string {
+  return transform === 'uppercase' ? text.toUpperCase() : transform === 'lowercase' ? text.toLowerCase() : text;
+}
 
-async function renderTextSlide(ctx: any, slide: ThumbSlideData, W: number, H: number): Promise<boolean> {
-  if (slide.items?.length) return false;
-  ctx.fillStyle = slide.styles?.backgroundColor || '#000000';
-  ctx.fillRect(0, 0, W, H);
+async function renderTextSlide(ctx: Ctx, slide: ThumbSlideData, W: number, H: number): Promise<boolean> {
+  const styles = (slide.styles ?? {}) as Record<string, any>;
 
-  if (slide.styles?.backgroundImage) {
-    try {
-      const bgImg = await loadImageFromSource(slide.styles.backgroundImage);
-      if (bgImg) drawImageSafe(ctx, bgImg, 'cover', W, H);
-    } catch { /* skip bg image */ }
+  if (styles.backgroundImage) {
+    const bg = await loadImageFromSource(styles.backgroundImage);
+    if (bg) drawImageSafe(ctx, bg, 'cover', W, H);
   }
 
-  const styles = (slide.styles ?? {}) as Record<string, any>;
-  const displayContent = getSlideDisplayContent(slide);
-  if (!displayContent) return true;
+  const content = getSlideDisplayContent(slide);
+  if (!content) return true;
 
   const typography = canvasTypography(styles, W, 8);
   const { lineHeight, padding, textAlign } = typography;
-  let text = displayContent;
-  if (styles.textTransform === 'uppercase') text = text.toUpperCase();
-  else if (styles.textTransform === 'lowercase') text = text.toLowerCase();
+  const textColor = styles.textColor || '#ffffff';
   ctx.font = typography.font;
-  ctx.fillStyle = styles.textColor || '#ffffff';
+  ctx.fillStyle = textColor;
   ctx.textBaseline = 'top';
 
-  const maxWidth = W - padding * 2;
-  const lines = wrapCanvasText(ctx, text, maxWidth);
+  const lines = wrapCanvasText(ctx, applyTextTransform(content, styles.textTransform), W - padding * 2);
   if (lines.length === 0) return true;
 
   const { startY, x, leading } = canvasLinePlacement(typography, lines.length, W, H);
   ctx.textAlign = textAlign === 'left' || textAlign === 'right' ? textAlign : 'center';
+  const highlight = styles.textHighlight && styles.textHighlight !== 'transparent' ? styles.textHighlight : null;
+
   for (let i = 0; i < lines.length; i++) {
     const y = startY + i * lineHeight + leading;
     if (y + lineHeight < 0 || y > H) continue;
-    if (styles.textHighlight && styles.textHighlight !== 'transparent') {
-      const metrics = ctx.measureText(lines[i]);
-      const highlightX = textAlign === 'center' ? x - metrics.width / 2 : textAlign === 'right' ? x - metrics.width : x;
-      ctx.save();
-      ctx.fillStyle = styles.textHighlight;
-      ctx.fillRect(highlightX, y - leading, metrics.width, lineHeight);
-      ctx.restore();
-      ctx.fillStyle = styles.textColor || '#ffffff';
+    if (highlight) {
+      const { width } = ctx.measureText(lines[i]);
+      const highlightX = textAlign === 'center' ? x - width / 2 : textAlign === 'right' ? x - width : x;
+      ctx.fillStyle = highlight;
+      ctx.fillRect(highlightX, y - leading, width, lineHeight);
+      ctx.fillStyle = textColor;
     }
     ctx.fillText(lines[i], x, y);
   }
   return true;
 }
 
-async function loadImageFromSource(src: string): Promise<any | null> {
-  if (!src) return null;
-  if (src.startsWith('data:')) {
-    const base64 = src.split(',')[1];
-    if (!base64) return null;
-    const buf = Buffer.from(base64, 'base64');
-    return loadImage(buf);
-  }
-  if (src.startsWith('http://') || src.startsWith('https://')) {
-    try {
-      const res = await fetch(src);
-      const buf = Buffer.from(await res.arrayBuffer());
-      return loadImage(buf);
-    } catch { return null; }
-  }
-  // local-resource:// or file paths — skip in worker, renderer handles fallback
-  return null;
-}
-
-async function renderImageSlide(ctx: any, slide: ThumbSlideData, W: number, H: number): Promise<boolean> {
-  const sources = [slide.thumbnailUrl, slide.mediaUrl].filter(Boolean);
-  for (const src of sources) {
-    if (!src) continue;
-    // Only render if we have inline data (base64)
-    if (src.startsWith('data:')) {
-      try {
-        const img = await loadImageFromSource(src);
-        if (img) {
-          const fit = slide.styles?.objectFit === 'cover' ? 'cover' : 'contain';
-          drawImageSafe(ctx, img, fit, W, H);
-          return true;
-        }
-      } catch { /* continue */ }
+async function renderImageSlide(ctx: Ctx, slide: ThumbSlideData, W: number, H: number): Promise<boolean> {
+  // Only render if we have inline data (base64)
+  for (const src of [slide.thumbnailUrl, slide.mediaUrl]) {
+    if (!src?.startsWith('data:')) continue;
+    const img = await loadImageFromSource(src);
+    if (img) {
+      drawImageSafe(ctx, img, slide.styles?.objectFit === 'cover' ? 'cover' : 'contain', W, H);
+      return true;
     }
   }
-  ctx.fillStyle = EMPTY_BG;
-  ctx.fillRect(0, 0, W, H);
-  fillFallbackText(ctx, slide.content?.slice(0, 40) || 'Image');
+  paintLabelSlide(ctx, W, H, EMPTY_BG, slide.content?.slice(0, 40) || 'Image', FALLBACK_COLOR, FALLBACK_FONT);
   return true;
 }
 
-function renderScreenSlide(ctx: any, _slide: ThumbSlideData, W: number, H: number): boolean {
-  ctx.fillStyle = PLACEHOLDER_BG;
-  ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = 'rgba(59,130,246,0.15)';
-  ctx.font = 'bold 14px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('Screen Capture', W / 2, H / 2);
-  return true;
-}
-
-function renderCaptionsSlide(ctx: any, _slide: ThumbSlideData, W: number, H: number): boolean {
-  ctx.fillStyle = '#000000';
-  ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = 'rgba(147,197,253,0.18)';
-  ctx.font = 'bold 16px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('Live Captions', W / 2, H / 2);
-  return true;
-}
-
-async function renderLoopSlide(ctx: any, slide: ThumbSlideData, W: number, H: number): Promise<boolean> {
-  const first = slide.loopItems?.[0];
-  if (first?.mediaData) {
-    try {
-      const img = await loadImageFromSource(first.mediaData);
-      if (img) { drawImageSafe(ctx, img, 'contain', W, H); return true; }
-    } catch { /* continue */ }
+async function renderLoopSlide(ctx: Ctx, slide: ThumbSlideData, W: number, H: number): Promise<boolean> {
+  const img = await loadImageFromSource(slide.loopItems?.[0]?.mediaData);
+  if (img) {
+    drawImageSafe(ctx, img, 'contain', W, H);
+    return true;
   }
-  ctx.fillStyle = EMPTY_BG;
-  ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = 'rgba(168,85,247,0.2)';
-  ctx.font = 'bold 14px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('Loop', W / 2, H / 2);
+  paintLabelSlide(ctx, W, H, EMPTY_BG, 'Loop', 'rgba(168,85,247,0.2)', FALLBACK_FONT);
   return true;
 }
 
-async function renderItemsSlide(ctx: any, slide: ThumbSlideData, W: number, H: number): Promise<boolean> {
-  if (!slide.items?.length) return false;
+function drawItemText(ctx: Ctx, item: ThumbItem, x: number, y: number, iw: number, ih: number, baseScale: number): boolean {
+  const ts = (item.textStyles ?? {}) as Record<string, any>;
+  const fontSize = Math.max(4, (ts.fontSize || 32) * baseScale);
+  const lineHeight = (ts.lineHeight ?? 1.25) * fontSize;
+  const padding = 8 * baseScale;
+  const align = ts.textAlign === 'left' || ts.textAlign === 'right' ? ts.textAlign : 'center';
+  const family = ts.fontFamily ? ts.fontFamily.split(',')[0].trim() : 'sans-serif';
+
+  ctx.font = `${ts.fontStyle === 'italic' ? 'italic ' : ''}${ts.fontWeight || 'normal'} ${fontSize}px ${family}`;
+  ctx.fillStyle = ts.textColor || '#ffffff';
+  ctx.textBaseline = 'top';
+  ctx.textAlign = align;
+
+  const lines = wrapCanvasText(ctx, applyTextTransform(item.content ?? '', ts.textTransform), iw - padding * 2);
+  if (lines.length === 0) return false;
+
+  const startY = y + (ih - lines.length * lineHeight) / 2;
+  const tx = align === 'center' ? x + iw / 2 : align === 'right' ? x + iw - padding : x + padding;
+  const leading = (lineHeight - fontSize) / 2;
+  for (let i = 0; i < lines.length; i++) {
+    const ly = startY + i * lineHeight + leading;
+    if (ly + lineHeight < y || ly > y + ih) continue;
+    ctx.fillText(lines[i], tx, ly);
+  }
+  return true;
+}
+
+async function renderItemsSlide(ctx: Ctx, slide: ThumbSlideData, W: number, H: number): Promise<boolean> {
+  const items = [...(slide.items ?? [])].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
   const baseScale = W / 1920;
 
-  ctx.fillStyle = slide.styles?.backgroundColor || '#000000';
-  ctx.fillRect(0, 0, W, H);
+  // Görseller sırayla değil paralel çözülür; çizim sonra senkron yapılır.
+  const images = await Promise.all(
+    items.map(item => (item.type === 'image' && item.mediaData ? loadImageFromSource(item.mediaData) : null)),
+  );
 
   let drewAny = false;
-  const sorted = [...slide.items].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
-  for (const item of sorted) {
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
     const x = (item.x / 100) * W;
     const y = (item.y / 100) * H;
     const iw = (item.width / 100) * W;
     const ih = (item.height / 100) * H;
 
     ctx.save();
-    if (item.rotation) {
-      ctx.translate(x + iw / 2, y + ih / 2);
-      ctx.rotate((item.rotation * Math.PI) / 180);
-      ctx.translate(-(x + iw / 2), -(y + ih / 2));
-    }
-
-    if (item.borderWidth && item.borderWidth > 0) {
-      ctx.beginPath();
-      const r = (item.borderRadius ?? 0) * baseScale;
-      if (r > 0) ctx.roundRect(x, y, iw, ih, r);
-      else ctx.rect(x, y, iw, ih);
-      ctx.strokeStyle = item.borderColor || '#ffffff';
-      ctx.lineWidth = item.borderWidth * baseScale;
-      ctx.stroke();
-    }
-
-    if (item.type === 'image' && item.mediaData) {
-      try {
-        const img = await loadImageFromSource(item.mediaData);
-        if (img) {
-          const fit = item.imageStyles?.objectFit === 'cover' ? 'cover' : 'contain';
-          ctx.beginPath();
-          ctx.rect(x, y, iw, ih);
-          ctx.clip();
-          ctx.translate(x, y);
-          drawImageSafe(ctx, img, fit, iw, ih);
-          drewAny = true;
-        }
-      } catch { /* skip */ }
-    } else if (item.type === 'text' && item.content) {
-      const ts = (item.textStyles ?? {}) as Record<string, any>;
-      const fontSize = Math.max(4, (ts.fontSize || 32) * baseScale);
-      const lineHeight = (ts.lineHeight ?? 1.25) * fontSize;
-      const padding = 8 * baseScale;
-      const align = ts.textAlign || 'center';
-      const ff = ts.fontFamily ? ts.fontFamily.split(',')[0].trim() : 'sans-serif';
-
-      let text = item.content;
-      if (ts.textTransform === 'uppercase') text = text.toUpperCase();
-      else if (ts.textTransform === 'lowercase') text = text.toLowerCase();
-
-      ctx.font = `${ts.fontStyle === 'italic' ? 'italic ' : ''}${ts.fontWeight || 'normal'} ${fontSize}px ${ff}`;
-      ctx.fillStyle = ts.textColor || '#ffffff';
-      ctx.textBaseline = 'top';
-      if (align === 'left') ctx.textAlign = 'left';
-      else if (align === 'right') ctx.textAlign = 'right';
-      else ctx.textAlign = 'center';
-
-      const maxWidth = iw - padding * 2;
-      const lines = wrapCanvasText(ctx, text, maxWidth);
-      if (lines.length > 0) {
-        const totalH = lines.length * lineHeight;
-        const startY = y + (ih - totalH) / 2;
-        const tx = align === 'center' ? x + iw / 2 : align === 'right' ? x + iw - padding : x + padding;
-        const leading = (lineHeight - fontSize) / 2;
-
-        for (let i = 0; i < lines.length; i++) {
-          const ly = startY + i * lineHeight + leading;
-          if (ly + lineHeight < y || ly > y + ih) continue;
-          ctx.fillText(lines[i], tx, ly);
-        }
-        drewAny = true;
+    try {
+      if (item.rotation) {
+        ctx.translate(x + iw / 2, y + ih / 2);
+        ctx.rotate((item.rotation * Math.PI) / 180);
+        ctx.translate(-(x + iw / 2), -(y + ih / 2));
       }
+
+      if (item.borderWidth && item.borderWidth > 0) {
+        ctx.beginPath();
+        const r = (item.borderRadius ?? 0) * baseScale;
+        if (r > 0) ctx.roundRect(x, y, iw, ih, r);
+        else ctx.rect(x, y, iw, ih);
+        ctx.strokeStyle = item.borderColor || '#ffffff';
+        ctx.lineWidth = item.borderWidth * baseScale;
+        ctx.stroke();
+      }
+
+      const img = images[i];
+      if (img) {
+        ctx.beginPath();
+        ctx.rect(x, y, iw, ih);
+        ctx.clip();
+        ctx.translate(x, y);
+        drawImageSafe(ctx, img, item.imageStyles?.objectFit === 'cover' ? 'cover' : 'contain', iw, ih);
+        drewAny = true;
+      } else if (item.type === 'text' && item.content) {
+        if (drawItemText(ctx, item, x, y, iw, ih, baseScale)) drewAny = true;
+      }
+    } finally {
+      ctx.restore(); // Hata olsa bile dönüşüm/klip durumu sızmaz.
     }
-    ctx.restore();
   }
 
   if (!drewAny) {
-    fillFallbackText(ctx, slide.content?.slice(0, 40) || 'Layout Slide', 'rgba(255,255,255,0.45)', 'bold 11px sans-serif');
+    drawCenteredText(ctx, slide.content?.slice(0, 40) || 'Layout Slide', FALLBACK_COLOR, 'bold 11px sans-serif', W, H);
   }
   return true;
+}
+
+/** Çizilemeyen (bilinmeyen) türde false döner; çağıran yedek görünümü basar. */
+async function renderSlide(ctx: Ctx, slide: ThumbSlideData, W: number, H: number): Promise<boolean> {
+  const hasItems = !!slide.items?.length;
+  switch (slide.type) {
+    case 'text':
+      return hasItems ? renderItemsSlide(ctx, slide, W, H) : renderTextSlide(ctx, slide, W, H);
+    case 'image':
+      return renderImageSlide(ctx, slide, W, H);
+    case 'screen':
+      paintLabelSlide(ctx, W, H, PLACEHOLDER_BG, 'Screen Capture', 'rgba(59,130,246,0.15)', FALLBACK_FONT);
+      return true;
+    case 'loop':
+      return renderLoopSlide(ctx, slide, W, H);
+    case 'captions':
+      paintLabelSlide(ctx, W, H, '#000000', 'Live Captions', 'rgba(147,197,253,0.18)', 'bold 16px sans-serif');
+      return true;
+    default:
+      return hasItems ? renderItemsSlide(ctx, slide, W, H) : false;
+  }
 }
 
 async function generateThumbnail(slide: ThumbSlideData): Promise<string | null> {
@@ -349,55 +381,38 @@ async function generateThumbnail(slide: ThumbSlideData): Promise<string | null> 
   const ctx = canvas.getContext('2d');
 
   try {
-    ctx.fillStyle = slide.styles?.backgroundColor || '#000000';
-    ctx.fillRect(0, 0, W, H);
-
-    let rendered = false;
-
-    if (slide.type === 'text' && slide.items?.length) {
-      rendered = await renderItemsSlide(ctx, slide, W, H);
-    } else if (slide.type === 'text') {
-      rendered = await renderTextSlide(ctx, slide, W, H);
-    } else if (slide.type === 'image') {
-      rendered = await renderImageSlide(ctx, slide, W, H);
-    } else if (slide.type === 'screen') {
-      rendered = renderScreenSlide(ctx, slide, W, H);
-    } else if (slide.type === 'loop') {
-      rendered = await renderLoopSlide(ctx, slide, W, H);
-    } else if (slide.type === 'captions') {
-      rendered = renderCaptionsSlide(ctx, slide, W, H);
-    } else if (slide.items?.length) {
-      rendered = await renderItemsSlide(ctx, slide, W, H);
-    }
-
-    if (!rendered) {
-      ctx.fillStyle = PLACEHOLDER_BG;
-      ctx.fillRect(0, 0, W, H);
-      fillFallbackText(ctx, slide.content?.slice(0, 60) || slide.type);
+    fillBackground(ctx, slide.styles?.backgroundColor || '#000000', W, H);
+    if (!(await renderSlide(ctx, slide, W, H))) {
+      paintLabelSlide(ctx, W, H, PLACEHOLDER_BG, slide.content?.slice(0, 60) || slide.type, FALLBACK_COLOR, FALLBACK_FONT);
     }
   } catch {
-    ctx.fillStyle = PLACEHOLDER_BG;
-    ctx.fillRect(0, 0, W, H);
-    fillFallbackText(ctx, slide.content?.slice(0, 40) || slide.type || 'Slide', 'rgba(255,255,255,0.25)', 'bold 12px sans-serif');
+    paintLabelSlide(ctx, W, H, PLACEHOLDER_BG, slide.content?.slice(0, 40) || slide.type || 'Slide', 'rgba(255,255,255,0.25)', 'bold 12px sans-serif');
   }
 
   try {
-    const buf = canvas.toBuffer('image/webp');
+    // Asenkron kodlama libuv iş parçacığında çalışır; bu sırada başka küçük resimlerin görselleri çözülebilir.
+    const buf = await canvas.encode('webp');
     return `data:image/webp;base64,${buf.toString('base64')}`;
   } catch {
     return null;
   }
 }
 
-port.on('message', (e) => {
-  const req = e.data;
+// ─── Messaging ──────────────────────────────────────────────────────────────
+
+function reply(id: number, result: unknown): void {
+  const zip = (result as { zipBuffer?: Buffer } | undefined)?.zipBuffer;
+  // Yalnızca kendi ArrayBuffer'ının tamamını kaplayan tampon devredilir. Havuzdan gelen (pool) küçük bir
+  // Buffer'ın .buffer'ını devretmek, Node'un paylaşılan havuzunu ve alıcıya giden dilimi bozar.
+  const owned = zip && zip.byteOffset === 0 && zip.byteLength === zip.buffer.byteLength;
+  port.postMessage({ id, ok: true, result }, owned ? [zip.buffer as Transferable] : undefined);
+}
+
+port.on('message', ({ data: req }) => {
+  if (!req || typeof req.id !== 'number') return;
   void (async () => {
     try {
-      const result = await handle(req);
-      // Transfer the zip buffer instead of copying it across processes.
-      const zipBuffer = (result as { zipBuffer?: Buffer } | undefined)?.zipBuffer;
-      const transfer = zipBuffer ? [zipBuffer.buffer as Transferable] : undefined;
-      port.postMessage({ id: req.id, ok: true, result }, transfer);
+      reply(req.id, await handle(req));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[heavyWorker] ${req.type} failed:`, message);

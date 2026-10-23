@@ -2,9 +2,9 @@ const { test, expect, _electron: electron } = require('@playwright/test');
 const path = require('node:path');
 
 test('production music slide: real YouTube, live output, editing and instant stop', async ({}, info) => {
-  const env = { ...process.env };
+  const env = { ...process.env, WPA_TEST_PROFILE: info.outputPath('profile') };
   delete env.ELECTRON_RUN_AS_NODE; delete env.VITE_DEV_SERVER_URL;
-  const app = await electron.launch({ args: [path.resolve('.'), '--wpa-smoke'], env });
+  const app = await electron.launch({ args: [path.resolve('tests/tour/electron-bootstrap.cjs'), '--wpa-smoke'], env });
   let page;
   const errors = [];
   const logs = [];
@@ -17,12 +17,14 @@ test('production music slide: real YouTube, live output, editing and instant sto
     await page.locator('nav').waitFor();
     await page.keyboard.press('Escape');
     await page.locator('nav [data-guide-anchor="nav-slides"]').click();
-    await page.getByTestId('background-music-toggle').click();
+    if (await page.getByTestId('music-dialog-close').isVisible()) await page.getByTestId('music-dialog-close').click();
+    else await page.getByTestId('background-music-toggle').click();
     await page.getByTestId('music-source-youtube').click();
     await page.getByTestId('youtube-music-query').fill('Amazing Grace piano instrumental hymn with lyrics');
     await page.getByTestId('youtube-music-query').press('Enter');
     await page.getByTestId('youtube-add-slide-KI33ItOO_M4').click({ timeout: 30000 });
-    await page.getByTestId('background-music-toggle').click();
+    if (await page.getByTestId('music-dialog-close').isVisible()) await page.getByTestId('music-dialog-close').click();
+    else await page.getByTestId('background-music-toggle').click();
     const musicCard = page.locator('[data-slide-id]').last();
     const audio = page.getByTestId('background-music-audio');
     await audio.evaluate(el => { window.__musicEvents = []; for (const type of ['error', 'ended', 'playing', 'pause', 'emptied', 'stalled']) el.addEventListener(type, () => window.__musicEvents.push({ type, time: performance.now(), position: el.currentTime, error: el.error?.message, code: el.error?.code, src: el.getAttribute('src') })); });
@@ -53,7 +55,8 @@ test('production music slide: real YouTube, live output, editing and instant sto
     expect(await audio.getAttribute('src')).toBe(source);
     expect(await audio.evaluate(el => el.currentTime)).toBeGreaterThan(2);
     await expect.poll(() => audio.evaluate(el => el.currentTime), { timeout: 40000 }).toBeGreaterThan(30);
-    await page.getByTestId('background-music-toggle').click();
+    if (await page.getByTestId('music-dialog-close').isVisible()) await page.getByTestId('music-dialog-close').click();
+    else await page.getByTestId('background-music-toggle').click();
     await page.getByTestId('background-music-stop').click();
     await expect.poll(() => audio.getAttribute('src')).toBeNull();
     expect(await audio.evaluate(el => el.paused)).toBe(true);
@@ -63,7 +66,8 @@ test('production music slide: real YouTube, live output, editing and instant sto
     await page.getByTestId('youtube-music-query').fill('Amazing Grace Piano Instrumental');
     await page.getByTestId('youtube-music-query').press('Enter');
     await page.getByTestId('youtube-add-slide-SIfMHRHdTAI').click({ timeout: 30000 });
-    await page.getByTestId('background-music-toggle').click();
+    if (await page.getByTestId('music-dialog-close').isVisible()) await page.getByTestId('music-dialog-close').click();
+    else await page.getByTestId('background-music-toggle').click();
     await expect(page.getByTestId('music-slide-editor').getByRole('status')).toHaveText('Connection ready', { timeout: 60000 });
     expect(await audio.getAttribute('src')).toBe(playingSource);
     expect(await audio.evaluate(el => el.paused)).toBe(false);
@@ -73,7 +77,8 @@ test('production music slide: real YouTube, live output, editing and instant sto
     await expect.poll(() => audio.getAttribute('src'), { timeout: 15000 }).not.toBe(playingSource);
     await expect.poll(() => audio.evaluate(el => el.currentTime), { timeout: 15000 }).toBeGreaterThan(0.2);
     console.log('Prepared next track playback (including 800 ms fade-out):', Date.now() - nextSentLiveAt, 'ms');
-    await page.getByTestId('background-music-toggle').click();
+    if (await page.getByTestId('music-dialog-close').isVisible()) await page.getByTestId('music-dialog-close').click();
+    else await page.getByTestId('background-music-toggle').click();
     await page.getByTestId('background-music-play-pause').click();
     const pausedTime = await audio.evaluate(el => el.currentTime);
     await page.waitForTimeout(25000);

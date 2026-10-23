@@ -23,6 +23,7 @@ test('JPEG deduplication, gpres round trip and PPTX embedding preserve bytes and
       darkness: 25,
       width: 1920,
       height: 1080,
+      motion: { enabled: true, type: 'aurora', speed: 31, amount: 76 },
     };
     const bytes = encodeGradient(recipe).bytes,
       lib = createMediaLibrary(path.join(dir, 'media'));

@@ -2,7 +2,7 @@ import { playSfx } from './sfx';
 import { RangeVideo } from './components/RangeVideo';
 import { VideoOverlayLayer } from './components/VideoOverlayLayer';
 import { MediaPoster } from './components/MediaPoster';
-import { memo, useCallback, useMemo, useState, useRef } from 'react';
+import { memo, useCallback, useMemo, useState, useRef, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ListOrdered, Play, Square, Lock, AlertTriangle, AlertCircle } from 'lucide-react';
 import { usePreparationStore } from './state/usePreparationStore';
@@ -10,6 +10,8 @@ import { useStore } from './state/useStore';
 import type { Slide } from './types';
 import { cn } from './utils';
 import { resolveCanvasSource } from './canvasSource';
+import { useImageDrop } from './hooks/useImageDrop';
+import { SlideCardOverlays } from './components/SlideCardOverlays';
 import {
   SlideItemsPreview,
   TextSlidePreview,
@@ -39,13 +41,16 @@ const Badge = memo(({
   children,
   variant = 'default',
   color,
+  compact = false,
 }: {
   children: React.ReactNode;
   variant?: 'default' | 'live' | 'selected';
   color?: string;
+  compact?: boolean;
 }) => (
   <span className={cn(
-    'text-[10px] font-bold bg-black/60 px-2 py-1 rounded-md border tabular-nums',
+    'font-bold bg-black/60 rounded-md border tabular-nums whitespace-nowrap',
+    compact ? 'text-[8px] leading-none px-1 py-px' : 'text-[10px] px-2 py-1',
     variant === 'live'
       ? 'text-red-400 border-red-500/40'
       : variant === 'selected'
@@ -236,57 +241,66 @@ const SlideContent = memo(({ slide, cardWidth }: { slide: Slide; cardWidth?: num
 SlideContent.displayName = 'SlideContent';
 
 // Badges section
-const SlideBadges = memo(({ slide, index, isSelected, isLive }: {
+const SlideBadges = memo(({ slide, index, isSelected, isLive, cardWidth, zoom }: {
   slide: Slide;
   index: number;
   isSelected: boolean;
   isLive: boolean;
+  cardWidth: number;
+  zoom: number;
 }) => {
   const { t } = useTranslation();
   const showGroup = slide.group;
   const showType = slide.type !== 'text' || !!slide.youtubeMusic;
   const groupColor = slide.group?.color;
   const showBadges = showGroup || showType || isSelected || isLive;
+  const compact = cardWidth < 360;
+  const hideGroupTitle = zoom <= 0.6;
+  const tiny = cardWidth < 180;
+  const groupLabel = slide.group
+    ? `${slide.group.title} ${slide.partsMode && slide.parts?.length ? (slide.activePart ?? 0) + 1 : slide.group.part}/${slide.partsMode && slide.parts?.length ? slide.parts.length : slide.group.parts}`
+    : undefined;
 
   if (!showBadges && !isLive) {
     return (
-      <div className="absolute top-2 left-2 z-10">
-        <Badge>{index + 1}</Badge>
+      <div className={cn('absolute z-10', tiny ? 'top-0.5 left-1' : 'top-2 left-2')}>
+        <Badge compact={tiny}>{index + 1}</Badge>
       </div>
     );
   }
 
   return (
-    <div className="absolute top-2 left-2 z-10 flex items-center gap-2">
-      <Badge>{index + 1}</Badge>
+    <div className={cn('absolute z-10 flex items-center', tiny ? 'top-0.5 left-1 gap-1' : 'top-2 left-2 gap-2')}>
+      <Badge compact={tiny}>{index + 1}</Badge>
 
-      {isSelected && (
+      {isSelected && !compact && (
         <Badge variant="selected">{t('common.selectedCardLabel')}</Badge>
       )}
 
       {showGroup && !slide.partsMode && (
-        <Badge color={groupColor}>
-          <span className="max-w-[160px] truncate inline-block" style={{ color: groupColor }}>
-            {slide.group!.title} {slide.group!.part}/{slide.group!.parts}
+        <Badge color={groupColor} compact={tiny}>
+          <span title={groupLabel} className="max-w-[160px] truncate inline-block align-middle" style={{ color: groupColor }}>
+            {!hideGroupTitle && `${slide.group!.title} `}{slide.group!.part}/{slide.group!.parts}
           </span>
         </Badge>
       )}
 
       {slide.partsMode && slide.parts && slide.parts.length > 0 && slide.group && (
-        <Badge color={groupColor}>
-          <span className="flex items-center gap-1" style={{ color: groupColor }}>
-            <ListOrdered className="w-3 h-3" />
-            {slide.group.title} {(slide.activePart ?? 0) + 1}/{slide.parts.length}
+        <Badge color={groupColor} compact={tiny}>
+          <span title={groupLabel} className="flex items-center gap-1" style={{ color: groupColor }}>
+            {!hideGroupTitle && <ListOrdered className="w-3 h-3 shrink-0" />}
+            {!hideGroupTitle && <span className="max-w-[160px] truncate">{slide.group.title}</span>}
+            {(slide.activePart ?? 0) + 1}/{slide.parts.length}
           </span>
         </Badge>
       )}
 
       {showType && (
-        <Badge>{slide.youtubeMusic ? t('settings.youtubeMusicSlideLabel') : slide.type}</Badge>
+        <Badge compact={tiny}>{slide.youtubeMusic ? (slide.musicSettings?.attachment ? '♫' : t('settings.youtubeMusicSlideLabel')) : slide.type}</Badge>
       )}
 
       {isLive && (
-        <Badge variant="live">{t('common.liveCardLabel')}</Badge>
+        <Badge variant="live" compact={tiny}>{t('common.liveCardLabel')}</Badge>
       )}
     </div>
   );
@@ -351,8 +365,10 @@ export const SlideCard = memo(({
   isDragging,
   draggable = true,
   cardWidth,
+  zoom = 1,
 }: SlideCardProps) => {
   const { t } = useTranslation();
+  const dropImages = useImageDrop();
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     onClick(slide.id, index, e);
@@ -372,9 +388,13 @@ export const SlideCard = memo(({
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (e.dataTransfer.types.includes('Files')) {
+      e.dataTransfer.dropEffect = 'copy';
+      return;
+    }
     e.dataTransfer.dropEffect = 'move';
     onDragOver?.(slide.id, index);
-  }, [onDragOver, slide.id, index]);
+  }, [onDragOver, slide, index]);
 
   const handleDragEnd = useCallback(() => {
     onDragEnd?.();
@@ -383,8 +403,12 @@ export const SlideCard = memo(({
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (e.dataTransfer.types.includes('Files')) {
+      void dropImages(Array.from(e.dataTransfer.files), slide.id);
+      return;
+    }
     onDrop?.();
-  }, [onDrop]);
+  }, [onDrop, slide.id, dropImages]);
 
   const groupColor = slide.group?.color;
   const cardClassName = useMemo(() => cn(
@@ -394,6 +418,17 @@ export const SlideCard = memo(({
     isLive && 'live-border-pulse',
     isDragging && 'opacity-50'
   ), [isSelected, isLive, isDragging]);
+
+  const previewRef = useRef<HTMLDivElement>(null);
+  const [previewWidth, setPreviewWidth] = useState(0);
+  useLayoutEffect(() => {
+    const preview = previewRef.current;
+    if (!preview) return;
+    setPreviewWidth(preview.clientWidth);
+    const observer = new ResizeObserver(([entry]) => setPreviewWidth(entry.contentRect.width));
+    observer.observe(preview);
+    return () => observer.disconnect();
+  }, []);
 
   const slideLabel = isLive
     ? t('common.slideCardLiveLabel', { index: index + 1 })
@@ -414,14 +449,15 @@ export const SlideCard = memo(({
       className={cn(cardClassName, draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer')}
       style={{ ...(groupColor ? { borderLeftWidth: 4, borderLeftColor: groupColor } : {}) }}
       aria-pressed={isSelected}
-      aria-label={slideLabel}
+      aria-label={slide.group ? `${slideLabel}, ${slide.group.title}, ${slide.partsMode && slide.parts?.length ? (slide.activePart ?? 0) + 1 : slide.group.part}/${slide.partsMode && slide.parts?.length ? slide.parts.length : slide.group.parts}` : slideLabel}
     >
-      <SlideBadges slide={slide} index={index} isSelected={isSelected} isLive={isLive} />
+      <SlideBadges slide={slide} index={index} isSelected={isSelected} isLive={isLive} cardWidth={previewWidth || cardWidth || 320} zoom={zoom} />
       {slide.locked && <LockBadge />}
       <PreparationBadge slideId={slide.id} />
 
-      <div className="aspect-video bg-black flex items-center justify-center overflow-hidden">
-        <SlideContent slide={slide} cardWidth={cardWidth} />
+      <div ref={previewRef} className="aspect-video bg-black flex items-center justify-center overflow-hidden relative isolate">
+        <SlideContent slide={slide} cardWidth={previewWidth || cardWidth} />
+        <SlideCardOverlays slide={slide} width={previewWidth || cardWidth || 320} />
       </div>
     </div>
   );

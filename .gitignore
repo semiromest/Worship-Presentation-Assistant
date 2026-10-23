@@ -24,6 +24,7 @@ src/main/driveCredentials.ts
 docs/
 docs/superpowers/plans/
 todo.txt
+patches/
 
 # IDE
 .vscode/

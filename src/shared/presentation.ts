@@ -142,7 +142,7 @@ export interface Slide {
   content: string;
   /** Durable YouTube reference; transient stream URLs are never saved in slides. */
   youtubeMusic?: import('./youtubeMusic').YouTubeMusicResult;
-  musicSettings?: { volume?: number };
+  musicSettings?: { volume?: number; autoPlay?: boolean; attachment?: boolean };
   /** Live captions slide options (see CaptionsRenderer). */
   captions?: {
     showOriginal?: boolean;
@@ -160,7 +160,7 @@ export interface Slide {
   videoOverlays?: VideoTextOverlay[];
   items?: SlideItem[];
   loopItems?: LoopItem[];
-  group?: { id: string; title: string; part: number; parts: number; color?: string; author?: string };
+  group?: { id: string; title: string; part: number; parts: number; color?: string; author?: string; kind?: 'hymn' };
   gridEnabled?: boolean;
   gridSize?: number;
   gridColor?: string;

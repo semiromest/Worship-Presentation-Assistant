@@ -1,5 +1,7 @@
 {
   "gradient": {
+    "customColors": "Colores personalizados",
+    "colorNumber": "Color {{number}}",
     "animation": "Animación",
     "aurora": "Aurora",
     "waves": "Olas",
@@ -35,7 +37,24 @@
       "amber": "Ámbar",
       "rose": "Rosa",
       "smoke": "Humo"
-    }
+    },
+    "scopeSlideHint": "Solo la diapositiva que estás editando.",
+    "scopeNoGroup": "Esta diapositiva no pertenece a un grupo.",
+    "scopeSelectionHint": "Diapositivas seleccionadas en el área de diapositivas.",
+    "scopeNoSelection": "Selecciona primero varias diapositivas en el área de diapositivas.",
+    "targetCount": "Se aplicará a {{count}} diapositivas",
+    "targetList": "Diapositivas que se actualizarán",
+    "untitledSlide": "Diapositiva sin contenido",
+    "textOnly": "Solo cambiarán los fondos de las diapositivas de texto.",
+    "groupInheritance": "Las diapositivas compatibles que se añadan después a este grupo también heredarán este fondo.",
+    "linear": "Lineal",
+    "startColor": "Color inicial",
+    "endColor": "Color final",
+    "angle": "Ángulo",
+    "remove": "Quitar degradado",
+    "colors": "Colores",
+    "presets": "Paletas",
+    "appearance": "Apariencia"
   },
   "nav": {
     "editor": "Editor",
@@ -178,10 +197,20 @@
     "remoteLoadingDesc": "Generando el código QR. Espera un momento.",
     "remoteQrAlt": "Código QR para el control remoto: escanéalo con tu teléfono",
     "remoteDiagTitle": "Diagnosticar problemas de conexión",
+    "remoteDiagFirewallCheck": "Firewall y permiso de red",
+    "remoteDiagProfilePublic": "Red pública",
+    "remoteDiagProfilePrivate": "Red privada",
+    "remoteDiagProfileDomain": "Red de dominio",
+    "remoteDiagFirewallStatusallowed": "Las reglas de Windows permiten la conexión. Aún debe comprobarse el acceso desde el teléfono.",
+    "remoteDiagFirewallStatusdisabled": "El firewall de Windows está desactivado en esta red; no se detectó un bloqueo de Windows.",
+    "remoteDiagFirewallStatusblocked": "Una configuración del firewall de Windows bloquea las conexiones entrantes en esta red.",
+    "remoteDiagFirewallStatusmissingPermission": "No se encontró permiso de entrada para la aplicación o el puerto en esta red; Windows podría bloquear la conexión.",
+    "remoteDiagFirewallStatusunknown": "No se pudieron verificar los permisos de red de Windows por reglas restringidas, permisos de acceso u otro software de seguridad.",
+    "remoteDiagFirewallPermissionHint": "Para enlaces de teléfono, espectadores y subtítulos, abra Seguridad de Windows > Firewall y protección de red > Permitir una aplicación a través del firewall y compruebe el permiso de Worship Presentation Assistant para la red actual (Privada/Pública). Mantenga el firewall activado y permita el acceso solo en redes de confianza.",
     "remoteDiagRun": "Ejecutar diagnóstico",
     "remoteDiagRunning": "Ejecutando diagnóstico...",
     "remoteDiagRetry": "Reintentar",
-    "remoteDiagFirewallTitle": "⚠ Bloqueo de firewall detectado",
+    "remoteDiagFirewallTitle": "Un firewall podría bloquear la conexión",
     "remoteDiagFirewallStep1": "Asegúrese de que 'Worship Presentation Assistant' esté permitido en Firewall de Windows → Reglas de entrada",
     "remoteDiagFirewallStep2": "Si tiene antivirus (Avast, Kaspersky, etc.), agregue la aplicación a la lista de confianza",
     "remoteDiagFirewallStep3": "Las redes Wi-Fi públicas (hoteles, cafés) pueden tener aislamiento AP — intente usar un hotspot móvil",
@@ -346,12 +375,12 @@
     "hymnsPartsModeOn": "Modo por partes ACTIVADO: el himno se divide en una diapositiva",
     "hymnsPartsModeOff": "Modo por partes DESACTIVADO: el himno se divide en varias diapositivas",
     "hymnsPartsMode": "Modo por partes",
-    "hymnsAuthorOnSlides": "Mostrar autor",
-    "hymnsAuthorOnSlidesOn": "Autor visible en las diapositivas",
-    "hymnsAuthorOnSlidesOff": "Autor oculto en las diapositivas",
-    "hymnsAuthorPosition": "Posición del autor",
-    "hymnsAuthorPositionDesc": "Dónde aparece el nombre del autor en la diapositiva",
-    "hymnsAuthorSize": "Tamaño del texto del autor",
+    "hymnsAuthorOnSlides": "Mostrar título y autor",
+    "hymnsAuthorOnSlidesOn": "Título y autor visibles en las diapositivas",
+    "hymnsAuthorOnSlidesOff": "Título y autor ocultos en las diapositivas",
+    "hymnsAuthorPosition": "Posición del título y autor",
+    "hymnsAuthorPositionDesc": "Dónde aparecen juntos el título del himno y el autor en la diapositiva",
+    "hymnsAuthorSize": "Tamaño del texto del título y autor",
     "hymnsAuthorPosBottomLeft": "Inferior izquierda",
     "hymnsAuthorPosBottomCenter": "Inferior centro",
     "hymnsAuthorPosBottomRight": "Inferior derecha",
@@ -429,6 +458,9 @@
     "calendarUpdate": "Actualizar",
     "clickToRename": "Haga clic para renombrar",
     "mediaLibrary": "Biblioteca de medios",
+    "mediaAddSelected": "Añadir selección a diapositivas ({{count}})",
+    "mediaClearSelection": "Limpiar selección",
+    "mediaAddAll": "Añadir todo a diapositivas",
     "mediaTabs": "Pestañas de medios",
     "mediaVolume": "Volumen de medios",
     "mediaAdd": "Añadir medios",
@@ -1001,7 +1033,9 @@
     "editorAlignToSelection": "Selección",
     "editorSameWidth": "Mismo ancho",
     "editorSameHeight": "Misma altura",
-    "editorSafeArea": "Mostrar área segura (5 %)"
+    "editorSafeArea": "Mostrar área segura (5 %)",
+    "importCompleteWithWarnings": "Importado con advertencias",
+    "importReviewWarnings": "Es posible que algunas fuentes o elementos no se hayan conservado completamente. Revisa las diapositivas antes de presentarlas."
   },
   "warnings": {
     "minSlides": "¡Debe quedar al menos 1 diapositiva!",
@@ -1017,7 +1051,12 @@
     "ko": "Coreano"
   },
   "countdown": {
-    "remaining": "Quedan {{time}}"
+    "remaining": "Quedan {{time}}",
+    "preview": "Vista previa",
+    "ready": "Listo",
+    "running": "En marcha",
+    "previewHint": "Esta prueba no cambia el temporizador de la presentación. Añadir a diapositiva inicia uno nuevo con la duración configurada.",
+    "durationLocked": "Restablece el temporizador de prueba para cambiar la duración."
   },
   "loop": {
     "noItems": "No hay elementos en el bucle"
@@ -1053,6 +1092,7 @@
     "error": "Error de Drive"
   },
   "transition": {
+    "label": "Transición",
     "settings": "Configuración de transición",
     "type": "Tipo de transición",
     "duration": "Duración de la transición",
@@ -1147,7 +1187,9 @@
     "youtubeLoading": "Preparando audio de YouTube…",
     "youtubeNoResults": "No se encontraron resultados.",
     "youtubeSearch": "Buscar en YouTube",
-    "youtubeSearchPlaceholder": "Buscar música en YouTube...",
+    "youtubeSearchPlaceholder": "Nombre de canción o enlace de YouTube…",
+    "youtubeInvalidLink": "Introduce un enlace válido a un vídeo de YouTube.",
+    "youtubeVideoUnavailable": "Este vídeo no está disponible. Comprueba el enlace.",
     "youtubeSearchError": "La búsqueda de YouTube falló.",
     "youtubePlayError": "No se pudo reproducir el audio de YouTube.",
     "soundEffectsDesc": "Efectos de sonido de la interfaz (paquete minimal)",
@@ -1230,6 +1272,7 @@
         "clear-live-saves": "guardados automáticos borrar limpiar",
         "updates": "actualizaciones versión descargar",
         "learn": "práctica guía aprender ayuda tutorial",
+        "shortcuts": "teclado atajos teclas ayuda",
         "soniox-website": "soniox sitio oficial cuenta uso facturación",
         "stt-clear-key": "api clave borrar eliminar",
         "appearance-preview": "vista previa simulación logotipo autor tamaño posición"
@@ -1266,7 +1309,10 @@
     "completed": "Comprobación completada",
     "slideErrors": "{{count}} problema(s), incluidos errores. Abrir informe de diapositiva.",
     "slideWarnings": "{{count}} aviso(s). Abrir informe de diapositiva.",
-    "severity": {"error":"Error","warning":"Aviso"},
+    "severity": {
+      "error": "Error",
+      "warning": "Aviso"
+    },
     "title": "Comprobación de preparación",
     "button": "Comprobación",
     "allClear": "Todo parece listo",
@@ -1294,16 +1340,19 @@
     "splitAction": "Dividir en partes legibles"
   },
   "library": {
+    "tools": "Herramientas de presentación",
+    "powerPoint": "PowerPoint",
+    "saveFile": "Guardar en archivo",
     "subtitle": "Prepara el culto, guarda tu trabajo y encuentra tus presentaciones.",
     "current": "Presentación actual",
     "slideCount": "{{count}} diapositivas",
-    "saved": "Guardada en biblioteca",
-    "unsaved": "Cambios sin guardar en biblioteca",
+    "saved": "Guardada en Presentaciones guardadas",
+    "unsaved": "Cambios sin guardar en Presentaciones guardadas",
     "backupOn": "Copia automática activa",
     "backupOff": "Copia automática desactivada",
     "backupAt": "Copia: {{time}}",
     "continueEditing": "Editar diapositivas",
-    "save": "Guardar en biblioteca",
+    "save": "Guardar en Presentaciones guardadas",
     "fileTools": "Archivos y PowerPoint",
     "saveFailed": "No se pudo guardar. La presentación sigue abierta. Inténtalo de nuevo.",
     "operationFailed": "La operación falló. Inténtalo de nuevo.",
@@ -1447,7 +1496,7 @@
       },
       "presentations": {
         "title": "Guardar en biblioteca",
-        "body": "Guarda la presentación de práctica en la biblioteca. No se escribe ningún archivo externo."
+        "body": "En Presentaciones, utiliza Guardar en la biblioteca en el área de la presentación actual. Esta tarea guarda en la biblioteca de práctica, no mediante Guardar en archivo."
       },
       "hymns": {
         "title": "Himnos",
@@ -1500,7 +1549,7 @@
       },
       "presentations": {
         "title": "Presentaciones",
-        "body": "Aquí puedes crear, guardar y gestionar tus presentaciones. Por ahora, conozcamos esta sección. Pronto prepararás tus propias diapositivas."
+        "body": "Las herramientas superiores reúnen nuevas presentaciones, archivos, copias de seguridad, Drive y PowerPoint. Debajo, el área de la presentación actual muestra su nombre y estado de guardado y permite seguir editando sus diapositivas."
       },
       "sidebar": {
         "title": "Moverte por la aplicación",
@@ -1588,7 +1637,7 @@
       },
       "settings-intro": {
         "title": "Adapta la aplicación a ti",
-        "body": "Aquí puedes gestionar el idioma de la aplicación y otras preferencias. También puedes reiniciar los tutoriales desde Ayuda y explorar de nuevo las secciones de la aplicación."
+        "body": "Busca los ajustes por categoría o utiliza el campo de búsqueda. Puedes volver a la guía paso a paso desde la categoría de aprendizaje."
       },
       "nav-save": {
         "title": "Vuelve a Presentaciones",
@@ -1640,7 +1689,7 @@
       },
       "save": {
         "title": "Guarda tu presentación en la biblioteca",
-        "body": "Haz clic en Guardar en la biblioteca. Tu presentación se guardará únicamente en la biblioteca del perfil de práctica; tus presentaciones reales no se verán afectadas."
+        "body": "Haz clic en el botón azul Guardar en la biblioteca del área de la presentación actual. Guardar en archivo es una acción independiente. Este ejercicio guarda solo en la biblioteca de práctica; tus presentaciones reales no se ven afectadas."
       },
       "add-result": {
         "title": "¡Tu primera diapositiva está lista!",
@@ -1776,5 +1825,85 @@
     "volume": "Volumen de esta diapositiva",
     "volumeHint": "Se combina con el volumen general. Cambiar el título o el diseño no reinicia la música.",
     "fadeHint": "El sonido sube gradualmente en 0,5 segundos y baja en 0,8 segundos al salir de la diapositiva. Detener y cerrar la salida cortan el sonido al instante."
+  },
+  "slidesWorkspace": {
+    "readiness": "Readiness",
+    "help": "Shortcuts",
+    "music": "Music",
+    "viewers": "Viewers",
+    "phone": "Phone",
+    "locked": "Locked",
+    "direct": "Direct live",
+    "selectedTitle": "Selected slide · {{number}}",
+    "editingLive": "Editing the live slide",
+    "content": "Content",
+    "appearance": "Appearance",
+    "background": "Background",
+    "selectionTools": "Selected slide actions",
+    "displays": "Displays",
+    "openEditor": "Open editor",
+    "partsNavigationHint": "↑ ↓: partes del himno · ← →: diapositivas"
+  },
+  "offlineMusic": {
+    "download": "Descargar",
+    "downloading": "Descargando",
+    "ready": "Disponible sin conexión",
+    "cancel": "Cancelar descarga",
+    "hint": "Guardar el audio en este equipo para reproducirlo sin conexión.",
+    "localHint": "Guardado en este equipo; no está incluido en el archivo de presentación.",
+    "error": "No se pudo descargar. Comprueba la conexión y el espacio libre e inténtalo de nuevo.",
+    "busy": "Se está descargando otra pista. Espera a que termine."
+  },
+  "slideAudio": {
+    "add": "Añadir música",
+    "dialogTitle": "Añadir música a la diapositiva seleccionada",
+    "attach": "Vincular a esta diapositiva",
+    "attachHint": "El aspecto no cambia. Activa la reproducción automática en el panel lateral.",
+    "autoPlay": "Reproducción automática",
+    "autoHint": "Reproducir al salir en directo. Seleccionar o cambiar este ajuste no inicia el audio.",
+    "play": "Reproducir música de la diapositiva",
+    "liveFirst": "Envía la diapositiva al directo para reproducir",
+    "change": "Cambiar música",
+    "remove": "Quitar música"
+  },
+  "hymnLibrary": {
+    "newHymn": "Nuevo himno",
+    "hymn": "Himno",
+    "actions": "Acciones",
+    "searchLyrics": "Buscar también en la letra",
+    "sort": "Orden",
+    "original": "Orden original",
+    "ascending": "Título: A–Z",
+    "descending": "Título: Z–A",
+    "clearSearch": "Borrar búsqueda",
+    "addHint": "Haz clic en un himno para añadirlo a la presentación.",
+    "resultCount": "{{matched}} / {{total}} himnos",
+    "noResults": "No hay himnos que coincidan con la búsqueda.",
+    "addNamed": "{{title}} — añadir a la presentación",
+    "editNamed": "{{title}} — editar",
+    "deleteNamed": "{{title}} — eliminar"
+  },
+  "gradientLibrary": {
+    "title": "Degradado",
+    "design": "Diseñar",
+    "library": "Mis gradientes",
+    "quickApply": "Degradado",
+    "openEditor": "Crear un gradiente en el editor",
+    "empty": "Aún no hay gradientes guardados. Crea un diseño en el editor y guárdalo en la biblioteca.",
+    "libraryError": "No se pudo cargar la biblioteca de gradientes.",
+    "deleteNamed": "{{name}} — eliminar de la biblioteca",
+    "skipped": "Se omitirán {{count}} diapositivas no compatibles.",
+    "liveIncluded": "Incluye la diapositiva en directo",
+    "previewHint": "Los cambios en el lienzo son una vista previa.",
+    "applyDraft": "Aplicar al borrador · {{count}} diapositivas",
+    "appliedDraft": "Use Guardar en el editor para actualizar la presentación.",
+    "saveLibrary": "Guardar en la biblioteca",
+    "name": "Nombre del gradiente",
+    "confirmSave": "Guardar diseño",
+    "saveHint": "Guardar en la biblioteca no modifica la diapositiva.",
+    "saved": "Gradiente guardado en la biblioteca.",
+    "removed": "Entrada eliminada. Se conservaron los fondos de las diapositivas existentes.",
+    "backgroundOnly": "Edición del fondo",
+    "backgroundOnlyHint": "Los ajustes de texto y partes permanecen en Diapositivas. Aquí puede diseñar y aplicar un fondo degradado."
   }
 }

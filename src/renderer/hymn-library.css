@@ -1,0 +1,49 @@
+.hymn-library{container-type:inline-size;overflow:hidden}
+.hymn-library-top,.hymn-library-content{width:100%;max-width:1600px;margin-inline:auto;min-width:0}
+.hymn-library-top{flex-shrink:0;padding:12px 16px 8px;border-bottom:1px solid #ffffff12;display:flex;flex-direction:column;gap:10px}
+.hymn-management,.hymn-tools,.hymn-find,.hymn-add-options{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.hymn-management{justify-content:space-between}
+.hymn-management h2{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;flex-shrink:0}
+.hymn-management h2 span{font-size:12px;font-weight:400;color:#ffffff99;font-variant-numeric:tabular-nums}
+.hymn-tools button,.hymn-tool,.hymn-add-options button{min-height:36px;font-size:13px;border-radius:6px;padding:6px 10px}
+.hymn-tool{display:inline-flex;align-items:center;justify-content:center;gap:6px;color:#ffffffbb;border:1px solid transparent;background:transparent}
+.hymn-tool:hover{background:#ffffff0d;color:white}
+.hymn-danger{color:#f87171}.hymn-danger:hover{color:#fca5a5}
+.hymn-tools button:disabled{opacity:.45;cursor:not-allowed}
+.hymn-search{display:flex;align-items:center;gap:8px;min-width:200px;flex:1 1 260px;min-height:38px;background:#0003;border:1px solid #ffffff20;border-radius:6px;padding:0 10px}
+.hymn-search>svg{color:#ffffff80;flex-shrink:0}
+.hymn-search input{width:100%;min-width:0;background:none;outline:none;font-size:14px;padding:8px 0}
+.hymn-search input::-webkit-search-cancel-button{display:none}
+.hymn-search button{width:28px;height:28px;display:grid;place-items:center;flex-shrink:0;border-radius:4px}
+.hymn-search:focus-within{border-color:#60a5fa}
+.hymn-lyrics-option{display:flex;align-items:center;gap:7px;font-size:13px;min-height:36px;cursor:pointer;white-space:nowrap}
+.hymn-lyrics-option input{accent-color:#3b82f6;width:16px;height:16px}
+.hymn-sort select{font-size:13px;padding:8px;min-height:36px;background:var(--bg-raised,#252525);border:1px solid #ffffff26;border-radius:6px;max-width:100%}
+.hymn-add-options{gap:6px}
+.hymn-list-summary{display:flex;justify-content:space-between;gap:4px 16px;flex-wrap:wrap;font-size:12px;line-height:18px;color:#ffffff99}
+.hymn-list-summary>[role=status]{white-space:nowrap;font-variant-numeric:tabular-nums}
+.hymn-library-content{flex:1;min-height:0;overflow:auto}
+.hymn-list-shell{--hymn-row-height:4.5rem;--hymn-columns:minmax(0,1fr) clamp(168px,22cqi,240px) clamp(120px,15cqi,176px);height:100%;display:flex;flex-direction:column;min-height:0;position:relative}
+.hymn-row-probe{position:absolute;visibility:hidden;pointer-events:none;height:var(--hymn-row-height);width:1px}
+.hymn-column-header{display:none;flex-shrink:0;color:#ffffff99;font-size:12px;border-bottom:1px solid #ffffff1a}
+.hymn-columns{display:grid;grid-template-columns:var(--hymn-columns) 80px;gap:12px;padding:8px 12px}
+.hymn-viewport{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable}
+.hymn-row{height:var(--hymn-row-height);display:flex;align-items:center;border-bottom:1px solid #ffffff10;padding:0 12px;gap:12px}
+.hymn-row:hover,.hymn-row:focus-within{background:#ffffff08}
+.hymn-add{flex:1;min-width:0;height:100%;display:grid;text-align:left;align-items:center;grid-template-columns:minmax(0,1fr);gap:12px;cursor:pointer;border-radius:3px}
+.hymn-title-block{display:flex;min-width:0;flex-direction:column}
+.hymn-title,.hymn-first-line,.hymn-mobile-meta,.hymn-author,.hymn-source{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;display:block}
+.hymn-title{font-size:14px;line-height:20px;font-weight:600;color:#fffffff0}
+.hymn-first-line{font-size:12px;line-height:16px;color:#ffffffa8}
+.hymn-mobile-meta{font-size:12px;line-height:16px;color:#ffffffa8}
+.hymn-author,.hymn-source{display:none;font-size:13px;line-height:18px;color:#ffffffb8}
+.hymn-row-actions{display:flex;align-items:center;gap:8px;width:80px;flex-shrink:0}
+.hymn-row-actions button{width:32px;height:32px;display:grid;place-items:center;border-radius:4px;color:#ffffffa8}
+.hymn-row-actions button:last-child{color:#f87171}
+.hymn-row-actions button:hover:not(:disabled){background:#ffffff12;color:white}
+.hymn-row-actions button:disabled{opacity:.3;cursor:not-allowed}
+.hymn-library button:focus-visible,.hymn-library select:focus-visible,.hymn-library input[type=checkbox]:focus-visible{outline:2px solid #60a5fa;outline-offset:-2px}
+.hymn-tooltip{position:fixed;z-index:80;width:min(360px,calc(100vw - 16px));max-height:70vh;overflow:auto;padding:12px;background:var(--bg-raised,#252525);border:1px solid #ffffff30;border-radius:6px;box-shadow:0 8px 24px #0008;font-size:13px;line-height:20px;overflow-wrap:anywhere;color:#e5e7eb}
+.hymn-tooltip strong{display:block;color:white}
+@container (min-width:56rem){.hymn-list-shell{--hymn-row-height:3.5rem}.hymn-column-header{display:block}.hymn-add{grid-template-columns:var(--hymn-columns)}.hymn-mobile-meta{display:none}.hymn-author,.hymn-source{display:block}}
+@container (max-width:55.99rem){.hymn-library-top{padding:10px 12px 8px}.hymn-tools{gap:4px}.hymn-add-options{width:100%}.hymn-find{gap:6px 10px}.hymn-search{flex-basis:240px}.hymn-management h2{margin-right:auto}}

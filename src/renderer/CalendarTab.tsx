@@ -313,7 +313,7 @@ export default function CalendarTab({
     <div className="h-full bg-[#16161a] text-white overflow-hidden">
       <div className="h-full flex flex-col">
         {/* HEADER */}
-        <div className="border-b border-white/[0.08] bg-[#26262b]/95 backdrop-blur-xl">
+        <div className="shrink-0 border-b border-white/[0.08] bg-[#26262b]/95 backdrop-blur-xl">
           <div className="px-4 sm:px-6 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-3">
             {/* LEFT */}
             <div className="flex items-center gap-3 sm:gap-4">
@@ -367,21 +367,21 @@ export default function CalendarTab({
               </button>
 
               <button
+                type="button"
                 onClick={openModal}
-                className="h-9 sm:h-10 px-3 sm:px-4 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 hover:opacity-90 transition-all flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium shadow-lg shadow-blue-500/20"
+                className="workspace-secondary-action h-9 sm:h-10"
               >
-                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span className="hidden sm:inline">{t('common.calendarAddEvent')}</span>
-                <span className="sm:hidden">{t('common.calendarAddEventShort')}</span>
+                <Plus className="w-4 h-4" aria-hidden="true" />
+                <span>{t('common.calendarAddEvent')}</span>
               </button>
             </div>
           </div>
         </div>
 
         {/* BODY */}
-        <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
+        <div className="min-h-0 flex-1 overflow-y-auto lg:flex lg:overflow-hidden">
           {/* CALENDAR */}
-          <div className="flex-1 overflow-y-auto lg:min-w-0">
+          <div className="lg:min-h-0 lg:min-w-0 lg:flex-1 lg:overflow-y-auto">
             <div className="p-3 sm:p-5">
               {/* WEEK DAYS */}
               <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-1 sm:mb-2">
@@ -416,7 +416,7 @@ export default function CalendarTab({
                       key={index}
                       onClick={() => { if (selectedDate !== dateStr) { setSelectedDate(dateStr); playSfx('check'); } }}
                       className={cn(
-                        'group relative min-h-[80px] sm:min-h-[120px] rounded-xl sm:rounded-2xl border p-2 sm:p-3 text-left transition-all duration-200 overflow-hidden',
+                        'group relative min-h-[72px] sm:min-h-[88px] lg:min-h-[120px] rounded-xl border p-2 lg:p-3 text-left transition-all duration-200 overflow-hidden',
                         isCurrentMonth
                           ? 'bg-white/[0.05] border-white/[0.08]'
                           : 'bg-white/[0.03] border-white/[0.05] opacity-40',
@@ -483,11 +483,11 @@ export default function CalendarTab({
           </div>
 
           {/* SIDEBAR */}
-          <div className="lg:w-[380px] w-full border-t lg:border-t-0 lg:border-l border-white/[0.08] bg-[#1e2128] overflow-y-auto lg:max-h-full max-h-[320px] sm:max-h-[400px]">
-            <div className="p-5">
+          <div className="w-full lg:w-[380px] lg:min-h-0 lg:shrink-0 border-t lg:border-t-0 lg:border-l border-white/[0.08] bg-[#1e2128] lg:overflow-y-auto">
+            <div className="p-3 lg:p-4">
               {/* DATE HEADER */}
-              <div className="rounded-3xl bg-gradient-to-br from-blue-500/10 to-violet-500/10 border border-white/5 p-5">
-                <div className="flex items-center gap-3 mb-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-gradient-to-br from-blue-500/10 to-violet-500/10 border border-white/5 p-3">
+                <div className="flex min-w-0 items-center gap-3">
                   <div className="w-10 h-10 rounded-2xl bg-blue-500/10 flex items-center justify-center border border-blue-500/10">
                     <Sparkles className="w-5 h-5 text-blue-400" />
                   </div>
@@ -510,18 +510,11 @@ export default function CalendarTab({
                   </div>
                 </div>
 
-                <button
-                  onClick={openModal}
-                  className="w-full h-11 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/5 transition-all text-sm font-medium flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  {t('common.calendarNewEvent')}
-                </button>
               </div>
 
               {/* EVENTS */}
-              <div className="mt-6">
-                <div className="flex items-center justify-between mb-4">
+              <div className="mt-4">
+                <div className="flex items-center justify-between mb-3">
                   <h4 className="font-semibold">
                     {t('common.calendarEvents')}
                   </h4>
@@ -533,9 +526,9 @@ export default function CalendarTab({
 
                 <div aria-live="polite">
                 {selectedDayEvents.length === 0 ? (
-                  <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.02] p-10 text-center">
-                    <div className="w-16 h-16 mx-auto rounded-3xl bg-blue-500/10 border border-blue-500/10 flex items-center justify-center mb-4">
-                      <CalendarDays className="w-8 h-8 text-blue-400/60" />
+                  <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-center">
+                    <div className="w-9 h-9 mx-auto rounded-lg bg-blue-500/10 border border-blue-500/10 flex items-center justify-center mb-2">
+                      <CalendarDays className="w-5 h-5 text-blue-400/60" />
                     </div>
 
                     <h5 className="font-medium text-white/80">
@@ -554,7 +547,7 @@ export default function CalendarTab({
                         className="group rounded-3xl border border-white/5 bg-white/[0.03] hover:bg-white/[0.05] transition-all p-4"
                       >
                         <div className="flex items-start justify-between gap-3">
-                          <div className="flex gap-3 flex-1">
+                          <div className="flex min-w-0 gap-3 flex-1">
                             <div
                               className={cn(
                                 'w-3 h-3 rounded-full mt-1.5 shrink-0',
@@ -599,11 +592,11 @@ export default function CalendarTab({
                             </div>
                           </div>
 
-                          <div className="flex gap-1">
+                          <div className="flex shrink-0 gap-1">
                             <button
                               onClick={() => openEditModal(event)}
                               aria-label={t('common.edit')}
-                              className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-all w-9 h-9 rounded-xl hover:bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0"
+                              className="transition-colors w-9 h-9 rounded-xl hover:bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                             >
                               <Pencil className="w-4 h-4" aria-hidden="true" />
                             </button>
@@ -611,7 +604,7 @@ export default function CalendarTab({
                             <button
                               onClick={() => deleteEvent(event.id)}
                               aria-label={t('common.delete')}
-                              className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-all w-9 h-9 rounded-xl hover:bg-red-500/10 text-red-400 flex items-center justify-center shrink-0"
+                              className="transition-colors w-9 h-9 rounded-xl hover:bg-red-500/10 text-red-400 flex items-center justify-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                             >
                               <Trash2 className="w-4 h-4" aria-hidden="true" />
                             </button>

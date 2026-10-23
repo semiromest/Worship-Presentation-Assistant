@@ -9,7 +9,7 @@ import { PracticePanel } from './PracticePanel';
 import { registerTourAnchor } from './Tour/tourController';
 import { useMemo, useState, useEffect, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Globe, Zap, Settings2, Save, Trash2, DatabaseBackup, Volume2, Mic, KeyRound, Languages, Check, Loader2, Music, Palette, Sparkles, Search, X, ChevronRight, BookOpen, Monitor, RefreshCw } from 'lucide-react';
+import { Globe, Zap, Settings2, Save, Trash2, DatabaseBackup, Volume2, Mic, KeyRound, Languages, Check, Loader2, Music, Palette, Sparkles, Search, X, ChevronRight, BookOpen, Monitor, RefreshCw, Keyboard } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { useUpdaterStore } from '../state/useUpdaterStore';
 import { WatermarkSettingsPanel } from './WatermarkSettingsPanel';
@@ -90,6 +90,7 @@ export default function SettingsTab() {
   const autoGoLive = useStore((s) => s.autoGoLive);
   const setAutoGoLive = useStore((s) => s.setAutoGoLive);
   const setIsUpdatesOpen = useStore((s) => s.setIsUpdatesOpen);
+  const setIsCheatsheetOpen = useStore((s) => s.setIsCheatsheetOpen);
   const liveSaveEnabled = useStore((s) => s.liveSaveEnabled);
   const setLiveSaveEnabled = useStore((s) => s.setLiveSaveEnabled);
   const liveSaveLastSaved = useStore((s) => s.liveSaveLastSaved);
@@ -190,7 +191,7 @@ export default function SettingsTab() {
 
   const categoryContent: Record<SettingsCategoryId, ReactNode> = {
     general: <>
-        <section id="settings-item-language" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4 space-y-3" aria-label={t('settings.language')}>
+        <section id="settings-item-language" tabIndex={-1} className="settings-simple-card settings-row rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.language')}>
           <div className="flex items-center gap-2">
             <Globe className="w-4 h-4 text-white/60 shrink-0" aria-hidden="true" />
             <div>
@@ -212,7 +213,7 @@ export default function SettingsTab() {
           </select>
         </section>
 
-        <section id="settings-item-sound" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.soundEffects')}>
+        <section id="settings-item-sound" tabIndex={-1} className="settings-simple-card rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.soundEffects')}>
           <div className="settings-row flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 min-w-0">
               <Volume2 className={cn('w-4 h-4 shrink-0', uiSfxEnabled ? 'text-emerald-300' : 'text-white/35')} aria-hidden="true" />
@@ -223,13 +224,13 @@ export default function SettingsTab() {
             </div>
             <SettingSwitch checked={uiSfxEnabled} onCheckedChange={setUiSfxEnabled} label={t('settings.soundEffects')} />
           </div>
-          <div className="settings-row mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-4">
+          <div className="settings-row mt-3 flex items-center justify-between gap-4 border-t border-white/10 pt-3">
             <div><h4 className="text-sm font-medium">{t('settings.muteSfxDuringLive')}</h4><p className="text-sm text-white/60">{t('settings.muteSfxDuringLiveDesc')}</p></div>
             <SettingSwitch checked={uiSfxMuteDuringLive} onCheckedChange={setUiSfxMuteDuringLive} label={t('settings.muteSfxDuringLive')} />
           </div>
         </section>
 
-        <section id="settings-item-motion" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.uiMotion')}>
+        <section id="settings-item-motion" tabIndex={-1} className="settings-simple-card rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.uiMotion')}>
           <div className="settings-row flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 min-w-0">
               <Sparkles className={cn('w-4 h-4 shrink-0', uiMotionEnabled ? 'text-violet-300' : 'text-white/35')} aria-hidden="true" />
@@ -247,7 +248,7 @@ export default function SettingsTab() {
           </div>
         </section></>,
     presentation: <>
-        <section id="settings-item-auto-live" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('common.autoGoLive')}>
+        <section id="settings-item-auto-live" tabIndex={-1} className="settings-simple-card rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('common.autoGoLive')}>
           <div className="settings-row flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 min-w-0">
               <Zap className={cn('w-4 h-4 shrink-0', autoGoLive ? 'text-emerald-300' : 'text-white/35')} aria-hidden="true" />
@@ -260,12 +261,12 @@ export default function SettingsTab() {
           </div>
         </section>
 
-        <section id="settings-item-sections" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4 settings-row flex items-center justify-between gap-4">
+        <section id="settings-item-sections" tabIndex={-1} className="settings-simple-card rounded-xl border border-white/10 bg-surface-raised p-4 settings-row flex items-center justify-between gap-4">
           <div><h3 className="text-sm font-semibold">{t('sections.title')}</h3><p className="text-sm leading-relaxed text-white/60">{t('sections.description')}</p></div>
           <SettingSwitch checked={sectionsEnabled} onCheckedChange={setSectionsEnabled} label={t('sections.title')} />
         </section>
 
-        <section id="settings-item-notes" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4 settings-row flex items-center justify-between gap-4" aria-label={t('common.operatorNotes')}>
+        <section id="settings-item-notes" tabIndex={-1} className="settings-simple-card rounded-xl border border-white/10 bg-surface-raised p-4 settings-row flex items-center justify-between gap-4" aria-label={t('common.operatorNotes')}>
           <div>
             <h3 className="text-sm font-semibold">{t('common.operatorNotes')}</h3>
             <p className="text-sm leading-relaxed text-white/60">{t('settings.operatorNotesDesc')}</p>
@@ -533,20 +534,20 @@ export default function SettingsTab() {
             )}
           </div>
         </section>,
-    updates: <section id="settings-item-updates" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.updates')}>
+    updates: <section id="settings-item-updates" tabIndex={-1} className="settings-simple-card rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.updates')}>
           <div className="settings-row flex items-center justify-between gap-4">
             <div className="min-w-0">
               <h3 className="text-sm font-semibold">{t('settings.updates')}</h3>
               <p className="text-sm leading-relaxed text-white/60">{t('settings.updatesDesc')}</p>
               {currentVersion && (
-                <p className="mt-2 text-xs font-mono text-white/40">
+                <p className="mt-1 text-xs font-mono text-white/65">
                   {t('updates.currentVersion')}: v{currentVersion}
                 </p>
               )}
             </div>
             <button
               onClick={() => { setIsUpdatesOpen(true); playSfx('open'); }}
-              className="relative inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.96]"
+              className="workspace-secondary-action relative font-medium transition-colors active:scale-[0.96]"
             >
               {t('settings.openUpdates')}
               {(updaterStatus === 'available' || updaterStatus === 'downloaded') && (
@@ -559,14 +560,22 @@ export default function SettingsTab() {
             </button>
           </div>
         </section>,
-    learning: <section id="settings-item-learn" tabIndex={-1} ref={element => registerTourAnchor('help', element)} className="rounded-xl border border-white/10 bg-surface-raised p-4 space-y-3">
+    learning: <>
+        <section id="settings-item-shortcuts" tabIndex={-1} className="settings-simple-card settings-row flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-surface-raised p-4">
+          <div className="min-w-0">
+            <h3 className="flex items-center gap-2 text-sm font-semibold"><Keyboard className="h-4 w-4 shrink-0 text-white/60" aria-hidden="true" />{t('common.keyboardShortcuts')}</h3>
+            <p className="mt-1 text-sm leading-relaxed text-white/60">{t('tour.helpDescription')}</p>
+          </div>
+          <button type="button" aria-label={t('common.keyboardShortcuts')} onClick={() => { setIsCheatsheetOpen(true); playSfx('open'); }} className="workspace-secondary-action focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">{t('common.open')}</button>
+        </section>
+        <section id="settings-item-learn" tabIndex={-1} ref={element => registerTourAnchor('help', element)} className="rounded-xl border border-white/10 bg-surface-raised p-4 space-y-3">
           <PracticePanel />
-        </section>,
+        </section></>,
   };
 
   return (
     <div className="settings-workspace flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-white/10 bg-surface px-4 py-4">
+      <header className="shrink-0 border-b border-white/10 bg-surface px-4 py-3">
         <div className="settings-header-layout mx-auto max-w-6xl">
           <h2 className="flex items-center gap-2 text-xl font-bold"><Settings2 className="h-5 w-5 text-blue-400" aria-hidden="true" />{t('nav.settings')}</h2>
           <div className="settings-search relative min-w-0">
@@ -574,7 +583,7 @@ export default function SettingsTab() {
             <input ref={searchRef} type="search" value={query} onChange={event => setQuery(event.target.value)}
               onKeyDown={event => { if (event.key === 'Escape' && query) { event.preventDefault(); event.stopPropagation(); clearSearch(); } }}
               aria-label={t('settings.navigation.search')} placeholder={t('settings.navigation.search')}
-              className="w-full rounded-xl border border-white/15 bg-white/5 py-2.5 pl-10 pr-11 text-sm outline-none placeholder:text-white/40 focus-visible:border-blue-400" />
+              className="workspace-search-input pr-11" />
             {query && <button type="button" onClick={clearSearch} aria-label={t('settings.navigation.clearSearch')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-white/60 hover:bg-white/10 hover:text-white"><X className="h-4 w-4" aria-hidden="true" /></button>}
           </div>
         </div>

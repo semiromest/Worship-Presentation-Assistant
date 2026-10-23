@@ -1,5 +1,7 @@
 {
   "gradient": {
+    "customColors": "Eigene Farben",
+    "colorNumber": "Farbe {{number}}",
     "animation": "Animation",
     "aurora": "Polarlicht",
     "waves": "Wellen",
@@ -35,7 +37,24 @@
       "amber": "Bernstein",
       "rose": "Rose",
       "smoke": "Rauch"
-    }
+    },
+    "scopeSlideHint": "Nur die gerade bearbeitete Folie.",
+    "scopeNoGroup": "Diese Folie gehört zu keiner Gruppe.",
+    "scopeSelectionHint": "Im Folienbereich ausgewählte Folien.",
+    "scopeNoSelection": "Wählen Sie zuerst mehrere Folien im Folienbereich aus.",
+    "targetCount": "Wird auf {{count}} Folien angewendet",
+    "targetList": "Zu ändernde Folien",
+    "untitledSlide": "Folie ohne Inhalt",
+    "textOnly": "Nur Hintergründe von Textfolien werden geändert.",
+    "groupInheritance": "Später hinzugefügte geeignete Folien dieser Gruppe übernehmen diesen Hintergrund ebenfalls.",
+    "linear": "Linear",
+    "startColor": "Startfarbe",
+    "endColor": "Endfarbe",
+    "angle": "Winkel",
+    "remove": "Farbverlauf entfernen",
+    "colors": "Farben",
+    "presets": "Farbpaletten",
+    "appearance": "Darstellung"
   },
   "nav": {
     "editor": "Editor",
@@ -178,10 +197,20 @@
     "remoteLoadingDesc": "Der QR-Code wird erstellt. Bitte warten Sie.",
     "remoteQrAlt": "QR-Code für die Fernsteuerung – mit dem Telefon scannen",
     "remoteDiagTitle": "Verbindungsprobleme diagnostizieren",
+    "remoteDiagFirewallCheck": "Firewall und Netzwerkberechtigung",
+    "remoteDiagProfilePublic": "Öffentliches Netzwerk",
+    "remoteDiagProfilePrivate": "Privates Netzwerk",
+    "remoteDiagProfileDomain": "Domänennetzwerk",
+    "remoteDiagFirewallStatusallowed": "Windows-Regeln erlauben die Verbindung. Der Zugriff vom Telefon muss noch geprüft werden.",
+    "remoteDiagFirewallStatusdisabled": "Die Windows-Firewall ist für dieses Netzwerk ausgeschaltet; keine Windows-Blockierung erkannt.",
+    "remoteDiagFirewallStatusblocked": "Eine Windows-Firewalleinstellung blockiert eingehende Verbindungen in diesem Netzwerk.",
+    "remoteDiagFirewallStatusmissingPermission": "Keine eingehende Berechtigung für App oder Port in diesem Netzwerk gefunden; Windows könnte die Verbindung blockieren.",
+    "remoteDiagFirewallStatusunknown": "Die Windows-Netzwerkberechtigungen konnten wegen eingeschränkter Regeln, Zugriffsrechten oder anderer Sicherheitssoftware nicht bestätigt werden.",
+    "remoteDiagFirewallPermissionHint": "Prüfen Sie für Telefon-, Zuschauer- und Untertitellinks unter Windows-Sicherheit > Firewall & Netzwerkschutz > Zugriff von App durch Firewall zulassen die Berechtigung für Worship Presentation Assistant im aktuellen Netzwerktyp (Privat/Öffentlich). Lassen Sie die Firewall eingeschaltet und erlauben Sie den Zugriff nur in vertrauenswürdigen Netzwerken.",
     "remoteDiagRun": "Diagnose starten",
     "remoteDiagRunning": "Diagnose läuft...",
     "remoteDiagRetry": "Wiederholen",
-    "remoteDiagFirewallTitle": "⚠ Firewall-Blockierung erkannt",
+    "remoteDiagFirewallTitle": "Eine Firewall könnte die Verbindung blockieren",
     "remoteDiagFirewallStep1": "Stellen Sie sicher, dass 'Worship Presentation Assistant' in der Windows-Firewall → Eingehende Regeln erlaubt ist",
     "remoteDiagFirewallStep2": "Falls Sie eine Antiviren-Software nutzen (Avast, Kaspersky usw.), fügen Sie die App zur Vertrauensliste hinzu",
     "remoteDiagFirewallStep3": "Öffentliche WLANs (Hotels, Cafés) können AP-Isolation haben — versuchen Sie einen mobilen Hotspot",
@@ -346,12 +375,12 @@
     "hymnsPartsModeOn": "Teilmodus EIN – Lied wird auf eine Folie aufgeteilt",
     "hymnsPartsModeOff": "Teilmodus AUS – Lied wird auf mehrere Folien aufgeteilt",
     "hymnsPartsMode": "Teilmodus",
-    "hymnsAuthorOnSlides": "Autor anzeigen",
-    "hymnsAuthorOnSlidesOn": "Autor wird auf Folien angezeigt",
-    "hymnsAuthorOnSlidesOff": "Autor wird auf Folien ausgeblendet",
-    "hymnsAuthorPosition": "Autorenposition",
-    "hymnsAuthorPositionDesc": "Position des Autorennamens auf der Folie",
-    "hymnsAuthorSize": "Schriftgröße des Autors",
+    "hymnsAuthorOnSlides": "Liedtitel und Autor anzeigen",
+    "hymnsAuthorOnSlidesOn": "Liedtitel und Autor werden auf Folien angezeigt",
+    "hymnsAuthorOnSlidesOff": "Liedtitel und Autor werden auf Folien ausgeblendet",
+    "hymnsAuthorPosition": "Position von Liedtitel und Autor",
+    "hymnsAuthorPositionDesc": "Gemeinsame Position von Liedtitel und Autor auf der Folie",
+    "hymnsAuthorSize": "Schriftgröße von Liedtitel und Autor",
     "hymnsAuthorPosBottomLeft": "Unten links",
     "hymnsAuthorPosBottomCenter": "Unten Mitte",
     "hymnsAuthorPosBottomRight": "Unten rechts",
@@ -429,6 +458,9 @@
     "calendarUpdate": "Aktualisieren",
     "clickToRename": "Zum Umbenennen klicken",
     "mediaLibrary": "Medienbibliothek",
+    "mediaAddSelected": "Auswahl als Folien hinzufügen ({{count}})",
+    "mediaClearSelection": "Auswahl aufheben",
+    "mediaAddAll": "Alle als Folien hinzufügen",
     "mediaTabs": "Medien-Tabs",
     "mediaVolume": "Medienlautstärke",
     "mediaAdd": "Medien hinzufügen",
@@ -1001,7 +1033,9 @@
     "editorAlignToSelection": "Auswahl",
     "editorSameWidth": "Gleiche Breite",
     "editorSameHeight": "Gleiche Höhe",
-    "editorSafeArea": "Sicherheitsbereich anzeigen (5 %)"
+    "editorSafeArea": "Sicherheitsbereich anzeigen (5 %)",
+    "importCompleteWithWarnings": "Mit Warnungen importiert",
+    "importReviewWarnings": "Einige Schriften oder Elemente wurden möglicherweise nicht vollständig erhalten. Prüfen Sie die Folien vor der Präsentation."
   },
   "warnings": {
     "minSlides": "Es muss mindestens eine Folie übrig bleiben!",
@@ -1017,7 +1051,12 @@
     "ko": "Koreanisch"
   },
   "countdown": {
-    "remaining": "{{time}} verbleibend"
+    "remaining": "{{time}} verbleibend",
+    "preview": "Vorschau",
+    "ready": "Bereit",
+    "running": "Läuft",
+    "previewHint": "Diese Vorschau ändert den Präsentationstimer nicht. Zur Folie hinzufügen startet einen neuen Timer mit der eingestellten Dauer.",
+    "durationLocked": "Setzen Sie den Vorschautimer zurück, um die Dauer zu ändern."
   },
   "loop": {
     "noItems": "Keine Loop-Elemente"
@@ -1053,6 +1092,7 @@
     "error": "Drive-Fehler"
   },
   "transition": {
+    "label": "Übergang",
     "settings": "Übergangseinstellungen",
     "type": "Übergangstyp",
     "duration": "Übergangsdauer",
@@ -1147,7 +1187,9 @@
     "youtubeLoading": "YouTube-Audio wird vorbereitet…",
     "youtubeNoResults": "Keine Ergebnisse gefunden.",
     "youtubeSearch": "YouTube durchsuchen",
-    "youtubeSearchPlaceholder": "YouTube-Musik suchen...",
+    "youtubeSearchPlaceholder": "Songname oder YouTube-Link…",
+    "youtubeInvalidLink": "Bitte einen gültigen YouTube-Videolink eingeben.",
+    "youtubeVideoUnavailable": "Dieses Video ist nicht verfügbar. Bitte den Link prüfen.",
     "youtubeSearchError": "YouTube-Suche fehlgeschlagen.",
     "youtubePlayError": "YouTube-Audio konnte nicht abgespielt werden.",
     "soundEffectsDesc": "Soundeffekte der Benutzeroberfläche (Minimal-Paket)",
@@ -1230,6 +1272,7 @@
         "clear-live-saves": "automatische aufnahmen löschen bereinigen",
         "updates": "updates version herunterladen",
         "learn": "übung anleitung lernen hilfe",
+        "shortcuts": "tastatur tastenkürzel tasten hilfe",
         "soniox-website": "soniox offizielle website konto kosten nutzung",
         "stt-clear-key": "api schlüssel löschen entfernen",
         "appearance-preview": "vorschau simulation logo autor größe position"
@@ -1266,7 +1309,10 @@
     "completed": "Prüfung abgeschlossen",
     "slideErrors": "{{count}} Problem(e), darunter Fehler. Folienbericht öffnen.",
     "slideWarnings": "{{count}} Warnung(en). Folienbericht öffnen.",
-    "severity": {"error":"Fehler","warning":"Warnung"},
+    "severity": {
+      "error": "Fehler",
+      "warning": "Warnung"
+    },
     "title": "Vorbereitungsprüfung",
     "button": "Prüfung",
     "allClear": "Alles bereit",
@@ -1294,16 +1340,19 @@
     "splitAction": "Text in lesbare Teile aufteilen"
   },
   "library": {
+    "tools": "Präsentationswerkzeuge",
+    "powerPoint": "PowerPoint",
+    "saveFile": "In Datei speichern",
     "subtitle": "Gottesdienst vorbereiten, Arbeit speichern und Präsentationen finden.",
     "current": "Aktuelle Präsentation",
     "slideCount": "{{count}} Folien",
-    "saved": "In Bibliothek gespeichert",
-    "unsaved": "Nicht in Bibliothek gespeicherte Änderungen",
+    "saved": "Unter Gespeicherte Präsentationen gespeichert",
+    "unsaved": "Änderungen nicht unter Gespeicherte Präsentationen gespeichert",
     "backupOn": "Automatische Sicherung aktiv",
     "backupOff": "Automatische Sicherung aus",
     "backupAt": "Sicherung: {{time}}",
     "continueEditing": "Folien bearbeiten",
-    "save": "In Bibliothek speichern",
+    "save": "Unter Gespeicherte Präsentationen speichern",
     "fileTools": "Datei- und PowerPoint-Werkzeuge",
     "saveFailed": "Speichern fehlgeschlagen. Die Präsentation bleibt geöffnet. Erneut versuchen.",
     "operationFailed": "Vorgang fehlgeschlagen. Erneut versuchen.",
@@ -1447,7 +1496,7 @@
       },
       "presentations": {
         "title": "In Bibliothek speichern",
-        "body": "Speichern Sie die Übungspräsentation in der Bibliothek. Keine externe Datei wird geschrieben."
+        "body": "Verwende in Präsentationen die Schaltfläche In Bibliothek speichern im Bereich der aktuellen Präsentation. Diese Aufgabe speichert in der Übungsbibliothek, nicht über In Datei speichern."
       },
       "hymns": {
         "title": "Lieder",
@@ -1500,7 +1549,7 @@
       },
       "presentations": {
         "title": "Präsentationen",
-        "body": "Hier kannst du deine Präsentationen erstellen, speichern und verwalten. Schauen wir uns diesen Bereich zunächst an. Bald wirst du deine eigenen Folien erstellen."
+        "body": "Oben findest du die Werkzeuge für neue Präsentationen, Dateien, Sicherungen, Drive und PowerPoint. Darunter zeigt der Bereich der aktuellen Präsentation ihren Namen und Speicherstatus; dort kannst du auch die Folien weiterbearbeiten."
       },
       "sidebar": {
         "title": "In der App navigieren",
@@ -1588,7 +1637,7 @@
       },
       "settings-intro": {
         "title": "Die App an dich anpassen",
-        "body": "Hier kannst du die App-Sprache und weitere Einstellungen verwalten. Außerdem kannst du im Hilfebereich Tutorials neu starten und die Bereiche der App erneut entdecken."
+        "body": "Finde Einstellungen über die Kategorien oder das Suchfeld. Über die Lernkategorie kannst du die Schritt-für-Schritt-Anleitung erneut öffnen."
       },
       "nav-save": {
         "title": "Zu Präsentationen zurückkehren",
@@ -1640,7 +1689,7 @@
       },
       "save": {
         "title": "Deine Präsentation in der Bibliothek speichern",
-        "body": "Klicke auf In Bibliothek speichern. Deine Präsentation wird ausschließlich in der Bibliothek des Übungsprofils gespeichert; deine echten Präsentationen bleiben unberührt."
+        "body": "Klicke im Bereich der aktuellen Präsentation auf die blaue Schaltfläche In Bibliothek speichern. In Datei speichern ist eine separate Aktion. Diese Übung speichert nur in der Übungsbibliothek; deine echten Präsentationen bleiben unberührt."
       },
       "add-result": {
         "title": "Deine erste Folie ist fertig!",
@@ -1776,5 +1825,85 @@
     "volume": "Lautstärke dieser Folie",
     "volumeHint": "Wird mit der Gesamtlautstärke kombiniert. Änderungen an Titel und Aussehen starten die Musik nicht neu.",
     "fadeHint": "Der Ton wird in 0,5 Sekunden eingeblendet und beim Folienwechsel in 0,8 Sekunden ausgeblendet. Stopp und das Schließen der Ausgabe schalten ihn sofort aus."
+  },
+  "slidesWorkspace": {
+    "readiness": "Prüfung",
+    "help": "Tastatur",
+    "music": "Musik",
+    "viewers": "Zuschauer",
+    "phone": "Telefon",
+    "locked": "Gesperrt",
+    "direct": "Direkt live",
+    "selectedTitle": "Ausgewählt · {{number}}",
+    "editingLive": "Live-Folie wird bearbeitet",
+    "content": "Inhalt",
+    "appearance": "Darstellung",
+    "background": "Hintergrund",
+    "selectionTools": "Folienaktionen",
+    "displays": "Bildschirme",
+    "openEditor": "Editor öffnen",
+    "partsNavigationHint": "↑ ↓: Strophen · ← →: Folien"
+  },
+  "offlineMusic": {
+    "download": "Herunterladen",
+    "downloading": "Wird geladen",
+    "ready": "Offline verfügbar",
+    "cancel": "Download abbrechen",
+    "hint": "Audio für die Offline-Wiedergabe auf diesem Computer speichern.",
+    "localHint": "Auf diesem Computer gespeichert; nicht in der Präsentationsdatei enthalten.",
+    "error": "Download fehlgeschlagen. Verbindung und freien Speicher prüfen und erneut versuchen.",
+    "busy": "Ein anderer Titel wird heruntergeladen. Bitte warten."
+  },
+  "slideAudio": {
+    "add": "Musik hinzufügen",
+    "dialogTitle": "Musik zur ausgewählten Folie",
+    "attach": "Mit dieser Folie verknüpfen",
+    "attachHint": "Das Aussehen bleibt unverändert. Automatische Wiedergabe im Seitenbereich aktivieren.",
+    "autoPlay": "Automatisch abspielen",
+    "autoHint": "Startet, wenn die Folie live geht. Auswahl oder Änderung startet keine Wiedergabe.",
+    "play": "Folienmusik abspielen",
+    "liveFirst": "Folie zuerst live schalten",
+    "change": "Musik ändern",
+    "remove": "Musik entfernen"
+  },
+  "hymnLibrary": {
+    "newHymn": "Neues Lied",
+    "hymn": "Lied",
+    "actions": "Aktionen",
+    "searchLyrics": "Auch im Liedtext suchen",
+    "sort": "Sortierung",
+    "original": "Ursprüngliche Reihenfolge",
+    "ascending": "Liedtitel: A–Z",
+    "descending": "Liedtitel: Z–A",
+    "clearSearch": "Suche löschen",
+    "addHint": "Ein Lied anklicken, um es zur Präsentation hinzuzufügen.",
+    "resultCount": "{{matched}} / {{total}} Lieder",
+    "noResults": "Keine Lieder entsprechen Ihrer Suche.",
+    "addNamed": "{{title}} — zur Präsentation hinzufügen",
+    "editNamed": "{{title}} — bearbeiten",
+    "deleteNamed": "{{title}} — löschen"
+  },
+  "gradientLibrary": {
+    "title": "Farbverlauf",
+    "design": "Gestalten",
+    "library": "Meine Gradienten",
+    "quickApply": "Farbverlauf",
+    "openEditor": "Gradient im Editor erstellen",
+    "empty": "Noch keine Gradienten gespeichert. Erstellen Sie im Editor einen Entwurf und speichern Sie ihn in der Bibliothek.",
+    "libraryError": "Die Gradientenbibliothek konnte nicht geladen werden.",
+    "deleteNamed": "{{name}} — aus Bibliothek löschen",
+    "skipped": "{{count}} ungeeignete Folien werden übersprungen.",
+    "liveIncluded": "Live-Folie enthalten",
+    "previewHint": "Änderungen auf der Leinwand sind eine Vorschau.",
+    "applyDraft": "Auf Entwurf anwenden · {{count}} Folien",
+    "appliedDraft": "Übernehmen Sie die Änderungen mit Speichern im Editor in die Präsentation.",
+    "saveLibrary": "In Bibliothek speichern",
+    "name": "Gradientenname",
+    "confirmSave": "Entwurf speichern",
+    "saveHint": "Das Speichern in der Bibliothek verändert die Folie nicht.",
+    "saved": "Gradient in der Bibliothek gespeichert.",
+    "removed": "Bibliothekseintrag entfernt. Bestehende Folienhintergründe bleiben erhalten.",
+    "backgroundOnly": "Hintergrund bearbeiten",
+    "backgroundOnlyHint": "Text- und Abschnittseinstellungen bleiben auf der Folienseite. Hier können Sie einen Verlaufshintergrund gestalten und anwenden."
   }
 }

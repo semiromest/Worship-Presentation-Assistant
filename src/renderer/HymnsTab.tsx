@@ -3,9 +3,9 @@ export type { Hymn } from './hymnImport';
 import { playSfx } from './sfx';
 import { practiceHymns } from '../shared/practice';
 import { usePractice } from './hooks/usePractice';
-import { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Music, Plus, Search, Trash2, FolderUp, CheckSquare, Pencil, X, ListOrdered, Cloud, Link2, CheckCircle, UserRound } from 'lucide-react';
+import { Music, Plus, Search, Trash2, FolderUp, X, ListOrdered, Cloud, Link2, CheckCircle, UserRound } from 'lucide-react';
 import { Skeleton } from './components/Skeleton';
 import OnlineHymnsPanel from './components/OnlineHymnsPanel';
 import SetLinkImportDialog from './components/SetLinkImportDialog';
@@ -14,6 +14,10 @@ import { cn, normalizeSearchText, sourceTextMatches, useDebounce } from './utils
 import { confirmDialog } from './dialogs';
 import Dialog from './components/Dialog';
 import ProgressBar from './components/ProgressBar';
+import HymnLibraryList from './components/HymnLibraryList';
+import type { HymnFocus } from './components/HymnLibraryList';
+import { hymnSortOrder, sortHymns } from './hymnLibrary';
+import './hymn-library.css';
 
 interface HymnsTabProps {
   onAddHymnToPresentation: (hymn: Hymn, partsMode?: boolean, goLive?: boolean) => void;
@@ -206,39 +210,6 @@ async function parseXmlFiles(
   return { hymns: results, failedCount };
 }
 
-// ─── Virtual list ─────────────────────────────────────────────────────────
-
-const ITEM_H = 80;
-const OVERSCAN = 5;
-
-function useVirtualList(items: Hymn[], containerRef: React.RefObject<HTMLDivElement>) {
-  const [scrollTop, setScrollTop] = useState(0);
-  const [height, setHeight] = useState(400);
-  const [el, setEl] = useState<HTMLDivElement | null>(null);
-
-  // Sync ref.current → state so useEffect re-fires when the DOM element changes
-  // (e.g. after toggling showOnlinePanel off/on which unmounts and remounts the div)
-  useEffect(() => {
-    setEl(containerRef.current);
-  });
-
-  useEffect(() => {
-    if (!el) return;
-    const ro = new ResizeObserver(entries => setHeight(entries[0].contentRect.height));
-    ro.observe(el);
-    const onScroll = () => setScrollTop(el.scrollTop);
-    el.addEventListener('scroll', onScroll, { passive: true });
-    // Read initial dimensions
-    setHeight(el.clientHeight || 400);
-    return () => { ro.disconnect(); el.removeEventListener('scroll', onScroll); };
-  }, [el]);
-
-  const start = Math.max(0, Math.floor(scrollTop / ITEM_H) - OVERSCAN);
-  const end   = Math.min(items.length, Math.ceil((scrollTop + height) / ITEM_H) + OVERSCAN);
-
-  return { start, end, totalHeight: items.length * ITEM_H };
-}
-
 // ─── Main component ───────────────────────────────────────────────────────
 
 export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
@@ -276,7 +247,12 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
     }
   });
   const [showSetLinkDialog, setShowSetLinkDialog] = useState(false);
-  const listRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const editReturnRef = useRef<HTMLElement | null>(null);
+  const [focusRequest, setFocusRequest] = useState<HymnFocus | null>(null);
+  const [libraryReady, setLibraryReady] = useState(false);
+  const allowEmptyPersist = useRef(false);
+  const [sortOrder, setSortOrder] = useState(() => { try { return hymnSortOrder(localStorage.getItem('hymnsSortOrder')); } catch { return hymnSortOrder(null); } });
 
   const filteredHymns = useMemo(() => {
     if (!debouncedSearch) return hymns;
@@ -289,7 +265,9 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
     });
   }, [hymns, debouncedSearch, searchInLyrics]);
 
-  const { start, end, totalHeight } = useVirtualList(filteredHymns, listRef);
+  const sortedHymns = useMemo(() => sortHymns(filteredHymns, sortOrder, i18n.resolvedLanguage || i18n.language), [filteredHymns, sortOrder, i18n.resolvedLanguage, i18n.language]);
+  const requestFocus = useCallback((id: string, action: HymnFocus['action']) => setFocusRequest({ id, action, request: performance.now() }), []);
+  const selectHymn = useCallback((h: Hymn) => onAddHymnToPresentation({ ...h, showAuthorOnSlides }, practice && h.id.startsWith('practice-hymn-') ? true : partsModeEnabled), [onAddHymnToPresentation, showAuthorOnSlides, practice, partsModeEnabled]);
 
   // ─── Import ───────────────────────────────────────────────────────────
 
@@ -346,15 +324,17 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
     if (practice) {
       const cached = loadCachedHymns('__online__') ?? [];
       setHymns(previous => [sample, ...mergeImportedHymns(previous, cached).filter(hymn => !hymn.id.startsWith('practice-hymn-'))]);
+      setLibraryReady(true);
       return;
     }
     const path = localStorage.getItem('defaultHymnArchivePath');
     if (path) {
-      handleBulkImport(path);
+      void handleBulkImport(path).finally(() => setLibraryReady(true));
     } else {
       // No file archive path — try loading from fallback (online-only) cache
       const cached = loadCachedHymns('__online__');
       if (cached) setHymns(cached);
+      setLibraryReady(true);
     }
   }, [handleBulkImport, practice, sample]);
 
@@ -393,14 +373,15 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
   // bulk import, online import, add new, remove, edit)
   // Always caches — uses path-based key if available, otherwise a fallback key.
   useEffect(() => {
-    if (hymns.length === 0) return;
+    if (!libraryReady || (hymns.length === 0 && !allowEmptyPersist.current)) return;
     const savedPath = localStorage.getItem('defaultHymnArchivePath') || '__online__';
     cacheHymns(savedPath, hymns);
-  }, [hymns]);
+  }, [hymns, libraryReady]);
 
   const clearHymns = useCallback(async () => {
     const confirmed = await confirmDialog(t('common.hymnsConfirmClear'));
     if (!confirmed) return;
+    allowEmptyPersist.current = true;
     const savedPath = localStorage.getItem('defaultHymnArchivePath');
     if (savedPath) {
       localStorage.removeItem(`hymnsCache:${CACHE_VERSION}:${savedPath}`);
@@ -412,22 +393,37 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
   }, [t]);
 
   const removeHymn = useCallback((id: string) => {
+    const index = sortedHymns.findIndex(h => h.id === id);
+    const next = sortedHymns[index + 1] ?? sortedHymns[index - 1];
+    allowEmptyPersist.current = true;
     setHymns(prev => prev.filter(h => h.id !== id));
+    if (next) requestFocus(next.id, 'add');
+    else requestAnimationFrame(() => searchRef.current?.focus());
     playSfx('delete');
-  }, []);
+  }, [sortedHymns, requestFocus]);
 
   // ─── Hymn editing ────────────────────────────────────────────────────
 
   const openEditModal = useCallback((hymn: Hymn) => {
     playSfx('open');
+    editReturnRef.current = document.activeElement as HTMLElement;
     setEditingHymn(hymn);
     setEditForm({ title: hymn.title, lyrics: hymn.lyrics, author: hymn.author ?? '' });
   }, []);
 
-  const closeEditModal = useCallback(() => {
+  const closeEditModal = useCallback((updated?: Hymn) => {
+    const q = normalizeSearchText(debouncedSearch);
+    const remainsVisible = !updated || !q || normalizeSearchText(updated.title).includes(q)
+      || (searchInLyrics && normalizeSearchText(updated.lyrics).includes(q))
+      || (updated.source && sourceTextMatches(updated.source, q));
+    if (editingHymn && remainsVisible) requestFocus(editingHymn.id, 'edit');
+    else {
+      setFocusRequest(null);
+      requestAnimationFrame(() => searchRef.current?.focus());
+    }
     setEditingHymn(null);
     setEditForm({ title: '', lyrics: '', author: '' });
-  }, []);
+  }, [editingHymn, requestFocus, debouncedSearch, searchInLyrics]);
 
   const saveEditedHymn = useCallback(() => {
     if (!editingHymn) return;
@@ -448,28 +444,75 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
       return updated;
     });
 
-    closeEditModal();
+    closeEditModal({ ...editingHymn, title: cleanTitle(trimmedTitle), lyrics: cleanLyrics(trimmedLyrics), author: author || undefined });
     playSfx('success');
   }, [editingHymn, editForm, closeEditModal]);
 
   // ─── Render ───────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full bg-surface-raised">
-      {/* Top bar */}
-      <div className="p-4 border-b border-white/10 space-y-4">
-        <div className="flex items-center justify-end">
-          <h2 className="font-bold text-xs uppercase tracking-widest text-white/40 flex items-center gap-2 mr-auto">
-            <Music className="w-3.5 h-3.5" />
-            {t('common.hymnsTitle')}
-            {hymns.length > 0 && (
-              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-full bg-white/5 text-white/45">
-                {hymns.length}
-              </span>
-            )}
-          </h2>
-
-          <div className="flex flex-wrap items-center gap-2">
+    <div className="hymn-library flex flex-col h-full min-h-0 bg-surface-raised">
+      <div className="hymn-library-top">
+        <div className="hymn-management">
+          <h2><Music size={16} aria-hidden="true" />{t('common.hymnsTitle')} <span>{hymns.length.toLocaleString(i18n.language)}</span></h2>
+          <div className="hymn-tools">
+            <button
+              onClick={() => { setIsAddingNew(!isAddingNew); playSfx(isAddingNew ? 'close' : 'open'); }}
+              className="hymn-tool"
+              aria-expanded={isAddingNew}
+              title={t('hymnLibrary.newHymn')}
+            >
+              <Plus className={cn('w-4 h-4 transition-transform', isAddingNew && 'rotate-45')} aria-hidden="true" />
+              {t('hymnLibrary.newHymn')}
+            </button>
+            <button
+              onClick={() => handleBulkImport()}
+              disabled={importProgress !== null}
+              className="hymn-tool"
+              title={t('common.hymnsImport')}
+            >
+              <FolderUp className="w-4 h-4" aria-hidden="true" />
+              {t('common.hymnsImport')}
+            </button>
+            <button
+              onClick={() => { setShowOnlinePanel(!showOnlinePanel); playSfx(showOnlinePanel ? 'close' : 'open'); }}
+              className="hymn-tool"
+              aria-expanded={showOnlinePanel}
+              data-guide-anchor="hymns-online"
+              title={t('common.hymnsOnline')}
+            >
+              <Cloud className="w-4 h-4" aria-hidden="true" />
+              {t('common.hymnsOnline')}
+            </button>
+            <button
+              onClick={() => { setShowSetLinkDialog(true); playSfx('open'); }}
+              className="hymn-tool"
+              title={t('common.setImportTitle')}
+            >
+              <Link2 className="w-4 h-4" aria-hidden="true" />
+              {t('common.setImportButton')}
+            </button>
+            <button
+              onClick={clearHymns}
+              className="hymn-tool hymn-danger"
+              title={t('common.hymnsClearAll')}
+            >
+              <Trash2 className="w-4 h-4" aria-hidden="true" />
+              {t('common.hymnsClearButton')}
+            </button>
+          </div>
+        </div>
+        {!isAddingNew && <div className="hymn-find">
+          <div className="hymn-search">
+            <Search size={16} aria-hidden="true" />
+            <input ref={searchRef} type="search" placeholder={t('common.hymnsSearch')} aria-label={t('common.hymnsSearch')} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            {searchTerm && <button type="button" aria-label={t('hymnLibrary.clearSearch')} onClick={() => { setSearchTerm(''); searchRef.current?.focus(); }}><X size={16} aria-hidden="true" /></button>}
+          </div>
+          <label className="hymn-lyrics-option"><input type="checkbox" checked={searchInLyrics} onChange={e => setSearchInLyrics(e.target.checked)} />{t('hymnLibrary.searchLyrics')}</label>
+          <label className="hymn-sort"><span className="sr-only">{t('hymnLibrary.sort')}</span><select aria-label={t('hymnLibrary.sort')} value={sortOrder} onChange={e => { const value = hymnSortOrder(e.target.value); setSortOrder(value); try { localStorage.setItem('hymnsSortOrder', value); } catch {} }}>
+            <option value="original">{t('hymnLibrary.original')}</option><option value="title-asc">{t('hymnLibrary.ascending')}</option><option value="title-desc">{t('hymnLibrary.descending')}</option>
+          </select></label>
+          <div className="hymn-add-options">
             <button
               type="button"
               onClick={() => {
@@ -485,7 +528,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
               className={cn(
                 'inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none',
                 partsModeEnabled
-                  ? 'bg-purple-600/20 border-purple-500/40 text-purple-300'
+                  ? 'bg-blue-600/20 border-blue-500/40 text-blue-300'
                   : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
               )}
               title={partsModeEnabled ? t('common.hymnsPartsModeOn') : t('common.hymnsPartsModeOff')}
@@ -493,7 +536,6 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
               <ListOrdered className="w-4 h-4" aria-hidden="true" />
               {t('common.hymnsPartsMode')}
             </button>
-
             <button
               type="button"
               onClick={() => {
@@ -509,7 +551,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
               className={cn(
                 'inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors',
                 showAuthorOnSlides
-                  ? 'bg-amber-600/20 border-amber-500/40 text-amber-300'
+                  ? 'bg-blue-600/20 border-blue-500/40 text-blue-300'
                   : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
               )}
               title={showAuthorOnSlides ? t('common.hymnsAuthorOnSlidesOn') : t('common.hymnsAuthorOnSlidesOff')}
@@ -517,64 +559,8 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
               <UserRound className="w-4 h-4" aria-hidden="true" />
               {t('common.hymnsAuthorOnSlides')}
             </button>
-
-            <button
-              onClick={() => handleBulkImport()}
-              disabled={importProgress !== null}
-              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium bg-green-600/20 hover:bg-green-600/40 text-green-400 rounded-lg border border-green-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title={t('common.hymnsImport')}
-            >
-              <FolderUp className="w-4 h-4" aria-hidden="true" />
-              {t('common.hymnsImport')}
-            </button>
-
-            <button
-              onClick={() => { setShowOnlinePanel(!showOnlinePanel); playSfx(showOnlinePanel ? 'close' : 'open'); }}
-              className={cn(
-                'inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors',
-                showOnlinePanel
-                  ? 'bg-sky-600/20 border-sky-500/40 text-sky-300'
-                  : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
-              )}
-              data-guide-anchor="hymns-online"
-              title={t('common.hymnsOnline')}
-            >
-              <Cloud className="w-4 h-4" aria-hidden="true" />
-              {t('common.hymnsOnline')}
-            </button>
-
-            <button
-              onClick={() => { setShowSetLinkDialog(true); playSfx('open'); }}
-              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 rounded-lg border border-cyan-500/30 transition-colors"
-              title={t('common.setImportTitle')}
-            >
-              <Link2 className="w-4 h-4" aria-hidden="true" />
-              {t('common.setImportButton')}
-            </button>
-
-            <button
-              onClick={clearHymns}
-              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg border border-red-500/30 transition-colors"
-              title={t('common.hymnsClearAll')}
-            >
-              <Trash2 className="w-4 h-4" aria-hidden="true" />
-              {t('common.hymnsClearButton')}
-            </button>
-
-            <button
-              onClick={() => { setIsAddingNew(!isAddingNew); playSfx(isAddingNew ? 'close' : 'open'); }}
-              className={cn(
-                'inline-flex items-center gap-2 px-3 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors',
-                isAddingNew && 'bg-blue-700'
-              )}
-              title={t('common.add')}
-            >
-              <Plus className={cn('w-4 h-4 transition-transform', isAddingNew && 'rotate-45')} aria-hidden="true" />
-              {t('common.add')}
-            </button>
           </div>
-        </div>
-
+        </div>}
         <div aria-live="polite" role="status">
           {importProgress && (
             <div className="space-y-1.5">
@@ -613,35 +599,11 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
           </div>
         )}
 
-        {!isAddingNew && (
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/45" />
-            <input
-              type="text"
-              placeholder={t('common.hymnsSearch')}
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              aria-label={t('common.hymnsSearch')}
-              className="w-full bg-black/20 border border-white/10 rounded-md py-2 pl-10 pr-4 text-sm"
-            />
-            <button
-              onClick={() => setSearchInLyrics(!searchInLyrics)}
-              className={`absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded transition-colors ${
-                searchInLyrics 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-white/10 text-white/40 hover:bg-white/20'
-              }`}
-              title={t(searchInLyrics ? 'common.hymnsSearchLyricsOff' : 'common.hymnsSearchLyricsOn')}
-              aria-label={t(searchInLyrics ? 'common.hymnsSearchLyricsOn' : 'common.hymnsSearchLyricsOff')}
-            >
-              <CheckSquare className="w-4 h-4" aria-hidden="true" />
-            </button>
-          </div>
-        )}
+        {!isAddingNew && <div className="hymn-list-summary"><span>{t('hymnLibrary.addHint')}</span><span role="status" aria-live="polite">{t('hymnLibrary.resultCount', { count: filteredHymns.length, total: hymns.length.toLocaleString(i18n.language), matched: filteredHymns.length.toLocaleString(i18n.language) })}</span></div>}
       </div>
 
       {/* Content */}
-      <div ref={listRef} className="flex-1 overflow-y-auto">
+      <div className="hymn-library-content">
           {isAddingNew ? (
           <form
             className="ui-fade-enter p-4 space-y-4"
@@ -710,23 +672,12 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
             </div>
           ) : (
             <div className="h-full flex items-center justify-center text-white/45 text-sm">
-              {t('common.hymnsEmpty')}
+              <div className="text-center space-y-3"><p>{hymns.length ? t('hymnLibrary.noResults') : t('common.hymnsEmpty')}</p>{hymns.length > 0 && <button className="hymn-tool" onClick={() => { setSearchTerm(''); searchRef.current?.focus(); }}>{t('hymnLibrary.clearSearch')}</button>}</div>
             </div>
           )
         ) : (
-          <div style={{ height: totalHeight, position: 'relative' }}>
-            {filteredHymns.slice(start, end).map((hymn, i) => (
-              <HymnRow
-                key={hymn.id}
-                hymn={hymn}
-                top={(start + i) * ITEM_H}
-                onSelect={(h) => { onAddHymnToPresentation({ ...h, showAuthorOnSlides }, practice && h.id.startsWith('practice-hymn-') ? true : partsModeEnabled); }}
-                onDoubleClick={practice ? undefined : (h) => { onAddHymnToPresentation({ ...h, showAuthorOnSlides }, partsModeEnabled, true); }}
-                onEdit={openEditModal}
-                onRemove={removeHymn}
-              />
-            ))}
-          </div>
+          <HymnLibraryList items={sortedHymns} resetKey={`${debouncedSearch}|${searchInLyrics}|${sortOrder}|${i18n.language}`} focusRequest={focusRequest}
+            onSelect={selectHymn} onEdit={openEditModal} onRemove={removeHymn} />
         )}
       </div>
 
@@ -743,6 +694,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
       {/* Edit modal */}
       <Dialog
         open={!!editingHymn}
+        returnFocus={editReturnRef}
         onClose={() => { closeEditModal(); playSfx('close'); }}
         labelledBy="edit-hymn-dialog-title"
         className="bg-surface-overlay rounded-xl border border-white/10 w-full max-w-lg mx-4 shadow-2xl"
@@ -829,71 +781,4 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
   );
 }
 
-// ─── Row component ────────────────────────────────────────────────────────
-
-interface HymnRowProps {
-  hymn: Hymn;
-  top: number;
-  onSelect: (h: Hymn) => void;
-  onDoubleClick?: (h: Hymn) => void;
-  onEdit: (h: Hymn) => void;
-  onRemove: (id: string) => void;
-}
-
-const HymnRow = memo(({ hymn, top, onSelect, onDoubleClick, onEdit, onRemove }: HymnRowProps) => {
-  const { t } = useTranslation();
-
-  const metaParts = [
-    hymn.author ? `${t('common.hymnsAuthorLabel')}: ${hymn.author}` : '',
-    hymn.source ? `${t('common.hymnsSourceLabel')}: ${hymn.source}` : '',
-  ].filter(Boolean);
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={`${hymn.title}${hymn.author ? ` — ${hymn.author}` : ''}: ${hymn.lyrics?.substring(0, 60)}`}
-      data-guide-anchor={hymn.id.startsWith('practice-hymn-') ? 'hymns-add' : undefined}
-      onClick={() => onSelect(hymn)}
-      onDoubleClick={() => onDoubleClick?.(hymn)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onSelect(hymn);
-        }
-      }}
-      style={{ position: 'absolute', top, left: 8, right: 8, height: ITEM_H - 8 }}
-      className="p-2.5 bg-white/5 hover:bg-white/10 rounded-lg cursor-pointer flex justify-between items-center"
-    >
-      <div className="min-w-0 mr-2">
-        <div className="text-sm font-semibold truncate">{hymn.title}</div>
-        <div className="text-xs text-white/40 truncate">{hymn.lyrics.split('\n')[0]}</div>
-        {metaParts.length > 0 && (
-          <div className="text-[11px] leading-4 text-white/30 truncate">{metaParts.join(' · ')}</div>
-        )}
-      </div>
-
-      <div className="flex items-center gap-1 shrink-0">
-        <button
-          disabled={hymn.id.startsWith('practice-hymn-')}
-          onClick={e => { e.stopPropagation(); onEdit(hymn); }}
-          className="text-white/40 hover:text-white/70"
-          title={t('common.hymnsEdit')}
-          aria-label={t('common.hymnsEdit')}
-        >
-          <Pencil className="w-4 h-4" aria-hidden="true" />
-        </button>
-        <button
-          disabled={hymn.id.startsWith('practice-hymn-')}
-          onClick={e => { e.stopPropagation(); onRemove(hymn.id); }}
-          className="text-red-400 hover:text-red-300"
-          aria-label={t('common.delete')}
-        >
-          <Trash2 className="w-4 h-4" aria-hidden="true" />
-        </button>
-      </div>
-    </div>
-  );
-});
-
-export { HymnRow };
+export { HymnRow } from './components/HymnLibraryList';

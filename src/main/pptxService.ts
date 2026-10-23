@@ -1,14 +1,14 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { convertPptxToPng, type SlideImage } from 'pptx-glimpse';
+import type { SlideImage } from 'pptx-glimpse';
+import { runPptxImportWorker } from './pptxImportWorkerClient';
 import { storeBytesTo } from './mediaLibrary';
 
 // Constants
 
-const SLIDE_WIDTH = 1024;
 const CONCURRENCY = Math.max(2, Math.min(os.cpus().length, 8));
-const VALID_EXTS = new Set(['.pptx', '.ppt']);
+const VALID_EXTS = new Set(['.pptx', '.pptm']);
 const IMPORT_TIMEOUT = 120000;
 
 // Types
@@ -82,7 +82,7 @@ export class PptxService {
   private validateExtension(filePath: string): void {
     const ext = path.extname(filePath).toLowerCase();
     if (!VALID_EXTS.has(ext)) {
-      throw new Error(`Unsupported file type "${ext}" — expected .pptx or .ppt`);
+      throw new Error(`Unsupported file type "${ext}" — expected .pptx or .pptm`);
     }
   }
 
@@ -109,28 +109,10 @@ export class PptxService {
     return {
       slideNumber: slide.slideNumber,
       imageData,
-      width: 0,
-      height: 0,
+      width: slide.width,
+      height: slide.height,
       format: 'png',
     };
-  }
-
-  private convertWithTimeout(buffer: Buffer): Promise<SlideImage[]> {
-    let timerId: NodeJS.Timeout | undefined;
-
-    try {
-      return Promise.race([
-        convertPptxToPng(buffer, { width: SLIDE_WIDTH, logLevel: 'off' }),
-        new Promise<never>((_, reject) => {
-          timerId = setTimeout(
-            () => reject(new Error('PPTX conversion timed out')),
-            IMPORT_TIMEOUT
-          );
-        }),
-      ]);
-    } finally {
-      if (timerId) clearTimeout(timerId);
-    }
   }
 
   async importPptx(
@@ -150,7 +132,8 @@ export class PptxService {
         throw new Error(`File not found or unreadable: "${filePath}"`);
       }
 
-      const slideImages = await this.convertWithTimeout(buffer);
+      const rendered = await runPptxImportWorker(buffer, IMPORT_TIMEOUT);
+      const slideImages = rendered.slides;
       const total = slideImages.length;
 
       let completed = 0;
@@ -168,7 +151,7 @@ export class PptxService {
 
       // Pre-allocated array (avoids push cost)
       const slides: PptxSlideResult[] = new Array(total);
-      const warnings: string[] = [];
+      const warnings: string[] = [...rendered.warnings];
       let validCount = 0;
 
       for (let i = 0; i < settled.length; i++) {
@@ -182,8 +165,8 @@ export class PptxService {
         }
       }
 
-      if (validCount === 0) {
-        throw new Error(warnings[0] ?? 'All slides failed to process');
+      if (validCount !== total) {
+        throw new Error('PPTX import incomplete: one or more slides could not be stored');
       }
 
       // trim the array and sort (ordering guarantee)

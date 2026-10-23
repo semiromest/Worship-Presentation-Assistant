@@ -3,9 +3,9 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 
 test('real application: YouTube search, playback, pause, switch, stop and local audio', async ({}, info) => {
-  const env = { ...process.env };
+  const env = { ...process.env, WPA_TEST_PROFILE: info.outputPath('profile') };
   delete env.ELECTRON_RUN_AS_NODE; delete env.VITE_DEV_SERVER_URL;
-  const app = await electron.launch({ args: [path.resolve('.'), '--wpa-smoke'], env });
+  const app = await electron.launch({ args: [path.resolve('tests/tour/electron-bootstrap.cjs'), '--wpa-smoke'], env });
   let page;
   const errors = [];
   const logs = [];
@@ -21,7 +21,8 @@ test('real application: YouTube search, playback, pause, switch, stop and local 
     await page.keyboard.press('Escape');
     // Keep this automated playback test inaudible without changing the app's volume state.
     await page.evaluate(() => { const audio = document.querySelector('[data-testid="background-music-audio"]'); audio.muted = true; document.addEventListener('error', event => { if (event.target === audio) window.musicTestError = { code: audio.error?.code, message: audio.error?.message, src: audio.getAttribute('src') }; }, true); });
-    await page.getByTestId('background-music-toggle').click();
+    if (await page.getByTestId('music-dialog-close').isVisible()) await page.getByTestId('music-dialog-close').click();
+    else await page.getByTestId('background-music-toggle').click();
     await page.getByTestId('music-source-youtube').click();
     await page.getByTestId('youtube-music-query').fill('Amazing Grace piano instrumental hymn with lyrics');
     await page.getByTestId('youtube-music-query').press('Enter');
@@ -42,9 +43,11 @@ test('real application: YouTube search, playback, pause, switch, stop and local 
     await expect.poll(async () => (await audio()).time).toBeGreaterThan(paused + 1);
     expect((await audio()).src).toBe(source);
     // Closing the menu must leave the same audio playing.
-    await page.getByTestId('background-music-toggle').click();
+    if (await page.getByTestId('music-dialog-close').isVisible()) await page.getByTestId('music-dialog-close').click();
+    else await page.getByTestId('background-music-toggle').click();
     await expect.poll(async () => (await audio()).time, { timeout: 40000 }).toBeGreaterThan(30);
-    await page.getByTestId('background-music-toggle').click();
+    if (await page.getByTestId('music-dialog-close').isVisible()) await page.getByTestId('music-dialog-close').click();
+    else await page.getByTestId('background-music-toggle').click();
     await page.screenshot({ path: info.outputPath('youtube-playing.png') });
     console.log('First track passed 30 seconds with pause/resume and menu closed');
     await page.getByTestId('youtube-music-query').fill('Amazing Grace Piano Instrumental');

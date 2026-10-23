@@ -1,8 +1,24 @@
+import type { Slide } from './presentation';
+
+/** Hymn groups imported before kind existed carry a hymn color/author. */
+export function canAttachSlideMusic(slide: Slide | undefined): boolean {
+  return !!slide && slide.type !== 'video' && slide.type !== 'screen' && !slide.styles?.backgroundVideo &&
+    !slide.partsMode && !slide.parts?.length && !slide.group?.kind && !slide.group?.color && !slide.group?.author &&
+    !(slide.type === 'loop' && slide.loopItems?.some(item => item.type === 'video'));
+}
+
+/** Existing standalone music slides retain autoplay; new attachments opt in. */
+export function slideMusicAutoPlay(slide: Slide): boolean {
+  return slide.musicSettings?.autoPlay ?? !slide.musicSettings?.attachment;
+}
+
 export interface YouTubeMusicResult {
   id: string;
   title: string;
   duration: number;
 }
+
+export type OfflineMusicStatus = { state: 'missing' | 'downloading' | 'ready' } | { state: 'error'; error: string };
 
 export type YouTubeSearchResponse =
   | { ok: true; results: YouTubeMusicResult[]; nextCursor?: string }

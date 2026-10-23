@@ -7,6 +7,7 @@ import { useStore } from '../state/useStore';
 import { chooseDefaultOutputDisplay, type DisplayMode } from '../../shared/displays';
 
 interface DisplayOutputsPopoverProps {
+  label?: string;
   openOutput: (displayId: string) => Promise<void>;
   closeOutput: (displayId: string) => Promise<void>;
 }
@@ -17,7 +18,7 @@ function shortSlideLabel(content: string, index: number): string {
   return `${index + 1}. ${normalized.slice(0, 42)}${normalized.length > 42 ? '…' : ''}`;
 }
 
-export default function DisplayOutputsPopover({ openOutput, closeOutput }: DisplayOutputsPopoverProps) {
+export default function DisplayOutputsPopover({ openOutput, closeOutput, label }: DisplayOutputsPopoverProps) {
   const { t } = useTranslation();
   const displays = useStore((s) => s.displays);
   const presentation = useStore((s) => s.presentation);
@@ -39,9 +40,10 @@ export default function DisplayOutputsPopover({ openOutput, closeOutput }: Displ
       <Popover.Trigger
         title={t('common.displayOutputs')}
         aria-label={t('common.displayOutputs')}
-        className="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.96]"
+        className="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.96]"
       >
         <Monitor className="w-4 h-4" aria-hidden="true" />
+        {label && <span>{label}</span>}
         <span className="hidden xl:inline text-xs font-semibold">{outputDisplays.length}</span>
       </Popover.Trigger>
 

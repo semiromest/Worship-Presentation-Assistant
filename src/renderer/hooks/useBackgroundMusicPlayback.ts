@@ -2,11 +2,12 @@ import { playSfx } from '../sfx';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../state/useStore';
-import { activeMusicSlide, hasAudienceOutput } from '../musicSlides';
+import { activeMusicSlide, audienceMusicCue, hasAudienceOutput } from '../musicSlides';
 import { musicGain } from '../musicCustomization';
 import { MusicEnvelope, MUSIC_FADE_IN_MS, MUSIC_FADE_OUT_MS } from '../audio/musicEnvelope';
 import { toFileUrl } from '../utils';
 import type { YouTubeMusicResult } from '../../shared/youtubeMusic';
+import { slideMusicAutoPlay } from '../../shared/youtubeMusic';
 
 export function useBackgroundMusicPlayback() {
   const { t } = useTranslation();
@@ -24,6 +25,7 @@ export function useBackgroundMusicPlayback() {
   const youtubeActive = useRef(false);
   const playbackOwner = useRef<string | null>(null);
   const lastDesired = useRef<string | null>(null);
+  const lastCue = useRef<string | null>(null);
   const exiting = useRef(false);
   const fadeInPending = useRef(false);
   const [mixer] = useState(() => new MusicEnvelope(() => audioRef.current));
@@ -36,10 +38,12 @@ export function useBackgroundMusicPlayback() {
   const muted = useStore(state => state.isMediaMuted);
   const liveSlide = useStore(activeMusicSlide);
   const audienceOpen = useStore(hasAudienceOutput);
+  const audienceCue = useStore(audienceMusicCue);
   const presentationId = useStore(state => state.presentation.id);
   const setCurrent = useStore(state => state.setBackgroundMusicCurrent);
   const setPlaying = useStore(state => state.setBackgroundMusicPlaying);
   const desiredKey = liveSlide ? JSON.stringify([presentationId, liveSlide.id, liveSlide.youtubeMusic!.id]) : null;
+  const cueKey = audienceCue ? JSON.stringify([presentationId, audienceCue]) : null;
   const desired = useRef({ key: desiredKey, slide: liveSlide });
   desired.current = { key: desiredKey, slide: liveSlide };
   const translate = useRef(t); translate.current = t;
@@ -108,17 +112,22 @@ export function useBackgroundMusicPlayback() {
   }, [mixer, setCurrent, setPlaying, finishManualPlay]);
 
   useEffect(() => {
+    const entered = lastCue.current !== cueKey;
+    lastCue.current = cueKey;
     if (!audienceOpen && (playbackOwner.current || exiting.current)) { lastDesired.current = desiredKey; stop(); return; }
     if (lastDesired.current === desiredKey) return;
     const previouslyOwned = playbackOwner.current !== null;
     lastDesired.current = desiredKey;
+    const shouldStart = entered && !!desired.current.slide && slideMusicAutoPlay(desired.current.slide);
+    // An unchecked attachment must not cancel an intentional, pending preview.
+    if (!previouslyOwned && !shouldStart) return;
     request.current++; // A pending old stream must not start during the fade interval.
     const epoch = ++navigation.current;
     const next = () => {
       if (epoch !== navigation.current || desired.current.key !== desiredKey) return;
       exiting.current = false;
       const target = desired.current;
-      if (target.key && target.slide?.youtubeMusic) {
+      if (entered && target.key && target.slide?.youtubeMusic && slideMusicAutoPlay(target.slide)) {
         void playYouTube(target.slide.youtubeMusic, { key: target.key, gain: musicGain(target.slide.musicSettings?.volume) });
       } else if (previouslyOwned) stop();
     };
@@ -126,7 +135,7 @@ export function useBackgroundMusicPlayback() {
       exiting.current = true; fadeInPending.current = false;
       mixer.fadeTo(0, MUSIC_FADE_OUT_MS, next);
     } else next();
-  }, [desiredKey, audienceOpen, mixer, playYouTube, stop]);
+  }, [desiredKey, cueKey, audienceOpen, mixer, playYouTube, stop]);
   useEffect(() => {
     if (desiredKey && playbackOwner.current === desiredKey) mixer.update({ gain: musicGain(liveSlide?.musicSettings?.volume) });
   }, [desiredKey, liveSlide?.musicSettings?.volume, mixer]);
@@ -147,6 +156,16 @@ export function useBackgroundMusicPlayback() {
       setPlaying(!playing);
     }
   };
+  const playSlide = useCallback((id: string) => {
+    const slide = activeMusicSlide(useStore.getState());
+    if (!slide?.youtubeMusic || slide.id !== id || !desired.current.key) return;
+    if (playbackOwner.current === desired.current.key && useStore.getState().backgroundMusicCurrent) {
+      manualPlayPending.current = true;
+      setPlaying(true);
+      return;
+    }
+    void playYouTube(slide.youtubeMusic, { key: desired.current.key, gain: musicGain(slide.musicSettings?.volume) });
+  }, [playYouTube, setPlaying]);
   const onPlaying = () => {
     finishManualPlay();
     if (fadeInPending.current && playbackOwner.current === desired.current.key) {
@@ -166,5 +185,5 @@ export function useBackgroundMusicPlayback() {
     if (!useStore.getState().backgroundMusicCurrent) return;
     setError(translate.current(track ? 'settings.youtubePlayError' : 'settings.backgroundMusicPlayError')); ended();
   };
-  return { audioRef, loading, track, error, setError, liveSlide, current, playing, playYouTube, playFile, playPause, stop, onPlaying, ended, onError };
+  return { audioRef, loading, track, error, setError, liveSlide, current, playing, playYouTube, playFile, playPause, playSlide, stop, onPlaying, ended, onError };
 }
