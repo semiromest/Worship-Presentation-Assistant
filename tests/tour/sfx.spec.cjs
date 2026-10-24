@@ -149,7 +149,7 @@ test('media bulk add emits one success; automatic navigation and general toasts 
   await expect(page.locator('.media-card')).toHaveCount(3);
   await soundsFor(() => page.locator('.media-card').nth(0).click(), 1);
   await soundsFor(() => page.locator('.media-card').nth(1).click(), 1);
-  await soundsFor(() => page.getByRole('button', { name: /Seçilenleri Slayta Ekle/ }).click(), 1);
+  await soundsFor(() => page.getByRole('button', { name: require('../../src/renderer/locales/en/translation.json').common.mediaAddSelected.replace('{{count}}', '2'), exact: true }).click(), 1);
   expect(await page.evaluate(() => window.__sfxStore.getState().presentation.slides.length)).toBe(5);
   await expect(page.locator('[data-guide-anchor="nav-slides"]')).toHaveAttribute('aria-current', 'page');
   await soundsFor(() => page.evaluate(() => window.__sfxStore.getState().setToastMessage('A general information message')), 0);

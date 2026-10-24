@@ -35,3 +35,16 @@ test('navigates parts without crossing bounds', () => {
   assert.equal(getPreviousPartIndex({ ...slide, activePart: 0 }), 0);
   assert.equal(getNextPartIndex({ content: 'plain text' }), null);
 });
+
+test('editing a part survives navigation and leaves other parts untouched', async () => {
+  const { withSlideContent, slideTransitionKey } = await import('./slideContent');
+  const original = { ...slide, id: 'hymn', activePart: 1 };
+  const edited = withSlideContent(original, 'Revised second verse\nwith a new line');
+  assert.equal(getSlideDisplayContent(edited), 'Revised second verse\nwith a new line');
+  assert.equal(getSlideDisplayContent({ ...edited, activePart: 0 }), 'verse one');
+  assert.equal(getSlideDisplayContent({ ...edited, activePart: 2 }), 'verse three');
+  assert.equal(original.parts[1], 'verse two');
+  assert.equal(slideTransitionKey(edited), slideTransitionKey(original));
+  assert.notEqual(slideTransitionKey({ ...edited, activePart: 2 }), slideTransitionKey(edited));
+  assert.deepEqual(withSlideContent({ content: 'plain' }, 'changed'), { content: 'changed' });
+});

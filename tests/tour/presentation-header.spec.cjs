@@ -137,10 +137,10 @@ test('current presentation actions preserve rename, save, file and dialog behavi
     await name.fill('Yeni çalışma adı');
     await name.press('Enter');
     await expect(current.locator('.presentation-name')).toHaveText('Yeni çalışma adı');
-    await current.getByRole('button', { name: 'Kütüphaneye Kaydet', exact: true }).focus();
+    await current.getByRole('button', { name: require('../../src/renderer/locales/tr/translation.json').library.save, exact: true }).focus();
     await p.keyboard.press('Space');
     await expect.poll(() => app.evaluate(() => global.headerCalls.save)).toBe(1);
-    await expect(current.getByRole('status')).toContainText('Kütüphaneye kaydedildi');
+    await expect(current.getByRole('status')).toContainText(require('../../src/renderer/locales/tr/translation.json').library.saved);
     await current.getByRole('button', { name: 'Dosyaya Kaydet', exact: true }).click();
     await expect.poll(() => app.evaluate(() => global.headerCalls.file)).toBe(1);
     await tools.getByRole('button', { name: 'Dosyadan Aç', exact: true }).click();
@@ -163,7 +163,9 @@ test('current presentation actions preserve rename, save, file and dialog behavi
     await expect(p.getByRole('dialog')).toBeVisible();
     await p.keyboard.press('Escape');
     await expect(drive).toBeFocused();
-    await current.getByRole('button', { name: 'Slaytları Düzenle', exact: true }).click();
+    await expect(current.getByRole('button', { name: 'Slaytları Düzenle', exact: true })).toHaveCount(0);
+    await expect(current.locator('.presentation-current-actions > button')).toHaveCount(2);
+    await p.locator('[data-guide-anchor="nav-slides"]').click();
     await expect.poll(() => p.evaluate(() => window.headerStore.getState().activeTab)).toBe('slides');
     await p.evaluate(() => window.headerStore.getState().setActiveTab('presentations'));
     await tools.getByRole('button', { name: 'Yeni Sunum', exact: true }).click();

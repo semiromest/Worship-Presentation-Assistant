@@ -22,3 +22,10 @@ test('unavailable localStorage falls back consistently for preview and thumbnail
   assert.equal(readHymnAuthorPosition(), 'bottom-center');
   assert.equal(readHymnAuthorSize(), 28);
 });
+
+test('credit size uses only appearance settings and scales with the output', async () => {
+  const { hymnCreditFontSize } = await import('./hymnAuthorSettings');
+  const reference = hymnCreditFontSize(28);
+  assert.equal(hymnCreditFontSize(28, 0.5), reference / 2);
+  assert.equal(hymnCreditFontSize(56), reference * 2);
+});

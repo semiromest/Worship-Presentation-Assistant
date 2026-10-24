@@ -40,7 +40,7 @@ async function main(){
     const query=page.getByTestId('youtube-music-query');await query.fill('müzik');await query.press('Enter');await expect(page.getByTestId('youtube-add-slide-'+track)).toHaveText('Bu slayta bağla');await page.getByTestId('youtube-add-slide-'+track).click();await expect(page.getByRole('dialog')).toBeHidden();
   };
   await attach();await expect(page.getByTestId('slide-music-autoplay')).not.toBeChecked();
-  await expect(page.locator('#background-dim')).toBeAttached();await expect(page.getByRole('button',{name:require('../../src/renderer/locales/tr/translation.json').common.removeImage,exact:true})).toBeAttached();
+  await expect(page.locator('#background-dim')).toHaveCount(0);await expect(page.getByRole('button',{name:require('../../src/renderer/locales/tr/translation.json').common.removeImage,exact:true})).toBeAttached();
   const attached=await page.evaluate(()=>window.__attachStore.getState().presentation.slides[0]);expect(attached.content).toBe(original.content);expect(attached.styles).toEqual(original.styles);expect(await page.evaluate(()=>window.__attachStore.getState().presentation.slides.length)).toBe(8);expect(await plays()).toBe(0);
   await page.evaluate(()=>window.__attachStore.getState().setIsProjectorWindowOpen(true));await expect(page.getByTestId('slide-music-play')).toBeEnabled();expect(await plays()).toBe(0);
   await page.getByTestId('slide-music-play').click();await expect.poll(()=>audio.evaluate(el=>el.currentTime)).toBeGreaterThan(.2);expect(await plays()).toBe(1);

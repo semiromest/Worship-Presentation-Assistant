@@ -6,7 +6,7 @@ import type { TransitionType } from '../types';
 import { GradientQuickApply } from './GradientQuickApply';
 import { memo, useMemo, useEffect, useLayoutEffect, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, X, Plus, ZoomIn, ZoomOut, Layers2, Lock, ChevronUp, ChevronDown, Copy, Trash2 } from 'lucide-react';
+import { Search, X, Plus, ZoomIn, ZoomOut, Lock, ChevronUp, ChevronDown, Copy, Trash2 } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { SlideCard } from '../SlideCard';
 import { useDragAndDrop } from '../hooks/useDragAndDrop';
@@ -232,12 +232,20 @@ export default function SlideGrid({
   // from the textarea or cause jarring scroll jumps during editing).
   const prevSelectedIdRef = useRef<string | null>(scrollPositions.has(scrollKey) ? selectedSlideId : null);
 
+  const previousDeckRef = useRef(presentation);
+
   // On selection change, scroll the selected card into view (keyboard users);
   // virtualized off-screen cards may not exist in the DOM, so compute from row geometry.
   useEffect(() => {
-    const idChanged = prevSelectedIdRef.current !== selectedSlideId;
+    const previousDeck = previousDeckRef.current;
+    const previousSelection = prevSelectedIdRef.current;
+    const selectionWasDeleted = previousDeck.id === presentation.id && !!previousSelection &&
+      previousDeck.slides.some(s => s.id === previousSelection) &&
+      !presentation.slides.some(s => s.id === previousSelection);
+    previousDeckRef.current = presentation;
+    const idChanged = previousSelection !== selectedSlideId;
     prevSelectedIdRef.current = selectedSlideId;
-    if (!idChanged || restoringScrollRef.current) return; // Preserve restored viewport on return.
+    if (!idChanged || selectionWasDeleted || restoringScrollRef.current) return; // Preserve restored viewport on return.
 
     const el = containerRef.current;
     if (!el || !selectedSlideId) return;
@@ -266,7 +274,7 @@ export default function SlideGrid({
         el.querySelector<HTMLElement>(`[data-slide-id="${selectedSlideId}"]`)?.focus({ preventScroll: true });
       });
     });
-  }, [selectedSlideId, filteredSlides, columnCount, rowHeight, cardHeight, sectionsEnabled]);
+  }, [selectedSlideId, filteredSlides, columnCount, rowHeight, cardHeight, sectionsEnabled, presentation]);
 
   // Ghost slide ("add new") sits at the end of the grid; reserve a slot for it
   const showGhost = !searchQuery;
@@ -285,6 +293,14 @@ export default function SlideGrid({
   }, [filteredSlides, columnCount, showGhost]);
 
   const { startRow, endRow, totalHeight } = useVirtualRows(rows.length, rowHeight, containerRef);
+  // Keep the native drag source mounted when scrolling beyond the overscan.
+  const renderedRowIndices = useMemo(() => {
+    const indices = Array.from({ length: Math.max(0, endRow - startRow) }, (_, i) => startRow + i);
+    const sourceIndex = draggedSlideId ? filteredSlides.findIndex(s => s.id === draggedSlideId) : -1;
+    const sourceRow = Math.floor(sourceIndex / columnCount);
+    if (sourceIndex >= 0 && !indices.includes(sourceRow)) indices.push(sourceRow);
+    return indices;
+  }, [startRow, endRow, draggedSlideId, filteredSlides, columnCount]);
 
   const restoredKeyRef = useRef<string | null>(null);
   const restoreTopRef = useRef(0);
@@ -398,26 +414,6 @@ export default function SlideGrid({
             </div>
           )}
 
-          {/* Bulk selection indicator: always visible while several slides are selected */}
-          {selectedSlideIds.size > 1 && (
-            <div
-              role="status"
-              className="ui-choice-mark flex shrink-0 items-center gap-1 rounded-xl border border-blue-500/30 bg-blue-500/15 px-2 py-1.5 text-[11px] font-medium text-blue-100"
-            >
-              <Layers2 className="h-3.5 w-3.5" aria-hidden="true" />
-              {t('common.slidesSelected', { count: selectedSlideIds.size })}
-              <button
-                type="button"
-                onClick={() => setSelectedSlideIds(new Set([selectedSlideId]))}
-                aria-label={t('common.clearSelection')}
-                title={t('common.clearSelection')}
-                className="rounded p-0.5 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-              >
-                <X className="h-3 w-3" aria-hidden="true" />
-              </button>
-            </div>
-          )}
-
           <div className="design-slide-view-tools">
           {/* Zoom Controls */}
           <div className="flex items-center gap-1 shrink-0" role="group" aria-label={t('common.zoomControls')}>
@@ -456,6 +452,9 @@ export default function SlideGrid({
         </div>
         <div className="design-selection-tools" role="group" aria-label={t('slidesWorkspace.selectionTools')}>
           <span className="design-selection-count">{selectedSlideIds.size} {t('common.selected')}</span>
+          <button type="button" onClick={() => setSelectedSlideIds(new Set([selectedSlideId]))}
+            disabled={selectedSlideIds.size <= 1} aria-label={t('common.clearSelection')} title={t('common.clearSelection')}
+            className={selectedSlideIds.size <= 1 ? 'invisible' : undefined}><X /></button>
           <GradientQuickApply />
           <button onClick={()=>moveSelectedSlides(-1)} disabled={orderRestricted || !selectedSlideIds.size} title={t('common.moveSelectedUp')} aria-label={t('common.moveSelectedUp')}><ChevronUp /></button>
           <button onClick={()=>moveSelectedSlides(1)} disabled={orderRestricted || !selectedSlideIds.size} title={t('common.moveSelectedDown')} aria-label={t('common.moveSelectedDown')}><ChevronDown /></button>
@@ -495,8 +494,8 @@ export default function SlideGrid({
             </>
           ) : (
             <div style={{ position: 'relative', height: totalHeight }}>
-              {rows.slice(startRow, endRow).map((rowSlides, relIdx) => {
-                const rowIdx = startRow + relIdx;
+              {renderedRowIndices.map((rowIdx) => {
+                const rowSlides = rows[rowIdx];
                 return (
                   <div
                     key={rowIdx}
@@ -528,7 +527,7 @@ export default function SlideGrid({
                             onDragOver={handleDragOver}
                             onDragEnd={handleDragEnd}
                             onDrop={handleDrop}
-                            isDragging={draggedSlideId === slide.id}
+                            isDragging={draggedSlideId === slide.id || (!!draggedSlideId && selectedSlideIds.has(draggedSlideId) && selectedSlideIds.has(slide.id))}
                             zoom={slideZoom}
                           />
                         </div>

@@ -1,4 +1,4 @@
-import { formatHymnCredit, readHymnAuthorPosition, readHymnAuthorSize } from './hymnAuthorSettings';
+import { hymnCreditFontSize, formatHymnCredit, readHymnAuthorPosition, readHymnAuthorSize } from './hymnAuthorSettings';
 import { RangeVideo } from './components/RangeVideo';
 import BackgroundDim from './components/BackgroundDim';
 import { AnimatedGradientBackground } from './components/AnimatedGradientBackground';
@@ -19,6 +19,7 @@ import { WatermarkOverlay } from './components/WatermarkOverlay';
 import { useWatermarkStore } from './state/useWatermarkStore';
 
 export interface LivePreviewProps {
+  partTransition?: { from: Slide; incoming?: string; outgoing?: string };
   watermarkConfig?: import('./types').WatermarkConfig;
   hymnAuthorPosition?: import('./types').Position;
   hymnAuthorSize?: number;
@@ -190,7 +191,7 @@ function LoopVideoPlayer({ mediaUrl, isActive = true, preload = 'auto', volume =
   );
 }
 
-export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = false, isActive = true, watermarkConfig, hymnAuthorPosition, hymnAuthorSize }: LivePreviewProps) => {
+export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = false, isActive = true, watermarkConfig, hymnAuthorPosition, hymnAuthorSize, partTransition }: LivePreviewProps) => {
   const [videoPosition, setVideoPosition] = useState({ id: '', seconds: 0 });
   useEffect(() => { if (slide) slideFonts(slide).forEach(family => { void loadGoogleFont(family); }); }, [slide]);
   const outerRef = useRef<HTMLDivElement>(null);
@@ -440,6 +441,16 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
     const textAlign = (styles as any).textAlign || 'center';
     const verticalAlign = (styles as any).verticalAlign || 'center';
     const alignItemsMap: Record<string, string> = { top: 'flex-start', center: 'center', bottom: 'flex-end' };
+    const textLayer = (content: string) => (
+      <p data-gradient-text="" className="whitespace-pre-wrap leading-snug relative z-10" style={{
+        textTransform: styles.textTransform || 'none', fontSize: `${Math.max(8, fontSize * scale)}px`,
+        color: styles.textColor ?? '#fff',
+        backgroundColor: styles.textHighlight && styles.textHighlight !== 'transparent' ? styles.textHighlight : undefined,
+        fontWeight, fontStyle: styles.fontStyle || 'normal', fontFamily: styles.fontFamily || 'inherit',
+        lineHeight: styles.lineHeight || 1.3, width: '100%', boxSizing: 'border-box',
+        padding: `${54 * scale}px ${96 * scale}px`,
+      }}>{content}</p>
+    );
 
     return (
       <div
@@ -466,25 +477,16 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
           />
         )}
         <BackgroundDim value={styles.backgroundDim} />
-        <p
-          data-gradient-text=""
-          className="whitespace-pre-wrap leading-snug relative z-10"
-          style={{ 
-            textTransform: (styles as any).textTransform || 'none',
-            fontSize: `${Math.max(8, fontSize * scale)}px`, 
-            color: styles.textColor ?? '#fff',
-            backgroundColor: styles.textHighlight && styles.textHighlight !== 'transparent' ? styles.textHighlight : undefined,
-            fontWeight: fontWeight as any,
-            fontStyle: (styles as any).fontStyle || 'normal',
-            fontFamily: (styles as any).fontFamily || 'inherit',
-            lineHeight: (styles as any).lineHeight || 1.3,
-            width: '100%',
-            boxSizing: 'border-box',
-            padding: `${54 * scale}px ${96 * scale}px`,
-          }}
-        >
-          {displayContent}
-        </p>
+        {partTransition ? <>
+          <div key={'out-' + partTransition.from.activePart} data-slide-transition="" data-part-transition="outgoing" aria-hidden="true"
+            className="absolute inset-0 flex z-10" style={{ alignItems: alignItemsMap[verticalAlign] || 'center', animation: partTransition.outgoing }}>
+            {textLayer(getSlideDisplayContent(partTransition.from))}
+          </div>
+          <div key={'in-' + slide.activePart} data-slide-transition="" data-part-transition="incoming"
+            className="absolute inset-0 flex z-10" style={{ alignItems: alignItemsMap[verticalAlign] || 'center', animation: partTransition.incoming }}>
+            {textLayer(displayContent)}
+          </div>
+        </> : textLayer(displayContent)}
         {hymnCredit && (() => {
           const pos = hymnAuthorPosition ?? readHymnAuthorPosition();
           const sizePct = hymnAuthorSize ?? readHymnAuthorSize();
@@ -504,7 +506,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
           const posStyle: React.CSSProperties = {
             position: 'absolute',
             zIndex: 10,
-            fontSize: `${Math.max(8, fontSize * scale * (sizePct / 100))}px`,
+            fontSize: `${hymnCreditFontSize(sizePct, scale)}px`,
             color: styles.textColor || '#fff',
             opacity: 0.7,
             padding: `${20 * scale}px ${sidePad}px`,

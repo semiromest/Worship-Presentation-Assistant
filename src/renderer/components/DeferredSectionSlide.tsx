@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 const listeners = new Map<Element, (visible: boolean) => void>();
 let observer: IntersectionObserver | undefined;
 
-export default function DeferredSectionSlide({ render }: { render: () => ReactNode }) {
+export default function DeferredSectionSlide({ render, keepMounted = false }: { render: () => ReactNode; keepMounted?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   useEffect(() => {
@@ -30,7 +30,7 @@ export default function DeferredSectionSlide({ render }: { render: () => ReactNo
   }, []);
   return (
     <div ref={ref} className="aspect-video rounded-xl bg-black/30">
-      {visible ? render() : null}
+      {visible || keepMounted ? render() : null}
     </div>
   );
 }

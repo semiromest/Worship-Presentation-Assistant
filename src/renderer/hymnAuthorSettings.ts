@@ -32,3 +32,8 @@ export function readHymnAuthorSize(): number {
     return DEFAULT_AUTHOR_SIZE;
   }
 }
+
+/** Settings percentage uses the original 82px hymn reference, never the lyrics size. */
+export function hymnCreditFontSize(size: number, scale = 1): number {
+  return 82 * normalizeAuthorSize(size) / 100 * scale;
+}

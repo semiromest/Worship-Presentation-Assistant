@@ -233,13 +233,13 @@ export default function RightPanel({
             <button type="button" onClick={() => setSearchQuery('')} className="mt-2 underline focus-visible:ring-2 focus-visible:ring-amber-300">{t('common.clearSearch')}</button>
           </div>}
           <div className="design-editor-heading">
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-1">
               {selectedSlide?.type === 'countdown' ? (
                 <Timer className="w-3.5 h-3.5 text-blue-400" />
               ) : (
                 <Type className="w-3.5 h-3.5 text-blue-400" />
               )}
-              <span className="text-[10px] font-bold uppercase tracking-widest text-white/60">
+              <span className="truncate text-[10px] font-bold uppercase tracking-widest text-white/60" title={t('slidesWorkspace.selectedTitle', {number: selectedSlideIndex+1})}>
                 {t('slidesWorkspace.selectedTitle', {number: selectedSlideIndex+1})}
               </span>
             </div>
@@ -273,11 +273,11 @@ export default function RightPanel({
                     aria-label={t(isEditorEditableSlide(selectedSlide) ? 'common.detailedEdit' : 'common.editorPreview')}
                   >
                     <Edit3 className="w-3.5 h-3.5" aria-hidden="true" />
-                    <span className="text-xs">{t('slidesWorkspace.openEditor')}</span>
+                    <span className="sr-only">{t('slidesWorkspace.openEditor')}</span>
                   </button>
                 )}
                 {canAttachSlideMusic(selectedSlide) && !selectedSlide.youtubeMusic && (
-                  <SlideMusicAttachment key={selectedSlide.id} slide={selectedSlide} onPatch={updateSlideProperty} inline />
+                  <SlideMusicAttachment key={selectedSlide.id} slide={selectedSlide} onPatch={updateSlideProperty} inline compact />
                 )}
                 <button
                   onClick={() => moveSelectedSlide(-1)}

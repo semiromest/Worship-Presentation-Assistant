@@ -61,11 +61,11 @@
 .design-editor-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scroll-padding:12px}
 .design-editor-scroll>.mx-4{display:none}
 .design-selected-editor{padding:10px 12px 16px;display:flex;flex-direction:column;gap:12px}
-.design-editor-heading{display:flex;flex-direction:column;gap:7px;padding-top:6px;border-top:1px solid #ffffff12}
+.design-editor-heading{display:flex;align-items:center;gap:4px;padding-top:6px;border-top:1px solid #ffffff12}
 .design-editor-heading>div:first-child>span{font-size:12px;letter-spacing:0;text-transform:none;color:#ffffffe0}
-.design-editor-heading>div:last-child{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.design-editor-heading>div:last-child{display:flex;flex-shrink:0;align-items:center;gap:2px}
 .design-editor-heading button{min-width:32px;min-height:32px;padding:7px;border-color:transparent;background:transparent}
-.design-editor-heading button[data-guide-anchor=image-tools]{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.design-editor-heading button[data-guide-anchor=image-tools]{display:inline-flex;align-items:center;justify-content:center;white-space:nowrap}
 .design-editing-live{font-size:11px;color:#fbbf24;margin:-5px 0 0}
 .design-edit-section{padding:0 0 12px;border-bottom:1px solid #ffffff10;display:flex;flex-direction:column;gap:10px}
 .design-edit-section h3{font-size:12px;font-weight:600;color:#ffffffc9;letter-spacing:0;margin:0}
@@ -130,8 +130,8 @@
 
 .design-selection-tools [data-testid="gradient-quick-apply"]{width:auto;gap:6px;padding:0 8px;font-size:12px}
 
-/* A short viewport must not collapse the inspector's scroll area. Allow the
-   editor heading to scroll away while the existing save actions stay in reach. */
+/* A short viewport must not collapse the inspector's scroll area. Keep the
+   footer in the same scroll flow so it cannot cover the inspector controls. */
 @media(max-height:600px){
   .editor-workspace .editor-workspace-layout{overflow-y:auto;overscroll-behavior:contain}
   .editor-workspace .editor-workspace-body{min-height:12rem;flex-shrink:0}
@@ -140,7 +140,7 @@
   .editor-workspace .editor-workspace-tools{gap:4px}
   .editor-workspace .editor-workspace-tools>button,.editor-workspace .editor-workspace-tools>div>button{min-height:32px;padding:6px;font-size:12px}
   .editor-workspace .editor-workspace-tools svg{flex-shrink:0}
-  .editor-workspace .editor-workspace-footer{position:sticky;bottom:0;z-index:50;min-height:44px;padding:4px 8px;gap:4px 8px}
+  .editor-workspace .editor-workspace-footer{position:static;min-height:44px;padding:4px 8px;gap:4px 8px}
   .editor-workspace .editor-workspace-footer>div{gap:4px}
   .editor-workspace .editor-workspace-footer button{min-height:32px;padding:6px 8px;font-size:12px}
 }

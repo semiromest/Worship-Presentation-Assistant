@@ -16,16 +16,16 @@ const deckWith = (target: Partial<Slide> = {}): Presentation => ({
   ],
 });
 
-test('each image becomes a standalone slide after the target in file order', () => {
+test('each image becomes a standalone slide before the target in file order', () => {
   const deck = deckWith();
   const next = insertDroppedImages(deck, 'target', ['C:\\Photos\\a #1.png', 'C:\\Photos\\b.jpg']);
   assert.equal(next.slides.length, 4);
-  assert.equal(next.slides[0], deck.slides[0]);
+  assert.equal(next.slides[2], deck.slides[0]);
   assert.equal(next.slides[3], deck.slides[1]);
-  assert.deepEqual(next.slides.slice(1, 3).map(slide => slide.mediaUrl), [
+  assert.deepEqual(next.slides.slice(0, 2).map(slide => slide.mediaUrl), [
     'file:///C:/Photos/a%20%231.png', 'file:///C:/Photos/b.jpg',
   ]);
-  for (const slide of next.slides.slice(1, 3)) {
+  for (const slide of next.slides.slice(0, 2)) {
     assert.equal(slide.type, 'image');
     assert.equal(slide.items, undefined);
     assert.equal(slide.styles?.objectFit, 'contain');
@@ -38,10 +38,10 @@ test('hymn content and background stay untouched; only section membership is inh
   const deck = deckWith({ partsMode: true, parts: ['One', 'Two'], activePart: 1,
     group: { id: 'hymn', title: 'Hymn', part: 1, parts: 2 }, sectionId: 'section' });
   const next = insertDroppedImages(deck, 'target', ['C:\\photo.png']);
-  assert.equal(next.slides[0], deck.slides[0]);
-  assert.equal(next.slides[1].sectionId, 'section');
-  assert.equal(next.slides[1].group, undefined);
-  assert.equal(next.slides[1].partsMode, undefined);
+  assert.equal(next.slides[1], deck.slides[0]);
+  assert.equal(next.slides[0].sectionId, 'section');
+  assert.equal(next.slides[0].group, undefined);
+  assert.equal(next.slides[0].partsMode, undefined);
 });
 
 test('any slide type can be the target, including the last slide', () => {
@@ -49,8 +49,8 @@ test('any slide type can be the target, including the last slide', () => {
     const deck = deckWith();
     deck.slides[1] = { ...deck.slides[1], type };
     const next = insertDroppedImages(deck, 'last', ['C:\\photo.png']);
-    assert.equal(next.slides[1], deck.slides[1]);
-    assert.equal(next.slides[2].type, 'image');
+    assert.equal(next.slides[2], deck.slides[1]);
+    assert.equal(next.slides[1].type, 'image');
   }
 });
 

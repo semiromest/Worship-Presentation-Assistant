@@ -1,3 +1,4 @@
+import { withSlideContent } from '../../shared/slideContent';
 import { restoreLiveSession } from '../liveSession';
 import { moveSectionSlidesOneStep, dropSlidesOnSlide } from '../../shared/sectionModel';
 import { useShallow } from 'zustand/react/shallow';
@@ -93,22 +94,29 @@ export function useSlideOperations() {
   }, [t, dispatchUndo, setSelectedSlideId]);
 
   const removeSlide = useCallback((id: string) => {
-    const { presentation, selectedSlideId } = useStore.getState();
+    const state = useStore.getState();
+    const { presentation, selectedSlideId, selectedSlideIds } = state;
     if (presentation.slides.length <= 1) return;
     // A locked slide is pinned to the live output — removing it would leave
     // the broadcast dangling, so it must be unlocked first.
     const target = presentation.slides.find((s) => s.id === id);
     if (target?.locked) return;
     const slides = presentation.slides.filter((s) => s.id !== id);
-    if (selectedSlideId === id) {
-      setSelectedSlideId(slides[0].id);
-    }
     dispatchUndo({
       type: 'SET',
       payload: { ...presentation, slides },
     });
+    const ids = new Set([...selectedSlideIds].filter(selectedId => selectedId !== id));
+    if (selectedSlideId === id) {
+      const anchorIndex = Math.min(presentation.slides.findIndex(s => s.id === id), slides.length - 1);
+      const activeId = slides[anchorIndex].id;
+      ids.add(activeId);
+      state.selectSlides({ activeId, ids, anchorIndex });
+    } else if (selectedSlideIds.has(id)) {
+      state.setSelectedSlideIds(ids);
+    }
     playSfx('delete');
-  }, [dispatchUndo, setSelectedSlideId]);
+  }, [dispatchUndo]);
 
   const moveSelectedSlide = useCallback((direction: -1 | 1) => {
     const { presentation, selectedSlideId } = useStore.getState();
@@ -132,11 +140,14 @@ export function useSlideOperations() {
     const moved = presentation.slides[fromIndex];
     const target = presentation.slides[toIndex];
     if (!moved || !target) return;
-    const next = dropSlidesOnSlide(presentation, new Set([moved.id]), target.id);
-    setSelectedSlideId(moved.id);
+    const selected = state.selectedSlideIds.has(moved.id) ? state.selectedSlideIds : new Set([moved.id]);
+    const next = dropSlidesOnSlide(presentation, selected, target.id);
+    if (next === presentation) return;
     dispatchUndo({ type: 'SET', payload: next });
+    const activeId = selected.has(state.selectedSlideId) ? state.selectedSlideId : moved.id;
+    state.selectSlides({ activeId, ids: new Set(selected), anchorIndex: next.slides.findIndex(s => s.id === activeId) });
     playSfx('reorder');
-  }, [dispatchUndo, setSelectedSlideId]);
+  }, [dispatchUndo]);
 
   const updateSlideContent = useCallback((content: string) => {
     const { presentation, selectedSlideIds, selectedSlideId } = useStore.getState();
@@ -146,7 +157,7 @@ export function useSlideOperations() {
       payload: {
         ...presentation,
         slides: presentation.slides.map((s) =>
-          targetIds.has(s.id) ? { ...s, content } : s
+          targetIds.has(s.id) ? withSlideContent(s, content) : s
         ),
       },
     });
@@ -833,6 +844,9 @@ export function useSlideOperations() {
 
     const slides = presentation.slides.filter((s) => !selectedSlideIds.has(s.id));
     if (slides.length === 0) return;
+    const replacementIndex = presentation.slides
+      .slice(0, presentation.slides.findIndex(s => s.id === selectedSlideId))
+      .filter(s => !selectedSlideIds.has(s.id)).length;
 
     dispatchUndo({
       type: 'SET',
@@ -840,7 +854,8 @@ export function useSlideOperations() {
     });
 
     useStore.getState().selectSlides({ ids: new Set(), anchorIndex: null,
-      activeId: selectedSlideIds.has(selectedSlideId) ? slides[0].id : undefined });
+      activeId: selectedSlideIds.has(selectedSlideId)
+        ? slides[Math.min(replacementIndex, slides.length - 1)].id : undefined });
 
     playSfx('delete');
   }, [t, dispatchUndo]);

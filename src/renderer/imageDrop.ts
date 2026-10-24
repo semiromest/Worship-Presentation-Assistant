@@ -34,7 +34,7 @@ export function insertDroppedImages(
     ...(section && { section: { ...section } }),
   }));
 
-  const insertAt = index + 1;
+  const insertAt = targetId === undefined ? slides.length : index;
   return {
     ...deck,
     slides: [...slides.slice(0, insertAt), ...added, ...slides.slice(insertAt)],

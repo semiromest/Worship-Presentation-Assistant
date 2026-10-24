@@ -27,6 +27,7 @@ import { useTranslation } from 'react-i18next';
 import { choiceDialog } from '../choiceDialogState';
 import { GradientDesigner, type GradientPreview } from '../components/GradientDesigner';
 import { consumeGradientEditorRequest } from '../gradientEditorRequest';
+import { LivePreview } from '../LivePreview';
 import { SlidePreviewAny } from '../components/SlidePreview';
 import { isHelpActive } from '../components/Tour/tourController';
 import { setComponentInert } from '../components/Tour/guideBoundary';
@@ -1020,7 +1021,9 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
             onSelectOverlay={id => session.setItemSelection(new Set(id ? [id] : []))} onAddOverlay={addVideoText}
             onOverlaysChange={session.updateVideoOverlays} onGestureStart={beginGesture} onGestureEnd={endGesture} /> : !editable ? <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-4 overflow-auto p-4">
             <div className="aspect-video w-full max-w-5xl overflow-hidden rounded-xl border border-white/15 bg-black">
-              <SlidePreviewAny slide={{ ...activeSlide, styles: canvasStyles as Slide['styles'] }} cardWidth={800} enabled={active} />
+              {gradientOnly
+                ? <LivePreview slide={{ ...activeSlide, styles: canvasStyles as Slide['styles'] }} isActive={active} muted />
+                : <SlidePreviewAny slide={activeSlide} cardWidth={800} enabled={active} />}
             </div>
             <p className="text-sm font-semibold text-white/90">{t(gradientOnly ? 'gradientLibrary.backgroundOnly' : 'common.editorRailReadOnly')}</p>
             <p className="max-w-xl text-center text-sm text-white/60">{t(gradientOnly ? 'gradientLibrary.backgroundOnlyHint' : 'common.editorReadOnlyExplanation')}</p>

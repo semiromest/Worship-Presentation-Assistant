@@ -81,6 +81,7 @@ export default function ServiceSections({
   const [dragSection, setDragSection] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ sectionId: string; beforeId?: string; targetSlideId?: string } | null>(null);
   const dragRef = useRef<string[]>([]);
+  const dragSourceRef = useRef<string | null>(null);
   const targetRef = useRef<typeof dropTarget>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const [toolbarHeight, setToolbarHeight] = useState(96);
@@ -242,6 +243,7 @@ export default function ServiceSections({
   }
   function resetDrag() {
     dragRef.current = [];
+    dragSourceRef.current = null;
     targetRef.current = null;
     setDragIds([]);
     setDragSection(null);
@@ -623,10 +625,12 @@ export default function ServiceSections({
                             }}
                           >
                             <DeferredSectionSlide
+                              keepMounted={dragSourceRef.current === s.id}
                               render={() =>
                                 renderSlide(s, {
                                   onDragStart: (id) => {
                                     if (restricted) return;
+                                    dragSourceRef.current = id;
                                     const ids = selectedIds.has(id) ? [...selectedIds] : [id];
                                     dragRef.current = ids;
                                     setDragIds(ids);

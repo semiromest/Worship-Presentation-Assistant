@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { Slide } from '../types';
-import { formatHymnCredit, readHymnAuthorPosition, readHymnAuthorSize } from '../hymnAuthorSettings';
+import { hymnCreditFontSize, formatHymnCredit, readHymnAuthorPosition, readHymnAuthorSize } from '../hymnAuthorSettings';
 import { useWatermarkStore } from '../state/useWatermarkStore';
 import { WatermarkOverlay } from './WatermarkOverlay';
 
@@ -17,7 +17,7 @@ export function SlideCardOverlays({ slide, width }: { slide: Slide; width: numbe
     (config.position === 'bottom-left' || config.position === 'bottom-right');
   const creditStyle: CSSProperties = {
     position: 'absolute', zIndex: 10,
-    fontSize: (slide.styles?.fontSize || 48) * scale * readHymnAuthorSize() / 100,
+    fontSize: hymnCreditFontSize(readHymnAuthorSize(), scale),
     color: slide.styles?.textColor || '#fff', opacity: 0.7,
     padding: `${20 * scale}px ${(sideLogo && !top ? 28 : 20) * scale}px`,
     [top ? 'top' : 'bottom']: (!top && bottomCenterLogo ? 13 : 3) * scale,

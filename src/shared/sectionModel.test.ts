@@ -39,11 +39,11 @@ function divided() {
 
 test('card drops match flat ordering in both directions and on adjacent cards', () => {
   for (const [source, target, expected] of [
-    ['a', 'c', ['b', 'c', 'a', 'd', 'e', 'f']],
+    ['a', 'c', ['b', 'a', 'c', 'd', 'e', 'f']],
     ['d', 'b', ['a', 'd', 'b', 'c', 'e', 'f']],
-    ['a', 'b', ['b', 'a', 'c', 'd', 'e', 'f']],
+    ['a', 'b', ['a', 'b', 'c', 'd', 'e', 'f']],
     ['c', 'b', ['a', 'c', 'b', 'd', 'e', 'f']],
-    ['a', 'f', ['b', 'c', 'd', 'e', 'f', 'a']],
+    ['a', 'f', ['b', 'c', 'd', 'e', 'a', 'f']],
   ] as const) {
     assert.deepEqual(ids(dropSlidesOnSlide(base(), new Set([source]), target)), expected);
   }
@@ -52,10 +52,10 @@ test('card drops match flat ordering in both directions and on adjacent cards', 
 test('card drops adopt the target section at its first and last cards', () => {
   const deck = divided();
   const first = dropSlidesOnSlide(deck, new Set(['a']), 'c');
-  assert.deepEqual(ids(first), ['b', 'c', 'a', 'd', 'e', 'f']);
+  assert.deepEqual(ids(first), ['b', 'a', 'c', 'd', 'e', 'f']);
   assert.equal(first.slides.find((s) => s.id === 'a')?.sectionId, 'worship');
   const last = dropSlidesOnSlide(deck, new Set(['a']), 'd');
-  assert.deepEqual(ids(last), ['b', 'c', 'd', 'a', 'e', 'f']);
+  assert.deepEqual(ids(last), ['b', 'c', 'a', 'd', 'e', 'f']);
   assert.equal(last.slides.find((s) => s.id === 'a')?.sectionId, 'worship');
   const backward = dropSlidesOnSlide(deck, new Set(['f']), 'c');
   assert.deepEqual(ids(backward), ['a', 'b', 'f', 'c', 'd', 'e']);
@@ -65,13 +65,13 @@ test('card drops adopt the target section at its first and last cards', () => {
 test('multi-card drops preserve order, skip selected anchors, and ignore self or invalid drops', () => {
   const deck = base();
   const selection = new Set(['e', 'a']);
-  assert.deepEqual(ids(dropSlidesOnSlide(deck, selection, 'd')), ['b', 'c', 'd', 'a', 'e', 'f']);
-  assert.deepEqual(slideDropDestination(deck, selection, 'd'), { sectionId: deck.slides[0].sectionId, beforeId: 'f' });
+  assert.deepEqual(ids(dropSlidesOnSlide(deck, selection, 'd')), ['b', 'c', 'a', 'e', 'd', 'f']);
+  assert.deepEqual(slideDropDestination(deck, selection, 'd'), { sectionId: deck.slides[0].sectionId, beforeId: 'd' });
   assert.deepEqual(ids(dropSlidesOnSlide(deck, new Set(['f', 'e']), 'b')), ['a', 'e', 'f', 'b', 'c', 'd']);
   assert.equal(dropSlidesOnSlide(deck, selection, 'e'), deck);
   assert.equal(dropSlidesOnSlide(deck, selection, 'missing'), deck);
   assert.equal(dropSlidesOnSlide(deck, new Set(), 'b'), deck);
-  assert.deepEqual(slideDropDestination(deck, new Set(['a']), 'f'), { sectionId: deck.slides[0].sectionId, beforeId: undefined });
+  assert.deepEqual(slideDropDestination(deck, new Set(['a']), 'f'), { sectionId: deck.slides[0].sectionId, beforeId: 'f' });
 });
 test('legacy migration preserves order, separates disjoint IDs, and is idempotent', () => {
   const slides: Slide[] = ['a', 'b', 'c', 'd'].map((id, i) => ({

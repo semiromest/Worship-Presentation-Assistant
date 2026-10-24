@@ -105,8 +105,18 @@ function splitSentences(text: string): string[] {
 }
 
 function parseHymn(text: string): Block[] {
-  const normalized = normalizeText(text);
+  let normalized = normalizeText(text).replace(/^\s*\[(?:V|C|B|CHORUS|BRIDGE|VERSE|PRE|OUTRO|INTRO)\d*\]\s*$/gim, '\n\n').trim();
   if (!normalized) return [];
+  // Legacy online caches lost blank lines for this catalog hymn. The archive
+  // has four four-line stanzas; repair only the complete, recognizable shape.
+  if (!normalized.includes('\n\n')) {
+    const lines = normalized.split('\n');
+    const starts = [/^De Haleluya İsa['’]ya/i, /^Seni seviyorum,? Rabbim/i,
+      /^İsa gökte yerde Rab['’]dir/i, /^Rab İsa tekrar gelecek/i];
+    if (lines.length === 16 && starts.every((pattern, i) => pattern.test(lines[i * 4]))) {
+      normalized = [0, 4, 8, 12].map(start => lines.slice(start, start + 4).join('\n')).join('\n\n');
+    }
+  }
   return normalized
     .split(/\n{2,}/)
     .map(p => p.trim())

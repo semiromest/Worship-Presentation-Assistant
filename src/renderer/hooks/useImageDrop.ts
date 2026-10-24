@@ -15,7 +15,7 @@ export function useImageDrop() {
       const next = insertDroppedImages(state.presentation, targetId, paths);
       if (next === state.presentation) return;
       const index = targetId === undefined ? state.presentation.slides.length
-        : next.slides.findIndex(slide => slide.id === targetId) + 1;
+        : state.presentation.slides.findIndex(slide => slide.id === targetId);
       const id = next.slides[index].id;
       state.dispatchUndo({ type: 'SET', payload: next });
       state.selectSlides({ activeId: id, ids: new Set([id]), anchorIndex: index });

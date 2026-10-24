@@ -180,3 +180,34 @@ test('loop image transitions retain their duration and a single image never fade
   const duration = await output.locator('[data-slide-transition][style*="tr-fadeIn"]').evaluate(layer => getComputedStyle(layer).animationDuration);
   expect(duration).toBe('0.4s');
 });
+
+test('hymn part changes use the selected projector effect while text edits stay instant', async () => {
+  await control.evaluate(() => {
+    const s = window.__transitionStore.getState();
+    s.dispatchUndo({ type: 'SET', payload: { ...s.presentation, slides: [
+      { ...s.presentation.slides[0], id: 'red', partsMode: true, parts: ['First verse', 'Second verse', 'Third verse'], activePart: 0, content: 'First verse' },
+      ...s.presentation.slides.slice(1),
+    ] } });
+    s.setIsRightPanelOpen(true);
+    s.selectSlides({ activeId: 'red', ids: new Set(['red']), anchorIndex: 0 });
+  });
+  await output.waitForFunction(() => document.body.textContent.includes('First verse'));
+  await settled();
+  for (const [type, name] of [['fade','tr-fadeIn'], ['slideLeft','tr-slideInL'], ['zoom','tr-zoomIn'], ['none','none']]) {
+    await configure(type);
+    await control.locator('[data-hymn-part="1"]').click();
+    if (type === 'none') {
+      await output.waitForFunction(() => document.body.textContent.includes('Second verse'));
+      await expect(output.locator('[data-part-transition]')).toHaveCount(0);
+    } else {
+      await expect(output.locator('[data-part-transition="incoming"]')).toHaveCSS('animation-name', name);
+      await expect(output.locator('[data-part-transition="incoming"]')).toHaveCSS('animation-duration', '0.8s');
+      await expect(output.locator('[data-part-transition]')).toHaveCount(0, { timeout: 2000 });
+    }
+    await control.locator('[data-hymn-part="0"]').click();
+    await expect(output.locator('[data-part-transition]')).toHaveCount(0, { timeout: 2000 });
+  }
+  await control.locator('#slide-content-textarea').fill('Edited first verse');
+  await output.waitForFunction(() => document.body.textContent.includes('Edited first verse'));
+  await expect(output.locator('[data-part-transition]')).toHaveCount(0);
+});

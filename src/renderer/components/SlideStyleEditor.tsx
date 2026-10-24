@@ -71,45 +71,16 @@ export default function SlideStyleEditor({
 
   return (
     <>
-      <section className="design-edit-section design-content"><h3>{t('slidesWorkspace.content')}</h3>      {/* Parts Editor */}
-      {parts.length > 0 && (
+      <section className="design-edit-section design-content">
+      {/* Parts Editor */}
+      {partsMode && parts.length > 0 && (
         <div data-guide-anchor="hymns-parts" className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-              {t('common.partsMode')}
-            </span>
-            <button
-              onClick={() => {
-                const next = !partsMode;
-                playSfx(next ? 'toggle-on' : 'toggle-off');
-                if (!next) {
-                  updateSlideProperty(selectedSlide.id, { partsMode: next, content: parts.join('\n\n') });
-                } else {
-                  updateSlideProperty(selectedSlide.id, {
-                    partsMode: next,
-                    activePart,
-                    content: getSlideDisplayContent({ ...selectedSlide, partsMode: next, activePart }),
-                  });
-                }
-              }}
-              className={cn(
-                'text-[10px] font-bold px-2 py-1 rounded-md border transition-colors',
-                partsMode
-                  ? 'bg-blue-600/20 border-blue-500/40 text-blue-300'
-                  : 'bg-white/5 border-white/10 text-white/40'
-              )}
-            >
-              {partsMode ? t('common.on') : t('common.off')}
-            </button>
-          </div>
-
           {partsMode && (
             <div
               tabIndex={0}
               data-hymn-parts-list=""
               role="group"
               aria-label={t('common.partsMode')}
-              aria-describedby="hymn-parts-navigation-hint"
               onKeyDown={handlePartsKeyDown}
               className="design-parts-list space-y-1 max-h-40 overflow-y-auto outline-none"
             >
@@ -130,9 +101,6 @@ export default function SlideStyleEditor({
                   <span className="truncate">{part.replace(/\n/g, ' ').substring(0, 60)}</span>
                 </button>
               ))}
-              <div className="flex items-center justify-center gap-2 pt-1 text-[9px] text-white/50">
-                <span id="hymn-parts-navigation-hint">{t('slidesWorkspace.partsNavigationHint')}</span>
-              </div>
             </div>
           )}
         </div>
@@ -144,7 +112,7 @@ export default function SlideStyleEditor({
         </label>
         <textarea
           id="slide-content-textarea"
-          value={selectedSlide.content}
+          value={getSlideDisplayContent(selectedSlide)}
           onKeyDown={handleKeyDown}
           onChange={(e) => updateSlideContent(e.target.value)}
           placeholder={t('common.slideContentPlaceholder')}

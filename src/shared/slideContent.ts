@@ -41,3 +41,15 @@ export function getPreviousPartIndex(slide: PartsSlide): number | null {
   if (!slide.partsMode || !slide.parts?.length) return null;
   return Math.max(getActivePartIndex(slide) - 1, 0);
 }
+
+/** Editing the visible text in parts mode must update its persistent source. */
+export function withSlideContent<T extends PartsSlide>(slide: T, content: string): T {
+  if (!slide.partsMode || !slide.parts?.length) return { ...slide, content };
+  const index = getActivePartIndex(slide);
+  return { ...slide, content, parts: slide.parts.map((part, i) => i === index ? content : part) };
+}
+
+/** A hymn part is a distinct visual cue within the same slide. */
+export function slideTransitionKey(slide: (PartsSlide & { id: string }) | undefined): string | undefined {
+  return slide && JSON.stringify([slide.id, slide.partsMode && slide.parts?.length ? getActivePartIndex(slide) : null]);
+}

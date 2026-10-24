@@ -1,5 +1,5 @@
 import { calculateFit, calculateCover, wrapCanvasText, canvasTypography, canvasLinePlacement } from '../shared/canvasLayout';
-import { formatHymnCredit, readHymnAuthorPosition, readHymnAuthorSize } from './hymnAuthorSettings';
+import { hymnCreditFontSize, formatHymnCredit, readHymnAuthorPosition, readHymnAuthorSize } from './hymnAuthorSettings';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useEffect, useState, useRef } from 'react';
@@ -181,7 +181,7 @@ async function renderTextSlide(
   if (!displayContent) return true;
 
   const typography = canvasTypography(styles, W, 8 / outScale);
-  const { fontSize, family: ff, lineHeight, padding, textAlign } = typography;
+  const { family: ff, lineHeight, padding, textAlign } = typography;
   const baseScale = W / 1920;
   let text = displayContent;
   if (styles.textTransform === 'uppercase') text = text.toUpperCase();
@@ -222,7 +222,7 @@ async function renderTextSlide(
     const isLeft  = pos.endsWith('left');
     const isRight = pos.endsWith('right');
 
-    const authorFontSize = Math.max(8 / outScale, fontSize * (sizePct / 100));
+    const authorFontSize = hymnCreditFontSize(sizePct, baseScale);
     const pad = 20 * baseScale;
     const edgeOffset = 3 * baseScale;
 

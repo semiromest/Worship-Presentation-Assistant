@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, memo, useMemo } from 'react';
 import type { Slide, TransitionType } from './types';
 import { ANIM_MAP } from './constants';
-import { LivePreview } from './LivePreview';
+import { slideTransitionKey } from '../shared/slideContent';
+import { LivePreview, type LivePreviewProps } from './LivePreview';
 import { useTranslation } from 'react-i18next';
 
 interface AnimatedPreviewProps {
@@ -67,7 +68,7 @@ function useTransitionManager(
     const currentSlide = slide;
 
     // Same slide ID — update content only
-    if (currentSlide?.id === prevSlide?.id) {
+    if (slideTransitionKey(currentSlide) === slideTransitionKey(prevSlide)) {
       if (currentSlide && prevSlide) {
           // Update if content actually changed
           const shallowEqual = (a: any, b: any) => {
@@ -116,6 +117,9 @@ function useTransitionManager(
 
           const hasContentChanged =
             currentSlide.content !== prevSlide.content ||
+            currentSlide.parts !== prevSlide.parts ||
+            currentSlide.group !== prevSlide.group ||
+            currentSlide.partsMode !== prevSlide.partsMode ||
             !shallowEqual(currentSlide.styles, prevSlide.styles) ||
             !itemsEqual(currentSlide.items ?? [], prevSlide.items ?? []) ||
             !loopItemsEqual(currentSlide.loopItems, prevSlide.loopItems) ||
@@ -183,6 +187,7 @@ const SlideLayer = memo(({
   size, 
   zIndex, 
   animation,
+  partTransition,
   volume,
   muted,
   isActive,
@@ -191,6 +196,7 @@ const SlideLayer = memo(({
   size: 'preview' | 'projector'; 
   zIndex: number; 
   animation?: string;
+  partTransition?: LivePreviewProps['partTransition'];
   volume?: number;
   muted?: boolean;
   isActive?: boolean;
@@ -207,7 +213,7 @@ const SlideLayer = memo(({
       style={style}
       aria-hidden={!animation}
     >
-      <LivePreview slide={slide} size={size} volume={volume} muted={muted} isActive={isActive} />
+      <LivePreview slide={slide} size={size} volume={volume} muted={muted} isActive={isActive} partTransition={partTransition} />
     </div>
   );
 });
@@ -247,13 +253,16 @@ export const AnimatedPreview = memo(({
     () => (outAnim ? `${outAnim} ${durationStr} ease forwards` : undefined),
     [outAnim, durationStr]
   );
+  // Parts share one background/media instance. Animate only their text layers.
+  const partTransition = isTransitioning && incoming?.id === outgoing?.id && incoming?.partsMode && outgoing?.partsMode
+    ? { from: outgoing, incoming: inAnimStyle, outgoing: outAnimStyle } : undefined;
 
   return (
     <div className="relative w-full h-full overflow-hidden bg-black">
       {/* Outgoing layer */}
-      {outgoing && isTransitioning && (
+      {outgoing && isTransitioning && !partTransition && (
         <SlideLayer
-          key={outgoing.id}
+          key={outgoing.id !== incoming?.id ? outgoing.id : 'out-' + slideTransitionKey(outgoing)}
           slide={outgoing}
           size={size}
           zIndex={1}
@@ -271,7 +280,8 @@ export const AnimatedPreview = memo(({
           slide={incoming}
           size={size}
           zIndex={2}
-          animation={isTransitioning ? inAnimStyle : undefined}
+          animation={isTransitioning && !partTransition ? inAnimStyle : undefined}
+          partTransition={partTransition}
           volume={volume}
           muted={muted}
           isActive={isActive}

@@ -72,7 +72,7 @@ function cleanLyrics(lyrics: string): string {
   }
 
   // Strip section tags: [V1] [CHORUS] etc.
-  text = text.replace(SECTION_TAG_RE, '');
+  text = text.replace(SECTION_TAG_RE, '\n\n');
 
   const lines = text.split('\n');
   const out: string[] = [];
