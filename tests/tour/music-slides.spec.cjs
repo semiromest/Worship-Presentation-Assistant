@@ -41,6 +41,22 @@ test('music slides: add silently, live playback, pause, blackout, cancellation, 
     const rendererErrors = [];
     control.on('pageerror', error => rendererErrors.push(error.message));
     await control.waitForFunction(() => !!window.__tourTest);
+    const controlWindow = await app.browserWindow(control);
+    const setControlViewport = async (width, height) => {
+      await controlWindow.evaluate((window, { width, height }) => {
+        window.unmaximize();
+        window.webContents.setZoomFactor(1);
+        window.setContentSize(width, height);
+      }, { width, height });
+      // Native window borders can round the client size by one DIP at high DPI.
+      await expect.poll(() => control.evaluate(({ width, height }) =>
+        Math.max(Math.abs(innerWidth - width), Math.abs(innerHeight - height)), { width, height }),
+      { message: `Control viewport should be ${width}x${height}, allowing one DIP of native rounding` })
+        .toBeLessThanOrEqual(1);
+    };
+    // A maximized CI window may still be only 1024px wide. Use explicit
+    // content dimensions, independently of the runner's display and borders.
+    await setControlViewport(1366, 768);
     await control.evaluate(async () => {
       await window.__tourTest.language('en');
       window.__musicStore = (await import('/src/renderer/state/useStore.ts')).useStore;
@@ -161,8 +177,7 @@ test('music slides: add silently, live playback, pause, blackout, cancellation, 
     await expect.poll(() => audio.evaluate(element => element.currentTime)).toBeGreaterThan(0.2);
     await control.evaluate(id => window.electronAPI.closeProjector(id), displayId);
     await expect.poll(() => audio.getAttribute('src')).toBeNull();
-    await app.evaluate(({ BrowserWindow }) => { const window = BrowserWindow.getAllWindows().find(window => !window.webContents.getURL().includes('mode=projector')); window.unmaximize(); window.setSize(800, 600); });
-    await control.waitForFunction(() => innerWidth <= 800);
+    await setControlViewport(800, 600);
     for (const language of ['tr', 'en', 'de', 'es', 'ko']) {
       await control.evaluate(language => window.__tourTest.language(language), language);
       expect(await control.getByTestId('music-slide-editor').innerText()).not.toContain('musicSlide.');
@@ -172,8 +187,7 @@ test('music slides: add silently, live playback, pause, blackout, cancellation, 
       expect(box.y + box.height).toBeLessThanOrEqual(await control.evaluate(() => innerHeight));
     }
     await control.screenshot({ path: info.outputPath('music-editor-800x600.png') });
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].maximize());
-    await control.waitForFunction(() => innerWidth > 1024);
+    await setControlViewport(1366, 768);
     await control.evaluate(() => window.__tourTest.language('en'));
     // Exercise the actual file-open normalization, not just JSON serialization.
     const deck = await control.evaluate(() => window.__musicStore.getState().presentation);
