@@ -110,18 +110,27 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
   const [book, setBook] = useState<BibleBook | null>(null);
   const [chapter, setChapter] = useState<Chapter | null>(null);
   const [verses, setVerses] = useState<Set<string>>(new Set());
+  const [restoredPracticeBible, setRestoredPracticeBible] = useState<BibleData | null>(null);
   useEffect(() => {
     if (!practice || !bible || bible.name !== 'Practice Sample') return;
     let live = true;
     void window.electronAPI.readPracticeWorkspace(null).then(value => {
-      if (!live || !value.guide.step.startsWith('bible-') || !value.active?.importedBible) return;
-      setPracticeImported(true); const ui = value.guide.ui;
-      if (ui?.book === 1) { const restored = bible.books.find(item => item.number === '1'); if (restored) {
-        setBook(restored); if (ui.chapter === 1) { const c = restored.chapters.find(item => item.number === '1'); if (c) {
-          setChapter(c); setChapterChosen(!!ui.chapterChosen);
-          if (ui.verse) setVerses(new Set(getChapterReading(restored,c,bibleRepository.currentSource).available.map(entry => entry.id)));
-        } }
-      } }
+      if (!live) return;
+      if (value.guide.step.startsWith('bible-') && value.active?.importedBible) {
+        setPracticeImported(true);
+        const ui = value.guide.ui;
+        const restored = ui?.book === 1 ? bible.books.find(item => item.number === '1') : undefined;
+        if (restored) {
+          setBook(restored);
+          const restoredChapter = ui?.chapter === 1 ? restored.chapters.find(item => item.number === '1') : undefined;
+          if (restoredChapter) {
+            setChapter(restoredChapter);
+            setChapterChosen(!!ui?.chapterChosen);
+            if (ui?.verse) setVerses(new Set(getChapterReading(restored, restoredChapter, bibleRepository.currentSource).available.map(entry => entry.id)));
+          }
+        }
+      }
+      setRestoredPracticeBible(bible);
     }).catch(() => {});
     return () => { live = false; };
   }, [practice,bible]);
@@ -782,8 +791,12 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
     anchor.current = null;
   };
 
+  // Do not overwrite the saved practice selection with initial empty state
+  // if Resume is clicked before the asynchronous UI restore completes.
+  const practiceUiReady = !practice || bible.name !== 'Practice Sample' || restoredPracticeBible === bible;
   return (
-    <div ref={element => registerTourAnchor('bible', element)} data-guide-state={JSON.stringify({ bibleReady: practiceImported && bible.name === 'Practice Sample', book: Number(book?.number ?? 0), chapter: Number(chapter?.number ?? 0), chapterChosen, verse: book?.number === '1' && chapter?.number === '1' && selectedNumbers.includes('1'), sourceMenu })} className="flex h-full overflow-hidden bg-[#09090b] text-white">
+    <div ref={element => registerTourAnchor('bible', element)}
+      data-guide-state={practiceUiReady ? JSON.stringify({ bibleReady: practiceImported && bible.name === 'Practice Sample', book: Number(book?.number ?? 0), chapter: Number(chapter?.number ?? 0), chapterChosen, verse: book?.number === '1' && chapter?.number === '1' && selectedNumbers.includes('1'), sourceMenu }) : undefined} className="flex h-full overflow-hidden bg-[#09090b] text-white">
       <aside className="flex w-[200px] lg:w-[300px] shrink-0 flex-col border-r border-white/10 bg-[#0c0c0f]">
         <div className="border-b border-white/10 p-4">
           <div className="mb-4 flex items-center gap-3">

@@ -246,9 +246,32 @@ test('guided resumed imports: actual Base UI portal, keyboard and restored Bible
   await expect(anchor('bible-chapter')).toHaveAttribute('aria-current','true');
   await anchor('bible-chapter').click(); await step('bible-verse');
   await anchor('bible-verse').click(); await step('bible-add');
-  await page.keyboard.press('Escape'); await page.reload(); await page.waitForFunction(() => !!window.__tourTest);
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('guide-resume')).toBeEnabled();
+  expect((await page.evaluate(() => window.electronAPI.readPracticeWorkspace(null))).guide.ui.verse).toBe(true);
+  // Reproduce a slow UI restore independently of the runner's CPU/disk speed.
+  // The runner's initial deck read still completes so Resume remains usable.
+  await app.evaluate(({ ipcMain }) => {
+    const original = ipcMain._invokeHandlers.get('practice:workspace:read');
+    let hold = true;
+    ipcMain.removeHandler('practice:workspace:read');
+    ipcMain.handle('practice:workspace:read', async (event, deck) => {
+      if (hold && deck === null) {
+        hold = false;
+        await new Promise(resolve => { global.__releaseBibleUiRestore = resolve; });
+      }
+      return original(event, deck);
+    });
+  });
+  await page.reload(); await page.waitForFunction(() => !!window.__tourTest);
   await page.evaluate(() => window.__tourTest.language('en'));
-  await page.getByTestId('guide-resume').click(); await step('bible-add');
+  await expect.poll(() => app.evaluate(() => !!global.__releaseBibleUiRestore)).toBe(true);
+  try {
+    await page.getByTestId('guide-resume').click(); await step('bible-add');
+    expect((await page.evaluate(() => window.electronAPI.readPracticeWorkspace(null))).guide.ui.verse).toBe(true);
+  } finally {
+    await app.evaluate(() => { global.__releaseBibleUiRestore?.(); delete global.__releaseBibleUiRestore; });
+  }
   await expect(anchor('bible-add')).toBeEnabled(); await anchor('bible-add').click(); await seeResult(page,'bible-result'); await step('nav-media');
   await chapter('bible'); await page.getByTestId('guide-next').click(); await step('bible-source');
   await anchor('bible-source').click(); await step('bible-import');
