@@ -29,7 +29,7 @@ function ResultSlidePreview({ slide }: { slide: GuideResult['slides'][number] })
       top: (size.height - PREVIEW_HEIGHT * scale) / 2,
       transform: `scale(${scale})`, transformOrigin: 'top left',
     }}>
-      <SlidePreviewAny slide={slide} cardWidth={PREVIEW_WIDTH} enabled={false} />
+      <SlidePreviewAny slide={slide} cardWidth={PREVIEW_WIDTH} />
     </div>}
   </div>;
 }

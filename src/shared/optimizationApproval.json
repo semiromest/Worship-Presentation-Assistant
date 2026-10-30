@@ -1,0 +1,4 @@
+{
+  "preview": false,
+  "reason": "Not approved: matched 30-run groups left preview completion inconclusive; 120-minute baseline soak requires GPU/native memory investigation. See docs/electron-reliability-results.md."
+}

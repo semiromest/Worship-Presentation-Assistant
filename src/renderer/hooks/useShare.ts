@@ -1,6 +1,7 @@
 import { usePractice } from '../hooks/usePractice';
 import { markTourReady } from '../state/useTourStore';
 import { useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import QRCode from 'qrcode';
 import { useStore } from '../state/useStore';
 import type { ShareSnapshot } from '../../shared/share';
@@ -57,6 +58,7 @@ function buildSnapshot(s: SttState): ShareSnapshot {
  * control window runs this hook; the projector window is a no-op.
  */
 export function useShare(): { startShare: () => Promise<void>; stopShare: () => Promise<void> } {
+  const { t } = useTranslation();
   const practice = usePractice();
   const setShareActive = useStore((s) => s.setShareActive);
   const setShareUrl = useStore((s) => s.setShareUrl);
@@ -88,7 +90,7 @@ export function useShare(): { startShare: () => Promise<void>; stopShare: () => 
     const offMotion = useStore.subscribe(state => state.uiMotionEnabled, publish);
     publish();
     return () => { unsub(); offMotion(); clearTimeout(timer); };
-  }, []);
+  }, [practice]);
 
   // Main → renderer events: client count, network change, status re-hydration.
   useEffect(() => {
@@ -129,7 +131,7 @@ export function useShare(): { startShare: () => Promise<void>; stopShare: () => 
     try {
       const res = await window.electronAPI?.shareStart?.();
       if (!res?.ok || !res.url) {
-        setToastMessage(res?.error ? `Telefon yayını başlatılamadı: ${res.error}` : 'Telefon yayını başlatılamadı.');
+        setToastMessage(t('common.phoneShareFailed', { detail: res?.error ?? '' }), 'error');
         return;
       }
       setShareActive(true);
@@ -137,7 +139,7 @@ export function useShare(): { startShare: () => Promise<void>; stopShare: () => 
       setShareClientCount(0);
       setShareNetworkChanged(false);
       if ((res as { localOnly?: boolean }).localOnly) {
-        setToastMessage('Telefon yayını yalnızca aynı yerel ağdaki cihazlara açıktır.');
+        setToastMessage('phoneShareLocalOnly', 'info');
       }
       QRCode.toDataURL(res.url)
         .then(setShareQr)
@@ -145,9 +147,9 @@ export function useShare(): { startShare: () => Promise<void>; stopShare: () => 
       // Publish the current state immediately (the subscription only fires on change).
       window.electronAPI?.sharePublish?.(buildSnapshot(useSttStore.getState()));
     } catch (error) {
-      setToastMessage(`Telefon yayını başlatılamadı: ${error instanceof Error ? error.message : String(error)}`);
+      setToastMessage(t('common.phoneShareFailed', { detail: error instanceof Error ? error.message : String(error) }), 'error');
     }
-  }, [setShareActive, setShareUrl, setShareQr, setShareClientCount, setShareNetworkChanged, setToastMessage]);
+  }, [setShareActive, setShareUrl, setShareQr, setShareClientCount, setShareNetworkChanged, setToastMessage, t]);
 
   const stopShare = useCallback(async () => {
     await window.electronAPI?.shareStop?.();

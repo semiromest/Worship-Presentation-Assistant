@@ -1,9 +1,10 @@
-import UiMenu from './UiMenu';
-import { AnimatePresence } from 'motion/react';
+import { Menu } from '@base-ui/react/menu';
+import ControlTooltip from './ControlTooltip';
+import { ContextMenu } from '@base-ui/react/context-menu';
 import { useListMotion } from '../hooks/useListMotion';
 import UiCollapse from './UiCollapse';
 import { playSfx } from '../sfx';
-import DeferredSectionSlide from './DeferredSectionSlide';
+import VirtualSectionSlides from './VirtualSectionSlides';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronRight, GripVertical, ListTree, MoreHorizontal, MoveRight, Plus, Pencil, X } from 'lucide-react';
@@ -51,10 +52,12 @@ export interface SectionDragHandlers {
 export default function ServiceSections({
   slides,
   columns,
+  draggedSlideId,
   renderSlide,
 }: {
   slides: Slide[];
   columns: number;
+  draggedSlideId?: string | null;
   renderSlide: (slide: Slide, drag: SectionDragHandlers) => ReactNode;
 }) {
   const { t } = useTranslation();
@@ -86,10 +89,23 @@ export default function ServiceSections({
   const toolbarRef = useRef<HTMLDivElement>(null);
   const [toolbarHeight, setToolbarHeight] = useState(96);
   const rootRef = useRef<HTMLDivElement>(null);
+  const dialogReturn = useRef<HTMLElement | null>(null);
+  const dialogReturnSelector = useRef<string | null>(null);
+  const keyboardContext = useRef<string | null>(null);
+  useEffect(() => {
+    if (!context || keyboardContext.current !== context) return;
+    const frame = requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>(`[data-slide-context="${CSS.escape(context)}"] [role="menuitem"]`)?.focus();
+      keyboardContext.current = null;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [context]);
   const blocks = useMemo(() => getSectionBlocks(deck), [deck]);
   useListMotion(rootRef, blocks.map(section => section.id), deck.id ?? '', 'section', `${search}:${filter}`);
   const endPoint = useMemo(() => sectionInsertionPoints(deck).at(-1), [deck]);
   const visibleIds = useMemo(() => new Set(slides.map((s) => s.id)), [slides]);
+  const visibleBySection = useMemo(() => new Map(blocks.map(block =>
+    [block.id, block.slides.filter(slide => visibleIds.has(slide.id))])), [blocks, visibleIds]);
   const slideIndex = useMemo(() => new Map(deck.slides.map((s, i) => [s.id, i])), [deck.slides]);
   const title = (section?: PresentationSection) =>
     !section || section.unassigned ? t('sections.none') : section.title;
@@ -192,6 +208,13 @@ export default function ServiceSections({
     );
   }
   function openEditor(next: Editor) {
+    dialogReturnSelector.current = 'sectionId' in next
+      ? `[data-section-actions="${CSS.escape(next.sectionId)}"]`
+      : context ? `[data-slide-id="${CSS.escape(context)}"]` : null;
+    dialogReturn.current = 'sectionId' in next
+      ? rootRef.current?.querySelector<HTMLElement>(`[data-section-actions="${CSS.escape(next.sectionId)}"]`) ?? null
+      : context ? rootRef.current?.querySelector<HTMLElement>(`[data-slide-id="${CSS.escape(context)}"]`) ?? null
+      : document.activeElement as HTMLElement | null;
     playSfx('open');
     setMenu(null);
     setContext(null);
@@ -333,32 +356,19 @@ export default function ServiceSections({
         className="sticky top-0 z-30 rounded-xl border border-white/10 bg-surface-raised p-3 shadow-lg"
       >
         <div className="flex flex-wrap items-center gap-2">
+          <Menu.Root modal={false} open={outline} onOpenChange={next => { setOutline(next); if (next) { setMenu(null); setContext(null); } }}>
           <div className="relative" data-section-menu>
-            <button
-              className={button}
-              aria-expanded={outline}
-              onClick={() => {
-                setMenu(null);
-                setContext(null);
-                setOutline(!outline);
-                playSfx(outline ? 'close' : 'open');
-              }}
-            >
-              <ListTree className="inline w-4 h-4 mr-1" />
-              {t('sections.outline')}
-              <ChevronDown
-                className={cn('inline w-3 h-3 ml-1 transition-transform', outline && 'rotate-180')}
-                aria-hidden="true"
-              />
-            </button>
-            <AnimatePresence initial={false}>{outline && (
-              <UiMenu
+            <Menu.Trigger className={button}>
+              <ListTree className="inline w-4 h-4 mr-1" />{t('sections.outline')}
+              <ChevronDown className={cn('inline w-3 h-3 ml-1', outline && 'rotate-180')} aria-hidden="true" />
+            </Menu.Trigger>
+            <Menu.Portal><Menu.Positioner align="start" sideOffset={6} className="z-50"><Menu.Popup data-section-menu onKeyDown={e => e.stopPropagation()}
                 aria-label={t('sections.outline')}
-                className="absolute left-0 top-full z-40 mt-1 max-h-[60vh] w-72 overflow-y-auto rounded-xl border border-white/15 bg-surface-overlay p-2 shadow-xl"
+                className="design-action-menu w-72"
               >
                 <p className="px-2 py-1 text-sm font-semibold break-words">{deck.name}</p>
                 {blocks.map((b) => (
-                  <button
+                  <Menu.Item
                     key={b.id}
                     className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                     title={t('sections.goTo')}
@@ -367,11 +377,11 @@ export default function ServiceSections({
                     <span style={{ color: b.color }}>{b.icon ?? '•'}</span>
                     <span className="min-w-0 flex-1 truncate">{title(b)}</span>
                     <span className="text-white/40">{t('sections.slideCount', { count: b.slides.length })}</span>
-                  </button>
+                  </Menu.Item>
                 ))}
-              </UiMenu>
-            )}</AnimatePresence>
+              </Menu.Popup></Menu.Positioner></Menu.Portal>
           </div>
+          </Menu.Root>
           <button
             className={cn(button, 'bg-blue-500/15 text-blue-200')}
             onClick={openCreate}
@@ -417,7 +427,7 @@ export default function ServiceSections({
           .filter((b) => !filter || b.id === filter)
           .map((b) => {
             const index = blocks.findIndex((s) => s.id === b.id);
-            const visible = b.slides.filter((s) => visibleIds.has(s.id));
+            const visible = visibleBySection.get(b.id)!;
             if (search.trim() && !visible.length) return null;
             return (
               <section
@@ -538,24 +548,15 @@ export default function ServiceSections({
                   >
                     <Plus className="w-4 h-4" />
                   </button>
+                  <Menu.Root modal={false} open={menu === b.id} onOpenChange={next => { if (next) { setContext(null); setMenu(b.id); } else setMenu(current => current === b.id ? null : current); }}>
                   <div className="relative" data-section-menu>
-                    <button
-                      className={button}
-                      aria-label={t('sections.actions', { name: title(b) })}
-                      aria-expanded={menu === b.id}
-                      onClick={() => {
-                        setContext(null);
-                        setMenu(menu === b.id ? null : b.id);
-                      }}
-                    >
-                      <MoreHorizontal className="w-4 h-4" />
-                    </button>
-                    <AnimatePresence initial={false}>{menu === b.id && (
-                      <UiMenu className="absolute right-0 top-full mt-1 z-40 w-60 p-2 rounded-xl border border-white/15 bg-surface-overlay shadow-xl flex flex-col gap-1">
-                        <button className={button} onClick={() => openEditor({ kind: 'edit', sectionId: b.id })}>
+                    <ControlTooltip suppress={menu === b.id}><Menu.Trigger data-section-actions={b.id} className={button} aria-label={t('sections.actions', { name: title(b) })}><MoreHorizontal className="w-4 h-4" aria-hidden="true" /></Menu.Trigger></ControlTooltip>
+                    <Menu.Portal><Menu.Positioner side="bottom" align="end" sideOffset={6} className="z-[80]">
+                      <Menu.Popup data-section-menu aria-label={t('sections.actions', { name: title(b) })} finalFocus={() => editor ? false : true} className="design-action-menu w-60" onKeyDown={event => event.stopPropagation()}>
+                        <Menu.Item className={button} onClick={() => openEditor({ kind: 'edit', sectionId: b.id })}>
                           {t('sections.rename')}
-                        </button>
-                        <button
+                        </Menu.Item>
+                        <Menu.Item
                           className={button}
                           onClick={() => {
                             const state = useStore.getState();
@@ -565,34 +566,35 @@ export default function ServiceSections({
                           }}
                         >
                           {t('sections.selectAll')}
-                        </button>
+                        </Menu.Item>
                         {([-1, 1] as const).map((d) => (
-                          <button
+                          <Menu.Item
                             key={d}
                             className={button}
                             disabled={restricted || index + d < 0 || index + d >= blocks.length}
                             onClick={() => commit(moveSectionTo(deck, b.id, index + d))}
                           >
                             {t(d < 0 ? 'common.moveUp' : 'common.moveDown')}
-                          </button>
+                          </Menu.Item>
                         ))}
                         <div className="my-1 h-px bg-white/10" aria-hidden="true" />
-                        <button className={button} onClick={() => openEditor({ kind: 'remove', sectionId: b.id })}>
+                        <Menu.Item className={button} onClick={() => openEditor({ kind: 'remove', sectionId: b.id })}>
                           {t('sections.remove')}
-                        </button>
-                        <button
+                        </Menu.Item>
+                        <Menu.Item
                           className={cn(button, 'text-red-300')}
                           onClick={() => openEditor({ kind: 'delete', sectionId: b.id })}
                         >
                           {t('sections.deleteWithSlides')}
-                        </button>
-                      </UiMenu>
-                    )}</AnimatePresence>
+                        </Menu.Item>
+                      </Menu.Popup>
+                    </Menu.Positioner></Menu.Portal>
                   </div>
+                  </Menu.Root>
                 </div>
                 <UiCollapse open={!collapsed.has(b.id)}>
                   <div
-                    className="space-y-3 p-3"
+                    data-slide-drop-area className="space-y-3 p-3"
                     onDragOver={(e) => {
                       if (restricted || !dragRef.current.length) return;
                       e.preventDefault();
@@ -604,30 +606,28 @@ export default function ServiceSections({
                       finishDrop();
                     }}
                   >
-                    <div
-                      className="grid gap-3"
-                      style={{ gridTemplateColumns: 'repeat(' + columns + ', minmax(0, 1fr))' }}
-                    >
-                      {visible.map((s) => {
+                    <VirtualSectionSlides slides={visible} requestedColumns={columns}
+                      pinnedIds={[selectedId, context, draggedSlideId ?? dragSourceRef.current]}>
+                      {(s) => {
                         return (
-                          <div
+                          <ContextMenu.Root key={s.id} open={context === s.id} onOpenChange={next => { if (next) { setContext(s.id); setMenu(null); setOutline(false); } else setContext(current => current === s.id ? null : current); }}>
+                          <ContextMenu.Trigger
+                            onKeyDown={event => {
+                              if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+                              event.preventDefault(); event.stopPropagation();
+                              keyboardContext.current = s.id;
+                              const rect = event.currentTarget.getBoundingClientRect();
+                              event.currentTarget.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 }));
+                            }}
                             key={s.id}
                             data-section-slide={s.id}
                             className={cn(
-                              'relative min-w-0 scroll-mt-36 rounded-xl',
+                              'relative min-w-0 scroll-mt-36 rounded-xl aspect-video bg-black/30',
                               previewIds.has(s.id) && 'ring-2 ring-amber-300',
                               dropTarget?.targetSlideId === s.id && 'ring-2 ring-blue-400'
                             )}
-                            onContextMenu={(e) => {
-                              e.preventDefault();
-                              setMenu(null);
-                              setContext(s.id);
-                            }}
                           >
-                            <DeferredSectionSlide
-                              keepMounted={dragSourceRef.current === s.id}
-                              render={() =>
-                                renderSlide(s, {
+                            {renderSlide(s, {
                                   onDragStart: (id) => {
                                     if (restricted) return;
                                     dragSourceRef.current = id;
@@ -645,15 +645,13 @@ export default function ServiceSections({
                                   },
                                   draggable: !restricted,
                                   isDragging: dragIds.includes(s.id),
-                                })
-                              }
-                            />
-                            <AnimatePresence initial={false}>{context === s.id && (
-                              <UiMenu
-                                data-section-menu
-                                className="absolute right-1 top-1 z-40 min-w-52 p-2 rounded-xl border border-white/15 bg-surface-overlay shadow-xl flex flex-col gap-1"
+                            })}
+                          </ContextMenu.Trigger>
+                            <ContextMenu.Portal><ContextMenu.Positioner className="z-50"><ContextMenu.Popup finalFocus={() => editor ? false : rootRef.current?.querySelector<HTMLElement>(`[data-slide-id="${CSS.escape(s.id)}"]`) ?? false} onKeyDown={e => e.stopPropagation()}
+                                data-section-menu data-slide-context={s.id}
+                                className="design-action-menu min-w-52"
                               >
-                                <button
+                                <ContextMenu.Item
                                   className={button}
                                   onClick={() =>
                                     openEditor({
@@ -663,14 +661,14 @@ export default function ServiceSections({
                                   }
                                 >
                                   {t('sections.move')}
-                                </button>
-                              </UiMenu>
-                            )}</AnimatePresence>
-                          </div>
+                                </ContextMenu.Item>
+                              </ContextMenu.Popup></ContextMenu.Positioner></ContextMenu.Portal>
+                          </ContextMenu.Root>
                         );
-                      })}
-                    </div>
+                      }}
+                    </VirtualSectionSlides>
                     {!b.slides.length && <p className="text-xs text-white/40">{t('sections.emptyHint')}</p>}
+                    <div data-slide-end-drop className="h-4" />
                   </div>
                 </UiCollapse>
               </section>
@@ -694,6 +692,9 @@ export default function ServiceSections({
       </div>
       <Dialog
         open={!!editor}
+        returnFocus={() => dialogReturn.current?.isConnected ? dialogReturn.current
+          : (dialogReturnSelector.current ? rootRef.current?.querySelector<HTMLElement>(dialogReturnSelector.current) : null)
+            ?? toolbarRef.current?.querySelector<HTMLElement>('button') ?? false}
         onClose={() => { setEditor(null); playSfx('close'); }}
         labelledBy="section-dialog-title"
         className="w-[min(92vw,520px)] rounded-2xl border border-white/15 bg-surface-raised p-5 shadow-2xl"

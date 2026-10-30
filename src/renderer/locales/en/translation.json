@@ -72,6 +72,8 @@
     "sidebarLabel": "Main Navigation"
   },
   "common": {
+    "phoneShareLocalOnly": "Phone sharing is available only to devices on the same local network.",
+    "phoneShareFailed": "Could not start phone sharing. {{detail}}",
     "scriptureMerged": "Combined verses",
     "scriptureMergedInfo": "Some verses are combined in this translation.",
     "scriptureIssue_empty": "No separate text is provided in this source.",
@@ -678,6 +680,7 @@
     "editorCanvasEmpty": "Add items to the slide or select a background.",
     "editorTextStyles": "Text Styles",
     "editorImageStyles": "Image Styles",
+    "editorImageSettings": "Image settings",
     "editorTitle": "Slide Editor",
     "editorSlideCounter": "Slide {{number}} / {{count}}",
     "editorUnsavedSlideCount": "{{count}} slides with unsaved changes",
@@ -1105,7 +1108,7 @@
     "error": "Drive error"
   },
   "transition": {
-    "label": "Transition",
+    "label": "Effect",
     "settings": "Transition Settings",
     "type": "Transition Type",
     "duration": "Transition Duration",
@@ -1320,8 +1323,8 @@
   "prepCheck": {
     "stale": "Content changed; waiting to check…",
     "completed": "Check complete",
-    "slideErrors": "{{count}} issue(s), including errors. Open slide report.",
-    "slideWarnings": "{{count}} warning(s). Open slide report.",
+    "slideErrors": "{{count}} issues, including errors. Open slide report.",
+    "slideWarnings": "{{count}} warnings. Open slide report.",
     "severity": {
       "error": "Error",
       "warning": "Warning"
@@ -1330,7 +1333,7 @@
     "button": "Prep Check",
     "allClear": "Everything looks ready",
     "allClearHint": "No readability or missing-media issues found.",
-    "summary": "{{count}} slide(s) may need attention before you go live.",
+    "summary": "{{count}} slides may need attention before you go live.",
     "issue": {
       "duplicateSlide": "This slide appears identical to the previous slide.",
       "emptyText": "This text slide is empty.",
@@ -1350,7 +1353,13 @@
     "outputClosed": "Presentation output is closed. Open it from Displays before going live.",
     "outputDisconnected": "A configured open display is disconnected. Check the Displays menu.",
     "contentClear": "Content check complete",
-    "splitAction": "Split into readable parts"
+    "splitAction": "Split into readable parts",
+    "summary_one": "{{count}} slide may need attention before you go live.",
+    "summary_other": "{{count}} slides may need attention before you go live.",
+    "slideErrors_one": "{{count}} issue, including errors. Open slide report.",
+    "slideErrors_other": "{{count}} issues, including errors. Open slide report.",
+    "slideWarnings_one": "{{count}} warning. Open slide report.",
+    "slideWarnings_other": "{{count}} warnings. Open slide report."
   },
   "library": {
     "tools": "Presentation tools",
@@ -1891,6 +1900,18 @@
     "fadeHint": "Audio fades in over 0.5 seconds and fades out over 0.8 seconds when leaving the slide. Stop and closing the output silence it immediately."
   },
   "slidesWorkspace": {
+    "decreaseFontSize": "Decrease font size",
+    "increaseFontSize": "Increase font size",
+    "previousTools": "Show previous tools",
+    "nextTools": "Show more tools",
+    "textCaseOriginal": "Original letter case",
+    "textCaseUppercase": "Uppercase",
+    "textCaseLowercase": "Lowercase",
+    "noSearchResults": "No matching slides found.",
+    "fewerSlidesPerRow": "Fewer slides per row",
+    "moreSlidesPerRow": "More slides per row",
+    "slidesPerRow": "Slides per row",
+    "historyLabel": "History",
     "readiness": "Readiness",
     "help": "Shortcuts",
     "music": "Music",
@@ -1969,5 +1990,79 @@
     "removed": "Library entry removed. Existing slide backgrounds were preserved.",
     "backgroundOnly": "Background editing",
     "backgroundOnlyHint": "Text and part settings stay on the Slides page. You can design and apply a gradient background here."
+  },
+  "fileOpen": {
+    "confirmTitle": "Open this presentation?",
+    "confirmMessage": "The selected project will open in the workspace.",
+    "replaceDetail": "This replaces the current presentation. You can save unsaved changes before opening. If an output is live, its presentation may also change.",
+    "open": "Open presentation",
+    "pptxTitle": "How should PowerPoint be imported?",
+    "pptxMessage": "Create a new presentation or append the slides to the current presentation.",
+    "pptxOptionsDetail": "Create new: Replaces the workspace; you can save unsaved changes first.\nAppend: Keeps existing slides and the live slide. Added slides can be undone.\nPowerPoint slides are imported as images; some animations and interactions may not be preserved. Conversion warnings, if any, appear afterwards.",
+    "newPresentation": "Create new presentation",
+    "append": "Append to current presentation",
+    "noImportedSlides": "No slides could be imported from this PowerPoint file. The current presentation was preserved.",
+    "liveReplaceTitle": "The live presentation will change",
+    "liveReplaceWarning": "An output is open. Creating a new presentation may change what it displays. Continue?"
+  },
+  "desktop": {
+    "projectFileHint": "To open .gpres projects with this app, search for .gpres in Windows settings and choose Worship Presentation Assistant.",
+    "projectFileDefaults": "Choose default file app",
+    "settings": "Helper tools",
+    "shortcutsEnabled": "Enable global shortcuts",
+    "spellcheck": "Check spelling",
+    "notifications": "Notify when background operations finish",
+    "previous": "Previous",
+    "next": "Next",
+    "blackout": "Blackout",
+    "registered": "Registered",
+    "unregistered": "Registration failed",
+    "disabled": "Disabled",
+    "primarySet": "Primary combinations",
+    "alternativeSet": "Alternative combinations",
+    "save": "Save",
+    "invalidShortcut": "Use Shift and Control/Command with a supported key.",
+    "openRequest": "Open requested",
+    "open": "Open",
+    "reject": "Dismiss",
+    "shortcutsActive": "Global shortcuts enabled",
+    "openFailed": "Presentation could not be opened",
+    "documentChanged": "The document changed while opening. Please try again.",
+    "service": {
+      "unknown": "Unknown",
+      "working": "Available",
+      "offline": "Offline",
+      "error": "Request failed"
+    },
+    "serviceName": {
+      "drive": "Google Drive",
+      "music": "Music",
+      "captions": "Captions"
+    },
+    "shortcutsFailed": "Global shortcuts could not be registered",
+    "spellingLanguage": "Spelling language",
+    "spellingAuto": "Follow interface language",
+    "spellingSystem": "macOS uses the system language settings for spelling.",
+    "savedOutputs": "Recent saved outputs",
+    "dragHint": "Drag a file into another application.",
+    "replaceChoice": {
+      "title": "Save your changes?",
+      "message": "Save your current changes before opening another presentation.",
+      "cancel": "Cancel",
+      "discard": "Discard",
+      "save": "Save"
+    },
+    "systemMessages": {
+      "recoverTitle": "Recover project backup",
+      "recoverMessage": "The project could not be opened. Open its previous verified backup?",
+      "cancel": "Cancel",
+      "openBackup": "Open backup",
+      "saveErrorTitle": "Project could not be saved",
+      "saveErrorMessage": "The existing project was preserved. Check missing media and available disk space.",
+      "missingMedia": "Missing media files:",
+      "ok": "OK",
+      "addToDictionary": "Add to dictionary",
+      "operationCompleted": "Operation completed"
+    }
   }
 }

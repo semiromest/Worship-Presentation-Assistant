@@ -32,8 +32,8 @@ async function main(){
   const select=async id=>{await page.evaluate(id=>{const s=window.__attachStore.getState();s.selectSlides({activeId:id,ids:new Set([id]),anchorIndex:s.presentation.slides.findIndex(x=>x.id===id)});},id);};
   const plays=()=>app.evaluate(()=>global.__attachmentPlays.length);
   const audio=page.getByTestId('background-music-audio');
-  for(const id of ['video','screen','hymn','split-hymn','video-loop']){await select(id);await expect(page.getByTestId('slide-music-attachment')).toHaveCount(0);}
-  for(const id of ['text','image','countdown']){await select(id);await expect(page.getByTestId('slide-music-add')).toBeVisible();}
+  for(const id of ['video','screen','video-loop']){await select(id);await expect(page.getByTestId('slide-music-attachment')).toHaveCount(0);}
+  for(const id of ['text','image','countdown','hymn','split-hymn']){await select(id);await expect(page.getByTestId('slide-music-add')).toBeVisible();}
   await select('text');const original=await page.evaluate(()=>window.__attachStore.getState().presentation.slides[0]);
   const attach=async(change=false,track='KI33ItOO_M4')=>{
     await page.getByTestId(change?'slide-music-change':'slide-music-add').click();await expect(page.getByRole('dialog')).toHaveAccessibleName('Seçili slayta müzik ekle');await expect(page.getByTestId('music-source-local')).toHaveCount(0);

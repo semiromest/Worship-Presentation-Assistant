@@ -1,5 +1,5 @@
-import UiMenu from './components/UiMenu';
-import { AnimatePresence } from 'motion/react';
+import { Menu } from '@base-ui/react/menu';
+import { isGuideActive } from './components/Tour/guideBoundary';
 import { useUiMotionEnabled } from './hooks/useUiMotionEnabled';
 import { uiMotion } from './uiMotion';
 import { useListMotion } from './hooks/useListMotion';
@@ -901,8 +901,8 @@ const DropItem = memo(function DropItem({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
+    <Menu.Item
+      label={title}
       onClick={onClick}
       data-guide-anchor={guideAnchor}
       className="w-full flex items-center gap-2.5 p-2.5 rounded-lg hover:bg-white/[0.06] transition-colors text-left outline-none"
@@ -912,9 +912,9 @@ const DropItem = memo(function DropItem({
       </div>
       <div>
         <div className="text-xs font-semibold text-white/90">{title}</div>
-        <div className="text-[10px] text-white/40 leading-snug">{desc}</div>
+        <div className="text-[11px] text-white/60 leading-snug">{desc}</div>
       </div>
-    </button>
+    </Menu.Item>
   );
 });
 
@@ -953,7 +953,6 @@ export default function MediaLoopTab({
   useListMotion(motionRoot, loopItems.map(item => item.id), 'loop-library', 'loop', activeSub);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
   const [folderSettings, setFolderSettings] = useState<MediaFolderSettings>(() => loadMediaFolderSettings());
   const [scanLoading, setScanLoading] = useState(false);
   const [folderMissing, setFolderMissing] = useState(false);
@@ -965,13 +964,6 @@ export default function MediaLoopTab({
 
   const totalMs = useMemo(() => loopItems.reduce((acc, i) => acc + i.duration, 0), [loopItems]);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
 
   const addMediaPaths = useCallback(
     async (paths: string[], origin: 'manual' | 'folder' = 'manual') => {
@@ -1319,16 +1311,20 @@ export default function MediaLoopTab({
                 )
               )}
             </div>
-            <div ref={menuRef} className="relative shrink-0">
-              <button
+            <Menu.Root modal={false} open={menuOpen} onOpenChange={(next, details) => {
+              // The guide owns focus until its asynchronous next-step lease arrives.
+              if (!next && details.reason === 'focus-out' && isGuideActive()) { details.cancel(); return; }
+              if (next !== menuOpen) { setMenuOpen(next); playSfx(next ? 'open' : 'close'); }
+            }}>
+            <div className="relative shrink-0">
+              <Menu.Trigger
                 data-guide-anchor="media-menu"
-                onClick={() => { setMenuOpen(!menuOpen); playSfx(menuOpen ? 'close' : 'open'); }}
                 className="workspace-secondary-action transition-colors"
               >
                 <Plus size={13} /> {t('common.mediaAdd')} <ChevronDown size={12} className="opacity-60" />
-              </button>
-              <AnimatePresence initial={false}>{menuOpen && (
-                <UiMenu className="absolute right-0 top-[calc(100%+6px)] w-[280px] z-20 p-1.5 rounded-xl border border-white/10 bg-[#141414]/[0.98] shadow-2xl shadow-black/50 backdrop-blur-xl">
+              </Menu.Trigger>
+              <Menu.Portal><Menu.Positioner side="bottom" align="end" sideOffset={6} className="z-[80]">
+                <Menu.Popup className="design-action-menu w-[280px]" aria-label={t('common.mediaAdd')} onKeyDown={event => event.stopPropagation()}>
                   <DropItem
                     icon={<ImageIcon size={14} />}
                     guideAnchor="media-import"
@@ -1357,9 +1353,10 @@ export default function MediaLoopTab({
                       chooseFolder();
                     }}
                   />
-                </UiMenu>
-              )}</AnimatePresence>
+                </Menu.Popup>
+              </Menu.Positioner></Menu.Portal>
             </div>
+            </Menu.Root>
           </div>
 
           {folderSettings.path && (

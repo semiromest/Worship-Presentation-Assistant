@@ -67,6 +67,24 @@ export function walkStrings(node: any, onString: (value: string, parent: any, ke
   }
 }
 
+/** Text, notes and metadata must never become implicit filesystem reads. */
+export function walkMediaStrings(node: any, onString: (value: string, parent: any, key: string) => void): void {
+  const mediaKeys = new Set(['mediaUrl', 'thumbnailUrl', 'backgroundImage', 'backgroundVideo']);
+  const pending = [node];
+  while (pending.length) {
+    const value = pending.pop();
+    if (!value || typeof value !== 'object') continue;
+    for (const key of Object.keys(value)) {
+      const child = value[key];
+      if (typeof child === 'string' && mediaKeys.has(key)) onString(child, value, key);
+      else if (child && typeof child === 'object') {
+        if (key === 'generatedGroupBackground' && typeof child.image === 'string') onString(child.image, child, 'image');
+        pending.push(child);
+      }
+    }
+  }
+}
+
 export function normalizeLocalSourcePath(value: string, mediaDir?: string): string {
   if (!value) return '';
   const dir = mediaDir;
@@ -124,7 +142,7 @@ export const isZip = (buf: Buffer) => buf[0] === 0x50 && buf[1] === 0x4b; // "PK
 export async function buildGpresZip(data: any, opts?: { mediaDir?: string }): Promise<{ zip: AdmZip; embeddedCount: number }> {
   const mediaDir = opts?.mediaDir;
   const urls = new Set<string>();
-  walkStrings(data, (val) => { if (isEmbeddableUrl(val)) urls.add(val); });
+  walkMediaStrings(data, (val) => { if (isEmbeddableUrl(val)) urls.add(val); });
 
   const registry = createMediaNameRegistry();
   const zip = new AdmZip();
@@ -143,7 +161,7 @@ export async function buildGpresZip(data: any, opts?: { mediaDir?: string }): Pr
     }
   }));
 
-  walkStrings(data, (val, parent, key) => {
+  walkMediaStrings(data, (val, parent, key) => {
     const mapped = urlToMedia.get(val);
     if (mapped) parent[key] = mapped;
   });

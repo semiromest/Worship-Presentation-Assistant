@@ -2,26 +2,7 @@ import type { TransitionType, WatermarkConfig } from './types';
 
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 
-export const DEFAULT_STYLES = {
-  fontSize: 48,
-  textTransform: 'none',
-  backgroundColor: '#000000',
-  textColor: '#ffffff',
-  textHighlight: 'transparent',
-  textAlign: 'center',
-  verticalAlign: 'center',
-  fontWeight: 'bold',
-  fontStyle: 'normal',
-  lineHeight: 1.3,
-  opacity: 1,
-  imageBrightness: 1,
-  imageContrast: 1,
-  imageBlur: 0,
-  imageGrayscale: 0,
-  imageSepia: 0,
-  imageFlipX: false,
-  imageFlipY: false,
-} as const;
+export { DEFAULT_STYLES } from './defaultSlideStyles';
 
 export const DEFAULT__TRANSITION: { type: TransitionType; duration: number } = {
   type: 'fade',

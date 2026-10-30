@@ -1,7 +1,9 @@
+import ControlTooltip from './ControlTooltip';
 import { playSfx } from '../sfx';
 import { usePractice } from '../hooks/usePractice';
 import { registerTourAnchor } from './Tour/tourController';
-import OutputStatus from './OutputStatus';
+import OutputStatus, { SlideSelectionStatus } from './OutputStatus';
+import BroadcastControls from './BroadcastControls';
 import { useTranslation } from 'react-i18next';
 import {
   Undo2,
@@ -129,7 +131,7 @@ export default function Toolbar({
   const readinessLabel = t(readinessStatus === 'checking' ? 'prepCheck.checking' : readinessStatus === 'stale' ? 'prepCheck.stale' : readinessStatus === 'failed' ? 'prepCheck.checkFailed' : 'prepCheck.completed');
 
 
-  return <div className="design-toolbar-wrap"><header ref={element => registerTourAnchor('toolbar', element)} className={activeTab === 'slides' ? 'design-toolbar' : 'design-toolbar design-toolbar-legacy'}>
+  return <div className="design-toolbar-wrap"><header ref={element => registerTourAnchor('toolbar', element)} className={cn('design-toolbar', activeTab !== 'slides' && 'design-toolbar-legacy', isRightPanelOpen && 'design-inspector-open')}>
     <div className="design-doc">      <div className="flex items-center gap-2 min-w-0">
         {editingName ? (
           <input
@@ -146,7 +148,7 @@ export default function Toolbar({
             className="font-semibold text-blue-400 bg-transparent border-b border-blue-400/50 outline-none max-w-[300px]"
           />
         ) : (
-          <button
+          <ControlTooltip><button
             onClick={startEditing}
             className="group flex items-center gap-1.5 font-semibold text-blue-400 truncate max-w-[300px] hover:text-blue-300 transition-colors text-left cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none rounded px-2 py-0.5 -ml-2 hover:bg-white/5 active:scale-[0.98]"
             title={t('common.clickToRename')}
@@ -164,9 +166,10 @@ export default function Toolbar({
             >
               <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
             </svg>
-          </button>
+          </button></ControlTooltip>
         )}
 
+        <div className="design-document-status">
         {savedAgoLabel && (
           <span
             className={cn(
@@ -187,7 +190,9 @@ export default function Toolbar({
             {savedAgoLabel}
           </span>
         )}
-      </div><div className="design-undo">        <button
+        <OutputStatus />
+        </div>
+      </div>{activeTab !== 'slides' && <div className="design-undo">        <ControlTooltip shortcut="Ctrl+Z"><button
           onClick={() => dispatchUndo({ type: 'UNDO' })}
           disabled={!canUndo}
           title={t('common.undo')}
@@ -195,8 +200,8 @@ export default function Toolbar({
           className="p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-30 disabled:hover:bg-white/5 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92] disabled:active:scale-100"
         >
           <Undo2 className="w-4 h-4" aria-hidden="true" />
-        </button>
-        <button
+        </button></ControlTooltip>
+        <ControlTooltip shortcut="Ctrl+Y"><button
           onClick={() => dispatchUndo({ type: 'REDO' })}
           disabled={!canRedo}
           title={t('common.redo')}
@@ -204,54 +209,55 @@ export default function Toolbar({
           className="p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-30 disabled:hover:bg-white/5 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92] disabled:active:scale-100"
         >
           <Redo2 className="w-4 h-4" aria-hidden="true" />
-        </button>
+        </button></ControlTooltip>
 
-</div><div className="design-multi">        {activeTab !== 'slides' && selectedCount > 1 && (
+</div>}<div className="design-multi">        {activeTab !== 'slides' && selectedCount > 1 && (
           <>
             <div className="w-px h-6 bg-white/10 mx-1" aria-hidden="true" />
             <span className="text-xs text-white/55 font-medium" aria-live="polite">
               {selectedCount} {t('common.selected')}
             </span>
-            <button
+            <ControlTooltip><button
               onClick={() => moveSelectedSlides(-1)}
               title={t('common.moveSelectedUp')}
               aria-label={t('common.moveSelectedUp')}
               className="p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]"
             >
               <ChevronUp className="w-4 h-4" aria-hidden="true" />
-            </button>
-            <button
+            </button></ControlTooltip>
+            <ControlTooltip><button
               onClick={() => moveSelectedSlides(1)}
               title={t('common.moveSelectedDown')}
               aria-label={t('common.moveSelectedDown')}
               className="p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]"
             >
               <ChevronDown className="w-4 h-4" aria-hidden="true" />
-            </button>
-            <button
+            </button></ControlTooltip>
+            <ControlTooltip><button
               onClick={duplicateSelectedSlides}
               title={`${t('common.duplicateSelected')} (Ctrl+D)`}
               aria-label={t('common.duplicateSelected')}
               className="p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]"
             >
               <Copy className="w-4 h-4" aria-hidden="true" />
-            </button>
-            <button
+            </button></ControlTooltip>
+            <ControlTooltip><button
               onClick={deleteSelectedSlides}
               title={`${t('common.deleteSelected')} (Del)`}
               aria-label={t('common.deleteSelected')}
               className="p-2.5 rounded-md bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-400 transition-colors focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:outline-none active:scale-[0.92]"
             >
               <Trash2 className="w-4 h-4" aria-hidden="true" />
-            </button>
+            </button></ControlTooltip>
           </>
         )}
 
 </div></div>
     <div className="design-secondary"><div className="design-connections">{!practice && <><DisplayOutputsPopover label={activeTab === 'slides' ? t('slidesWorkspace.displays') : undefined} openOutput={openOutput} closeOutput={closeOutput} />        {/* Phone viewers (live-slide broadcast) */}
         <div className="relative shrink-0">
-          <button
+          <ControlTooltip><button
             onClick={() => { setIsLiveShareOpen(true); playSfx('open'); }}
+            aria-label={t('common.liveShareButton')}
             aria-haspopup="dialog"
             aria-pressed={screenShareActive}
             className={`flex items-center justify-center w-[150px] py-1.5 rounded-md transition-colors text-sm font-medium focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.97] ${
@@ -265,24 +271,25 @@ export default function Toolbar({
             {screenShareActive && (
               <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-pulse" aria-hidden="true" />
             )}
-          </button>
+          </button></ControlTooltip>
         </div>
 
         {/* Remote Panel */}
         <div className="relative shrink-0">
-          <button
+          <ControlTooltip><button
             onClick={() => { setIsRemoteOpen(true); playSfx('open'); }}
+            aria-label={t('common.remoteControl')}
             aria-haspopup="dialog"
             className="flex items-center justify-center w-[150px] py-1.5 rounded-md transition-colors text-sm font-medium focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.97] bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
           >
             <Smartphone className="w-4 h-4 shrink-0" aria-hidden="true" />
             <span className="truncate">{t('common.remoteControl')}</span>
-          </button>
+          </button></ControlTooltip>
         </div>
 
 </>}{practice && <button disabled data-guide-anchor="phone-controls">{t('common.remoteControl')}</button>}</div>
     <div className="design-utilities">{!practice && <>        {/* Live Captions console (labeled; reflects the running session) */}
-        <button
+        <ControlTooltip><button
           type="button"
           onClick={() => setIsSttPanelOpen(!isSttPanelOpen)}
           aria-pressed={isSttPanelOpen}
@@ -302,9 +309,9 @@ export default function Toolbar({
           {sttLive && (
             <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse shrink-0" aria-hidden="true" />
           )}
-        </button>
+        </button></ControlTooltip>
 
-</>}        <button
+</>}        <ControlTooltip><button
           onClick={() => { usePreparationStore.setState({ focusedSlideId: null }); setIsPrepCheckOpen(true); playSfx('open'); }}
           title={t('prepCheck.title') + ': ' + readinessLabel}
           aria-label={t('prepCheck.title')}
@@ -323,12 +330,14 @@ export default function Toolbar({
               {readinessIssueCount}
             </span>
           )}
-        </button>
+        </button></ControlTooltip>
 
         <BackgroundMusicPopover label={t('slidesWorkspace.music')} onAddSlide={practice ? undefined : addYouTubeMusicSlide} />
 
 </div></div>
-    <div className="design-output">        {!practice && <button
+    <div className="design-output">
+      {activeTab === 'slides' && <><SlideSelectionStatus navigation={false} /><BroadcastControls /></>}
+        {!practice && <ControlTooltip><button
           onClick={startLive}
           aria-label={isProjectorWindowOpen ? t('common.stopBroadcast') : t('common.startBroadcast')}
           className={cn(
@@ -349,9 +358,9 @@ export default function Toolbar({
               <span className="truncate">{t('common.startBroadcast').toUpperCase()}</span>
             </>
           )}
-        </button>}
+        </button></ControlTooltip>}
 
-        <button
+        <ControlTooltip><button
           onClick={() => { setIsRightPanelOpen(!isRightPanelOpen); playSfx(isRightPanelOpen ? 'close' : 'open'); }}
           title={isRightPanelOpen ? t('common.panelClose') : t('common.panelOpen')}
           aria-label={isRightPanelOpen ? t('common.panelClose') : t('common.panelOpen')}
@@ -364,8 +373,8 @@ export default function Toolbar({
           )}
         >
           {isRightPanelOpen ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
-        </button>
+        </button></ControlTooltip>
 </div>
-    </header><OutputStatus /></div>;
+    </header></div>;
 
 }

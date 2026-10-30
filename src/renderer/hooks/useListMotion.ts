@@ -114,9 +114,10 @@ export function useListMotion(
   useLayoutEffect(() => {
     const container = root.current;
     if (!container || !enabled) return;
-    let frame = 0;
     const beforeAction = () => capture.current();
-    const onScroll = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(beforeAction); };
+    // Scrolling is not a list mutation. Invalidate positions without forcing
+    // layout for every card; the next user mutation captures fresh geometry.
+    const onScroll = () => { previous.current?.frames.clear(); };
     container.addEventListener('pointerdown', beforeAction, true);
     const beforeKey = (event: KeyboardEvent) => { if ((event.target as HTMLElement)?.closest?.('input, textarea, select, [contenteditable=true]')) return; if (event.key === 'Delete' || event.key === 'Backspace' || ((event.ctrlKey || event.metaKey) && ['z', 'y', 'd'].includes(event.key.toLowerCase()))) beforeAction(); };
     container.addEventListener('keydown', beforeKey, true);
@@ -125,7 +126,6 @@ export function useListMotion(
     const parentScroll = container.parentElement?.closest('[data-guide-scroll]');
     parentScroll?.addEventListener('scroll', onScroll, { passive: true });
     return () => {
-      cancelAnimationFrame(frame);
       container.removeEventListener('pointerdown', beforeAction, true);
       container.removeEventListener('keydown', beforeKey, true);
       container.removeEventListener('drop', beforeAction, true);

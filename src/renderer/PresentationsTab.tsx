@@ -28,7 +28,9 @@ import {
 } from 'lucide-react';
 import { AnimatedPreview } from './AnimatedPreview';
 import { cn } from './utils';
-import { convertPptxToSlides, type PptxImportResult } from './utils';
+import { type PptxImportResult } from './utils';
+import type { PptxImportMode } from '../shared/fileOpen';
+import { choiceDialog } from './choiceDialogState';
 import type { Presentation, Preset, Slide } from './types';
 import type { PlayingSFX } from 'uisfx';
 import { playSfx, stopSfx } from './sfx';
@@ -93,9 +95,9 @@ export interface PresentationsTabProps {
   onPresetsChange: (presets: Preset[]) => void;
   onApplyPreset: (preset: Preset) => void;
   onSelectedPresetNameChange: (name: string | null) => void;
-  onOpenFile?: () => void;
+  onOpenFile?: () => void | Promise<void>;
   onSaveFile?: () => void;
-  onImportSlides?: (slides: import('./types').Slide[]) => void;
+  onImportPptx?: (filePath: string, mode: PptxImportMode) => Promise<PptxImportResult | null>;
   onImportWarnings?: (warnings: string[]) => void;
   onImportingChange?: (importing: boolean) => void;
   onNewPresentation?: () => void;
@@ -315,7 +317,7 @@ export default function PresentationsTab({
   onSelectedPresetNameChange,
   onOpenFile,
   onSaveFile,
-  onImportSlides,
+  onImportPptx,
   onImportWarnings,
   onImportingChange,
   onNewPresentation,
@@ -367,6 +369,15 @@ export default function PresentationsTab({
   const [isSaving, setIsSaving] = useState(false);
   const operationRef = useRef(false);
   const [operationError, setOperationError] = useState<string | null>(null);
+  const [isOpening, setIsOpening] = useState(false);
+  const openingRef = useRef(false);
+  const handleOpenFile = async () => {
+    if (openingRef.current || !onOpenFile) return;
+    openingRef.current = true; setIsOpening(true); setOperationError(null);
+    try { await onOpenFile(); }
+    catch (error) { setOperationError(error instanceof Error ? error.message : t('desktop.openFailed')); }
+    finally { openingRef.current = false; setIsOpening(false); }
+  };
   const [savedSnapshot, setSavedSnapshot] = useState<Presentation | null>(null);
   const liveSaveEnabled = useStore((s) => s.liveSaveEnabled);
   const liveSaveLastSaved = useStore((s) => s.liveSaveLastSaved);
@@ -583,7 +594,6 @@ export default function PresentationsTab({
   }, [presentation, t]);
 
   const handleImportPptx = useCallback(async () => {
-    importLoopRef.current = playSfx('processing');
     try {
       setImportError(null);
       setImportWarnings([]);
@@ -603,8 +613,21 @@ export default function PresentationsTab({
         return;
       }
 
+      const mode = await choiceDialog({
+        title: t('fileOpen.pptxTitle'), message: t('fileOpen.pptxMessage'),
+        detail: `${filePath.split(/[\\/]/).pop()}\n\n${t('fileOpen.pptxOptionsDetail')}`,
+        choices: [
+          { value: 'cancel', label: t('common.cancel') },
+          { value: 'new', label: t('fileOpen.newPresentation') },
+          { value: 'append', label: t('fileOpen.append'), tone: 'primary' },
+        ],
+      });
+      if (mode !== 'new' && mode !== 'append' || !onImportPptx) { setIsImporting(false); return; }
       onImportingChange?.(true);
-      const result: PptxImportResult = await window.electronAPI?.importPptx?.(filePath);
+      importLoopRef.current = playSfx('processing');
+      importStartTimeRef.current = performance.now();
+      const result = await onImportPptx(filePath, mode);
+      if (!result) { stopSfx(importLoopRef.current); importLoopRef.current = null; setIsImporting(false); setImportProgress({ current: 0, total: 0 }); return; }
 
       if (!result.success || !result.slides) {
         throw new Error(result.error || t('common.importFailedGeneric'));
@@ -613,14 +636,9 @@ export default function PresentationsTab({
       stopSfx(importLoopRef.current);
       importLoopRef.current = null;
 
-      const slides = convertPptxToSlides(result);
-      setImportCount(slides.length);
+      setImportCount(result.slides.length);
       setImportWarnings(result.warnings ?? []);
       onImportWarnings?.(result.warnings ?? []);
-
-      if (onImportSlides && slides.length > 0) {
-        onImportSlides(slides);
-      }
 
       const duration = performance.now() - importStartTimeRef.current;
       setImportDuration(Math.round(duration));
@@ -644,7 +662,7 @@ export default function PresentationsTab({
     } finally {
       onImportingChange?.(false);
     }
-  }, [onImportSlides, onImportWarnings, onImportingChange, t]);
+  }, [onImportPptx, onImportWarnings, onImportingChange, t]);
 
   return (
     <div ref={motionRoot} className="h-full bg-surface-base text-white overflow-y-auto">
@@ -665,7 +683,7 @@ export default function PresentationsTab({
                 if (!saved && !(await confirmDialog(t('library.confirmNew'), { title: t('common.newPresentation') }))) return;
                 onNewPresentation();
               }}><Plus aria-hidden="true" />{t('common.newPresentation')}</button>}
-            {onOpenFile && <button type="button" onClick={onOpenFile} className="presentation-action">
+            {onOpenFile && <button type="button" onClick={() => void handleOpenFile()} disabled={isOpening || isImporting} className="presentation-action">
               <FolderOpen aria-hidden="true" />{t('common.openFromFile')}
             </button>}
           </div>
@@ -684,7 +702,7 @@ export default function PresentationsTab({
             <Menu.Portal>
               <Menu.Positioner side="bottom" align="start" sideOffset={6} className="presentation-ppt-menu">
                 <Menu.Popup className="presentation-ppt-popup" aria-label={t('library.powerPoint')}>
-                  {onImportSlides && <Menu.Item onClick={() => void handleImportPptx()} disabled={isImporting || isExporting} className="presentation-ppt-item">
+                  {onImportPptx && <Menu.Item onClick={() => void handleImportPptx()} disabled={isImporting || isExporting} className="presentation-ppt-item">
                     <FileUp aria-hidden="true" />{isImporting ? t('common.importing') : t('common.importPptx')}
                   </Menu.Item>}
                   <Menu.Item onClick={() => void handleExportPptx()} disabled={isExporting || isImporting} className="presentation-ppt-item">

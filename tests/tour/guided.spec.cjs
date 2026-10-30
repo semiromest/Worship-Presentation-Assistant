@@ -56,10 +56,11 @@ test('guided startup language, paused chapter chooser and archived fresh restart
   }
   const archived=await page.evaluate(()=>window.electronAPI.readPracticeWorkspace(null));
   expect(archived.deck.slides.some(slide=>slide.items?.some(item=>item.id.startsWith('practice-editor-')))).toBe(true);
-  await app.evaluate(({dialog})=>{dialog.showMessageBox=async()=>({response:0});});
-  await page.getByTestId('guide-restart').click();expect((await page.evaluate(()=>window.electronAPI.readPracticeWorkspace(null))).runId).toBe(before.runId);
-  await app.evaluate(({dialog})=>{dialog.showMessageBox=async()=>({response:1});});
-  await page.getByTestId('guide-restart').click();await step('welcome');
+  await page.getByTestId('guide-restart').click();
+  await page.locator('.app-choice-dialog').getByRole('button',{name:'Cancel',exact:true}).click();
+  expect((await page.evaluate(()=>window.electronAPI.readPracticeWorkspace(null))).runId).toBe(before.runId);
+  await page.getByTestId('guide-restart').click();
+  await page.locator('.app-choice-dialog').getByRole('button',{name:'Start over',exact:true}).click();await step('welcome');
   const after=await page.evaluate(()=>window.electronAPI.readPracticeWorkspace(null));expect(after.runId).not.toBe(before.runId);expect(after.deck.slides).toEqual([]);
   const profile=await app.evaluate(({app})=>app.getPath('userData'));const archives=await fs.readdir(path.join(profile,'practice-archives'));
   expect(archives).toHaveLength(1);expect(JSON.parse(await fs.readFile(path.join(profile,'practice-archives',archives[0]),'utf8')).workspace.deck).toEqual(archived.deck);

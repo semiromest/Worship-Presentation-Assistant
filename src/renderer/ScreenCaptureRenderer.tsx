@@ -34,7 +34,8 @@ function useScreenStream(sourceId: string, captureAudio: boolean = true) {
     cleanup();
     
     abortControllerRef.current?.abort();
-    abortControllerRef.current = new AbortController();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     try {
       setStreamState({ status: 'connecting' });
@@ -56,7 +57,7 @@ function useScreenStream(sourceId: string, captureAudio: boolean = true) {
       });
 
       // Check if aborted
-      if (abortControllerRef.current?.signal.aborted) {
+      if (controller.signal.aborted) {
         stream.getTracks().forEach((track: { stop: () => any; }) => track.stop());
         return;
       }
@@ -78,14 +79,14 @@ function useScreenStream(sourceId: string, captureAudio: boolean = true) {
       
       return stream;
     } catch (error) {
-      if (!abortControllerRef.current?.signal.aborted) {
+      if (!controller.signal.aborted) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to capture screen';
         console.error('[ScreenCapture] getUserMedia failed:', error);
         setStreamState({ status: 'error', error: errorMessage });
       }
       return null;
     }
-  }, [cleanup]);
+  }, [cleanup, captureAudio]);
 
   useEffect(() => {
     if (!sourceId) {

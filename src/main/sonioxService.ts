@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow, type IpcMainInvokeEvent, type WebContents } fro
 import { SonioxNodeClient, type RealtimeSttSession } from '@soniox/node';
 import { randomUUID } from 'node:crypto';
 import { CaptionTimeline } from '../shared/captions';
+import { reportServiceHealth } from './serviceHealth';
 import { SttSessionGroup, finishSttSession } from './sttSessionGroup';
 import { getApiKey as keyStoreGetApiKey, hasApiKey as keyStoreHasApiKey, keyHint as keyStoreKeyHint, setApiKey as keyStoreSetApiKey, deleteApiKey as keyStoreDeleteApiKey } from './sonioxKeyStore';
 import type { SttConfig, SttErrorCode, SttEvent, SttSessionConfig, SttSessionStatus, SttStatus, SttToken } from '../shared/stt';
@@ -49,6 +50,8 @@ let stopping: Promise<void> | null = null;
 let closing = false;
 
 function broadcast(event: SttEvent): void {
+  if (event.type === 'status' && event.status === 'connected') reportServiceHealth('captions', true);
+  if (event.type === 'error') reportServiceHealth('captions', false);
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) win.webContents.send('stt:event', event);
   }

@@ -1,9 +1,8 @@
 import type { Slide } from './presentation';
 
-/** Hymn groups imported before kind existed carry a hymn color/author. */
+/** Visual slides, including hymns, can carry music unless they contain video. */
 export function canAttachSlideMusic(slide: Slide | undefined): boolean {
   return !!slide && slide.type !== 'video' && slide.type !== 'screen' && !slide.styles?.backgroundVideo &&
-    !slide.partsMode && !slide.parts?.length && !slide.group?.kind && !slide.group?.color && !slide.group?.author &&
     !(slide.type === 'loop' && slide.loopItems?.some(item => item.type === 'video'));
 }
 

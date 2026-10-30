@@ -78,6 +78,8 @@ html, body {
   --text-secondary: rgba(255, 255, 255, 0.65);
   --text-muted: rgba(255, 255, 255, 0.55);
   --text-faint: rgba(255, 255, 255, 0.50);
+  --option-selected-background: rgba(255, 255, 255, 0.10);
+  --option-selected-border: rgba(255, 255, 255, 0.20);
 
   /* Accent */
   --accent: #3b82f6;
@@ -387,3 +389,10 @@ html[data-ui-motion='off'] [data-app-shell] button { --tw-scale-x: 1 !important;
 @media (prefers-reduced-motion: reduce) {
   [data-app-shell] button { --tw-scale-x: 1 !important; --tw-scale-y: 1 !important; }
 }
+
+.control-tooltip-trigger:focus-visible{outline:2px solid #60a5fa;outline-offset:2px}
+.control-tooltip{display:flex;flex-direction:column;gap:4px;max-width:min(240px,calc(100vw - 24px));padding:7px 10px;border:1px solid #ffffff24;border-radius:7px;background:#252a30;color:#f1f5f9;box-shadow:0 4px 14px #0006;font-size:12px;line-height:1.45;overflow-wrap:anywhere;pointer-events:none}
+.control-tooltip kbd{align-self:flex-start;color:#aebaca;font-family:inherit;font-size:11px}
+.workspace-selected-option{background:var(--option-selected-background);border-color:var(--option-selected-border);color:var(--text-primary)}
+.workspace-selected-option:hover:not(:disabled){background:rgba(255,255,255,.14)}
+.workspace-selected-option:focus-visible{outline:2px solid #60a5fa;outline-offset:2px}

@@ -28,7 +28,7 @@ function sendEvent(type: UpdaterEventType, payload?: any): void {
   }
 }
 
-export function initUpdater(win: BrowserWindow): void {
+export function initUpdater(win: BrowserWindow, progress: (fraction: number | null, successful?: boolean) => void = () => {}): void {
   mainWindow = win;
 
   if (process.env.FORCE_DEV_UPDATE) {
@@ -42,16 +42,17 @@ export function initUpdater(win: BrowserWindow): void {
   autoUpdater.on('checking-for-update', () => sendEvent('checking-for-update'));
   autoUpdater.on('update-available', (info) => sendEvent('update-available', { version: info.version }));
   autoUpdater.on('update-not-available', () => sendEvent('update-not-available'));
-  autoUpdater.on('download-progress', (p) =>
+  autoUpdater.on('download-progress', (p) => {
+    progress(p.percent / 100);
     sendEvent('download-progress', {
       percent: Math.round(p.percent * 10) / 10,
       transferred: p.transferred,
       total: p.total,
       bytesPerSecond: p.bytesPerSecond,
-    }));
-  autoUpdater.on('update-downloaded', (info) => sendEvent('update-downloaded', { version: info.version }));
-  autoUpdater.on('update-cancelled', () => sendEvent('update-cancelled'));
-  autoUpdater.on('error', (err) => sendEvent('error', { message: err?.message ?? String(err) }));
+    }); });
+  autoUpdater.on('update-downloaded', (info) => { progress(null, true); sendEvent('update-downloaded', { version: info.version }); });
+  autoUpdater.on('update-cancelled', () => { progress(null); sendEvent('update-cancelled'); });
+  autoUpdater.on('error', (err) => { progress(null); sendEvent('error', { message: err?.message ?? String(err) }); });
 
   ipcMain.handle('updater:get-info', () => ({
     version: app.getVersion(),
@@ -70,6 +71,7 @@ export function initUpdater(win: BrowserWindow): void {
   });
 
   ipcMain.handle('updater:download', async () => {
+    progress(2);
     try {
       await autoUpdater.downloadUpdate();
       return { ok: true };

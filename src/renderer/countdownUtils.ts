@@ -19,10 +19,12 @@ export function parseCountdownContent(content: string): CountdownSlideData {
     );
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
+    const storedMinutes = parseInt(raw.minutes, 10);
+    const storedSeconds = parseInt(raw.seconds, 10);
 
     return {
-      minutes: parseInt(raw.minutes, 10) ?? minutes,
-      seconds: parseInt(raw.seconds, 10) ?? seconds,
+      minutes: Number.isFinite(storedMinutes) ? storedMinutes : minutes,
+      seconds: Number.isFinite(storedSeconds) ? storedSeconds : seconds,
       totalSeconds,
       startTime: parseInt(raw.startTime, 10) || Date.now(),
       paused: Boolean(raw.paused),

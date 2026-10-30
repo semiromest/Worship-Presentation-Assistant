@@ -1,6 +1,6 @@
 const { defineConfig } = require('@playwright/test');
 module.exports = defineConfig({
-  testDir: './tests/tour', testMatch: ['slide-regressions.spec.cjs', 'tour.spec.cjs', 'guided.spec.cjs', 'transitions.spec.cjs', 'music-slides.spec.cjs', 'preparation.spec.cjs', 'recent-features.spec.cjs', 'sfx.spec.cjs', 'music-modal.spec.cjs', 'slide-audio.spec.cjs', 'hymn-part-keys.spec.cjs', 'workspace-layout.spec.cjs', 'offline-music.spec.cjs', 'hymn-library.spec.cjs', 'projector-startup.spec.cjs', 'gradient-targets.spec.cjs', 'presentation-header.spec.cjs'], timeout: 60000,
+  testDir: './tests/tour', testMatch: ['desktop-shortcuts.spec.cjs', 'file-open-flows.spec.cjs', 'gpres-project.spec.cjs', 'preview-demand.spec.cjs', 'image-preview.spec.cjs', 'app-dialogs.spec.cjs', 'slide-grid-zoom.spec.cjs', 'slide-regressions.spec.cjs', 'tour.spec.cjs', 'guided.spec.cjs', 'transitions.spec.cjs', 'music-slides.spec.cjs', 'preparation.spec.cjs', 'recent-features.spec.cjs', 'sfx.spec.cjs', 'music-modal.spec.cjs', 'slide-audio.spec.cjs', 'hymn-part-keys.spec.cjs', 'workspace-layout.spec.cjs', 'offline-music.spec.cjs', 'hymn-library.spec.cjs', 'projector-startup.spec.cjs', 'gradient-targets.spec.cjs', 'presentation-header.spec.cjs'], timeout: 60000,
   workers: 1, retries: 0, reporter: 'list',
   outputDir: 'test-results/tour',
   webServer: {
@@ -8,3 +8,4 @@ module.exports = defineConfig({
     url: 'http://127.0.0.1:5199', reuseExistingServer: false, timeout: 30000,
   },
 });
+

@@ -1,3 +1,5 @@
+import { resolveCanvasSource } from '../canvasSource';
+import { snapGuides, sameGuides, type SnapGuide } from './snapGuides';
 import { AnimatedGradientBackground } from '../components/AnimatedGradientBackground';
 import BackgroundDim from '../components/BackgroundDim';
 import type { GeneratedBackground } from '../../shared/generatedBackground';
@@ -46,13 +48,6 @@ interface CanvasStageProps {
    */
   onItemDragStart?: (event: React.DragEvent, itemIds: string[]) => void;
 }
-
-interface SnapGuide {
-  orientation: 'horizontal' | 'vertical';
-  position: number;
-}
-
-const SNAP_THRESHOLD = 1;
 
 export function CanvasStage({
   slideStyles,
@@ -204,62 +199,15 @@ export function CanvasStage({
 
   const handleItemDrag = useCallback(
     (id: string, x: number, y: number) => {
-      // Show snap guides
-      if (snapEnabled) {
-        const currentItems = itemsRef.current;
-        const draggedItem = currentItems.find((i) => i.id === id);
-        if (draggedItem) {
-          const activeGuides: SnapGuide[] = [];
-          const draggedCenter = { x: x + draggedItem.width / 2, y: y + draggedItem.height / 2 };
-
-          for (const other of currentItems) {
-            if (other.id === id || other.visible === false) continue;
-            if (
-              Math.abs(x - other.x) > SNAP_THRESHOLD &&
-              Math.abs(x + draggedItem.width - (other.x + other.width)) > SNAP_THRESHOLD &&
-              Math.abs(y - other.y) > SNAP_THRESHOLD &&
-              Math.abs(y + draggedItem.height - (other.y + other.height)) > SNAP_THRESHOLD
-            )
-              continue;
-            const otherCenter = {
-              x: other.x + other.width / 2,
-              y: other.y + other.height / 2,
-            };
-
-            const vChecks = [
-              { d: x, o: other.x },
-              { d: x + draggedItem.width, o: other.x + other.width },
-              { d: draggedCenter.x, o: otherCenter.x },
-            ];
-            for (const c of vChecks) {
-              if (Math.abs(c.d - c.o) < SNAP_THRESHOLD) {
-                activeGuides.push({ orientation: 'vertical', position: c.o });
-                break;
-              }
-            }
-
-            const hChecks = [
-              { d: y, o: other.y },
-              { d: y + draggedItem.height, o: other.y + other.height },
-              { d: draggedCenter.y, o: otherCenter.y },
-            ];
-            for (const c of hChecks) {
-              if (Math.abs(c.d - c.o) < SNAP_THRESHOLD) {
-                activeGuides.push({ orientation: 'horizontal', position: c.o });
-                break;
-              }
-            }
-          }
-          setGuides(activeGuides);
-        }
-      }
+      const next = snapEnabled ? snapGuides(itemsRef.current, id, x, y) : [];
+      setGuides(previous => sameGuides(previous, next) ? previous : next);
       actionsRef.current.onDrag(id, x, y);
     },
     [snapEnabled]
   );
 
   const handleDragEnd = useCallback((id: string) => {
-    setGuides([]);
+    setGuides(previous => previous.length ? [] : previous);
     actionsRef.current.onDragEnd(id);
   }, []);
 
@@ -336,7 +284,7 @@ export function CanvasStage({
             className="absolute inset-0"
             style={{
               backgroundColor: bgColor,
-              backgroundImage: bgImage ? `url(${bgImage})` : undefined,
+              backgroundImage: bgImage ? `url(${resolveCanvasSource(bgImage, false).url})` : undefined,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
               filter: bgBlur > 0 ? `blur(${bgBlur}px)` : undefined,

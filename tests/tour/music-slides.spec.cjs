@@ -107,7 +107,7 @@ test('music slides: add silently, live playback, pause, blackout, cancellation, 
     await control.locator('#slide-content-textarea').fill('Evening worship');
     await app.evaluate(({ ipcMain }) => {
       ipcMain.removeHandler('select-media-file');
-      ipcMain.handle('select-media-file', () => 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect width="1920" height="1080" fill="white"/></svg>'));
+      ipcMain.handle('select-media-file', () => 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=');
     });
     await control.getByTestId('music-preset-simple').click();
     const strings = require('../../src/renderer/locales/en/translation.json');
@@ -189,18 +189,25 @@ test('music slides: add silently, live playback, pause, blackout, cancellation, 
     await control.screenshot({ path: info.outputPath('music-editor-800x600.png') });
     await setControlViewport(1366, 768);
     await control.evaluate(() => window.__tourTest.language('en'));
-    // Exercise the actual file-open normalization, not just JSON serialization.
+    // Save and read a real portable project through the worker. Only native
+    // file selection is replaced; confirmation and open tokens remain real.
     const deck = await control.evaluate(() => window.__musicStore.getState().presentation);
-    await app.evaluate(({ ipcMain }, deck) => {
-      ipcMain.removeHandler('open-file');
-      ipcMain.handle('open-file', () => ({ path: 'fixture.gpres', content: JSON.stringify(deck) }));
-    }, deck);
+    const savedFile = info.outputPath('music-roundtrip.gpres');
+    await app.evaluate(({ dialog }, file) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath: file });
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [file] });
+    }, savedFile);
+    expect(await control.evaluate(deck => window.electronAPI.saveFile(JSON.stringify(deck)), deck)).toBe(savedFile);
+    expect((await fs.stat(savedFile)).size).toBeGreaterThan(0);
+    await control.evaluate(() => window.electronAPI.desktopLanguage('en'));
     await control.evaluate(() => {
       const store = window.__musicStore.getState();
       store.dispatchUndo({ type: 'RESET', payload: { name: 'Empty before reopen', slides: [store.presentation.slides[0]] } });
     });
     await control.getByRole('button', { name: 'Presentations', exact: true }).click();
     await control.getByRole('button', { name: 'Open from File', exact: true }).click();
+    await control.locator('.app-choice-dialog').getByRole('button', { name: 'Open presentation', exact: true }).click();
+    await control.locator('.app-choice-dialog').getByRole('button', { name: 'Discard', exact: true }).click();
     await expect.poll(() => control.evaluate(() => window.__musicStore.getState().presentation.slides[1]?.youtubeMusic?.id)).toBe('KI33ItOO_M4');
     expect(await control.evaluate(() => window.__musicStore.getState().presentation.slides[1].musicSettings.volume)).toBe(0.5);
     expect(await control.evaluate(() => window.__musicStore.getState().presentation.slides[1].styles.backgroundDim)).toBe(0.8);

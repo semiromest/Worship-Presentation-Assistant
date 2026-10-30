@@ -774,7 +774,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
         open={showSetLinkDialog}
         onClose={() => setShowSetLinkDialog(false)}
         partsMode={partsModeEnabled}
-        onAddHymn={(hymn, parts) => onAddHymnToPresentation(hymn, parts)}
+        onAddHymn={(hymn, parts) => onAddHymnToPresentation({ ...hymn, showAuthorOnSlides }, parts)}
         onImportLibrary={handleOnlineImport}
       />
     </div>

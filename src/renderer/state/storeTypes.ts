@@ -206,6 +206,8 @@ export interface AppState {
   editorSessionVersion: number;
   editorTargetId: string | null;
   openEditor: (slideId: string) => void;
+  slideColumns: number;
+  setSlideColumns: (columns: number) => void;
   slideZoom: number;
   setSlideZoom: (zoom: number | ((prev: number) => number)) => void;
 
@@ -242,7 +244,9 @@ export interface AppState {
   // Toast notification
   toastMessage: string | null;
   toastKey: number;
-  setToastMessage: (msg: string | null) => void;
+  setToastMessage: (msg: string | null, severity?: 'info' | 'warning' | 'error') => void;
+  importantNotification: { message: string; key: number; severity: 'info' | 'warning' | 'error' } | null;
+  dismissImportantNotification: () => void;
 
   // Presentation name
   setPresentationName: (name: string) => void;

@@ -56,8 +56,10 @@ test.afterEach(async ({}, info) => {
 });
 
 async function configure(type, duration = 800) {
-  await control.getByRole('combobox', { name: 'Transition Type', exact: true }).selectOption(type);
-  await control.getByRole('combobox', { name: 'Transition Duration', exact: true }).selectOption(String(duration));
+  await control.getByRole('combobox', { name: 'Transition Type', exact: true }).click();
+  await control.locator(`[role="option"][data-value="${type}"]`).click();
+  await control.getByRole('combobox', { name: 'Transition Duration', exact: true }).click();
+  await control.locator(`[role="option"][data-value="${duration}"]`).click();
   await output.waitForFunction(({ type, duration }) => {
     const transition = window.__transitionStore.getState().presentation.transition;
     return transition.type === type && transition.duration === duration;
@@ -73,6 +75,20 @@ async function go(key = 'ArrowRight') {
   await control.locator(`[data-slide-id="${target}"]`).click();
   await output.waitForFunction(id => window.__transitionStore.getState().liveSlideId === id, target, { timeout: 5000 });
 }
+
+test('first effect selection and undo/redo sync default transitions to the projector', async () => {
+  await control.evaluate(()=>{const s=window.__transitionStore.getState();s.dispatchUndo({type:'RESET',payload:{...s.presentation,transition:undefined}});});
+  await output.waitForFunction(()=>{const t=window.__transitionStore.getState().presentation.transition;return t?.type==='fade'&&t.duration===400;});
+  await configure('flip',600);
+  const history=control.locator('.design-search-history');
+  await history.getByRole('button').first().click();
+  await history.getByRole('button').first().click();
+  await expect.poll(()=>control.evaluate(()=>window.__transitionStore.getState().presentation.transition)).toBe(undefined);
+  await output.waitForFunction(()=>{const t=window.__transitionStore.getState().presentation.transition;return t?.type==='fade'&&t.duration===400;});
+  await history.getByRole('button').nth(1).click();
+  await history.getByRole('button').nth(1).click();
+  await output.waitForFunction(()=>{const t=window.__transitionStore.getState().presentation.transition;return t?.type==='flip'&&t.duration===600;});
+});
 
 async function runningLayer() {
   await output.waitForFunction(() => [...document.querySelectorAll('[data-slide-transition]')].some(element => element.style.zIndex === '2' && element.style.animation), null, { timeout: 5000 });

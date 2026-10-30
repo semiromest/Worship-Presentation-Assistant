@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { shallow } from 'zustand/shallow';
 import { IS_PROJECTOR_MODE } from '../constants';
-import { loadGoogleFont, slideFonts } from '../fontLoader';
+import { loadGoogleFont, slideFonts, retryUnavailableFonts } from '../fontLoader';
 import { runPreparationCheck } from '../preparationCheck';
 import { createPreparationMonitor } from '../preparationMonitor';
 import { measureSlideReadability } from '../readinessMeasurement';
@@ -46,7 +46,7 @@ export function usePreparationCheck() {
         }
       }, { equalityFn: shallow });
     const unsubscribeRetry = usePreparationStore.subscribe((state, prev) => {
-      if (state.retry !== prev.retry) monitor.update(useStore.getState().presentation, true);
+      if (state.retry !== prev.retry) { retryUnavailableFonts(); monitor.update(useStore.getState().presentation, true); }
     });
     return () => {
       unsubscribeDeck();

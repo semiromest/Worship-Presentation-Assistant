@@ -75,11 +75,13 @@ test('subscriptions relay payloads without exposing Electron events and unsubscr
   const { api, ipc } = fixture(true);
   const received = [];
   const unsubscribe = api.onProjectorUpdate((value) => received.push(value));
+  assert.equal(api.getPreloadPerfSnapshot().listeners.total, 1);
   ipc.emit('projector-update', { sender: 'private' }, { liveIndex: 2 });
   assert.deepEqual(received, [{ liveIndex: 2 }]);
   unsubscribe();
   unsubscribe();
   assert.equal(ipc.listenerCount('projector-update'), 0);
+  assert.equal(api.getPreloadPerfSnapshot().listeners.total, 0);
   ipc.emit('projector-update', {}, { liveIndex: 3 });
   assert.equal(received.length, 1);
 });
@@ -104,6 +106,14 @@ test('every preload request has a compatible main-process channel registration',
   function inspect(file, requestSide) {
     const source = ts.createSourceFile(file, fs.readFileSync(path.join(__dirname, file), 'utf8'), ts.ScriptTarget.Latest, true);
     function visit(node) {
+      // Desktop IPC uses a local registration wrapper. Verify the wrapper really
+      // delegates to ipcMain.handle before accepting its literal call sites.
+      if (file === 'desktopService.ts' && ts.isCallExpression(node) &&
+          ts.isIdentifier(node.expression) && node.expression.text === 'handle' &&
+          node.arguments[0] && ts.isStringLiteral(node.arguments[0])) {
+        assert.match(source.text, /ipcMain\.handle\(channel,\s*listener\)/);
+        handlers.add('handle:' + node.arguments[0].text);
+      }
       if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
         const receiver = node.expression.expression.getText(source), method = node.expression.name.text, arg = node.arguments[0];
         if (arg && ts.isStringLiteral(arg)) {

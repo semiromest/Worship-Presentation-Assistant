@@ -90,15 +90,19 @@ export const heavyClient = {
   exportPptx(content: string, filePath: string, mediaDir: string, onProgress?: (c: number, t: number) => void): Promise<PptxExportResult> {
     return call<PptxExportResult>('export-pptx', { content, filePath, mediaDir }, onProgress);
   },
-  async buildGpres(content: string, mediaDir: string): Promise<{ embeddedCount: number; zipBuffer: Buffer }> {
-    const res = await call<{ embeddedCount: number; zipBuffer: unknown }>('build-gpres', { content, mediaDir });
-    // The transferred ArrayBuffer arrives in the main process as a Uint8Array
-    // (not a Buffer) — normalize so callers (fs.writeFile / drive upload)
-    // always receive the documented Buffer type.
-    return { embeddedCount: res.embeddedCount, zipBuffer: Buffer.from(res.zipBuffer as Uint8Array) };
+  writeGpres(content: string, target: string, mediaDir: string): Promise<{ embeddedCount: number; bytes: number }> {
+    // No media/archive buffers cross the process boundary. A timed-out worker
+    // may finish its private partial, but cannot commit the user's document.
+    return call('write-gpres', { content, target, mediaDir }, undefined, 600_000);
+  },
+  validateGpres(filePath: string, mediaDir: string): Promise<void> {
+    return call('validate-gpres', { filePath, mediaDir }, undefined, 600_000);
   },
   extractGpres(buffer: Buffer, mediaDir: string): Promise<{ data: unknown; mediaCount: number }> {
     return call<{ data: unknown; mediaCount: number }>('extract-gpres', { buffer: buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer, mediaDir }, undefined, 60_000);
+  },
+  readGpresFile(filePath: string, mediaDir: string): Promise<{ content: string; mediaCount: number }> {
+    return call('extract-gpres', { filePath, mediaDir, serialize: true }, undefined, 120_000);
   },
   generateThumbnail(slide: ThumbSlideData): Promise<string | null> {
     return call<string | null>('generate-thumbnail', { slide }, undefined, 30_000);

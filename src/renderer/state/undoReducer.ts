@@ -1,4 +1,8 @@
 import type { Presentation, Slide } from '../types';
+import { withSlideContent } from '../../shared/slideContent';
+import { backgroundPatch } from '../gradientBackground';
+import { DEFAULT_STYLES } from '../defaultSlideStyles';
+import { retainSlideTopology, slideTopology } from './slideTopology';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -9,6 +13,7 @@ export type SlidePatch = {
 };
 
 export type PresentationPatch = {
+  editOnly?: true;
   slidesPatch: SlidePatch[];
   prevOrder: string[];
   nextOrder: string[];
@@ -30,6 +35,9 @@ export type UndoState = {
 
 export type UndoAction =
   | { type: 'SET'; payload: Presentation }
+  | { type: 'EDIT_SLIDES'; ids: string[]; edit:
+      | { kind: 'content'; content: string }
+      | { kind: 'styles'; styles: Partial<NonNullable<Slide['styles']>> } }
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'RESET'; payload: Presentation };
@@ -67,19 +75,22 @@ function shallowEqual(a: unknown, b: unknown): boolean {
 
 export function isPatchEmpty(patch: PresentationPatch): boolean {
   const orderChanged =
-    patch.prevOrder.length !== patch.nextOrder.length ||
-    patch.prevOrder.some((id, i) => id !== patch.nextOrder[i]);
+    patch.prevOrder !== patch.nextOrder && (
+      patch.prevOrder.length !== patch.nextOrder.length ||
+      patch.prevOrder.some((id, i) => id !== patch.nextOrder[i]));
   return (
     patch.slidesPatch.length === 0 &&
     patch.nextSections === undefined &&
     !patch.prevName &&
     !patch.prevZoom &&
     !patch.prevTransition &&
+    !patch.nextTransition &&
     !orderChanged
   );
 }
 
 function slideHasChanged(a: Slide, b: Slide): boolean {
+  if (a === b) return false;
   if (a.type !== b.type) return true;
   if (a.content !== b.content) return true;
   if (a.mediaUrl !== b.mediaUrl) return true;
@@ -169,6 +180,7 @@ export function computePatch(prev: Presentation, next: Presentation): Presentati
 }
 
 export function applyPatch(current: Presentation, patch: PresentationPatch): Presentation {
+  if (patch.editOnly) return applyEditPatch(current, patch, false);
   // Map-based rebuild: the old findIndex/filter version was O(n²) on reorder
   // patches (measured ~65 ms for a 5000-slide undo/redo, see perf/bench.ts).
   const byId = new Map(current.slides.map(s => [s.id, s] as const));
@@ -200,7 +212,7 @@ export function applyPatch(current: Presentation, patch: PresentationPatch): Pre
     name: patch.nextName ?? current.name,
     slides: reordered,
     zoom: patch.nextZoom ?? current.zoom,
-    transition: patch.nextTransition ?? current.transition,
+    transition: 'nextTransition' in patch ? patch.nextTransition : current.transition,
   };
 }
 
@@ -241,6 +253,7 @@ export function applyProjectorPatch(current: Presentation, patch: ProjectorPatch
 }
 
 export function applyInversePatch(current: Presentation, patch: PresentationPatch): Presentation {
+  if (patch.editOnly) return applyEditPatch(current, patch, true);
 
   const byId = new Map(current.slides.map(s => [s.id, s] as const));
 
@@ -271,14 +284,47 @@ export function applyInversePatch(current: Presentation, patch: PresentationPatc
     name: patch.prevName ?? current.name,
     slides: reordered,
     zoom: patch.prevZoom ?? current.zoom,
-    transition: patch.prevTransition ?? current.transition,
+    transition: 'prevTransition' in patch ? patch.prevTransition : current.transition,
   };
 }
 
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 
+function applyEditPatch(current: Presentation, patch: PresentationPatch, inverse: boolean): Presentation {
+  const { index } = slideTopology(current.slides);
+  const slides = current.slides.slice();
+  for (const change of patch.slidesPatch) {
+    const position = index.get(change.id);
+    const slide = inverse ? change.prevSlide : change.nextSlide;
+    if (position !== undefined && slide) slides[position] = slide;
+  }
+  retainSlideTopology(current.slides, slides);
+  return { ...current, slides };
+}
+
 export function undoReducer(state: UndoState, action: UndoAction): UndoState {
   switch (action.type) {
+    case 'EDIT_SLIDES': {
+      // This action cannot change section membership, order, IDs or locks, so
+      // normalization and full-deck diffing are unnecessary.
+      const { index, order } = slideTopology(state.present.slides);
+      const slidesPatch: SlidePatch[] = [];
+      for (const id of new Set(action.ids)) {
+        const position = index.get(id);
+        if (position === undefined) continue;
+        const prevSlide = state.present.slides[position];
+        const nextSlide = action.edit.kind === 'content'
+          ? withSlideContent(prevSlide, action.edit.content)
+          : { ...prevSlide, styles: backgroundPatch(
+              { ...DEFAULT_STYLES, ...prevSlide.styles }, action.edit.styles
+            ) as Slide['styles'] };
+        if (slideHasChanged(prevSlide, nextSlide)) slidesPatch.push({ id, prevSlide, nextSlide });
+      }
+      if (!slidesPatch.length) return state;
+      const patch: PresentationPatch = { editOnly: true, slidesPatch, prevOrder: order, nextOrder: order };
+      const present = applyEditPatch(state.present, patch, false);
+      return { past: [...state.past, patch].slice(-MAX_HISTORY), present, future: [] };
+    }
     case 'SET': {
       const newPresent = action.payload;
       if (newPresent === state.present) return state;

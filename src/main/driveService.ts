@@ -5,8 +5,10 @@ import http from 'node:http';
 import path from 'node:path';
 import fsSync from 'node:fs';
 import { randomBytes } from 'node:crypto';
-import { PassThrough } from 'node:stream';
+import { PassThrough, Readable } from 'node:stream';
 import { DRIVE_CREDENTIALS } from './driveCredentials';
+import { serviceRequest } from './serviceHealth';
+import { streamPresentationDownload } from './presentationDownload';
 
 const TOKEN_FILE = path.join(app.getPath('userData'), 'drive-token.enc');
 const APP_FOLDER_NAME = 'Worship Presentation Assistant';
@@ -300,7 +302,7 @@ class GoogleDriveService {
     const drive = this.getDrive();
     const folderId = await this.ensureAppFolder(drive);
     try {
-      return await task(drive, folderId);
+      return await serviceRequest('drive', () => task(drive, folderId));
     } catch (error) {
       this.folderPromise = null;
       throw error;
@@ -325,7 +327,7 @@ class GoogleDriveService {
   }
 
   /** Aynı adlı dosya varsa günceller, yoksa oluşturur. `makeBody` yalnızca gerçekten yüklenirken akış üretir. */
-  private upsertFile(name: string, mimeType: string, makeBody: () => string | PassThrough): Promise<string> {
+  private upsertFile(name: string, mimeType: string, makeBody: () => string | Readable): Promise<string> {
     return this.inAppFolder(async (drive, folderId) => {
       const existing = await drive.files.list({
         q: `name='${escapeQuery(name)}' and '${folderId}' in parents and trashed=false`,
@@ -356,10 +358,17 @@ class GoogleDriveService {
     });
   }
 
-  async downloadFile(fileId: string): Promise<Buffer> {
-    const res = await this.getDrive().files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' });
-    const data = res.data as unknown as ArrayBuffer | Buffer;
-    return Buffer.isBuffer(data) ? data : Buffer.from(data);
+  uploadProjectFile(name: string, file: string): Promise<string> {
+    // The retry factory opens a fresh bounded stream for each upload attempt.
+    return this.upsertFile(name, 'application/octet-stream', () => fsSync.createReadStream(file));
+  }
+
+  async downloadToFile(fileId: string, target: string): Promise<void> {
+    await serviceRequest('drive', async () => {
+      const res = await this.getDrive().files.get({ fileId, alt: 'media' }, { responseType: 'stream' });
+      try { await streamPresentationDownload(res.data, target); }
+      finally { res.data.destroy(); }
+    });
   }
 
   async deleteFile(fileId: string): Promise<void> {

@@ -22,6 +22,7 @@ import { DEFAULT_LIVE_SAVE_RETENTION_MS, isLiveSavePreset, LIVE_SAVE_RETENTION_O
 import SettingSwitch from './SettingSwitch';
 import { settingsCategories, settingsItems, normalizeSettingsSearch, type SettingsCategoryId, type SettingsItemId } from './settingsNavigation';
 import './SettingsTab.css';
+import DesktopSettings from './DesktopSettings';
 
 // Navigation is session-only; it never changes a saved presentation or user setting.
 let lastSettingsCategory: SettingsCategoryId = 'general';
@@ -625,6 +626,7 @@ export default function SettingsTab() {
               {id !== 'learning' && <p className="mt-1 text-sm leading-relaxed text-white/60">{t(`settings.navigation.categories.${id}.description`)}</p>}
             </div>
             {categoryContent[id]}
+            {id === 'general' && !practice && <DesktopSettings />}
           </section>)}
         </div>
       </div>

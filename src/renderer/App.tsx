@@ -1,3 +1,5 @@
+import { resolveCanvasSource } from './canvasSource';
+import ControlTooltip from './components/ControlTooltip';
 import { lazy, Suspense, useEffect, useMemo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as m from 'motion/react-m';
@@ -17,7 +19,7 @@ import {
   Loader2,
 } from 'lucide-react';
 
-import SlideEditor from './SlideEditor';
+const SlideEditor = lazy(() => import('./SlideEditor'));
 import { ChoiceDialogHost } from './choiceDialogs';
 import { mergeEditorCommit } from './editor/editorConflicts';
 import StageDisplay from './components/StageDisplay';
@@ -67,6 +69,8 @@ import LiveShareModal from './components/LiveShareModal';
 import LiveCaptionsConsole from './components/LiveCaptionsConsole';
 import LiveCaptionsSessionBar from './components/LiveCaptionsSessionBar';
 import Toast from './components/Toast';
+import DesktopHost from './components/DesktopHost';
+import { usePractice } from './hooks/usePractice';
 import PptxImportWarnings from './components/PptxImportWarnings';
 
 import { registerTourAnchor, notifyPageVisit } from './components/Tour/tourController';
@@ -82,12 +86,13 @@ type AppCommands = ReturnType<typeof useRemoteControl> & {
 };
 
 export default function App() {
+  const practice = usePractice();
   const remote = useRemoteControl();
   const { start: sttStart, stop: sttStop } = useStt();
   const { startShare, stopShare } = useShare();
   const { startShare: startScreenShare, stopShare: stopScreenShare } = useScreenShare();
   const commands = { ...remote, sttStart, sttStop, startShare, stopShare, startScreenShare, stopScreenShare };
-  return <><RuntimeSync />{IS_PROJECTOR_MODE ? <ProjectorView /> : <ControlApp commands={commands} />}</>;
+  return <><RuntimeSync />{IS_PROJECTOR_MODE ? <ProjectorView /> : <><ControlApp commands={commands} />{!practice && <DesktopHost />}</>}</>;
 }
 
 /** Reactive bridges have their own render boundary; no visual children. */
@@ -275,7 +280,7 @@ function ControlApp({ commands }: { commands: AppCommands }) {
         className="w-[72px] flex-shrink-0 overflow-y-auto overflow-x-hidden bg-surface border-r border-white/10 flex flex-col items-center py-3 gap-1"
       >
         {SIDEBAR_TABS.map(({ id, icon: Icon, titleKey }) => (
-          <button
+          <ControlTooltip key={id} side="right"><button
             key={id}
             data-guide-anchor={`nav-${id}`}
             onClick={() => { if (activeTab !== id) playSfx('forward'); setActiveTab(id as any); notifyPageVisit(id); }}
@@ -304,7 +309,7 @@ function ControlApp({ commands }: { commands: AppCommands }) {
             <span className="relative z-10 text-[10px] font-semibold leading-tight text-white/65 max-w-[56px] truncate text-center text-balance">
               {t(titleKey)}
             </span>
-          </button>
+          </button></ControlTooltip>
         ))}
       </nav>
 
@@ -378,7 +383,7 @@ function ControlApp({ commands }: { commands: AppCommands }) {
                     updateLoopItems={updateLoopItems}
                     updateSlideProperty={updateSlideProperty}
                 />
-                <button
+                <ControlTooltip><button
                   data-testid="right-panel-opener"
                   onClick={() => { setIsRightPanelOpen(true); playSfx('open'); }}
                   tabIndex={isRightPanelOpen ? -1 : 0}
@@ -395,7 +400,7 @@ function ControlApp({ commands }: { commands: AppCommands }) {
                   aria-label={t('common.panelOpen')}
                 >
                   <PanelRightOpen className="w-4 h-4 shrink-0 text-white/40 group-hover:text-white/70 transition-colors" />
-                </button>
+                </button></ControlTooltip>
               </div>
             </div>
           )}
@@ -453,7 +458,9 @@ function ControlApp({ commands }: { commands: AppCommands }) {
             )}
           {(editorMounted || activeTab === 'editor') && (
             <div ref={element => registerTourAnchor('page-editor', element)} className={activeTab === 'editor' ? 'ui-fade-enter h-full' : 'hidden'} aria-hidden={activeTab !== 'editor'}>
-              <EditorConnection active={activeTab === 'editor'} />
+              <Suspense fallback={<div role="status" className="flex h-full items-center justify-center text-white/50">{t('common.loading')}</div>}>
+                <EditorConnection active={activeTab === 'editor'} />
+              </Suspense>
             </div>
           )}
         </main>
@@ -529,7 +536,7 @@ function ProjectorView() {
         backgroundColor: liveSlide?.type === 'text' ? (liveSlide.styles?.backgroundColor ?? '#000') : '#000',
         backgroundImage:
           liveSlide?.type === 'text' && liveSlide.styles?.backgroundImage
-            ? `url(${liveSlide.styles.backgroundImage})`
+            ? `url(${resolveCanvasSource(liveSlide.styles.backgroundImage, false).url})`
             : undefined,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
@@ -553,11 +560,11 @@ function PresentationLibrary({ operations, onImportWarnings, onImportingChange }
   const presets = useStore(s => s.presets);
   const selectedPresetName = useStore(s => s.selectedPresetName);
   const { setPresets, setSelectedPresetName } = useStore.getState();
-  const { applyPreset, openPresentation, savePresentation, handleImportSlides, createNewPresentation } = operations;
+  const { applyPreset, openPresentation, savePresentation, importPptxPresentation, createNewPresentation } = operations;
   return <PresentationsTab
     presentation={presentation} presets={presets} selectedPresetName={selectedPresetName}
     onPresetsChange={setPresets} onApplyPreset={applyPreset} onSelectedPresetNameChange={setSelectedPresetName}
-    onOpenFile={openPresentation} onSaveFile={savePresentation} onImportSlides={handleImportSlides} onImportWarnings={onImportWarnings} onImportingChange={onImportingChange}
+    onOpenFile={openPresentation} onSaveFile={savePresentation} onImportPptx={importPptxPresentation} onImportWarnings={onImportWarnings} onImportingChange={onImportingChange}
     onNewPresentation={createNewPresentation} />;
 }
 

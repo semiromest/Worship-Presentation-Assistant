@@ -51,7 +51,21 @@ export interface ElectronAPI {
   openPractice: () => Promise<{ ok: boolean }>;
   getTourProfileInfo: () => Promise<{ profileKind: 'new' | 'existing' | 'unknown' }>;
   saveFile: (content: string) => Promise<string>;
-  openFile: () => Promise<{ content: string; path: string }>;
+  openFile: (requestId?: string, confirmation?: import('./fileOpen').OpenFileConfirmation) => Promise<{ content: string; path: string; token?: string } | null>;
+  desktopReady: () => Promise<import('./desktop').DesktopStatus>;
+  desktopDefaultApps: () => Promise<boolean>;
+  desktopSettings: (input: import('./desktop').DesktopPreferences) => Promise<import('./desktop').DesktopStatus>;
+  desktopBlock: (blocked: boolean) => Promise<void>;
+  desktopDocument: (dirty: boolean, path: string | null) => Promise<void>;
+  desktopCommitOpen: (token: string) => Promise<void>;
+  desktopReplaceChoice: () => Promise<'save' | 'discard' | 'cancel'>;
+  desktopRejectOpen: (id: string) => Promise<void>;
+  desktopDragOutput: (file: string) => Promise<void>;
+  desktopLanguage: (language: string) => Promise<void>;
+  onDesktopOpenRequests: (callback: (requests: import('./desktop').OpenDocumentRequest[]) => void) => () => void;
+  onDesktopStatus: (callback: (status: import('./desktop').DesktopStatus) => void) => () => void;
+  onDesktopCommand: (callback: (command: import('./desktop').DesktopCommand) => void) => () => void;
+  onDesktopHistory: (callback: (command: 'undo' | 'redo') => void) => () => void;
   loadPresets: (retentionMs?: number) => Promise<any[]>;
   savePreset: (preset: { name: string; presentation: any; retentionMs?: number }) => Promise<any[]>;
   deletePreset: (name: string, retentionMs?: number) => Promise<any[]>;
@@ -83,6 +97,12 @@ export interface ElectronAPI {
     error?: string;
     canceled?: boolean;
   }>;
+  getPreviewDemand: () => Promise<import('./remotePreview').PreviewDemand>;
+  onPreviewDemand: (callback: (demand: import('./remotePreview').PreviewDemand) => void) => () => void;
+  onPreviewAssetRequest: (callback: (request: import('./remotePreview').PreviewAssetRequest) => void) => () => void;
+  configurePreviewDeck: (deck: import('./remotePreview').PreviewDeck) => Promise<boolean>;
+  publishPreviewAsset: (asset: import('./remotePreview').PreviewAssetResult) => Promise<boolean>;
+  getPreviewAssetDiagnostics: () => Promise<{ entries: number; bytes: number; slots: number; waiting: number }>;
   getRemoteUrl: () => Promise<string>;
   publicTunnelStart: () => Promise<{ active: boolean; url: string; state: string; error?: string }>;
   publicTunnelStop: () => Promise<{ active: boolean; url: string; state: string; error?: string }>;
@@ -110,6 +130,9 @@ export interface ElectronAPI {
   sendSlidePreview: (dataUrl: string) => Promise<void>;
   sendRemoteNotice: (notice: { text: string; tone?: 'ok' | 'error' }) => Promise<boolean>;
   generateThumbnail: (slide: any) => Promise<string | null>;
+  onAppDialog: (callback: (request: import('./appDialog').AppDialogRequest) => void) => () => void;
+  appDialogsReady: () => void;
+  respondAppDialog: (id: string, value: string | null) => void;
   showConfirmDialog: (options: {
     message: string;
     title?: string;

@@ -263,13 +263,26 @@ function updatePartsBar() {
 /* ── Slides Grid ─────────────────────────────────────────────────────── */
 function mergePreviews(newData) {
   if (!Array.isArray(newData)) return;
-  while (allPreviews.length < newData.length) allPreviews.push(null);
-  newData.forEach((url, i) => { if (url) allPreviews[i] = url; });
+  allPreviews = newData.map(url => url || null);
 }
 
 /* ── Slides Grid: incremental thumbnail delta ─────────────────────────── */
 // Phase 3: a single-slide edit arrives as [{i, url}] and patches only that
 // grid node instead of rebuilding the whole grid (O(n) DOM per broadcast).
+// Managed previews can be absent briefly after reconnect/source recovery.
+// Retry only this immutable source; a late retry cannot replace a newer slot.
+function setPreviewSource(img, url, finalError) {
+  const ticket = String((Number(img.dataset.previewTicket) || 0) + 1);
+  img.dataset.previewTicket = ticket;
+  let attempts = 0;
+  img.onerror = event => {
+    if (url.startsWith('/preview/') && attempts++ < 2) {
+      setTimeout(() => { if (img.dataset.previewTicket === ticket && img.isConnected) img.src = url + '?retry=' + attempts; }, 1000);
+    } else if (finalError) finalError(event);
+  };
+  img.src = url;
+}
+
 function updateThumbNode(i, url) {
   const th = slidesGrid.querySelector('.slide-thumb[data-index="' + i + '"]');
   if (!th) return; // partsMode cards / not-yet-rendered nodes have no thumb to patch
@@ -285,7 +298,7 @@ function updateThumbNode(i, url) {
     img.decoding = 'async';
     th.replaceChild(img, ph);
   }
-  img.src = url;
+  setPreviewSource(img, url);
 }
 
 function applyPreviewsDelta(updates) {
@@ -382,7 +395,7 @@ function renderGrid() {
 
     if (dataUrl) {
       const img = document.createElement('img');
-      img.src = dataUrl;
+      setPreviewSource(img, dataUrl);
       img.dataset.url = dataUrl;
       img.alt = 'Slide ' + (i + 1) + ' of ' + allPreviews.length;
       // Keep the first viewport-sized batch immediately available; lazy-load
@@ -600,7 +613,7 @@ function showPreview(url) {
     // above would otherwise silently drop the retried preview.
     if (lastUrl === url) lastUrl = '';
   };
-  to.src = url;
+  setPreviewSource(to, url, to.onerror);
 }
 
 /* ── Commands ────────────────────────────────────────────────────────── */

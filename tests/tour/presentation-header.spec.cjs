@@ -105,9 +105,8 @@ test('current presentation actions preserve rename, save, file and dialog behavi
     const p = f.page;
     await p.evaluate(() => window.__tourTest.language('tr'));
     await app.evaluate(({ ipcMain }) => {
-      global.headerCalls = { save: 0, file: 0, open: 0, ppt: 0, confirm: 0 };
-      global.allowNew = false;
-      for (const c of ['save-preset', 'save-file', 'open-file', 'select-pptx-file', 'show-confirm-dialog'])
+      global.headerCalls = { save: 0, file: 0, open: 0, ppt: 0 };
+      for (const c of ['save-preset', 'save-file', 'open-file', 'select-pptx-file'])
         ipcMain.removeHandler(c);
       ipcMain.handle('save-preset', (_, x) => {
         global.headerCalls.save++;
@@ -124,10 +123,6 @@ test('current presentation actions preserve rename, save, file and dialog behavi
       ipcMain.handle('select-pptx-file', () => {
         global.headerCalls.ppt++;
         return null;
-      });
-      ipcMain.handle('show-confirm-dialog', () => {
-        global.headerCalls.confirm++;
-        return global.allowNew;
       });
     });
     const current = p.locator('.presentation-current'),
@@ -169,10 +164,11 @@ test('current presentation actions preserve rename, save, file and dialog behavi
     await expect.poll(() => p.evaluate(() => window.headerStore.getState().activeTab)).toBe('slides');
     await p.evaluate(() => window.headerStore.getState().setActiveTab('presentations'));
     await tools.getByRole('button', { name: 'Yeni Sunum', exact: true }).click();
-    await expect.poll(() => app.evaluate(() => global.headerCalls.confirm)).toBe(1);
+    await p.locator('.app-choice-dialog').getByRole('button', { name: 'İptal', exact: true }).click();
     expect(await p.evaluate(() => window.headerStore.getState().presentation.slides.length)).toBe(2);
-    await app.evaluate(() => (global.allowNew = true));
     await tools.getByRole('button', { name: 'Yeni Sunum', exact: true }).click();
+    await p.locator('.app-choice-dialog').getByRole('button', { name: 'Onayla', exact: true }).click();
+    await p.locator('.app-choice-dialog').getByRole('button', { name: 'Değişiklikleri At', exact: true }).click();
     await expect.poll(() => p.evaluate(() => window.headerStore.getState().presentation.slides.length)).toBe(1);
   } finally {
     await closeWorkspace(app);

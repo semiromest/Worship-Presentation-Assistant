@@ -32,22 +32,28 @@ test('gradient library serializes concurrent saves, preserves recipes across res
     assert.equal((await createGradientLibraryStore(root).list()).length, 2);
     assert.equal(await fs.readFile(path.join(root, 'media', 'abcd1234.jpg'), 'utf8'), 'shared-image');
     assert.deepEqual((await fs.readdir(root)).sort(), ['gradient-library.json', 'media']);
-    assert.throws(() => library.save({ name: '', image, recipe }));
-    assert.throws(() => library.save({ name: 'bad', image: 'file:///private.jpg', recipe }));
-    assert.throws(() => library.save({ name: 'bad', image, recipe: { ...recipe, darkness: 999 } }));
+    await assert.rejects(library.save({ name: '', image, recipe }), /Invalid gradient name/);
+    await assert.rejects(library.save({ name: 'bad', image: 'file:///private.jpg', recipe }), /Invalid gradient image/);
+    await assert.rejects(library.save({ name: 'bad', image, recipe: { ...recipe, darkness: 999 } }));
     assert.equal((await library.list()).length, 2);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
 });
-test('corrupt library reports failure without replacing its contents', async () => {
+test('corrupt library recovers with an exact backup and persists new entries across restart', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'gradient-library-corrupt-'));
   try {
     await fs.writeFile(path.join(root, 'gradient-library.json'), '{broken');
     const library = createGradientLibraryStore(root);
-    await assert.rejects(library.list());
-    await assert.rejects(library.save({ name: 'New', image: 'local-resource://media/abcd.jpg', recipe }));
-    assert.equal(await fs.readFile(path.join(root, 'gradient-library.json'), 'utf8'), '{broken');
+    assert.deepEqual(await library.list(), []);
+    const backups = (await fs.readdir(root)).filter(name => name.startsWith('gradient-library.json.corrupt-'));
+    assert.equal(backups.length, 1);
+    assert.equal(await fs.readFile(path.join(root, backups[0]), 'utf8'), '{broken');
+    await library.save({ name: 'New', image: 'local-resource://media/abcd.jpg', recipe });
+    const restored = await createGradientLibraryStore(root).list();
+    assert.equal(restored.length, 1);
+    assert.equal(restored[0].name, 'New');
+    assert.deepEqual(restored[0].recipe, recipe);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

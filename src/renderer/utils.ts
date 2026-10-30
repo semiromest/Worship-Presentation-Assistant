@@ -8,6 +8,9 @@ import { getSlideDisplayContent } from '../shared/slideContent';
 import { useWatermarkStore } from './state/useWatermarkStore';
 import { parseCountdownContent, getCountdownRemaining } from './countdownUtils';
 import { rendererPerf } from './perf';
+import { encodePreview } from './previewEncoding';
+import { imagePreviewEdge, preparePreviewImages } from './imagePreviewSource';
+import { loadGoogleFont, slideFonts } from './fontLoader';
 import { resolveCanvasSource } from './canvasSource';
 
 // Precompiled regexes (compiled once, not per call)
@@ -763,17 +766,20 @@ async function drawWatermarkOnCanvas(
 
 async function generateSlideThumbnailInner(
   slide: Slide,
-  opts?: { scale?: number; quality?: number; status?: ThumbnailStatus },
+  opts?: { scale?: number; quality?: number; status?: ThumbnailStatus; eligible?: () => boolean },
 ): Promise<string | null> {
+  await Promise.all(slideFonts(slide).map(loadGoogleFont));
   const status = opts?.status;
   // High-resolution output for phone broadcasts: draw everything in the base
   // 320×180 coordinate space and let ctx.scale upscale uniformly, so every
   // font/position stays proportionally correct at any size.
   const scale = Math.max(1, Math.round(opts?.scale ?? 1));
+  slide = await preparePreviewImages(slide, imagePreviewEdge(THUMB_W * scale), opts?.eligible);
   const BASE_W = THUMB_W;
   const BASE_H = THUMB_H;
   const W = BASE_W * scale;
   const H = BASE_H * scale;
+  if (opts?.eligible && !opts.eligible()) return null;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -837,9 +843,9 @@ async function generateSlideThumbnailInner(
   }
 
   try {
-    return canvas.toDataURL('image/webp', opts?.quality ?? 0.65);
+    return await encodePreview(canvas, opts?.quality ?? 0.65);
   } catch (err) {
-    console.error('generateSlideThumbnail: toDataURL failed (canvas tainted?):', err);
+    console.error('generateSlideThumbnail: encoding failed (canvas tainted?):', err);
     // A tainted canvas can never be exported, so retrying this slide would only
     // fail again. Returning null left the phone grid stuck on "LOADING"
     // forever, so hand back an untainted placeholder instead — the operator can
@@ -853,7 +859,7 @@ async function generateSlideThumbnailInner(
  * by a media source we are not allowed to read). Deliberately drawn on a fresh
  * canvas with no external image, so encoding always succeeds.
  */
-function buildFallbackThumbnail(slide: Slide, scale: number, quality?: number): string | null {
+async function buildFallbackThumbnail(slide: Slide, scale: number, quality?: number): Promise<string | null> {
   try {
     const canvas = document.createElement('canvas');
     canvas.width = THUMB_W * scale;
@@ -865,7 +871,7 @@ function buildFallbackThumbnail(slide: Slide, scale: number, quality?: number): 
     ctx.fillRect(0, 0, THUMB_W, THUMB_H);
     const label = slide.content?.trim() || slide.group?.title || slide.type;
     fillFallbackText(ctx, label.slice(0, 60));
-    return canvas.toDataURL('image/webp', quality ?? 0.65);
+    return await encodePreview(canvas, quality ?? 0.65);
   } catch {
     return null;
   }
@@ -883,7 +889,7 @@ export interface ThumbnailStatus {
 /** Phase 0: times thumbnail generation (dev-only, zero overhead in prod). */
 export async function generateSlideThumbnail(
   slide: Slide,
-  opts?: { scale?: number; quality?: number; status?: ThumbnailStatus },
+  opts?: { scale?: number; quality?: number; status?: ThumbnailStatus; eligible?: () => boolean },
 ): Promise<string | null> {
   if (!rendererPerf.enabled) return generateSlideThumbnailInner(slide, opts);
   const t0 = performance.now();

@@ -9,7 +9,7 @@ import { usePreparationStore } from './state/usePreparationStore';
 import { useStore } from './state/useStore';
 import type { Slide } from './types';
 import { cn } from './utils';
-import { resolveCanvasSource } from './canvasSource';
+import { PreviewImage } from './components/PreviewImage';
 import { useImageDrop } from './hooks/useImageDrop';
 import { SlideCardOverlays } from './components/SlideCardOverlays';
 import {
@@ -131,7 +131,7 @@ const LoopVideoPreview = memo(({ item }: { item: NonNullable<Slide['loopItems']>
 LoopVideoPreview.displayName = 'LoopVideoPreview';
 
 // Slide content renderer
-const SlideContent = memo(({ slide, cardWidth }: { slide: Slide; cardWidth?: number }) => {
+const SlideContent = memo(({ slide, cardWidth, viewport }: { slide: Slide; cardWidth?: number; viewport: { width: number; height: number } }) => {
   const { t } = useTranslation();
   const hasItems = !slide.partsMode && (slide.type === 'text' || slide.type === 'image') && slide.items && slide.items.length > 0;
 
@@ -140,6 +140,7 @@ const SlideContent = memo(({ slide, cardWidth }: { slide: Slide; cardWidth?: num
       <SlideItemsPreview
         items={slide.items!}
         slide={slide}
+        viewport={viewport}
       />
     );
   }
@@ -147,15 +148,15 @@ const SlideContent = memo(({ slide, cardWidth }: { slide: Slide; cardWidth?: num
   switch (slide.type) {
     case 'image':
       return (
-        <img
-          src={slide.mediaUrl ? resolveCanvasSource(slide.mediaUrl, false).url : undefined}
+        <PreviewImage
+          source={slide.mediaUrl}
+          width={cardWidth}
           style={{ filter: `grayscale(${slide.styles?.imageGrayscale ?? 0})` }}
           className={cn(
             'w-full h-full',
             slide.styles?.objectFit === 'cover' ? 'object-cover' : 'object-contain'
           )}
           alt="Slide"
-          loading="lazy"
         />
       );
 
@@ -178,11 +179,11 @@ const SlideContent = memo(({ slide, cardWidth }: { slide: Slide; cardWidth?: num
       const firstItem = slide.loopItems?.[0];
       if (firstItem) {
         return firstItem.type === 'image' ? (
-          <img
-            src={firstItem.mediaUrl}
+          <PreviewImage
+            source={firstItem.mediaUrl}
+            width={cardWidth}
             className="w-full h-full object-cover"
             alt="Loop"
-            loading="lazy"
           />
         ) : (
           <LoopVideoPreview item={firstItem} />
@@ -255,7 +256,7 @@ const SlideBadges = memo(({ slide, index, isSelected, isLive, cardWidth, zoom }:
   const groupColor = slide.group?.color;
   const showBadges = showGroup || showType || isSelected || isLive;
   const compact = cardWidth < 360;
-  const hideGroupTitle = zoom <= 0.6;
+  const hideGroupTitle = Math.min(zoom, cardWidth / 320) <= 0.6;
   const tiny = cardWidth < 180;
   const groupLabel = slide.group
     ? `${slide.group.title} ${slide.partsMode && slide.parts?.length ? (slide.activePart ?? 0) + 1 : slide.group.part}/${slide.partsMode && slide.parts?.length ? slide.parts.length : slide.group.parts}`
@@ -420,15 +421,22 @@ export const SlideCard = memo(({
   ), [isSelected, isLive, isDragging]);
 
   const previewRef = useRef<HTMLDivElement>(null);
-  const [previewWidth, setPreviewWidth] = useState(0);
+  const [measuredViewport, setViewport] = useState({ width: 0, height: 0 });
+  const viewport = useMemo(() => cardWidth
+    ? { width: Math.max(1, cardWidth - 2), height: Math.max(1, cardWidth - 2) * 9 / 16 }
+    : measuredViewport, [cardWidth, measuredViewport]);
+  const previewWidth = viewport.width;
   useLayoutEffect(() => {
+    if (cardWidth) return;
     const preview = previewRef.current;
     if (!preview) return;
-    setPreviewWidth(preview.clientWidth);
-    const observer = new ResizeObserver(([entry]) => setPreviewWidth(entry.contentRect.width));
+    const update = (width: number, height: number) => setViewport(previous =>
+      previous.width === width && previous.height === height ? previous : { width, height });
+    update(preview.clientWidth, preview.clientHeight);
+    const observer = new ResizeObserver(([entry]) => update(entry.contentRect.width, entry.contentRect.height));
     observer.observe(preview);
     return () => observer.disconnect();
-  }, []);
+  }, [cardWidth]);
 
   const slideLabel = isLive
     ? t('common.slideCardLiveLabel', { index: index + 1 })
@@ -455,8 +463,8 @@ export const SlideCard = memo(({
       {slide.locked && <LockBadge />}
       <PreparationBadge slideId={slide.id} />
 
-      <div ref={previewRef} className="aspect-video bg-black flex items-center justify-center overflow-hidden relative isolate">
-        <SlideContent slide={slide} cardWidth={previewWidth || cardWidth} />
+      <div ref={previewRef} style={{ contain: 'layout paint' }} className="aspect-video bg-black flex items-center justify-center overflow-hidden relative isolate">
+        <SlideContent slide={slide} cardWidth={previewWidth || cardWidth} viewport={viewport} />
         <SlideCardOverlays slide={slide} width={previewWidth || cardWidth || 320} />
       </div>
     </div>

@@ -1,3 +1,4 @@
+import ControlTooltip from './ControlTooltip';
 import { Music, Pencil, Play, Trash2, Volume2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Slide } from '../types';
@@ -17,12 +18,12 @@ export default function SlideMusicAttachment({ slide, onPatch, volume = true, in
   const source = slide.youtubeMusic;
   const control = 'inline-flex min-h-8 min-w-8 items-center justify-center rounded-md text-white/60 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400';
   return <section data-testid="slide-music-attachment" tabIndex={-1} aria-label={t('settings.backgroundMusic')} className={inline ? 'inline-flex text-xs outline-none' : 'space-y-2 border-b border-white/10 pb-3 text-xs outline-none'}>
-    {!source ? <button type="button" data-testid="slide-music-add" title={t('slideAudio.add')} className={control + ' gap-1.5 px-2'} onClick={e => requestSlideMusic(slide.id, e.currentTarget)}><Music className="h-3.5 w-3.5" aria-hidden="true" /><span className={compact ? 'sr-only' : undefined}>{t('slideAudio.add')}</span></button> : <>
+    {!source ? <ControlTooltip><button type="button" data-testid="slide-music-add" title={t('slideAudio.add')} className={control + ' gap-1.5 px-2'} onClick={e => requestSlideMusic(slide.id, e.currentTarget)}><Music className="h-3.5 w-3.5" aria-hidden="true" /><span className={compact ? 'sr-only' : undefined}>{t('slideAudio.add')}</span></button></ControlTooltip> : <>
       <div className="flex min-w-0 items-center gap-1.5">
         <Music className="h-3.5 w-3.5 shrink-0 text-sky-300" /><span className="min-w-0 flex-1 truncate text-white/85" title={source.title}>{source.title}</span>
-        <button type="button" data-testid="slide-music-play" className={control + ' disabled:opacity-30'} disabled={!isLive} title={t(isLive ? 'slideAudio.play' : 'slideAudio.liveFirst')} aria-label={t('slideAudio.play')} onClick={() => requestSlideMusicPlay(slide.id)}><Play className="h-3.5 w-3.5" /></button>
-        <button type="button" data-testid="slide-music-change" className={control} title={t('slideAudio.change')} aria-label={t('slideAudio.change')} onClick={e => requestSlideMusic(slide.id, e.currentTarget)}><Pencil className="h-3.5 w-3.5" /></button>
-        <button type="button" data-testid="slide-music-remove" className={control} title={t('slideAudio.remove')} aria-label={t('slideAudio.remove')} onClick={() => onPatch(slide.id, { youtubeMusic: undefined, musicSettings: undefined })}><Trash2 className="h-3.5 w-3.5" /></button>
+        <ControlTooltip><button type="button" data-testid="slide-music-play" className={control + ' disabled:opacity-30'} disabled={!isLive} title={t(isLive ? 'slideAudio.play' : 'slideAudio.liveFirst')} aria-label={t('slideAudio.play')} onClick={() => requestSlideMusicPlay(slide.id)}><Play className="h-3.5 w-3.5" /></button></ControlTooltip>
+        <ControlTooltip><button type="button" data-testid="slide-music-change" className={control} title={t('slideAudio.change')} aria-label={t('slideAudio.change')} onClick={e => requestSlideMusic(slide.id, e.currentTarget)}><Pencil className="h-3.5 w-3.5" /></button></ControlTooltip>
+        <ControlTooltip><button type="button" data-testid="slide-music-remove" className={control} title={t('slideAudio.remove')} aria-label={t('slideAudio.remove')} onClick={() => onPatch(slide.id, { youtubeMusic: undefined, musicSettings: undefined })}><Trash2 className="h-3.5 w-3.5" /></button></ControlTooltip>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <label className="inline-flex min-h-8 cursor-pointer items-center gap-2 text-white/70" title={t('slideAudio.autoHint')}>

@@ -12,6 +12,7 @@ import {
   WorshipSong,
 } from '../worshipLeaderApi';
 import ProgressBar from './ProgressBar';
+import { confirmDialog } from '../dialogs';
 
 interface Hymn {
   id: string;
@@ -266,7 +267,7 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
   };
 
   const handleImportAll = async () => {
-    if (!window.confirm(t('common.onlineHymnsConfirmAll'))) return;
+    if (!(await confirmDialog(t('common.onlineHymnsConfirmAll')))) return;
     setError('');
 
     // Capture current language to detect changes
@@ -503,7 +504,7 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
                   className="w-full h-10 flex items-center justify-center gap-2 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded-xl text-sm font-semibold border border-amber-500/30 transition-colors disabled:opacity-40"
                 >
                   <Download className="w-4 h-4" />
-                  {t('common.onlineHymnsImportAll')}
+                  {t('common.onlineHymnsImportAll', { count: total })}
                 </button>
 
                 {selected.size > 0 && (

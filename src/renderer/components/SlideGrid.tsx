@@ -1,28 +1,22 @@
+import { useSlidePrefetch } from '../hooks/useSlidePrefetch';
+import { useToolbarOverflow } from '../hooks/useToolbarOverflow';
+import ControlTooltip from './ControlTooltip';
 import { useListMotion } from '../hooks/useListMotion';
+import { createPortal } from 'react-dom';
 import ServiceSections from './ServiceSections';
 import { TransitionSelector } from '../TransitionSelector';
 import { DEFAULT__TRANSITION } from '../constants';
 import type { TransitionType } from '../types';
 import { GradientQuickApply } from './GradientQuickApply';
+import { SlideNavigation } from './OutputStatus';
+import { slideGridGeometry, slideGridScrollTop, ROW_GAP, CONTENT_PADDING } from './slideGridGeometry';
 import { memo, useMemo, useEffect, useLayoutEffect, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, X, Plus, ZoomIn, ZoomOut, Lock, ChevronUp, ChevronDown, Copy, Trash2 } from 'lucide-react';
+import { Search, X, Plus, Grid2X2, Minus, ChevronLeft, ChevronRight, Lock, ChevronUp, ChevronDown, Copy, Trash2, Undo2, Redo2 } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { SlideCard } from '../SlideCard';
-import { useDragAndDrop } from '../hooks/useDragAndDrop';
-import { useImageDrop } from '../hooks/useImageDrop';
+import { useSlideInsertionDrag } from '../hooks/useSlideInsertionDrag';
 import { getSectionBlocks } from '../../shared/sectionModel';
-
-const MIN_ZOOM = 0.4;
-const MAX_ZOOM = 2;
-const ZOOM_STEP = 0.1;
-
-// Scroll container horizontal/vertical padding (p-4 = 16px)
-const CONTENT_PADDING = 16;
-
-// Approximate card height ratio for virtual scrolling (aspect-video = 9/16 + badge + gap)
-const CARD_ASPECT = 9 / 16;
-const ROW_GAP = 12; // gap-3 = 12px
 
 // Session-only view state survives tab unmounts without entering saved decks.
 const scrollPositions = new Map<string, number>();
@@ -43,28 +37,38 @@ function useVirtualRows(
   totalRows: number,
   rowHeight: number,
   containerRef: React.RefObject<HTMLDivElement>,
+  enabled = true,
   overscan = 3,
 ) {
   const [scrollTop, setScrollTop] = useState(0);
   const [viewHeight, setViewHeight] = useState(600);
 
   useEffect(() => {
+    if (!enabled) return;
     const el = containerRef.current;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
       setViewHeight(entries[0].contentRect.height);
     });
     ro.observe(el);
+    let frame = 0;
     const onScroll = () => {
       // rAF-throttled to avoid excessive re-renders on fast scroll
-      requestAnimationFrame(() => setScrollTop(el.scrollTop));
+      if (!frame) frame = requestAnimationFrame(() => {
+        frame = 0;
+        const top = el.scrollTop;
+        setScrollTop(previous => Math.floor(previous / rowHeight) === Math.floor(top / rowHeight) &&
+          Math.ceil((previous + viewHeight) / rowHeight) === Math.ceil((top + viewHeight) / rowHeight) ? previous : top);
+      });
     };
     el.addEventListener('scroll', onScroll, { passive: true });
+    setScrollTop(el.scrollTop);
     return () => {
+      cancelAnimationFrame(frame);
       ro.disconnect();
       el.removeEventListener('scroll', onScroll);
     };
-  }, [containerRef]);
+  }, [containerRef, enabled, rowHeight, viewHeight]);
 
   const startRow = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
   const endRow = Math.min(totalRows, Math.ceil((scrollTop + viewHeight) / rowHeight) + overscan);
@@ -77,10 +81,10 @@ function useVirtualRows(
  * Ghost slide — a quiet "empty slot" card that mirrors real slide
  * dimensions and creates a new slide on click without competing with slides.
  */
-const GhostSlide = memo(({ onClick, zoom }: { onClick: () => void; zoom: number }) => {
+const GhostSlide = memo(({ onClick }: { onClick: () => void }) => {
   const { t } = useTranslation();
   return (
-    <button
+    <ControlTooltip><button
       type="button"
       data-guide-anchor="add-slide"
       onClick={onClick}
@@ -88,7 +92,6 @@ const GhostSlide = memo(({ onClick, zoom }: { onClick: () => void; zoom: number 
       aria-describedby="add-slide-hint"
       title={t('common.addSlideHint')}
       className="group relative w-full aspect-video rounded-xl border border-dashed border-white/12 bg-white/[0.015] overflow-hidden cursor-pointer text-left transition-colors duration-150 hover:border-white/25 hover:bg-white/[0.035] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
-      style={{ zoom }}
     >
       <span className="relative flex flex-col items-center justify-center gap-2 h-full">
         <Plus className="w-4 h-4 text-white/35" aria-hidden="true" />
@@ -96,7 +99,7 @@ const GhostSlide = memo(({ onClick, zoom }: { onClick: () => void; zoom: number 
           {t('common.addNewSlide')}
         </span>
       </span>
-    </button>
+    </button></ControlTooltip>
   );
 });
 
@@ -105,13 +108,13 @@ GhostSlide.displayName = 'GhostSlide';
 export default function SlideGrid({
   moveSelectedSlides, deleteSelectedSlides, duplicateSelectedSlides,
   addSlide,
-  reorderSlides,
   handleSlideClick,
   handleSlideDoubleClick,
   updateTransition,
 }: SlideGridProps) {
   const { t } = useTranslation();
-  const dropImages = useImageDrop();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const tools = useToolbarOverflow();
   const sectionsEnabled = useStore(s => s.serviceSectionsEnabled);
   const presentation = useStore((s) => s.presentation);
   const searchQuery = useStore((s) => s.searchQuery);
@@ -122,9 +125,13 @@ export default function SlideGrid({
   const selectedSlideId = useStore((s) => s.selectedSlideId);
   const scrollKey = `${presentation.id ?? presentation.slides[0]?.id ?? 'empty'}:${sectionsEnabled}`;
   const isProjectorWindowOpen = useStore((s) => s.isProjectorWindowOpen);
+  const isRightPanelOpen = useStore(s => s.isRightPanelOpen);
+  const canUndo = useStore(s => s.undoState.past.length > 0);
+  const canRedo = useStore(s => s.undoState.future.length > 0);
+  const dispatchUndo = useStore(s => s.dispatchUndo);
   const liveIndex = useStore((s) => s.liveIndex);
-  const slideZoom = useStore((s) => s.slideZoom);
-  const setSlideZoom = useStore((s) => s.setSlideZoom);
+  const slideColumns = useStore((s) => s.slideColumns);
+  const setSlideColumns = useStore((s) => s.setSlideColumns);
   const setSelectedSlideIds = useStore((s) => s.setSelectedSlideIds);
 
   // Section filter lives next to search: both narrow the grid and both suspend
@@ -137,19 +144,9 @@ export default function SlideGrid({
     block.unassigned ? t('sections.none') : block.title;
   const orderRestricted = sectionsEnabled && (!!searchQuery.trim() || !!sectionFilterId);
 
-  const { handleDragStart, handleDragOver, handleDragEnd, handleDrop, resetDragState, draggedSlideId, dragOverIndex } =
-    useDragAndDrop(reorderSlides);
-
-  const slidesRef = useRef(presentation.slides);
-
-  useEffect(() => {
-    if (draggedSlideId !== null && slidesRef.current !== presentation.slides) {
-      resetDragState();
-    }
-    slidesRef.current = presentation.slides;
-  }, [presentation.slides, draggedSlideId, resetDragState]);
-
   const containerRef = useRef<HTMLDivElement>(null);
+  const { handlers: insertionHandlers, sourceId: draggedSlideId, movingIds, indicator } = useSlideInsertionDrag(containerRef, slideColumns, sectionsEnabled);
+  const scrollTopBeforeLayoutRef = useRef(0);
   const motionSlideIds = useMemo(() => presentation.slides.map(slide => slide.id), [presentation.slides]);
   useListMotion(containerRef, motionSlideIds, `${presentation.id ?? ''}:${sectionsEnabled}`, 'slide', `${searchQuery}:${sectionFilterId}`);
   const restoringScrollRef = useRef(true);
@@ -165,50 +162,30 @@ export default function SlideGrid({
     return () => ro.disconnect();
   }, []);
 
-  const columnCount = useMemo(() => {
-    if (slideZoom <= 0.4) return 8;
-    if (slideZoom <= 0.5) return 7;
-    if (slideZoom <= 0.6) return 6;
-    if (slideZoom <= 0.7) return 5;
-    if (slideZoom <= 0.9) return 4;
-    if (slideZoom <= 1.1) return 3;
-    if (slideZoom <= 1.5) return 2;
-    return 1;
-  }, [slideZoom]);
-
-  // Card width and height (height = width * aspect + small overhead for badges)
-  const cardWidth = useMemo(
-    () => Math.floor((containerWidth - ROW_GAP * (columnCount - 1) - 32) / columnCount),
-    [containerWidth, columnCount],
+  const { columns: columnCount, cardWidth, cardHeight, rowHeight } = useMemo(
+    () => slideGridGeometry(containerWidth, slideColumns), [containerWidth, slideColumns]
   );
-  const cardHeight = useMemo(() => Math.floor(cardWidth * CARD_ASPECT) + 8, [cardWidth]);
-  const rowHeight = cardHeight + ROW_GAP;
 
-  const adjustZoom = useCallback(
-    (delta: number) => {
-      setSlideZoom((prev) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, +(prev + delta).toFixed(1))));
-    },
-    [setSlideZoom],
-  );
-  const resetZoom = useCallback(() => setSlideZoom(1), [setSlideZoom]);
+  const changeColumns = useCallback((columns: number) => {
+    scrollTopBeforeLayoutRef.current = containerRef.current?.scrollTop ?? 0;
+    setSlideColumns(columns);
+  }, [setSlideColumns]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const el = document.activeElement as HTMLElement | null;
       const tag = el?.tagName?.toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select' || el?.isContentEditable) return;
-      // The slide editor is a full-screen workspace with its own zoom keys; the
-      // grid zoom behind it would only change something the user cannot see.
       if (useStore.getState().activeTab === 'editor') return;
       if (e.ctrlKey || e.metaKey) {
-        if (e.key === '=' || e.key === '+') { e.preventDefault(); adjustZoom(ZOOM_STEP); }
-        else if (e.key === '-') { e.preventDefault(); adjustZoom(-ZOOM_STEP); }
-        else if (e.key === '0') { e.preventDefault(); resetZoom(); }
+        if (e.key === '=' || e.key === '+') { e.preventDefault(); changeColumns(slideColumns - 1); }
+        else if (e.key === '-') { e.preventDefault(); changeColumns(slideColumns + 1); }
+        else if (e.key === '0') { e.preventDefault(); changeColumns(4); }
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [adjustZoom, resetZoom]);
+  }, [changeColumns, slideColumns]);
 
   const slideIndexMap = useMemo(
     () => new Map(presentation.slides.map((s, i) => [s.id, i])),
@@ -226,6 +203,8 @@ export default function SlideGrid({
         s.type.toLowerCase().includes(q),
     );
   }, [presentation.slides, searchQuery]);
+
+  useSlidePrefetch(containerRef, filteredSlides, columnCount, isProjectorWindowOpen);
 
   // Track previous selectedSlideId so we only scroll+focus on actual selection
   // changes, not on every zoom/layout/content update (which would steal focus
@@ -282,6 +261,7 @@ export default function SlideGrid({
   // Group slides into rows for virtual rendering
   const rows = useMemo(() => {
     const result: (typeof filteredSlides)[] = [];
+    if (sectionsEnabled) return result;
     for (let i = 0; i < filteredSlides.length; i += columnCount) {
       result.push(filteredSlides.slice(i, i + columnCount));
     }
@@ -290,9 +270,9 @@ export default function SlideGrid({
       result.push([]);
     }
     return result;
-  }, [filteredSlides, columnCount, showGhost]);
+  }, [filteredSlides, columnCount, showGhost, sectionsEnabled]);
 
-  const { startRow, endRow, totalHeight } = useVirtualRows(rows.length, rowHeight, containerRef);
+  const { startRow, endRow, totalHeight } = useVirtualRows(rows.length, rowHeight, containerRef, !sectionsEnabled);
   // Keep the native drag source mounted when scrolling beyond the overscan.
   const renderedRowIndices = useMemo(() => {
     const indices = Array.from({ length: Math.max(0, endRow - startRow) }, (_, i) => startRow + i);
@@ -333,10 +313,25 @@ export default function SlideGrid({
     };
   }, [scrollKey, rowHeight, totalHeight]);
 
+  const previousGridRef = useRef({ columnCount, rowHeight, sectionsEnabled, scrollKey });
+  useLayoutEffect(() => {
+    const previous = previousGridRef.current;
+    previousGridRef.current = { columnCount, rowHeight, sectionsEnabled, scrollKey };
+    const el = containerRef.current;
+    if (!el || restoringScrollRef.current || sectionsEnabled || previous.sectionsEnabled || previous.scrollKey !== scrollKey) return;
+    if (previous.columnCount === columnCount && previous.rowHeight === rowHeight) return;
+    // The browser may already have clamped scrollTop after the spacer shrank.
+    el.scrollTop = slideGridScrollTop(scrollTopBeforeLayoutRef.current,
+      { columns: previous.columnCount, rowHeight: previous.rowHeight }, { columns: columnCount, rowHeight });
+    scrollTopBeforeLayoutRef.current = el.scrollTop;
+    el.dispatchEvent(new Event('scroll'));
+  }, [columnCount, rowHeight, sectionsEnabled, scrollKey]);
+
   useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const remember = () => {
+      scrollTopBeforeLayoutRef.current = el.scrollTop;
       if (!restoringScrollRef.current) scrollPositions.set(scrollKey, el.scrollTop);
     };
     el.addEventListener('scroll', remember, { passive: true });
@@ -347,13 +342,14 @@ export default function SlideGrid({
   }, [scrollKey]);
 
   return (
-    <div className="design-slide-grid flex flex-col overflow-hidden h-full flex-1">
+    <div className={`design-slide-grid flex flex-col overflow-hidden h-full flex-1${isRightPanelOpen ? ' inspector-open' : ''}`}>
       {/* Search Bar */}
-      <div className="design-searchbar border-b border-white/5 bg-surface-raised flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="design-slide-search relative group flex-1">
+      <div className="design-searchbar-shell" data-overflow-left={tools.edges.left} data-overflow-right={tools.edges.right}>
+      <div ref={tools.ref} className="design-searchbar border-b border-white/5 bg-surface-raised flex-shrink-0">
+        <div className="design-search-fields flex items-center gap-3">
+          <div className="design-slide-search flex-1" data-has-query={!!searchQuery || undefined}>
             <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/45 group-focus-within:text-blue-500 transition-colors"
+              className="slide-search-icon"
               aria-hidden="true"
             />
             <label htmlFor="slide-search" className="sr-only">
@@ -361,20 +357,23 @@ export default function SlideGrid({
             </label>
             <input
               id="slide-search"
+              ref={searchInputRef}
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t('common.searchPlaceholder')}
-              className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm outline-none focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:bg-white/10 transition-[background-color,border-color] placeholder:text-white/40"
+              className="slide-search-input"
             />
             {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
+              <ControlTooltip><button
+                type="button"
+                onClick={() => { setSearchQuery(''); searchInputRef.current?.focus(); }}
                 aria-label={t('common.clearSearch')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-white/10 text-white/40 hover:text-white transition-colors active:scale-[0.88]"
+                title={t('common.clearSearch')}
+                className="slide-search-clear"
               >
                 <X className="w-3 h-3" aria-hidden="true" />
-              </button>
+              </button></ControlTooltip>
             )}
           </div>
 
@@ -414,34 +413,30 @@ export default function SlideGrid({
             </div>
           )}
 
+        </div>
+        <div className="design-slide-actions">
+          <div className="design-search-history design-search-tool-group" role="group" aria-label={`${t('common.undo')} / ${t('common.redo')}`}>
+            <ControlTooltip shortcut="Ctrl+Z"><button type="button" onClick={() => dispatchUndo({ type: 'UNDO' })} disabled={!canUndo} title={t('common.undo')} aria-label={t('common.undo')}><Undo2 aria-hidden="true" /></button></ControlTooltip>
+            <ControlTooltip shortcut="Ctrl+Y"><button type="button" onClick={() => dispatchUndo({ type: 'REDO' })} disabled={!canRedo} title={t('common.redo')} aria-label={t('common.redo')}><Redo2 aria-hidden="true" /></button></ControlTooltip>
+          </div>
+          <div className="design-search-navigation design-search-tool-group" role="group" aria-label={t('common.navigation')}>
+            <SlideNavigation />
+          </div>
           <div className="design-slide-view-tools">
-          {/* Zoom Controls */}
-          <div className="flex items-center gap-1 shrink-0" role="group" aria-label={t('common.zoomControls')}>
-            <button
-              onClick={() => adjustZoom(-ZOOM_STEP)}
-              disabled={slideZoom <= MIN_ZOOM}
-              aria-label={t('common.zoomOut')}
-              className="w-8 h-8 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92] disabled:active:scale-100"
-            >
-              <ZoomOut className="w-4 h-4 text-white/60" aria-hidden="true" />
-            </button>
-
-            <button
-              onClick={resetZoom}
-              aria-label={t('common.zoomReset')}
-              className="h-8 px-2 rounded-lg text-[11px] font-medium text-white/55 hover:text-white/80 hover:bg-white/5 transition-colors min-w-[44px] text-center focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]"
-            >
-              {Math.round(slideZoom * 100)}%
-            </button>
-
-            <button
-              onClick={() => adjustZoom(ZOOM_STEP)}
-              disabled={slideZoom >= MAX_ZOOM}
-              aria-label={t('common.zoomIn')}
-              className="w-8 h-8 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92] disabled:active:scale-100"
-            >
-              <ZoomIn className="w-4 h-4 text-white/60" aria-hidden="true" />
-            </button>
+          <div className="design-slide-columns design-search-tool-group" role="group" aria-label={t('slidesWorkspace.slidesPerRow')}
+            onKeyDown={event => event.stopPropagation()}>
+            <ControlTooltip><button type="button" data-columns-action="decrease" onClick={() => changeColumns(slideColumns - 1)} disabled={slideColumns <= 1}
+              aria-label={t('slidesWorkspace.fewerSlidesPerRow')} title={t('slidesWorkspace.fewerSlidesPerRow')}>
+              <Minus aria-hidden="true" />
+            </button></ControlTooltip>
+            <output className="design-slide-columns-value" aria-live="polite" aria-atomic="true" title={t('slidesWorkspace.slidesPerRow')}>
+              <Grid2X2 aria-hidden="true" />
+              <span className="sr-only">{t('slidesWorkspace.slidesPerRow')}: </span>{slideColumns}
+            </output>
+            <ControlTooltip><button type="button" data-columns-action="increase" onClick={() => changeColumns(slideColumns + 1)} disabled={slideColumns >= 8}
+              aria-label={t('slidesWorkspace.moreSlidesPerRow')} title={t('slidesWorkspace.moreSlidesPerRow')}>
+              <Plus aria-hidden="true" />
+            </button></ControlTooltip>
           </div>
           <TransitionSelector
             transitionType={presentation.transition?.type ?? DEFAULT__TRANSITION.type}
@@ -449,47 +444,58 @@ export default function SlideGrid({
             onChange={updateTransition}
           />
           </div>
-        </div>
         <div className="design-selection-tools" role="group" aria-label={t('slidesWorkspace.selectionTools')}>
           <span className="design-selection-count">{selectedSlideIds.size} {t('common.selected')}</span>
-          <button type="button" onClick={() => setSelectedSlideIds(new Set([selectedSlideId]))}
+          <ControlTooltip><button type="button" onClick={() => setSelectedSlideIds(new Set([selectedSlideId]))}
             disabled={selectedSlideIds.size <= 1} aria-label={t('common.clearSelection')} title={t('common.clearSelection')}
-            className={selectedSlideIds.size <= 1 ? 'invisible' : undefined}><X /></button>
+            className={selectedSlideIds.size <= 1 ? 'invisible' : undefined}><X /></button></ControlTooltip>
           <GradientQuickApply />
-          <button onClick={()=>moveSelectedSlides(-1)} disabled={orderRestricted || !selectedSlideIds.size} title={t('common.moveSelectedUp')} aria-label={t('common.moveSelectedUp')}><ChevronUp /></button>
-          <button onClick={()=>moveSelectedSlides(1)} disabled={orderRestricted || !selectedSlideIds.size} title={t('common.moveSelectedDown')} aria-label={t('common.moveSelectedDown')}><ChevronDown /></button>
-          <button onClick={duplicateSelectedSlides} disabled={!selectedSlideIds.size} title={t('common.duplicateSelected')} aria-label={t('common.duplicateSelected')}><Copy /></button>
-          <button onClick={deleteSelectedSlides} disabled={!selectedSlideIds.size} title={t('common.deleteSelected')} aria-label={t('common.deleteSelected')} className="design-delete"><Trash2 /></button>
+          <div className="design-selection-actions design-search-tool-group">
+          <ControlTooltip shortcut="Alt+↑"><button onClick={()=>moveSelectedSlides(-1)} disabled={orderRestricted || !selectedSlideIds.size} title={t('common.moveSelectedUp')} aria-label={t('common.moveSelectedUp')}><ChevronUp /></button></ControlTooltip>
+          <ControlTooltip shortcut="Alt+↓"><button onClick={()=>moveSelectedSlides(1)} disabled={orderRestricted || !selectedSlideIds.size} title={t('common.moveSelectedDown')} aria-label={t('common.moveSelectedDown')}><ChevronDown /></button></ControlTooltip>
+          <span className="design-tool-divider" aria-hidden="true" />
+          <ControlTooltip shortcut="Ctrl+D"><button onClick={duplicateSelectedSlides} disabled={!selectedSlideIds.size} title={t('common.duplicateSelected')} aria-label={t('common.duplicateSelected')}><Copy /></button></ControlTooltip>
+          <ControlTooltip shortcut="Del"><button onClick={deleteSelectedSlides} disabled={!selectedSlideIds.size} title={t('common.deleteSelected')} aria-label={t('common.deleteSelected')} className="design-delete"><Trash2 /></button></ControlTooltip>
+          </div>
+        </div>
         </div>
       </div>
 
+      {(tools.edges.left || tools.edges.right) && <>
+        <ControlTooltip><button type="button" className="design-toolbar-scroll design-toolbar-scroll-left" disabled={!tools.edges.left} aria-label={t('slidesWorkspace.previousTools')} onClick={() => tools.scroll(-1)}><ChevronLeft aria-hidden="true" /></button></ControlTooltip>
+        <ControlTooltip><button type="button" className="design-toolbar-scroll design-toolbar-scroll-right" disabled={!tools.edges.right} aria-label={t('slidesWorkspace.nextTools')} onClick={() => tools.scroll(1)}><ChevronRight aria-hidden="true" /></button></ControlTooltip>
+      </>}
+      </div>
+      {indicator && createPortal(<div aria-hidden="true" className="design-insertion-overlay">
+        <div data-slide-insertion-indicator data-horizontal={indicator.horizontal} className="design-slide-insertion" style={{
+          left: indicator.x, top: indicator.y, width: indicator.horizontal ? indicator.length : 3, height: indicator.horizontal ? 3 : indicator.length,
+        }} />
+        {(indicator.section || movingIds.size > 1) && <div className="design-insertion-label" style={{
+          left: Math.max(8, Math.min(indicator.x + 12, window.innerWidth - 208)),
+          top: Math.max(8, Math.min(indicator.y >= 48 ? indicator.y - 34 : indicator.y + 14, window.innerHeight - 40)),
+        }}>
+          {movingIds.size > 1 && <span className="design-insertion-count"><Copy aria-hidden="true" />{movingIds.size}</span>}
+          {indicator.section && <span className="design-insertion-section" title={indicator.section}>{indicator.section}</span>}
+        </div>}
+      </div>, document.body)}
+      {draggedSlideId && movingIds.size > 1 && <span className="sr-only" role="status">{movingIds.size} {t('common.selected')}</span>}
       {/* Virtual scroll container */}
       <div ref={containerRef} data-guide-scroll className="flex-1 overflow-y-auto p-4" role="list" aria-label={t('common.slideList')}
-        onDragOverCapture={event => {
-          if (!event.dataTransfer.types.includes('Files') || (event.target as Element).closest('[data-slide-id]')) return;
-          event.preventDefault();
-          event.stopPropagation();
-          event.dataTransfer.dropEffect = 'copy';
-        }}
-        onDropCapture={event => {
-          if (!event.dataTransfer.types.includes('Files') || (event.target as Element).closest('[data-slide-id]')) return;
-          event.preventDefault();
-          event.stopPropagation();
-          void dropImages(Array.from(event.dataTransfer.files));
-        }}>
+        {...insertionHandlers}>
         <div aria-live="polite">
-          {!sectionsEnabled && filteredSlides.length === 0 && searchQuery ? (
-            <div className="h-64 flex flex-col items-center justify-center text-center opacity-30 space-y-4">
-              <Search className="w-16 h-16" aria-hidden="true" />
-              <p className="text-lg font-medium">{t('common.noResults')}</p>
+          {filteredSlides.length === 0 && searchQuery.trim() ? (
+            <div data-testid="slides-empty-search" className="flex min-h-48 flex-col items-center justify-center gap-3 px-6 py-8 text-center">
+              <Search className="h-7 w-7 text-white/40" aria-hidden="true" />
+              <p className="text-sm font-medium text-white/80">{t('slidesWorkspace.noSearchResults')}</p>
+              <button type="button" onClick={() => { setSearchQuery(''); searchInputRef.current?.focus(); }} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') event.stopPropagation(); }} className="rounded-lg border border-white/15 px-3 py-2 text-xs text-white/80 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">{t('common.clearSearch')}</button>
             </div>
           ) : sectionsEnabled ? (
             <>
-              <ServiceSections slides={filteredSlides} columns={columnCount} renderSlide={(slide, drag) => {
+              <ServiceSections slides={filteredSlides} columns={slideColumns} draggedSlideId={draggedSlideId} renderSlide={(slide, drag) => {
                 const index = slideIndexMap.get(slide.id)!;
                 return <div key={slide.id} role="listitem" data-motion-item="slide" data-motion-id={slide.id}><SlideCard slide={slide} index={index}
                   isSelected={selectedSlideIds.has(slide.id)} isLive={isProjectorWindowOpen && liveIndex === index}
-                  onClick={handleSlideClick} onDoubleClick={handleSlideDoubleClick} {...drag} zoom={slideZoom} /></div>;
+                  onClick={handleSlideClick} onDoubleClick={handleSlideDoubleClick} {...drag} isDragging={movingIds.has(slide.id)} zoom={1} /></div>;
               }} />
             </>
           ) : (
@@ -505,7 +511,7 @@ export default function SlideGrid({
                       left: 0,
                       right: 0,
                       display: 'grid',
-                      gridTemplateColumns: `repeat(${columnCount}, 1fr)`,
+                      gridTemplateColumns: `repeat(${columnCount}, ${cardWidth}px)`,
                       gap: ROW_GAP,
                     }}
                   >
@@ -513,30 +519,24 @@ export default function SlideGrid({
                       const originalIndex = slideIndexMap.get(slide.id)!;
                       return (
                         <div key={slide.id} className="relative" role="listitem" data-motion-item="slide" data-motion-id={slide.id}>
-                          {draggedSlideId && dragOverIndex === originalIndex && (
-                            <div className="absolute -left-1.5 top-0 bottom-0 w-1 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.8)] z-20 pointer-events-none" />
-                          )}
                           <SlideCard
                             slide={slide}
                             index={originalIndex}
+                            cardWidth={cardWidth}
                             isSelected={selectedSlideIds.has(slide.id)}
                             isLive={isProjectorWindowOpen && liveIndex === originalIndex}
                             onClick={handleSlideClick}
                             onDoubleClick={handleSlideDoubleClick}
-                            onDragStart={handleDragStart}
-                            onDragOver={handleDragOver}
-                            onDragEnd={handleDragEnd}
-                            onDrop={handleDrop}
-                            isDragging={draggedSlideId === slide.id || (!!draggedSlideId && selectedSlideIds.has(draggedSlideId) && selectedSlideIds.has(slide.id))}
-                            zoom={slideZoom}
+                            isDragging={movingIds.has(slide.id)}
+                            zoom={1}
                           />
                         </div>
                       );
                     })}
 
                     {rowIdx === rows.length - 1 && showGhost && (
-                      <div role="listitem" className="relative">
-                        <GhostSlide onClick={addSlide} zoom={slideZoom} />
+                      <div role="listitem" className="relative" data-slide-end-drop>
+                        <GhostSlide onClick={addSlide} />
                         <p id="add-slide-hint" className="sr-only">
                           {t('common.addSlideHint')}
                         </p>

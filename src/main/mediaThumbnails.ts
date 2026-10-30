@@ -277,6 +277,10 @@ async function createThumbnail(filePath: string, key: string, maxEdge: number): 
   if (cached) return cached;
 
   return schedule(async () => {
+    // Another request/process may have populated the disk while this job was
+    // waiting. Avoid decoding a large source after its thumbnail is available.
+    const existing = await findCached(dir, key, isVideo ? VIDEO_CACHE_EXTS : IMAGE_CACHE_EXTS);
+    if (existing) return existing;
     await fs.mkdir(dir, { recursive: true });
     const result = isVideo
       ? await generateVideoThumbnailBytes(filePath, maxEdge, dir)

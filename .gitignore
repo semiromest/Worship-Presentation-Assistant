@@ -8,21 +8,30 @@ dist/
 dist-electron/
 out/
 release/
-perf/
+perf/*
+!perf/reliability-*.cjs
+!perf/reliability-plot.py
+!perf/worker-smoke.cjs
 .freebuff/
 .tmp/
 
+# Local code-analysis and agent caches (keep their root config files)
+/.fallow/
+/.gitnexus/
+/.opencode/
+
 # Environment
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.*.example
 
 # Credentials
 src/main/driveCredentials.ts
 
 # Planning / scratch files
-docs/
-docs/superpowers/plans/
+docs/*
+!docs/localization.md
 todo.txt
 
 # IDE
@@ -44,6 +53,20 @@ yarn-error.log*
 coverage/
 test-results/
 playwright-report/
+blob-report/
+playwright/.cache/
+
+# Generated profiling dumps and Python bytecode; retain test source/fixtures
+*.heapsnapshot
+*.heapprofile
+*.cpuprofile
+*.trace.json
+__pycache__/
+*.pyc
+*.pyo
+
+# Automatic project recovery copies; keep source .gpres fixtures/templates
+*.gpres.bak
 
 # TypeScript
 *.tsbuildinfo

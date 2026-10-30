@@ -1,3 +1,4 @@
+import ControlTooltip from './ControlTooltip';
 import Dialog from './Dialog';
 import { playSfx } from '../sfx';
 import { useEffect, useId, useRef, useState } from 'react';
@@ -124,27 +125,27 @@ export default function BackgroundMusicPopover({ onAddSlide, label }: { label?: 
   return (
     <div className="relative shrink-0">
       <audio ref={audioRef} data-testid="background-music-audio" onEnded={ended} onPlaying={onPlaying} onError={onError} />
-      <button type="button" ref={triggerRef} data-testid="background-music-toggle" onClick={() => { returnFocus.current = triggerRef.current; setAttachmentTarget(null); setSource('youtube'); setOpen(true); playSfx('open'); }} aria-haspopup="dialog" aria-controls={open ? dialogId : undefined} title={t('settings.backgroundMusic')} aria-label={t('settings.backgroundMusic')} aria-expanded={open} className={cn('p-2.5 rounded-md border transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none', playing ? 'bg-blue-600/20 border-blue-500/40 text-blue-300' : 'bg-white/5 hover:bg-white/10 border-white/10 text-white/60 hover:text-white')}>
+      <ControlTooltip><button type="button" ref={triggerRef} data-testid="background-music-toggle" onClick={() => { returnFocus.current = triggerRef.current; setAttachmentTarget(null); setSource('youtube'); setOpen(true); playSfx('open'); }} aria-haspopup="dialog" aria-controls={open ? dialogId : undefined} title={t('settings.backgroundMusic')} aria-label={t('settings.backgroundMusic')} aria-expanded={open} className={cn('p-2.5 rounded-md border transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none', playing ? 'bg-blue-600/20 border-blue-500/40 text-blue-300' : 'bg-white/5 hover:bg-white/10 border-white/10 text-white/60 hover:text-white')}>
         <Music className="w-4 h-4" aria-hidden="true" />{error && <AlertCircle data-testid="music-error-indicator" className="w-3.5 h-3.5 text-red-400" aria-label={error} />}{label && <span className="design-action-label">{label}</span>}
-      </button>
+      </button></ControlTooltip>
       <Dialog open={open} onClose={close} labelledBy={dialogId + '-title'} returnFocus={returnFocus}
         className="design-music-dialog rounded-xl border border-white/10 bg-[#1a1a1a] shadow-2xl">
         <div id={dialogId} data-testid="background-music-menu" className="design-music-shell">
           <header className="design-music-header">
-          <div className="flex items-center justify-between mb-3"><h2 id={dialogId + '-title'} className="text-base font-semibold">{t(attachmentTarget ? 'slideAudio.dialogTitle' : 'settings.backgroundMusic')}</h2><button type="button" data-testid="music-dialog-close" onClick={close} aria-label={t('common.close')} className="inline-flex h-9 w-9 items-center justify-center rounded-lg hover:bg-white/10"><X className="w-4 h-4" /></button></div>
+          <div className="flex items-center justify-between mb-3"><h2 id={dialogId + '-title'} className="text-base font-semibold">{t(attachmentTarget ? 'slideAudio.dialogTitle' : 'settings.backgroundMusic')}</h2><ControlTooltip><button type="button" data-testid="music-dialog-close" onClick={close} aria-label={t('common.close')} className="inline-flex h-9 w-9 items-center justify-center rounded-lg hover:bg-white/10"><X className="w-4 h-4" /></button></ControlTooltip></div>
           <div className="flex gap-1 mb-3 rounded-lg bg-black/25 p-1">
             {(attachmentTarget ? ['youtube'] as const : ['youtube', 'local'] as const).map(value => <button type="button" key={value} data-testid={`music-source-${value}`} aria-pressed={source === value} onClick={() => { if (source !== value) { setSource(value); playSfx('swipe'); } }} className={cn('flex-1 rounded-md py-1.5 text-xs', source === value ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white')}>{value === 'youtube' ? 'YouTube' : t('settings.backgroundMusicLocal')}</button>)}
           </div>
           </header>
           <section className="design-music-body">
           {source === 'local' ? <>
-            <div className="flex gap-2"><button type="button" onClick={chooseFolder} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 px-2 py-2 text-xs font-semibold"><FolderOpen className="w-3.5 h-3.5" />{t('settings.backgroundMusicChooseFolder')}</button>{folder && <button type="button" onClick={() => void scan()} title={t('settings.backgroundMusicRefresh')} className="rounded-lg border border-white/10 px-2 text-white/60 hover:bg-white/10"><RefreshCw className="w-3.5 h-3.5" /></button>}</div>
+            <div className="flex gap-2"><button type="button" onClick={chooseFolder} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 px-2 py-2 text-xs font-semibold"><FolderOpen className="w-3.5 h-3.5" />{t('settings.backgroundMusicChooseFolder')}</button>{folder && <ControlTooltip><button type="button" onClick={() => void scan()} title={t('settings.backgroundMusicRefresh')} className="rounded-lg border border-white/10 px-2 text-white/60 hover:bg-white/10"><RefreshCw className="w-3.5 h-3.5" /></button></ControlTooltip>}</div>
             {folder && <div className="mt-2 text-[10px] text-white/35 truncate" title={folder}>{folder}</div>}
             <div className="design-music-results mt-2 space-y-1">{files.length ? files.map(file => <button key={file} type="button" disabled={!!liveSlide} onClick={() => playFile(file)} className={cn('w-full flex items-center gap-2 rounded-lg px-2 py-2 text-left text-xs disabled:opacity-40', current === file ? 'bg-blue-600/20 text-blue-200' : 'bg-white/5 text-white/70 hover:bg-white/10')}><Music className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{file.split(/[\\/]/).pop()}</span>{current === file && playing && <span className="ml-auto text-[10px]">▶</span>}</button>) : <div className="py-4 text-center text-[11px] text-white/35">{folder ? t('settings.backgroundMusicEmpty') : t('settings.backgroundMusicChooseHint')}</div>}</div>
           </> : <>
             <form onSubmit={event => { event.preventDefault(); void search(); }} className="flex gap-2">
               <input data-testid="youtube-music-query" aria-label={t('settings.youtubeSearch')} value={query} onChange={event => changeQuery(event.target.value)} maxLength={2048} placeholder={t('settings.youtubeSearchPlaceholder')} className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/25 px-2 py-2 text-xs focus:outline-none focus:border-blue-500" />
-              <button type="submit" disabled={searching || !query.trim()} aria-label={t('settings.youtubeSearch')} className="rounded-lg bg-blue-600 px-3 hover:bg-blue-500 disabled:opacity-40">{searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}</button>
+              <ControlTooltip><button type="submit" disabled={searching || !query.trim()} aria-label={t('settings.youtubeSearch')} className="rounded-lg bg-blue-600 px-3 hover:bg-blue-500 disabled:opacity-40">{searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}</button></ControlTooltip>
             </form>
             <div className="design-music-results mt-3 space-y-2" data-testid="youtube-music-results">
               {results.map(video => <div key={video.id} className={cn('design-music-result rounded-lg border border-white/10', track?.id === video.id ? 'bg-blue-600/20' : 'bg-white/5')}>

@@ -250,7 +250,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
             width: `${width}px`, 
             height: `${height}px`,
             backgroundColor: slide.styles?.backgroundColor ?? '#000000',
-            backgroundImage: slide.styles?.backgroundImage ? `url(${slide.styles.backgroundImage})` : undefined,
+            backgroundImage: slide.styles?.backgroundImage ? `url(${resolveCanvasSource(slide.styles.backgroundImage, false).url})` : undefined,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}
@@ -258,7 +258,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
           <AnimatedGradientBackground recipe={slide.styles?.generatedBackground} active={isActive} />
           {slide.styles?.backgroundVideo && (
             <video
-              src={slide.styles.backgroundVideo}
+              src={resolveCanvasSource(slide.styles.backgroundVideo, false).url}
               autoPlay
               loop
               muted
@@ -459,7 +459,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
           width: `${width}px`,
           height: `${height}px`,
           backgroundColor: styles.backgroundColor ?? '#000',
-          backgroundImage: styles.backgroundImage ? `url(${styles.backgroundImage})` : undefined,
+          backgroundImage: styles.backgroundImage ? `url(${resolveCanvasSource(styles.backgroundImage, false).url})` : undefined,
           backgroundSize: 'cover', backgroundPosition: 'center',
           textAlign: textAlign as any,
           alignItems: alignItemsMap[verticalAlign] || 'center',
@@ -469,7 +469,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
         <AnimatedGradientBackground recipe={slide.styles?.generatedBackground} active={isActive} />
         {styles.backgroundVideo && (
           <video
-            src={styles.backgroundVideo}
+            src={resolveCanvasSource(styles.backgroundVideo, false).url}
             autoPlay
             loop
             muted

@@ -2,6 +2,8 @@ import { before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Presentation, Slide } from './types';
 import { undoReducer } from './state/undoReducer';
+import { normalizeSections } from '../shared/sectionModel';
+import { insertionAtCard } from '../shared/slideInsertion';
 
 let insertDroppedImages: typeof import('./imageDrop').insertDroppedImages;
 before(async () => {
@@ -14,6 +16,21 @@ const deckWith = (target: Partial<Slide> = {}): Presentation => ({
     { id: 'target', type: 'text', content: 'Keep this text', ...target },
     { id: 'last', type: 'text', content: 'Last slide' },
   ],
+});
+
+test('logical image gaps insert before, after and at an empty section without changing existing slides', () => {
+  const deck = normalizeSections(deckWith());
+  const after = insertDroppedImages(deck, insertionAtCard(deck, 'target', 'after')!, ['C:/a.png', 'C:/b.png']);
+  assert.deepEqual(after.slides.map(slide => slide.type), ['text', 'image', 'image', 'text']);
+  assert.equal(after.slides[0], deck.slides[0]);
+  assert.equal(after.slides[3], deck.slides[1]);
+  const end = insertDroppedImages(deck, insertionAtCard(deck, 'last', 'after')!, ['C:/a.png']);
+  assert.equal(end.slides.at(-1)!.type, 'image');
+  const withEmpty = { ...deck, sections: [...deck.sections!, { id: 'empty', title: 'Empty' }] };
+  const empty = insertDroppedImages(withEmpty, { sectionId: 'empty', beforeId: null }, ['C:/a.png']);
+  assert.equal(empty.slides.at(-1)!.sectionId, 'empty');
+  assert.equal(insertDroppedImages(deck, { sectionId: deck.sections![0].id, beforeId: 'deleted' }, ['C:/a.png']), deck);
+  assert.equal(insertDroppedImages(deck, { sectionId: 'deleted', beforeId: null }, ['C:/a.png']), deck);
 });
 
 test('each image becomes a standalone slide before the target in file order', () => {

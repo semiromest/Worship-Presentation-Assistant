@@ -1,13 +1,15 @@
+import ControlTooltip from './ControlTooltip';
 import { setComponentInert } from './Tour/guideBoundary';
 import MusicSlideEditor from './MusicSlideEditor';
 import SlideMusicAttachment from './SlideMusicAttachment';
-import { SlideSelectionStatus } from './OutputStatus';
+import { SlideSelectionStatus, SlidePositionLabels } from './OutputStatus';
+import BroadcastControls from './BroadcastControls';
 import { canAttachSlideMusic } from '../../shared/youtubeMusic';
 import { isEditorEditableSlide } from '../editor/slideCapabilities';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Eye, EyeOff, Play, VolumeX, Volume2, Timer, Type,
+  VolumeX, Volume2,
   Edit3, ChevronUp, ChevronDown, Trash2, Monitor, Repeat, Image as ImageIcon, Video, MousePointer2,
   Plus, Settings2, Captions, Lock, LockOpen
 } from 'lucide-react';
@@ -54,8 +56,6 @@ export default function RightPanel({
   removeSlideBackgroundVideo,
   applyStyleFieldToAll,
   handleKeyDown,
-  replaceSlideMedia,
-  removeSlideMedia,
   updateLoopItems,
   updateSlideProperty,
 }: RightPanelProps) {
@@ -65,11 +65,6 @@ export default function RightPanel({
   const selectedSlide = useStore(s => s.presentation.slides.find(slide => slide.id === s.selectedSlideId));
   const selectedSlideIndex = useStore(s => s.presentation.slides.findIndex(slide => slide.id === s.selectedSlideId));
   const liveSlide = useStore(s => s.presentation.slides[s.liveIndex] ?? s.presentation.slides[0]);
-  const isBroadcastLocked = useStore(s => s.presentation.slides.some(slide => slide.locked));
-  const setLiveIndex = useStore((s) => s.setLiveIndex);
-  const isBlackout = useStore((s) => s.isBlackout);
-  const setIsBlackout = useStore((s) => s.setIsBlackout);
-  const selectedSlideId = useStore((s) => s.selectedSlideId);
   const isProjectorWindowOpen = useStore((s) => s.isProjectorWindowOpen);
   const mediaVolume = useStore((s) => s.mediaVolume);
   const setMediaVolume = useStore((s) => s.setMediaVolume);
@@ -104,9 +99,6 @@ export default function RightPanel({
     selectedSlide.group?.title.toLowerCase().includes(q) || selectedSlide.type.toLowerCase().includes(q)
   );
 
-  const getSlideIndex = (slides: Slide[], id: string): number =>
-    slides.findIndex((s) => s.id === id);
-
   return (
     <>
       {/* Backdrop for mobile/tablet drawer */}
@@ -132,7 +124,10 @@ export default function RightPanel({
         )}
       >
       <div className="design-right-layout"><div className="design-live-core">
-        <SlideSelectionStatus drawer />
+        {isRightPanelOpen && <div className="output-drawer-controls">
+          <SlideSelectionStatus drawer />
+          <BroadcastControls />
+        </div>}
         {/* Live preview — animated (TOP) */}
         <div className="design-live-preview bg-black relative group">
           {isRightPanelOpen && <AnimatedPreview
@@ -146,53 +141,13 @@ export default function RightPanel({
 
         </div>
 
-<div className="design-live-controls">
-            <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => {
-                const next = !useStore.getState().isBlackout;
-                playSfx(next ? 'lock' : 'unlock');
-                setIsBlackout(next);
-              }}
-              title={isBlackout ? t('common.openBroadcast') : t('common.blackScreen')}
-              aria-label={isBlackout ? t('common.openBroadcast') : t('common.blackScreen')}
-              aria-pressed={isBlackout}
-              className={cn(
-                'flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-bold text-xs border transition-[background-color,border-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.97]',
-                isBlackout
-                  ? 'bg-red-600 text-white border-red-500 shadow-lg shadow-red-900/20'
-                  : 'bg-white/5 text-white border-white/10 hover:bg-white/10'
-              )}
-            >
-              {isBlackout ? <Eye className="w-3.5 h-3.5" aria-hidden="true" /> : <EyeOff className="w-3.5 h-3.5" aria-hidden="true" />}
-              {/* Show current state label so user knows what the button will DO */}
-              {isBlackout ? t('common.openBroadcast') : t('common.blackScreen')}
-            </button>
-            <button
-              onClick={() => {
-                const idx = getSlideIndex(useStore.getState().presentation.slides, selectedSlideId);
-                if (idx >= 0 && !isBroadcastLocked) {
-                  setLiveIndex(idx);
-                  playSfx('start');
-                }
-              }}
-              disabled={isBroadcastLocked}
-              title={isBroadcastLocked ? t('common.slideLockActiveHint') : t('common.sendSelectedToLive')}
-              aria-label={t('common.sendSelectedToLive')}
-              className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 font-medium text-xs transition-[background-color,border-color] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.97] disabled:opacity-40 disabled:hover:bg-white/5 disabled:cursor-not-allowed"
-            >
-              <Play className="w-3.5 h-3.5" aria-hidden="true" />
-              {t('common.goToSelected')}
-            </button>
-          </div>
-
-</div></div><div className="design-editor-scroll" data-design-editor-scroll>
+</div><div className="design-editor-scroll" data-design-editor-scroll>
 
         {/* Volume Controls */}
         {isProjectorWindowOpen && (
           <div className="px-4 py-2 border-b border-white/10 bg-[#161616]">
             <div className="flex items-center gap-2">
-              <button
+              <ControlTooltip><button
                 onClick={() => {
                   const next = !useStore.getState().isMediaMuted;
                   playSfx(next ? 'toggle-on' : 'toggle-off');
@@ -207,7 +162,7 @@ export default function RightPanel({
                 aria-label={isMediaMuted ? t('common.unmute') : t('common.mute')}
               >
                 {isMediaMuted ? <VolumeX className="w-3.5 h-3.5" aria-hidden="true" /> : <Volume2 className="w-3.5 h-3.5" aria-hidden="true" />}
-              </button>
+              </button></ControlTooltip>
               <input
                 type="range"
                 min={0}
@@ -233,20 +188,10 @@ export default function RightPanel({
             <button type="button" onClick={() => setSearchQuery('')} className="mt-2 underline focus-visible:ring-2 focus-visible:ring-amber-300">{t('common.clearSearch')}</button>
           </div>}
           <div className="design-editor-heading">
-            <div className="flex min-w-0 flex-1 items-center gap-1">
-              {selectedSlide?.type === 'countdown' ? (
-                <Timer className="w-3.5 h-3.5 text-blue-400" />
-              ) : (
-                <Type className="w-3.5 h-3.5 text-blue-400" />
-              )}
-              <span className="truncate text-[10px] font-bold uppercase tracking-widest text-white/60" title={t('slidesWorkspace.selectedTitle', {number: selectedSlideIndex+1})}>
-                {t('slidesWorkspace.selectedTitle', {number: selectedSlideIndex+1})}
-              </span>
-            </div>
             {selectedSlide && (
-              <div className="flex items-center gap-1.5">
+              <div className="design-editor-actions flex items-center gap-1.5">
                 {/* Broadcast lock toggle — pins the live output to this slide. */}
-                <button
+                <ControlTooltip><button
                   onClick={() => toggleSlideLock(selectedSlide.id)}
                   aria-pressed={selectedSlideLocked}
                   title={selectedSlideLocked ? t('common.slideLockOff') : t('common.slideLockOn')}
@@ -263,9 +208,9 @@ export default function RightPanel({
                   ) : (
                     <LockOpen className="w-3.5 h-3.5" aria-hidden="true" />
                   )}
-                </button>
+                </button></ControlTooltip>
                 {selectedSlide && (
-                  <button
+                  <ControlTooltip><button
                     data-guide-anchor="image-tools"
                     onClick={() => selectedSlide && openEditor(selectedSlide.id)}
                     className="p-1.5 rounded-lg text-white/60 hover:bg-white/10 hover:text-white border border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
@@ -274,28 +219,28 @@ export default function RightPanel({
                   >
                     <Edit3 className="w-3.5 h-3.5" aria-hidden="true" />
                     <span className="sr-only">{t('slidesWorkspace.openEditor')}</span>
-                  </button>
+                  </button></ControlTooltip>
                 )}
                 {canAttachSlideMusic(selectedSlide) && !selectedSlide.youtubeMusic && (
                   <SlideMusicAttachment key={selectedSlide.id} slide={selectedSlide} onPatch={updateSlideProperty} inline compact />
                 )}
-                <button
+                <ControlTooltip shortcut="Alt+↑"><button
                   onClick={() => moveSelectedSlide(-1)}
                   disabled={sectionOrderRestricted || selectedSlideIndex <= 0}
                   className="p-1.5 rounded-lg bg-white/5 text-white hover:bg-white/10 disabled:opacity-20 border border-white/10 transition-colors"
                   aria-label={t('common.moveUp')}
                 >
                   <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
-                </button>
-                <button
+                </button></ControlTooltip>
+                <ControlTooltip shortcut="Alt+↓"><button
                   onClick={() => moveSelectedSlide(1)}
                   disabled={sectionOrderRestricted || selectedSlideIndex === slideCount - 1}
                   className="p-1.5 rounded-lg bg-white/5 text-white hover:bg-white/10 disabled:opacity-20 border border-white/10 transition-colors"
                   aria-label={t('common.moveDown')}
                 >
                   <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
-                </button>
-                <button
+                </button></ControlTooltip>
+                <ControlTooltip><button
                   data-guide-anchor="delete-slide"
                   onClick={() => removeSlide(selectedSlide.id)}
                   disabled={selectedSlideLocked}
@@ -304,12 +249,12 @@ export default function RightPanel({
                   className="p-1.5 text-red-400 hover:bg-red-400/10 rounded-lg border border-red-500/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
                   <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                </button>
+                </button></ControlTooltip>
               </div>
             )}
+            <SlidePositionLabels />
           </div>
 
-          {isProjectorWindowOpen && selectedSlide?.id === liveSlide?.id && <p className="design-editing-live">{t('slidesWorkspace.editingLive')}</p>}
           <div className="space-y-3">
             {selectedSlide?.youtubeMusic && canAttachSlideMusic(selectedSlide) && (!selectedSlide.musicSettings?.attachment
               ? <MusicSlideEditor key={selectedSlide.id} slide={selectedSlide} onPatch={updateSlideProperty} />
@@ -342,7 +287,7 @@ export default function RightPanel({
                 <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2">
                   <div className="flex items-center gap-2">
                     <Monitor className="w-4 h-4 text-blue-400" />
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-white/65">
                       {t('common.screenCaptureSource')}
                     </span>
                   </div>
@@ -369,8 +314,6 @@ export default function RightPanel({
               <ImageSlideEditor
                 selectedSlide={selectedSlide}
                 updateSlideStyles={updateSlideStyles}
-                replaceSlideMedia={replaceSlideMedia}
-                removeSlideMedia={removeSlideMedia}
                 applyStyleFieldToAll={applyStyleFieldToAll}
               />
             ) : selectedSlide ? (
@@ -478,7 +421,7 @@ function CaptionsSlideEditor({
         </label>
 
         <div className="space-y-1.5 pt-1">
-          <span className="text-[10px] uppercase tracking-wide text-white/40">
+          <span className="text-[11px] uppercase tracking-wide text-white/65">
             {t('common.captionsLayout')}
           </span>
           <div className="grid grid-cols-3 gap-1.5">
@@ -491,7 +434,7 @@ function CaptionsSlideEditor({
                 className={cn(
                   'rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none',
                   layout === value
-                    ? 'bg-blue-600/20 border-blue-500/40 text-blue-300'
+                    ? 'workspace-selected-option'
                     : 'bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10'
                 )}
               >
@@ -651,7 +594,7 @@ function LoopEditor({
 
         <div className="space-y-1.5">
           <div className="text-xs text-white/60">{items.length} {t('common.items')}</div>
-          <div className="text-xs text-white/40">
+          <div className="text-xs text-white/65">
             {t('common.totalDuration')}: {totalSec} {t('common.seconds')}
           </div>
         </div>
@@ -659,18 +602,18 @@ function LoopEditor({
         <div className="space-y-1 max-h-48 overflow-y-auto">
           {items.map((item, idx) => (
             <div key={item.id} className="flex items-center gap-1.5 bg-black/20 rounded-lg px-2 py-1.5 group">
-              <span className="text-[10px] text-white/45 w-4 shrink-0">{idx + 1}</span>
+              <span className="text-[11px] text-white/60 w-4 shrink-0">{idx + 1}</span>
               {item.type === 'video' ? (
                 <Video className="w-3 h-3 text-white/40 shrink-0" />
               ) : (
                 <ImageIcon className="w-3 h-3 text-white/40 shrink-0" />
               )}
-              <span className="text-[10px] text-white/50 flex-1 truncate">
+              <span className="inspector-item-name text-[11px] text-white/65 flex-1 truncate">
                 {item.fileName ?? (item.type === 'video' ? t('common.video') : t('common.image'))}
               </span>
 
               {item.type === 'video' && (
-                <button
+                <ControlTooltip><button
                   type="button"
                   onClick={() => updateItem(item.id, { useVideoDuration: !item.useVideoDuration })}
                   aria-pressed={item.useVideoDuration}
@@ -678,12 +621,12 @@ function LoopEditor({
                   className={cn(
                     'w-6 h-6 rounded border text-[10px] font-bold transition-colors shrink-0',
                     item.useVideoDuration
-                      ? 'bg-blue-500/25 border-blue-400/60 text-blue-300'
-                      : 'bg-black/20 border-white/10 text-white/40 hover:text-white/70'
+                      ? 'workspace-selected-option'
+                      : 'bg-black/20 border-white/10 text-white/65 hover:text-white/90'
                   )}
                 >
                   ▶
-                </button>
+                </button></ControlTooltip>
               )}
 
               <input
@@ -697,35 +640,35 @@ function LoopEditor({
                   updateItem(item.id, { duration: sec * 1000 });
                 }}
                 className={cn(
-                  'w-12 text-[10px] text-white/70 bg-black/40 border border-white/10 rounded px-1 py-0.5 text-center outline-none focus:border-blue-500/50',
+                  'w-12 text-[11px] text-white/70 bg-black/40 border border-white/10 rounded px-1 py-0.5 text-center outline-none focus:border-blue-500/50',
                   item.type === 'video' && item.useVideoDuration && 'opacity-40 cursor-not-allowed'
                 )}
               />
 
               <div className="flex items-center gap-0.5 opacity-60 hover:opacity-100 focus-visible:opacity-100 transition-opacity">
-                <button
+                <ControlTooltip shortcut="Alt+↑"><button
                   onClick={() => moveItem(idx, -1)}
                   disabled={idx === 0}
-                  className="p-1 rounded hover:bg-white/10 text-white/40 hover:text-white/70 disabled:opacity-20"
+                  className="min-h-6 min-w-6 p-1 rounded hover:bg-white/10 text-white/65 hover:text-white/90 disabled:opacity-20"
                   aria-label={t('common.moveUp')}
                 >
                   <ChevronUp className="w-4 h-4" aria-hidden="true" />
-                </button>
-                <button
+                </button></ControlTooltip>
+                <ControlTooltip shortcut="Alt+↓"><button
                   onClick={() => moveItem(idx, 1)}
                   disabled={idx === items.length - 1}
                   className="p-1 rounded hover:bg-white/10 text-white/40 hover:text-white/70 disabled:opacity-20"
                   aria-label={t('common.moveDown')}
                 >
                   <ChevronDown className="w-4 h-4" aria-hidden="true" />
-                </button>
-                <button
+                </button></ControlTooltip>
+                <ControlTooltip><button
                   onClick={() => removeItem(item.id)}
                   className="p-1 rounded hover:bg-red-400/20 text-red-400"
                   aria-label={t('common.delete')}
                 >
                   <Trash2 className="w-4 h-4" aria-hidden="true" />
-                </button>
+                </button></ControlTooltip>
               </div>
             </div>
           ))}
@@ -733,7 +676,7 @@ function LoopEditor({
 
         <button
           onClick={addMedia}
-          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-lg border border-dashed border-white/20 text-white/40 hover:text-white/70 hover:border-white/40 text-[10px] font-bold uppercase tracking-widest transition-colors"
+          className="flex items-center justify-center gap-1.5 w-full py-2 rounded-lg border border-dashed border-white/20 text-white/65 hover:text-white/90 hover:border-white/40 text-[11px] font-semibold tracking-wide transition-colors"
         >
           <Plus className="w-3 h-3" />
           {t('common.addMedia')}

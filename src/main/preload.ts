@@ -9,7 +9,7 @@ import type { SaveGradientLibraryInput } from '../shared/gradientLibrary';
 // estimates request + response payload sizes (dev-only).
 
 const preloadPerf = new PerfBuffer('preload');
-preloadPerf.enabled = defaultPerfEnabled();
+preloadPerf.enabled = defaultPerfEnabled() || import.meta.env?.VITE_RELIABILITY_DIAGNOSTICS === '1';
 
 type AnyFn = (...args: any[]) => any;
 type PerfMethods = Pick<ElectronAPI, 'getPerfSnapshot' | 'getPreloadPerfSnapshot' | 'resetPerf'>;
@@ -21,7 +21,9 @@ const IS_SUBSCRIPTION = /^on[A-Z]/;
 const DROPPABLE_IMAGE_RE = /\.(png|jpe?g|gif|webp|bmp)$/i;
 
 function wrapApi<T extends Record<string, AnyFn>>(api: T): T & PerfMethods {
-  const snapshot = () => preloadPerf.snapshot();
+  const snapshot = () => ({ ...preloadPerf.snapshot(), ...(preloadPerf.enabled ? {
+    listeners: { channels: ipcRenderer.eventNames().length, total: ipcRenderer.eventNames().reduce((sum, event) => sum + ipcRenderer.listenerCount(event), 0) },
+  } : {}) });
   const perfMethods: PerfMethods = {
     getPreloadPerfSnapshot: snapshot,
     getPerfSnapshot: snapshot,
@@ -70,6 +72,9 @@ function subscribe<T = any>(channel: string) {
 }
 
 const api = {
+  onAppDialog: subscribe<import('../shared/appDialog').AppDialogRequest>('app-dialog:request'),
+  appDialogsReady: () => ipcRenderer.send('app-dialog:ready'),
+  respondAppDialog: (id: string, value: string | null) => ipcRenderer.send('app-dialog:respond', id, value),
   // ── Perf ──
   getMainPerfSnapshot: () => ipcRenderer.invoke('perf:snapshot'),
   resetMainPerf: () => ipcRenderer.invoke('perf:reset'),
@@ -106,7 +111,21 @@ const api = {
 
   // ── Files / presets ──
   saveFile: (content: string) => ipcRenderer.invoke('save-file', content),
-  openFile: () => ipcRenderer.invoke('open-file'),
+  openFile: (requestId?: string, confirmation?: import('../shared/fileOpen').OpenFileConfirmation) => ipcRenderer.invoke('open-file', requestId, confirmation),
+  desktopReady: () => ipcRenderer.invoke('desktop:ready'),
+  desktopDefaultApps: () => ipcRenderer.invoke('desktop:default-apps'),
+  desktopSettings: (input: import('../shared/desktop').DesktopPreferences) => ipcRenderer.invoke('desktop:settings', input),
+  desktopBlock: (blocked: boolean) => ipcRenderer.invoke('desktop:block', blocked),
+  desktopDocument: (dirty: boolean, path: string | null) => ipcRenderer.invoke('desktop:document', { dirty, path }),
+  desktopCommitOpen: (token: string) => ipcRenderer.invoke('desktop:commit-open', token),
+  desktopReplaceChoice: () => ipcRenderer.invoke('desktop:replace-choice'),
+  desktopRejectOpen: (id: string) => ipcRenderer.invoke('desktop:reject-open', id),
+  desktopDragOutput: (file: string) => ipcRenderer.invoke('desktop:drag-output', file),
+  desktopLanguage: (language: string) => ipcRenderer.invoke('desktop:language', language),
+  onDesktopOpenRequests: subscribe<import('../shared/desktop').OpenDocumentRequest[]>('desktop:open-requests'),
+  onDesktopStatus: subscribe<import('../shared/desktop').DesktopStatus>('desktop:status'),
+  onDesktopCommand: subscribe<import('../shared/desktop').DesktopCommand>('desktop:command'),
+  onDesktopHistory: subscribe<'undo' | 'redo'>('desktop:history'),
   loadPresets: (retentionMs?: number) => ipcRenderer.invoke('load-presets', retentionMs),
   savePreset: (preset: { name: string; presentation: any; retentionMs?: number }) => ipcRenderer.invoke('save-preset', preset),
   deletePreset: (name: string, retentionMs?: number) => ipcRenderer.invoke('delete-preset', name, retentionMs),
@@ -157,6 +176,12 @@ const api = {
   generateThumbnail: (slide: any) => ipcRenderer.invoke('generate-thumbnail', slide),
 
   // ── Remote control / previews / tunnel / diagnostics ──
+  getPreviewDemand: () => ipcRenderer.invoke('preview:demand'),
+  onPreviewDemand: subscribe<import('../shared/remotePreview').PreviewDemand>('preview:demand'),
+  onPreviewAssetRequest: subscribe<import('../shared/remotePreview').PreviewAssetRequest>('preview:request'),
+  configurePreviewDeck: (deck: import('../shared/remotePreview').PreviewDeck) => ipcRenderer.invoke('preview:configure', deck),
+  publishPreviewAsset: (asset: import('../shared/remotePreview').PreviewAssetResult) => ipcRenderer.invoke('preview:publish', asset),
+  getPreviewAssetDiagnostics: () => ipcRenderer.invoke('preview:diagnostics'),
   getRemoteUrl: () => ipcRenderer.invoke('get-remote-url'),
   publicTunnelStart: () => ipcRenderer.invoke('public-tunnel:start'),
   publicTunnelStop: () => ipcRenderer.invoke('public-tunnel:stop'),

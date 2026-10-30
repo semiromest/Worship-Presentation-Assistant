@@ -93,16 +93,23 @@ test('presets retain typography and clamp optional legacy settings safely', () =
   assert.equal(musicGain(-1), 0);
 });
 
-test('attachments support visual slides but exclude all hymn variants, video and screen sources', () => {
+test('attachments support visual slides and hymn variants but exclude video and screen sources', () => {
   const base = fixture().presentation.slides[0];
   for (const type of ['text', 'image', 'countdown', 'captions', 'loop'] as const)
     assert.equal(canAttachSlideMusic({ ...base, type }), true);
   assert.equal(canAttachSlideMusic({ ...base, group: { id: 'bible', title: 'Genesis', part: 1, parts: 2 } }), true);
   for (const slide of [
-    { ...base, type: 'video' as const }, { ...base, type: 'screen' as const },
     { ...base, partsMode: true }, { ...base, parts: ['a', 'b'] },
     { ...base, group: { id: 'h', title: 'Hymn', part: 1, parts: 1, kind: 'hymn' as const } },
     { ...base, group: { id: 'h', title: 'Hymn', part: 1, parts: 1, color: '#abc' } },
+    { ...base, group: { id: 'h', title: 'Hymn', part: 1, parts: 1, author: 'Author' } },
+  ]) {
+    assert.equal(canAttachSlideMusic(slide), true);
+    const state = fixture();state.outputAssignments.tv.isOpen = true;state.presentation.slides[0] = { ...slide, youtubeMusic: state.presentation.slides[1].youtubeMusic };
+    assert.equal(activeMusicSlide(state)?.id, slide.id);
+  }
+  for (const slide of [
+    { ...base, type: 'video' as const }, { ...base, type: 'screen' as const },
     { ...base, styles: { fontSize: 48, textColor: '#fff', backgroundColor: '#000', backgroundVideo: 'video.mp4' } },
     { ...base, type: 'loop' as const, loopItems: [{ id: 'v', type: 'video' as const, mediaUrl: 'v.mp4', duration: 10 }] },
   ]) {

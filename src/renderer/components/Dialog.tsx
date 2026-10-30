@@ -15,7 +15,7 @@ export interface DialogProps {
   overlayClassName?: string;
   closeOnEscape?: boolean;
   closeOnOverlayClick?: boolean;
-  returnFocus?: RefObject<HTMLElement | null>;
+  returnFocus?: RefObject<HTMLElement | null> | (() => HTMLElement | boolean | null);
 }
 
 export default function Dialog({
@@ -50,7 +50,7 @@ export default function Dialog({
       <BaseDialog.Portal>
         <BaseDialog.Backdrop
           className={cn(
-            'base-dialog-backdrop fixed inset-0 z-50 bg-black/60 backdrop-blur-sm',
+            'base-dialog-backdrop fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm',
             overlayClassName,
           )}
         />
@@ -59,7 +59,7 @@ export default function Dialog({
           finalFocus={returnFocus}
           aria-labelledby={labelledBy}
           aria-describedby={describedBy}
-          className={cn('base-dialog-popup fixed left-1/2 top-1/2 z-[51]', className)}
+          className={cn('base-dialog-popup fixed left-1/2 top-1/2 z-[301]', className)}
         >
           {children}
           <BaseDialog.Close className="sr-only">{t('common.close')}</BaseDialog.Close>

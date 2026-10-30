@@ -1,31 +1,15 @@
+import { setPreviewBroadcast } from '../scrollPreviewPolicy';
+import { useRemotePreviews } from './useRemotePreviews';
 import { usePractice } from '../hooks/usePractice';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../state/useStore';
 import { useShallow } from 'zustand/shallow';
 import { IS_PROJECTOR_MODE, DEFAULT__TRANSITION } from '../constants';
-import { generateSlideThumbnail, useThrottle, type ThumbnailStatus } from '../utils';
+import { useThrottle } from '../utils';
 import { computePatch, isPatchEmpty, type ProjectorPatch } from '../state/undoReducer';
-import type { Presentation, Slide, TransitionType } from '../types';
+import type { Presentation, TransitionType } from '../types';
 import { chooseDefaultOutputDisplay, effectiveOutputSlideIndex, type DisplayMode } from '../../shared/displays';
 import { findLockedSlideIndex } from '../slideLock';
-
-/**
- * Top-level style equality (mirrors undoReducer.shallowEqual). Replaces
- * `JSON.stringify(styles)` comparison which ran per slide per deck change.
- * Immutable updates mean a changed nested field always produces a new
- * top-level styles object, so top-level reference equality is sufficient.
- */
-function stylesEqual(a: Slide['styles'], b: Slide['styles']): boolean {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  const ka = Object.keys(a);
-  const kb = Object.keys(b);
-  if (ka.length !== kb.length) return false;
-  for (const k of ka) {
-    if ((a as Record<string, unknown>)[k] !== (b as Record<string, unknown>)[k]) return false;
-  }
-  return true;
-}
 
 const TRANSITION_MAP: Record<TransitionType, string> = {
   none: 'none',
@@ -39,11 +23,6 @@ const TRANSITION_MAP: Record<TransitionType, string> = {
   blur: 'blur',
   flip: 'flip',
 };
-
-/** Operator previews use the DOM renderer so they match the presentation. */
-async function generateOperatorThumbnail(slide: Slide, status?: ThumbnailStatus): Promise<string | null> {
-  return generateSlideThumbnail(slide, { status });
-}
 
 export function useProjectorSync() {
   const practice = usePractice();
@@ -84,6 +63,8 @@ export function useProjectorSync() {
     () => isProjectorWindowOpen || Object.values(outputAssignments).some((assignment) => assignment.isOpen),
     [isProjectorWindowOpen, outputAssignments],
   );
+
+  useEffect(() => { if (!IS_PROJECTOR_MODE) setPreviewBroadcast(hasOpenOutputs); return () => { if (!IS_PROJECTOR_MODE) setPreviewBroadcast(false); }; }, [hasOpenOutputs]);
 
   const outputFrames = useMemo(() => {
     const defaultDisplayId = chooseDefaultOutputDisplay(displays)?.id;
@@ -199,7 +180,7 @@ export function useProjectorSync() {
       ...(orderChanged && { nextOrder: patch.nextOrder }),
       ...(patch.nextName !== undefined && { nextName: patch.nextName }),
       ...(patch.nextZoom !== undefined && { nextZoom: patch.nextZoom }),
-      ...(patch.nextTransition !== undefined && { nextTransition: patch.nextTransition }),
+      ...((patch.prevTransition !== undefined || patch.nextTransition !== undefined) && { nextTransition: patch.nextTransition ?? DEFAULT__TRANSITION }),
     };
 
     window.electronAPI?.updateProjector?.({ ...nav, patch: transport });
@@ -219,172 +200,7 @@ export function useProjectorSync() {
     outputFrames,
   ]);
 
-  const thumbnailCache = useRef<Map<string, { url: string }>>(new Map());
-  const prevSlidesRef = useRef<Slide[]>([]);
-  // Retry slides whose last generation failed (null) or only produced a
-  // placeholder even if unchanged, so their preview never stays empty forever.
-  const pendingRetryRef = useRef<Set<string>>(new Set());
-  // Bounded self-healing rounds for a deck (see the retry timer below).
-  const retryRoundsRef = useRef(0);
-  const [thumbRetryTick, setThumbRetryTick] = useState(0);
-
-  useEffect(() => {
-    if (practice) return;
-    let cancelled = false;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
-    const CACHE_MAX = 100;
-    const MAX_RETRY_ROUNDS = 3;
-    const RETRY_DELAY_MS = 1500;
-
-    (async () => {
-      const prevSlides = prevSlidesRef.current;
-      const currentSlides = throttledPresentation.slides;
-
-      if (prevSlides === currentSlides) return;
-
-      if (thumbnailCache.current.size > CACHE_MAX) {
-        const keys = [...thumbnailCache.current.keys()];
-        for (let i = 0; i < keys.length - CACHE_MAX; i++) {
-          thumbnailCache.current.delete(keys[i]);
-        }
-      }
-
-      const prevMap = new Map(prevSlides.map(s => [s.id, s]));
-
-      // Structural change (add/remove/reorder) shifts every remote index, so
-      // those runs must send a full snapshot for the phone grid to re-index.
-      // A pure content change can send a {index, url} delta that the remote
-      // applies in place — the common case (editing one slide) stays O(1).
-      const structurePreserved =
-        prevSlides.length === currentSlides.length &&
-        prevSlides.every((p, i) => p.id === currentSlides[i].id);
-
-      // O(n) removal pass instead of prevMap.keys() × currentSlides.some() (O(n²)).
-      const currentIds = new Set(currentSlides.map((s) => s.id));
-      for (const id of prevMap.keys()) {
-        if (!currentIds.has(id)) {
-          thumbnailCache.current.delete(id);
-          pendingRetryRef.current.delete(id);
-        }
-      }
-
-      const thumbs: (string | null)[] = structurePreserved ? [] : new Array(currentSlides.length);
-      const delta: { i: number; url: string }[] = [];
-      let idx = 0;
-
-      const worker = async () => {
-        while (idx < currentSlides.length && !cancelled) {
-          const i = idx++;
-          const s = currentSlides[i];
-          const prev = prevMap.get(s.id);
-          const cachedEntry = thumbnailCache.current.get(s.id);
-          const changed = !prev ||
-            prev.content !== s.content ||
-            prev.mediaUrl !== s.mediaUrl ||
-            prev.type !== s.type ||
-            prev.thumbnailUrl !== s.thumbnailUrl ||
-            (prev.items?.length ?? 0) !== (s.items?.length ?? 0) ||
-            (prev.loopItems?.length ?? 0) !== (s.loopItems?.length ?? 0) ||
-            // FIX: partsMode slides must regenerate when activePart changes
-            prev.activePart !== s.activePart ||
-            !stylesEqual(prev.styles, s.styles) ||
-            // Retry slides whose last attempt failed
-            pendingRetryRef.current.has(s.id);
-
-          if (!changed) {
-            if (!structurePreserved) thumbs[i] = cachedEntry?.url ?? null;
-          } else {
-            const status: ThumbnailStatus = {};
-            const url = await generateOperatorThumbnail(s, status);
-            if (url && !cancelled) {
-              thumbnailCache.current.set(s.id, { url });
-              if (structurePreserved) delta.push({ i, url });
-              else thumbs[i] = url;
-              // A placeholder preview (media not readable yet — a cloud/Drive
-              // file that has not materialised, an image still downloading) is
-              // shown right away but flagged so a later round replaces it.
-              if (status.usedFallback) pendingRetryRef.current.add(s.id);
-              else pendingRetryRef.current.delete(s.id);
-            } else if (!cancelled) {
-              // On failure keep the last valid image and flag for retry instead of sending an empty preview.
-              pendingRetryRef.current.add(s.id);
-              if (!structurePreserved) thumbs[i] = cachedEntry?.url ?? null;
-            } else if (!structurePreserved) {
-              thumbs[i] = null;
-            }
-          }
-        }
-      };
-
-      await Promise.all(Array.from({ length: 2 }, () => worker()));
-
-      // A structural change (add/remove/reorder) starts a fresh retry budget.
-      if (!structurePreserved) retryRoundsRef.current = 0;
-
-      // FIX: only a non-cancelled run may advance prevSlidesRef; a late-finishing
-      // cancelled run could otherwise corrupt the next changed() comparison.
-      if (!cancelled) prevSlidesRef.current = currentSlides;
-
-      if (!cancelled) {
-        if (structurePreserved) {
-          if (delta.length > 0) {
-            window.electronAPI?.updateSlidePreviewsDelta?.(delta);
-          }
-        } else {
-          window.electronAPI?.updateAllSlidePreviews?.(thumbs);
-        }
-
-        const liveSlide = currentSlides[liveIndex];
-        // Read from cache (not thumbs[]): in delta mode thumbs is empty, and
-        // the cache always holds the freshest url for both modes anyway.
-        const liveThumb = liveSlide ? (thumbnailCache.current.get(liveSlide.id)?.url ?? null) : null;
-        if (liveThumb) {
-          window.electronAPI?.sendSlidePreview?.(liveThumb);
-        }
-
-        // If the live slide failed to generate, wait briefly and retry once so the preview self-heals.
-        if (liveSlide && pendingRetryRef.current.has(liveSlide.id)) {
-          setTimeout(async () => {
-            if (cancelled) return;
-            const status: ThumbnailStatus = {};
-            const retryUrl = await generateOperatorThumbnail(liveSlide, status);
-            if (cancelled || !retryUrl) return;
-            thumbnailCache.current.set(liveSlide.id, { url: retryUrl });
-            if (status.usedFallback) pendingRetryRef.current.add(liveSlide.id);
-            else pendingRetryRef.current.delete(liveSlide.id);
-            window.electronAPI?.sendSlidePreview?.(retryUrl);
-          }, 180);
-        }
-
-        // Failed/placeholder previews used to stay that way until the next deck
-        // edit, which left the phone grid showing "LOADING" indefinitely. Retry
-        // a bounded number of times so they heal on their own.
-        if (pendingRetryRef.current.size > 0 && retryRoundsRef.current < MAX_RETRY_ROUNDS) {
-          retryRoundsRef.current += 1;
-          retryTimer = setTimeout(() => {
-            retryTimer = null;
-            if (!cancelled) setThumbRetryTick((tick) => tick + 1);
-          }, RETRY_DELAY_MS);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-      if (retryTimer) clearTimeout(retryTimer);
-    };
-  }, [practice, throttledPresentation.slides, liveIndex, thumbRetryTick]);
-
-  useEffect(() => {
-    if (practice) return;
-    const slides = throttledPresentation.slides;
-    const liveSlide = slides[liveIndex];
-    if (!liveSlide) return;
-
-    const cached = thumbnailCache.current.get(liveSlide.id);
-    if (cached?.url) {
-      window.electronAPI?.sendSlidePreview?.(cached.url);
-    }
-  }, [practice, liveIndex, throttledPresentation.slides]);
+  useRemotePreviews(presentation.slides, presentation.id ?? 'default', !practice && !IS_PROJECTOR_MODE);
 
   // Per-slide metadata for phones. Recomputed ONLY when the deck changes,
   // never on navigation — the map over all slides + IPC + main-side

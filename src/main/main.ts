@@ -1,4 +1,13 @@
+import { PreviewAssets } from './previewAssets';
+import type { PreviewDeck, PreviewAssetResult } from '../shared/remotePreview';
+import { attachAppDialogs, appDialogsReady, showAppDialog } from './appDialogs';
 import { applyPreviewUpdates } from './previewUpdates';
+import { createDesktopService } from './desktopService';
+import { systemMessageCopy } from './desktopDialogCopy';
+import { recoverAtomicWrites, writeAtomicGeneratedDocument } from './atomicFile';
+import { bundledFontCss } from './bundledFonts';
+import { observeServiceHealth, serviceRequest } from './serviceHealth';
+import { installNativeDialogGate, nativeDialogBusy } from './nativeDialogGate';
 import { inspectRemoteFirewall } from './remoteFirewallDiagnostics';
 import type { FirewallDiagnostic } from '../shared/remoteDiagnostics';
 import { launchMode, restricted, practiceProfile, systemTempRoot } from './isolatedLaunch';
@@ -29,6 +38,7 @@ import {
   protocol,
   session,
   systemPreferences,
+  net,
 } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
@@ -50,7 +60,7 @@ import {
 } from './cloudflareTunnelService';
 import { initPerfMonitor, mainPerf, recordWs } from './perfMonitor';
 import { createPresetStore, isLiveSavePresetName } from './presetStore';
-import { localResourceUrlToPath, isZip, mediaRefToName } from '../shared/mediaTree';
+import { localResourceUrlToPath, mediaRefToName } from '../shared/mediaTree';
 import { getMediaLibrary } from './mediaLibrary';
 import { registerGradientService } from './gradientService';
 import { getOrCreateThumbnail, thumbRefToPath, pruneThumbnailCache } from './mediaThumbnails';
@@ -111,6 +121,30 @@ initPerfMonitor();
 // Window references
 
 let win: BrowserWindow | null = null;
+// CLI/open-file requests can arrive while this module is still evaluating.
+// Initialize output state before desktop.enqueue can call hasOutputs().
+const projectorWindows = new Map<string, ProjectorEntry>();
+const desktop = createDesktopService(() => win, restricted, () => projectorWindows.size > 0);
+installNativeDialogGate();
+observeServiceHealth((name, ok) => desktop.service(name, ok, app.isReady() && !net.isOnline()));
+if (process.platform !== 'darwin') Menu.setApplicationMenu(null);
+if (!restricted) {
+  if (!app.requestSingleInstanceLock()) app.exit(0);
+  app.on('second-instance', (_event, argv) => { for (const value of argv) desktop.enqueue(value); });
+  app.on('open-file', (event, file) => { event.preventDefault(); desktop.enqueue(file); });
+  for (const value of process.argv.slice(1)) desktop.enqueue(value);
+}
+function requireControl(event: Electron.IpcMainInvokeEvent): void {
+  if (restricted || !win || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame) throw new Error('Unauthorized control request');
+}
+async function routeNativeHistory(redo: boolean): Promise<void> {
+  const target = BrowserWindow.getFocusedWindow();
+  if (!target || target.isDestroyed() || nativeDialogBusy()) return;
+  const editable = await target.webContents.executeJavaScript(`(() => { const e = document.activeElement; return !!e && (e.isContentEditable || ['INPUT','TEXTAREA'].includes(e.tagName)); })()`);
+  if (target.isDestroyed()) return;
+  if (editable) { if (redo) target.webContents.redo(); else target.webContents.undo(); }
+  else if (target === win) target.webContents.send('desktop:history', redo ? 'redo' : 'undo');
+}
 let youtubeMusicService = new YouTubeMusicService();
 let closingPractice = false;
 let practiceRendererReady=false;
@@ -148,7 +182,6 @@ type ProjectorEntry = {
 };
 
 /** One reusable projector renderer per output display. */
-const projectorWindows = new Map<string, ProjectorEntry>();
 
 function getDisplayInfos(): DisplayInfo[] {
   if (!app.isReady()) return [];
@@ -294,6 +327,15 @@ let lastPreviewDataUrl: string | null = null;
 /** Renderer önizlemesi geldikten sonra pencere yakalaması onu asla ezmez. */
 let rendererPreviewSeen = false;
 let allSlidePreviews: string[] = [];
+let previewDemandRevision = 0;
+const previewAssets = new PreviewAssets(request => { if (wsClients.size) sendToControl('preview:request', request); });
+function refreshRemotePreview() {
+  const url = allSlidePreviews[remoteStatus.currentIndex];
+  if (url?.startsWith('/preview/') && url !== lastPreviewDataUrl) {
+    lastPreviewDataUrl = url; rendererPreviewSeen = true;
+    broadcast({ type: 'preview', data: url }, 'preview');
+  }
+}
 /** JSON snapshot of the last broadcast slideMeta, used to detect deck changes. */
 let lastSlideMetaJson = '';
 
@@ -341,6 +383,7 @@ function broadcast(msg: object, priority: Priority = 'normal'): void {
 /** Notify renderer of connected client count. */
 function broadcastClientCount(): void {
   sendToControl('remote-client-count', wsClients.size);
+  sendToControl('preview:demand', { revision: ++previewDemandRevision, clients: wsClients.size });
 }
 
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -382,6 +425,7 @@ function isSameOrigin(req: http.IncomingMessage): boolean {
 }
 
 function forwardRemoteAction(action: unknown, value: unknown): boolean {
+  if (nativeDialogBusy()) return false;
   if (typeof action !== 'string' || action.length === 0 || action.length > 64) return false;
   if (value !== undefined) {
     try {
@@ -460,6 +504,18 @@ function handleRemoteRequest(req: http.IncomingMessage, res: http.ServerResponse
   if (pathname === '/' || pathname === '/remote') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': REMOTE_PAGE.length, ...NO_STORE_HEADERS });
     res.end(REMOTE_PAGE);
+    return;
+  }
+
+  if (pathname.startsWith('/preview/')) {
+    const controller = new AbortController();
+    res.once('close', () => controller.abort());
+    void previewAssets.read(pathname, controller.signal).then(asset => {
+      if (res.destroyed) return;
+      if (!asset) { res.writeHead(404, NO_STORE_HEADERS); res.end(); return; }
+      res.writeHead(200, { 'Content-Type': asset.type, 'Content-Length': asset.bytes.length, 'Cache-Control': IMMUTABLE_CACHE });
+      res.end(asset.bytes);
+    });
     return;
   }
 
@@ -892,10 +948,13 @@ async function readRendererLanguage(window: BrowserWindow): Promise<string> {
   return rendererLanguageCache;
 }
 
-/** Quit confirm: blocks window close until the user confirms in a native dialog. */
+/** Quit confirm: blocks window close until the user confirms in the themed app dialog. */
 function attachQuitConfirm(window: BrowserWindow): void {
   let quitConfirmed = false;
   let dialogOpen = false;
+  let responsive = true;
+  window.on('unresponsive', () => { responsive = false; });
+  window.on('responsive', () => { responsive = true; });
 
   window.on('close', (e) => {
     if (quitConfirmed) return;
@@ -905,22 +964,35 @@ function attachQuitConfirm(window: BrowserWindow): void {
     void (async () => {
       try {
         const texts = QUIT_CONFIRM_TEXTS[await readRendererLanguage(window)] ?? QUIT_CONFIRM_TEXTS.en;
-        const { response } = await dialog.showMessageBox(window, {
-          type: 'question',
-          title: 'Worship Presentation Assistant',
-          message: texts.message,
-          detail: texts.detail,
-          buttons: [texts.cancel, texts.confirm],
-          defaultId: 0,
-          cancelId: 0,
+        if (window.isMinimized()) window.restore();
+        window.show();
+        window.focus();
+        // Recovery only: a broken renderer cannot display an app-owned prompt.
+        if (!responsive || !appDialogsReady(window)) {
+          const { response } = await dialog.showMessageBox(window, {
+            type: 'warning', title: app.getName(), message: texts.message, detail: texts.detail,
+            buttons: [texts.cancel, texts.confirm], defaultId: 0, cancelId: 0,
+          });
+          quitConfirmed = response === 1;
+          return;
+        }
+        const response = await showAppDialog(window, {
+          title: texts.message,
+          message: texts.detail,
+          tone: 'danger',
+          choices: [
+            { value: 'cancel', label: texts.cancel },
+            { value: 'quit', label: texts.confirm, tone: 'danger' },
+          ],
         });
-        if (response === 1) quitConfirmed = true;
+        if (response === 'quit') quitConfirmed = true;
       } catch {
-        quitConfirmed = true;
+        // A failed or reloading renderer must never authorize closing.
+        quitConfirmed = false;
       } finally {
         dialogOpen = false;
+        if (quitConfirmed && !window.isDestroyed()) window.close();
       }
-      if (quitConfirmed && !window.isDestroyed()) window.close();
     })();
   });
 }
@@ -946,13 +1018,18 @@ function createWindow(): void {
       webSecurity: true,
     },
   });
+  attachAppDialogs(win);
   const controlWindow = win;
+  desktop.windowCreated(controlWindow);
+  const clearPreviewAssets = () => { previewAssets.clear(); allSlidePreviews = []; lastPreviewDataUrl = null; };
+  controlWindow.webContents.on('render-process-gone', clearPreviewAssets);
+  controlWindow.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => { if (mainFrame && !inPlace) clearPreviewAssets(); });
+  controlWindow.once('closed', clearPreviewAssets);
 
   setPracticeControl(win.webContents);
   if (restricted) restrictPracticeSession(win.webContents, DIST);
   if(restricted)win.webContents.on('did-start-navigation',(_event,_url,inPlace,mainFrame)=>{if(mainFrame&&!inPlace){practiceRendererReady=false;practiceWorkspaceReady=false;}});
   if (restricted) win.on('page-title-updated', event => event.preventDefault());
-  Menu.setApplicationMenu(null);
 
   process.env.VITE_DEV_SERVER_URL
     ? win.loadURL(process.env.VITE_DEV_SERVER_URL)
@@ -1023,6 +1100,7 @@ function createProjectorWindow(requestedDisplayId?: string, initialData?: any): 
     backgroundColor: '#000000',
     title: 'Worship Presentation Assistant - Projection',
     webPreferences: {
+      backgroundThrottling: false,
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
@@ -1299,6 +1377,16 @@ function setupMediaPermissionHandlers(): void {
 }
 
 app.whenReady().then(async () => {
+  await recoverAtomicWrites(path.join(app.getPath('userData'), 'atomic-writes'));
+  await desktop.init();
+  if (process.platform === 'darwin') Menu.setApplicationMenu(Menu.buildFromTemplate([
+    { role: 'appMenu' },
+    { label: 'Edit', submenu: [
+      { label: 'Undo', accelerator: 'Command+Z', click: () => { void routeNativeHistory(false).catch(console.error); } },
+      { label: 'Redo', accelerator: 'Command+Shift+Z', click: () => { void routeNativeHistory(true).catch(console.error); } },
+      { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' },
+    ] }, { role: 'windowMenu' },
+  ]));
   if (restricted) await recoverPracticeReset(practiceProfile);
   await tourProfile;
   setupMediaPermissionHandlers();
@@ -1367,7 +1455,7 @@ app.whenReady().then(async () => {
     }
   });
   createWindow();
-  if (win && !restricted) initUpdater(win);
+  if (win && !restricted) initUpdater(win, (value, success) => desktop.progress('update', value, success));
   if (restricted) ipcMain.handle('updater:get-info', () => ({ version: app.getVersion(), updaterActive: false }));
   attachDisplayWatch();
   if (!restricted) createRemoteServer();
@@ -1387,6 +1475,7 @@ app.on('activate', () => {
 });
 
 app.on('will-quit', () => {
+  desktop.dispose();
   youtubeMusicService.dispose();
   for (const timer of [captureTimer, displayTimer]) if (timer) clearTimeout(timer);
   for (const timer of [heartbeatTimer, networkTimer]) if (timer) clearInterval(timer);
@@ -1445,10 +1534,32 @@ ipcMain.handle('check-media-resources', async (_, urls: unknown) => {
 });
 ipcMain.handle('cache-google-font', async (_, family: unknown) => {
   if (typeof family !== 'string') throw new Error('Invalid font');
+  const bundled = await bundledFontCss(family.split(',')[0].replace(/['"]/g, '').trim());
+  if (bundled) return bundled;
   return cacheGoogleFont(family, path.join(app.getPath('userData'), 'fonts'));
 });
 
-ipcMain.handle('save-file', async (_, content: unknown) => {
+async function readProjectWithRecovery(filePath: string): Promise<{ content: string; mediaCount: number }> {
+  try { return await heavyClient.readGpresFile(filePath, mediaLibrary.dir); }
+  catch (error) {
+    const parent = dialogParent();
+    if (!parent) throw error;
+    const backup = filePath + '.bak';
+    try { await heavyClient.validateGpres(backup, mediaLibrary.dir); } catch { throw error; }
+    const copy = systemMessageCopy(desktop.getLanguage());
+    const choice = await showAppDialog(parent, {
+      title: copy.recoverTitle,
+      message: copy.recoverMessage,
+      detail: `${path.basename(filePath)}\n${String(error)}`,
+      choices: [{ value: 'cancel', label: copy.cancel }, { value: 'recover', label: copy.openBackup, tone: 'primary' }],
+    });
+    if (choice !== 'recover') throw error;
+    return heavyClient.readGpresFile(backup, mediaLibrary.dir);
+  }
+}
+
+ipcMain.handle('save-file', async (event, content: unknown) => {
+  requireControl(event);
   if (typeof content !== 'string') throw new Error('Invalid presentation data');
   const { filePath, canceled } = await dialog.showSaveDialog({
     defaultPath: lastDialogDir,
@@ -1458,15 +1569,36 @@ ipcMain.handle('save-file', async (_, content: unknown) => {
   const target = /\.gpres$/i.test(filePath) ? filePath : `${filePath}.gpres`; // Linux iletişim kutusu uzantı eklemez
   rememberDir(target);
 
-  // Phase 7: zip build (deflate CPU) runs in the heavy UtilityProcess.
-  const { embeddedCount, zipBuffer } = await heavyClient.buildGpres(content, mediaLibrary.dir);
-  await writeFileAtomic(target, zipBuffer); // yazma yarıda kesilse mevcut dosya bozulmaz
+  try {
+    await writeAtomicGeneratedDocument(target, path.join(app.getPath('userData'), 'atomic-writes'), async partial => {
+      await heavyClient.writeGpres(content, partial, mediaLibrary.dir);
+    }, { validatePrevious: file => heavyClient.validateGpres(file, mediaLibrary.dir) });
+  } catch (error) {
+    const parent = dialogParent();
+    if (!parent) throw error;
+    const copy = systemMessageCopy(desktop.getLanguage());
+    await showAppDialog(parent, {
+      title: copy.saveErrorTitle,
+      message: copy.saveErrorMessage,
+      detail: String(error).replace('GPRES_MISSING_MEDIA', copy.missingMedia),
+      choices: [{ value: 'ok', label: copy.ok, tone: 'primary' }],
+    });
+    return null;
+  }
+  desktop.saved(target);
 
-  console.info(`[save-file] Saved ${target} (${embeddedCount} media files embedded)`);
+  console.info(`[save-file] Saved verified project ${target}`);
   return target;
 });
 
-ipcMain.handle('open-file', async () => {
+ipcMain.handle('open-file', async (event, requestId?: unknown, confirmation?: import('../shared/fileOpen').OpenFileConfirmation) => {
+  requireControl(event);
+  if (requestId !== undefined) {
+    if (typeof requestId !== 'string') throw new Error('Invalid open request');
+    const filePath = desktop.take(requestId);
+    const { content } = await readProjectWithRecovery(filePath);
+    return { path: filePath, content, token: desktop.prepare(filePath, requestId) };
+  }
   const { filePaths, canceled } = await dialog.showOpenDialog({
     defaultPath: lastDialogDir,
     filters: [{ name: 'Worship Presentation Assistant Files', extensions: ['gpres'] }],
@@ -1476,58 +1608,43 @@ ipcMain.handle('open-file', async () => {
 
   const filePath = filePaths[0];
   rememberDir(filePath);
-  const raw = await fs.readFile(filePath);
-
-  if (isZip(raw)) {
-    // Phase 7: unzip + media externalization run in the heavy UtilityProcess.
-    const { data, mediaCount } = await heavyClient.extractGpres(raw, mediaLibrary.dir);
-    console.info(`[open-file] ${filePath}: ${mediaCount} media refs externalized`);
-    return { path: filePath, content: JSON.stringify(data) };
+  if (confirmation !== undefined) {
+    if (!confirmation || ['title','message','detail','cancelLabel','openLabel'].some(key => typeof confirmation[key as keyof typeof confirmation] !== 'string' || confirmation[key as keyof typeof confirmation].length > 4000)) throw new Error('Invalid project confirmation');
+    const parent = dialogParent();
+    if (!parent) return null;
+    const choice = await showAppDialog(parent, {
+      title: confirmation.title, message: confirmation.message,
+      detail: `${path.basename(filePath)}\n\n${confirmation.detail}`,
+      choices: [{ value: 'cancel', label: confirmation.cancelLabel }, { value: 'open', label: confirmation.openLabel, tone: 'primary' }],
+    });
+    if (choice !== 'open') return null;
   }
-
-  // Legacy plain-JSON format
-  return { path: filePath, content: raw.toString('utf-8') };
+  const { content } = await readProjectWithRecovery(filePath);
+  return { path: filePath, content, token: desktop.prepare(filePath) };
 });
 
-// IPC: native dialogs
-
-ipcMain.handle(
-  'show-confirm-dialog',
-  async (
-    _,
-    options: { message: string; title?: string; detail?: string; confirmLabel?: string; cancelLabel?: string }
-  ) => {
-    const parent = dialogParent();
-    const boxOptions = {
-      type: 'question' as const,
-      buttons: [options.cancelLabel ?? 'Cancel', options.confirmLabel ?? 'Confirm'],
-      defaultId: 0,
-      cancelId: 0,
-      title: options.title ?? 'Worship Presentation Assistant',
-      message: options.message,
-      detail: options.detail,
-    };
-    const { response } = parent
-      ? await dialog.showMessageBox(parent, boxOptions)
-      : await dialog.showMessageBox(boxOptions);
-    return response === 1;
-  }
-);
-
-ipcMain.handle(
-  'show-alert-dialog',
-  async (_, options: { message: string; title?: string; detail?: string; okLabel?: string }) => {
-    const parent = dialogParent();
-    const boxOptions = {
-      type: 'info' as const,
-      buttons: [options.okLabel ?? 'OK'],
-      title: options.title ?? 'Worship Presentation Assistant',
-      message: options.message,
-      detail: options.detail,
-    };
-    parent ? await dialog.showMessageBox(parent, boxOptions) : await dialog.showMessageBox(boxOptions);
-  }
-);
+// IPC: themed application dialogs (file pickers remain OS-owned).
+ipcMain.handle('show-confirm-dialog', async (event, options: { message: string; title?: string; detail?: string; confirmLabel?: string; cancelLabel?: string }) => {
+  const parent = dialogParent();
+  if (!parent || event.sender !== parent.webContents || event.senderFrame !== parent.webContents.mainFrame) return false;
+  return (await showAppDialog(parent, {
+    title: options.title ?? options.message,
+    message: options.title ? options.message : '',
+    detail: options.detail,
+    choices: [{ value: 'cancel', label: options.cancelLabel ?? 'Cancel' }, { value: 'confirm', label: options.confirmLabel ?? 'Confirm', tone: 'primary' }],
+  })) === 'confirm';
+});
+ipcMain.handle('show-alert-dialog', async (event, options: { message: string; title?: string; detail?: string; okLabel?: string }) => {
+  const parent = dialogParent();
+  if (!parent || event.sender !== parent.webContents || event.senderFrame !== parent.webContents.mainFrame) return;
+  await showAppDialog(parent, {
+    title: options.title ?? options.message,
+    message: options.title ? options.message : '',
+    detail: options.detail,
+    tone: 'info',
+    choices: [{ value: 'ok', label: options.okLabel ?? 'OK', tone: 'primary' }],
+  });
+});
 
 // IPC: preset CRUD
 
@@ -2017,6 +2134,28 @@ ipcMain.handle('quit-app', () => {
   return true;
 });
 
+ipcMain.handle('preview:demand', event => {
+  requireControl(event);
+  return { revision: previewDemandRevision, clients: wsClients.size };
+});
+ipcMain.handle('preview:configure', (event, deck: PreviewDeck) => {
+  requireControl(event);
+  const previous = allSlidePreviews;
+  const next = previewAssets.configure(deck);
+  allSlidePreviews = next;
+  if (previous.length !== next.length) broadcast({ type: 'allPreviews', data: next }, 'bulk');
+  else {
+    const updates = next.flatMap((url, i) => previous[i] === url ? [] : [{ i, url }]);
+    if (updates.length) broadcast({ type: 'previewsDelta', data: updates }, 'bulk');
+  }
+  refreshRemotePreview();
+  return true;
+});
+ipcMain.handle('preview:publish', (event, value: PreviewAssetResult) => {
+  requireControl(event); return previewAssets.publish(value);
+});
+ipcMain.handle('preview:diagnostics', event => { requireControl(event); return previewAssets.snapshot(); });
+
 ipcMain.handle('update-all-slide-previews', (_, previews: unknown) => {
   // Küçük resmi henüz üretilmemiş slaytlar için renderer null gönderir; bu girdiler geçerlidir.
   // (Telefona JSON'da null olarak gider, uygulamanın önceki davranışıyla aynı.)
@@ -2098,6 +2237,7 @@ ipcMain.handle('update-remote-status', (_, input: unknown) => {
   // the window capture is only a fallback until the first renderer preview arrives,
   // so it can never race and overwrite a fresh part preview with a stale or black frame.
   if (!rendererPreviewSeen) scheduleSlideCapture(transitionDelay);
+  refreshRemotePreview();
   return true;
 });
 
@@ -2250,15 +2390,19 @@ ipcMain.handle('soniox:open-website', async event => {
   return { ok: true };
 });
 ipcMain.handle('youtube-music:search', (event, query: unknown, cursor?: unknown) => isMusicControl(event)
-  ? youtubeMusicService.search(query, cursor) : { ok: false, error: 'unavailable' });
+  ? serviceRequest('music', () => youtubeMusicService.search(query, cursor)) : { ok: false, error: 'unavailable' });
 ipcMain.handle('youtube-music:play', (event, id: unknown) => isMusicControl(event)
-  ? youtubeMusicService.play(id) : { ok: false, error: 'unavailable' });
+  ? serviceRequest('music', () => youtubeMusicService.play(id)) : { ok: false, error: 'unavailable' });
 ipcMain.handle('youtube-music:prepare', (event, id: unknown) => isMusicControl(event)
   ? youtubeMusicService.prepare(id) : { ok: false });
 ipcMain.handle('youtube-music:offline-status', (event, id: unknown) => isMusicControl(event)
   ? youtubeMusicService.offlineStatus(id) : { state: 'error', error: 'unavailable' });
-ipcMain.handle('youtube-music:download', (event, id: unknown) => isMusicControl(event)
-  ? youtubeMusicService.download(id) : { state: 'error', error: 'unavailable' });
+ipcMain.handle('youtube-music:download', async (event, id: unknown) => {
+  if (!isMusicControl(event)) return { state: 'error', error: 'unavailable' };
+  const task = 'music-' + randomUUID(); desktop.progress(task, 2); let successful = false;
+  try { const result = await youtubeMusicService.download(id); successful = result.state === 'ready'; desktop.service('music', successful, !net.isOnline()); return result; }
+  finally { desktop.progress(task, null, successful); }
+});
 ipcMain.handle('youtube-music:cancel-download', (event, id: unknown) => {
   if (isMusicControl(event)) youtubeMusicService.cancelDownload(id);
 });
@@ -2309,10 +2453,10 @@ ipcMain.handle('read-media-folder', async (_event, folderPath: string, options?:
 });
 
 ipcMain.handle('media:getThumbnail', async (_evt, filePath: string, maxEdge: number) => {
-  if (restricted && path.resolve(filePath) !== practiceWorkspace.mediaPath) throw new Error('Only the practice image is available');
   try {
     const resolved = resolvePosterSource(filePath, mediaLibrary.dir);
     if (!resolved) return null;
+    if (restricted && path.resolve(resolved) !== practiceWorkspace.mediaPath) throw new Error('Only the practice image is available');
     return await getOrCreateThumbnail(resolved, { maxEdge });
   } catch {
     return null;
@@ -2332,14 +2476,21 @@ ipcMain.handle('select-pptx-file', async () => {
 });
 
 ipcMain.handle('import-pptx', async (event, filePath: string) => {
+  requireControl(event);
+  const task = 'pptx-import-' + randomUUID();
+  desktop.progress(task, 2);
+  let successful = false;
   // Phase 7: conversion (resvg warm-up + per-slide CPU) runs in the heavy
   // UtilityProcess; the main event loop stays responsive throughout.
-  return heavyClient.importPptx(filePath, mediaLibrary.dir, (current, total) => {
+  try { const result = await heavyClient.importPptx(filePath, mediaLibrary.dir, (current, total) => {
+    desktop.progress(task, total ? current / total : 2);
     event.sender.send('pptx-import-progress', { current, total });
-  });
+  }); successful = true; return result; }
+  finally { desktop.progress(task, null, successful); }
 });
 
 ipcMain.handle('export-pptx', async (event, content: string) => {
+  requireControl(event);
   let data: any;
   try {
     data = JSON.parse(content);
@@ -2361,9 +2512,12 @@ ipcMain.handle('export-pptx', async (event, content: string) => {
   rememberDir(filePath);
 
   // Phase 7: PptxGenJS rendering runs in the heavy UtilityProcess.
-  return heavyClient.exportPptx(content, filePath, mediaLibrary.dir, (current, total) => {
+  const task = 'pptx-export-' + randomUUID(); desktop.progress(task, 2); let successful = false;
+  try { const result = await heavyClient.exportPptx(content, filePath, mediaLibrary.dir, (current, total) => {
+    desktop.progress(task, total ? current / total : 2);
     event.sender.send('pptx-export-progress', { current, total });
-  });
+  }); successful = result.success; if (successful) desktop.output(filePath); return result; }
+  finally { desktop.progress(task, null, successful); }
 });
 
 ipcMain.handle('import-hymn-archive', async (_, dirPath?: string) => {
@@ -2478,22 +2632,21 @@ ipcMain.handle('drive-upload', async (_, name: unknown, content: unknown) => {
   }
 });
 
-ipcMain.handle('drive-download', async (_, fileId: string) => {
+ipcMain.handle('drive-download', async (event, fileId: string) => {
+  requireControl(event);
+  if (typeof fileId !== 'string' || fileId.length > 200) throw new Error('Invalid Drive file');
+  const directory = await fs.mkdtemp(path.join(app.getPath('temp'), 'wpa-drive-'));
+  const target = path.join(directory, 'download.gpres');
   try {
-    const buffer = await driveService.downloadFile(fileId);
-
-    if (isZip(buffer)) {
-      // Phase 7: unzip + media externalization run in the heavy UtilityProcess.
-      const { data, mediaCount } = await heavyClient.extractGpres(buffer, mediaLibrary.dir);
-      console.log(`[drive-download] ${mediaCount} media refs externalized`);
-      return { ok: true, data: JSON.stringify(data) };
-    }
-
-    // Plain JSON (legacy or non-ZIP)
-    return { ok: true, data: buffer.toString('utf-8') };
+    await driveService.downloadToFile(fileId, target);
+    const { content } = await heavyClient.readGpresFile(target, mediaLibrary.dir);
+    return { ok: true, data: content };
   } catch (error) {
     console.error('Drive download error:', error);
     return { ok: false, error: String(error) };
+  } finally {
+    await fs.unlink(target).catch(() => {});
+    await fs.rmdir(directory).catch(() => {});
   }
 });
 
@@ -2507,7 +2660,8 @@ ipcMain.handle('drive-delete-file', async (_, fileId: string) => {
   }
 });
 
-ipcMain.handle('drive-save-presentation', async (_, content: unknown, customName?: string) => {
+ipcMain.handle('drive-save-presentation', async (event, content: unknown, customName?: string) => {
+  requireControl(event);
   if (typeof content !== 'string') return { ok: false, error: 'Invalid presentation data' };
   try {
     const data = JSON.parse(content);
@@ -2517,7 +2671,6 @@ ipcMain.handle('drive-save-presentation', async (_, content: unknown, customName
 
     // Phase 7: zip build (deflate CPU) runs in the heavy UtilityProcess. Yeniden serileştirme yalnızca ad değiştiyse gerekir.
     const payload = trimmed ? JSON.stringify(data) : content;
-    const { embeddedCount, zipBuffer } = await heavyClient.buildGpres(payload, mediaLibrary.dir);
 
     // Strip characters invalid in filenames / Drive names.
     const baseName =
@@ -2526,9 +2679,13 @@ ipcMain.handle('drive-save-presentation', async (_, content: unknown, customName
         .trim() || 'presentation';
     const name = `${baseName}.gpres`;
 
-    const id = await driveService.uploadBuffer(name, zipBuffer);
-    console.info(`[drive-save-presentation] Uploaded ${name} (${embeddedCount} media files), id=${id}`);
-    return { ok: true, id };
+    const directory = await fs.mkdtemp(path.join(app.getPath('temp'), 'wpa-drive-save-'));
+    const file = path.join(directory, 'upload.gpres');
+    try {
+      await heavyClient.writeGpres(payload, file, mediaLibrary.dir);
+      const id = await driveService.uploadProjectFile(name, file);
+      return { ok: true, id };
+    } finally { await fs.unlink(file).catch(() => {}); await fs.rmdir(directory).catch(() => {}); }
   } catch (error) {
     console.error('[drive-save-presentation] Error:', error);
     return { ok: false, error: String(error) };

@@ -1,3 +1,4 @@
+import ControlTooltip from './ControlTooltip';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Popover } from '@base-ui/react/popover';
 import { useTranslation } from 'react-i18next';
@@ -59,7 +60,7 @@ export function GradientQuickApply() {
         setOpen(next);
       }}
     >
-      <Popover.Trigger
+      <ControlTooltip suppress={open}><Popover.Trigger
         disabled={!targets.length}
         aria-label={t('gradientLibrary.quickApply')}
         title={t('gradientLibrary.quickApply')}
@@ -67,7 +68,7 @@ export function GradientQuickApply() {
       >
         <Palette size={16} aria-hidden="true" />
         <span>{t('gradientLibrary.quickApply')}</span>
-      </Popover.Trigger>
+      </Popover.Trigger></ControlTooltip>
       <Popover.Portal>
         <Popover.Positioner side="bottom" align="end" sideOffset={8} className="z-[80]">
           <Popover.Popup

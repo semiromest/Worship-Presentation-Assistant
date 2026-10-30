@@ -1,4 +1,3 @@
-import { withSlideContent } from '../../shared/slideContent';
 import { restoreLiveSession } from '../liveSession';
 import { moveSectionSlidesOneStep, dropSlidesOnSlide } from '../../shared/sectionModel';
 import { useShallow } from 'zustand/react/shallow';
@@ -8,7 +7,8 @@ import { useStore } from '../state/useStore';
 import type { Slide, Preset, TransitionType, LoopItem } from '../types';
 import { backgroundPatch, inheritGeneratedBackgrounds } from '../gradientBackground';
 import { DEFAULT_STYLES, DEFAULT__TRANSITION } from '../constants';
-import { makeSlideId, toFileUrl } from '../utils';
+import { makeSlideId, toFileUrl, convertPptxToSlides, type PptxImportResult } from '../utils';
+import type { PptxImportMode } from '../../shared/fileOpen';
 import { guardEditorReplacement } from '../editor/editorSessionGuard';
 import { confirmDialog, alertDialog } from '../dialogs';
 import { findPresetByRef } from '../presetUtils';
@@ -19,6 +19,8 @@ import { findLockedSlideIndex } from '../slideLock';
 import { playSfx } from '../sfx';
 import { isYouTubeMusicResult, type YouTubeMusicResult } from '../../shared/youtubeMusic';
 import { musicGain } from '../musicCustomization';
+import { documentSession, documentSignature } from '../documentSession';
+import { usePractice } from './usePractice';
 
 export const createSlide = (type: Slide['type'], overrides: Partial<Slide> = {}): Slide => ({
   id: makeSlideId(),
@@ -43,6 +45,7 @@ function getHymnColor(id: string): string {
 }
 
 export function useSlideOperations() {
+  const practice = usePractice();
   // Subscribe only to stable actions. Each command snapshots the relevant
   // domain state when invoked, so selection/editing doesn't invalidate every
   // callback passed to memoized cards and kept-alive feature screens.
@@ -150,33 +153,15 @@ export function useSlideOperations() {
   }, [dispatchUndo]);
 
   const updateSlideContent = useCallback((content: string) => {
-    const { presentation, selectedSlideIds, selectedSlideId } = useStore.getState();
+    const { selectedSlideIds, selectedSlideId } = useStore.getState();
     const targetIds = selectedSlideIds.size > 0 ? selectedSlideIds : new Set([selectedSlideId]);
-    dispatchUndo({
-      type: 'SET',
-      payload: {
-        ...presentation,
-        slides: presentation.slides.map((s) =>
-          targetIds.has(s.id) ? withSlideContent(s, content) : s
-        ),
-      },
-    });
+    dispatchUndo({ type: 'EDIT_SLIDES', ids: [...targetIds], edit: { kind: 'content', content } });
   }, [dispatchUndo]);
 
   const updateSlideStyles = useCallback((styles: Partial<Slide['styles']>) => {
-    const { presentation, selectedSlideIds, selectedSlideId } = useStore.getState();
+    const { selectedSlideIds, selectedSlideId } = useStore.getState();
     const targetIds = selectedSlideIds.size > 0 ? selectedSlideIds : new Set([selectedSlideId]);
-    dispatchUndo({
-      type: 'SET',
-      payload: {
-        ...presentation,
-        slides: presentation.slides.map((s) =>
-          targetIds.has(s.id)
-            ? { ...s, styles: backgroundPatch({ ...DEFAULT_STYLES, ...s.styles }, styles ?? {}) as Slide['styles'] }
-            : s
-        ),
-      },
-    });
+    dispatchUndo({ type: 'EDIT_SLIDES', ids: [...targetIds], edit: { kind: 'styles', styles: styles ?? {} } });
   }, [dispatchUndo]);
 
   const patchSelectedCountdown = useCallback((mutate: (data: CountdownSlideData) => CountdownSlideData) => {
@@ -195,9 +180,11 @@ export function useSlideOperations() {
   }, [dispatchUndo]);
 
   const updateSlideBackgroundImage = useCallback(async () => {
+    const origin = useStore.getState();
+    const generation = documentSession.current().generation;
     const file = await window.electronAPI?.selectMediaFile?.('image');
-    if (typeof file === 'string' && file) {
-      updateSlideStyles({ backgroundImage: toFileUrl(file) });
+    if (typeof file === 'string' && file && generation === documentSession.current().generation && useStore.getState().selectedSlideId === origin.selectedSlideId) {
+      updateSlideStyles({ backgroundImage: toFileUrl(file), backgroundVideo: undefined, backgroundGradient: undefined });
       playSfx('success');
     }
   }, [updateSlideStyles]);
@@ -207,9 +194,11 @@ export function useSlideOperations() {
   }, [updateSlideStyles]);
 
   const updateSlideBackgroundVideo = useCallback(async () => {
+    const origin = useStore.getState();
+    const generation = documentSession.current().generation;
     const file = await window.electronAPI?.selectMediaFile?.('video');
-    if (typeof file === 'string' && file) {
-      updateSlideStyles({ backgroundVideo: toFileUrl(file) });
+    if (typeof file === 'string' && file && generation === documentSession.current().generation && useStore.getState().selectedSlideId === origin.selectedSlideId) {
+      updateSlideStyles({ backgroundVideo: toFileUrl(file), backgroundImage: undefined, backgroundGradient: undefined });
       playSfx('success');
     }
   }, [updateSlideStyles]);
@@ -312,6 +301,8 @@ export function useSlideOperations() {
 
   const savePresentation = useCallback(async () => {
     const { presentation } = useStore.getState();
+    const generation = documentSession.current().generation;
+    const signature = documentSignature(presentation);
     // Zoom lives in separate UI state; re-attach it to the saved payload so
     // files keep carrying the zoom level (legacy field, read on open).
     const state = useStore.getState();
@@ -324,16 +315,13 @@ export function useSlideOperations() {
     const content = JSON.stringify(payload, null, 2);
     const path = await window.electronAPI?.saveFile?.(content);
     if (path) {
-      dispatchUndo({
-        type: 'SET',
-        payload: {
-          ...payload,
-          name: path.split('\\').pop()?.replace('.gpres', '') ?? presentation.name,
-        },
-      });
+      // Saving a snapshot must never restore it over edits made while awaiting I/O.
+      documentSession.saved(path, signature, generation);
       playSfx('complete');
+      return true;
     }
-  }, [dispatchUndo]);
+    return false;
+  }, []);
 
   const handleImportSlides = useCallback((slides: Slide[]) => {
     const { presentation } = useStore.getState();
@@ -351,13 +339,42 @@ export function useSlideOperations() {
     setActiveTab('slides');
   }, [dispatchUndo, setSelectedSlideId, setActiveTab]);
 
-  const openPresentation = useCallback(async () => {
-    const result = await window.electronAPI?.openFile?.();
+  const guardDocumentReplacement = useCallback(async () => {
+    if (!(await guardEditorReplacement())) return;
+    if (!practice && documentSession.isDirty()) {
+      const choice = await window.electronAPI?.desktopReplaceChoice?.();
+      if (!choice || choice === 'cancel') return false;
+      if (choice === 'save' && (!(await savePresentation()) || documentSession.isDirty())) return false;
+    }
+    return true;
+  }, [practice, savePresentation]);
+  const openPresentation = useCallback(async (requestId?: string, options?: { automatic?: boolean }) => {
+    const outputActive = () => {
+      const state = useStore.getState();
+      return state.isProjectorWindowOpen || Object.values(state.outputAssignments).some(output => output.isOpen);
+    };
+    if (options?.automatic && (outputActive() || documentSession.isDirty())) return;
+    if (typeof requestId !== 'string') requestId = undefined;
+    let signature = documentSignature(useStore.getState().presentation);
+    let generation = documentSession.current().generation;
+    const result = await window.electronAPI?.openFile?.(requestId, requestId ? undefined : {
+      title: t('fileOpen.confirmTitle'), message: t('fileOpen.confirmMessage'), detail: t('fileOpen.replaceDetail'),
+      cancelLabel: t('common.cancel'), openLabel: t('fileOpen.open'),
+    });
     if (!result) return;
+    if (generation !== documentSession.current().generation || signature !== documentSignature(useStore.getState().presentation)) {
+      await alertDialog(t('desktop.documentChanged')); return;
+    }
+    if (!(await guardDocumentReplacement())) return;
+    // The editor guard may intentionally commit a draft before replacement.
+    // Treat the approved state as our origin after checking the read race.
+    signature = documentSignature(useStore.getState().presentation);
+    generation = documentSession.current().generation;
 
     const data = JSON.parse(result.content);
     const slides: Slide[] = Array.isArray(data.slides)
       ? data.slides.map((s: any, i: number) => ({
+          ...s,
           id: typeof s.id === 'string' ? s.id : `${i + 1}`,
           type: ['image', 'video', 'text', 'screen', 'countdown', 'loop', 'captions'].includes(s.type) ? s.type : 'text',
           content: typeof s.content === 'string' ? s.content : '',
@@ -411,13 +428,20 @@ export function useSlideOperations() {
         }))
       : [createSlide('text', { content: t('common.newSlideContent') })];
 
-    if (!(await guardEditorReplacement())) return;
+    if (generation !== documentSession.current().generation || signature !== documentSignature(useStore.getState().presentation)) {
+      await alertDialog(t('desktop.documentChanged'));
+      return;
+    }
+    // An output can open while disk/media work is awaited. Automatic OS opens
+    // must remain queued instead of changing a live output that just started.
+    if (options?.automatic && outputActive()) return;
     dispatchUndo({
       type: 'RESET',
       payload: {
+        ...data,
         sections: Array.isArray(data.sections) ? data.sections : undefined,
         id: data.id || crypto.randomUUID(),
-        name: result.path.split('\\').pop()?.replace('.gpres', '') ?? data.name ?? t('common.presentation'),
+        name: result.path.split(/[\\/]/).pop()?.replace(/\.gpres$/i, '') ?? data.name ?? t('common.presentation'),
         slides,
         zoom: typeof data.zoom === 'number' ? data.zoom : 1,
         transition: data.transition ?? { ...DEFAULT__TRANSITION },
@@ -429,11 +453,44 @@ export function useSlideOperations() {
     if (typeof data.zoom === 'number') {
       setSlideZoom(data.zoom);
     }
+    const loadedGeneration = documentSession.current().generation;
+    const loadedSignature = documentSignature(useStore.getState().presentation);
+    if (result.token) await window.electronAPI?.desktopCommitOpen?.(result.token);
+    documentSession.opened(result.path, loadedSignature, loadedGeneration);
+    setSelectedPresetName(null);
+    setActiveTab('slides');
     playSfx('open');
-  }, [t, dispatchUndo, setSelectedSlideId, setSlideZoom]);
+  }, [t, dispatchUndo, setSelectedSlideId, setSlideZoom, setActiveTab, setSelectedPresetName, guardDocumentReplacement]);
+
+  const importPptxPresentation = useCallback(async (filePath: string, mode: PptxImportMode): Promise<PptxImportResult | null> => {
+    if (mode === 'new' ? !(await guardDocumentReplacement()) : !(await guardEditorReplacement())) return null;
+    const generation = documentSession.current().generation;
+    const signature = documentSignature(useStore.getState().presentation);
+    const result: PptxImportResult = await window.electronAPI.importPptx(filePath);
+    if (!result?.success || !result.slides) throw new Error(result?.error || t('common.importFailedGeneric'));
+    const slides = convertPptxToSlides(result);
+    if (!slides.length) throw new Error(t('fileOpen.noImportedSlides'));
+    const unchanged = () => generation === documentSession.current().generation && signature === documentSignature(useStore.getState().presentation);
+    if (!unchanged()) { await alertDialog(t('desktop.documentChanged')); return null; }
+    if (mode === 'new') {
+      const current = useStore.getState();
+      if ((current.isProjectorWindowOpen || Object.values(current.outputAssignments).some(output => output.isOpen)) &&
+          !(await confirmDialog(t('fileOpen.liveReplaceWarning'), { title: t('fileOpen.liveReplaceTitle'), confirmLabel: t('fileOpen.newPresentation') }))) return null;
+      if (!unchanged()) { await alertDialog(t('desktop.documentChanged')); return null; }
+      dispatchUndo({ type: 'RESET', payload: { id: crypto.randomUUID(), name: filePath.split(/[\\/]/).pop()?.replace(/\.ppt[mx]$/i, '') || t('common.newPresentation'), slides, transition: { ...DEFAULT__TRANSITION } } });
+      setSelectedPresetName(null);
+      documentSession.unsaved();
+    } else {
+      const current = useStore.getState();
+      dispatchUndo({ type: 'SET', payload: { ...current.presentation, slides: [...current.presentation.slides, ...slides] } });
+    }
+    setSelectedSlideId(slides[0].id);
+    setActiveTab('slides');
+    return result;
+  }, [t, dispatchUndo, setSelectedSlideId, setSelectedPresetName, setActiveTab, guardDocumentReplacement]);
 
   const applyPreset = useCallback(async (preset: Preset) => {
-    if (!(await guardEditorReplacement())) return;
+    if (!(await guardDocumentReplacement())) return;
     const presentationWithId = {
       ...(isLiveSavePreset(preset.name) ? restoreLiveSession(preset.presentation, preset.createdAt) : preset.presentation),
       id: preset.presentation.id || crypto.randomUUID(),
@@ -456,8 +513,9 @@ export function useSlideOperations() {
     setLiveSlideId(savedLiveSlideId);
     setSelectedPresetName(preset.name);
     setActiveTab('slides');
+    documentSession.opened(null);
     playSfx('open');
-  }, [dispatchUndo, setPresentationName, setSelectedSlideId, setSlideZoom, setLiveSlideId, setSelectedPresetName, setActiveTab]);
+  }, [dispatchUndo, setPresentationName, setSelectedSlideId, setSlideZoom, setLiveSlideId, setSelectedPresetName, setActiveTab, guardDocumentReplacement]);
 
   const openSavedPresentationByName = useCallback(async (presentationName: string) => {
     const { presets } = useStore.getState();
@@ -478,7 +536,7 @@ export function useSlideOperations() {
   const createNewPresentation = useCallback(async () => {
     const { isProjectorWindowOpen } = useStore.getState();
     if (!(await confirmDialog(t('warnings.confirmNewPresentation')))) return;
-    if (!(await guardEditorReplacement())) return;
+    if (!(await guardDocumentReplacement())) return;
 
     if (isProjectorWindowOpen) {
       await window.electronAPI?.toggleProjector?.();
@@ -496,12 +554,13 @@ export function useSlideOperations() {
       },
     });
     setSelectedSlideId(newSlide.id);
+    documentSession.opened(null);
     setLiveIndex(0);
     setIsBlackout(false);
     setActiveTab('slides');
     setPanels({ preset: false, remote: false, styles: false, imageStyles: false });
     setSelectedPresetName(null);
-  }, [t, dispatchUndo, setSelectedSlideId, setLiveIndex, setIsBlackout, setActiveTab, setPanels, setSelectedPresetName]);
+  }, [t, dispatchUndo, setSelectedSlideId, setLiveIndex, setIsBlackout, setActiveTab, setPanels, setSelectedPresetName, guardDocumentReplacement]);
 
   const appendSlides = useCallback((newSlides: Slide[], goLive?: boolean) => {
     if (newSlides.length === 0) return;
@@ -915,14 +974,16 @@ export function useSlideOperations() {
   }, [dispatchUndo]);
 
   const replaceSlideMedia = useCallback(async () => {
-    const { presentation, selectedSlideId } = useStore.getState();
+    const { selectedSlideId } = useStore.getState();
+    const generation = documentSession.current().generation;
     const file = await window.electronAPI?.selectMediaFile?.('image');
-    if (typeof file === 'string' && file) {
+    if (typeof file === 'string' && file && generation === documentSession.current().generation) {
+      const current = useStore.getState().presentation;
       dispatchUndo({
         type: 'SET',
         payload: {
-          ...presentation,
-          slides: presentation.slides.map((s) =>
+          ...current,
+          slides: current.slides.map((s) =>
             s.id === selectedSlideId
               ? { ...s, mediaUrl: toFileUrl(file) }
               : s
@@ -1007,6 +1068,7 @@ export function useSlideOperations() {
     updateTransition,
     savePresentation,
     handleImportSlides,
+    importPptxPresentation,
     openPresentation,
     applyPreset,
     openSavedPresentationByName,

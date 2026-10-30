@@ -1,3 +1,5 @@
+import { PreviewImage } from './PreviewImage';
+import { usePreviewImage } from '../hooks/usePreviewImage';
 import { playSfx } from '../sfx';
 import { MediaPoster } from './MediaPoster';
 import BackgroundDim from './BackgroundDim';
@@ -29,8 +31,8 @@ import { slidePreviewGeometry } from '../slidePreviewGeometry';
  */
 
 // Image item renderer
-export const ImageItem = memo(({ item }: { item: SlideItem }) => {
-  return <SlideImage src={item.mediaUrl} styles={item.imageStyles} alt="Slide content" lazy />;
+export const ImageItem = memo(({ item, width = 320, enabled = true }: { item: SlideItem; width?: number; enabled?: boolean }) => {
+  return <SlideImage src={enabled ? item.mediaUrl : undefined} styles={item.imageStyles} alt="Slide content" lazy previewWidth={width} />;
 });
 
 ImageItem.displayName = 'ImageItem';
@@ -58,7 +60,7 @@ export const BackgroundVideoPlayer = memo(({ src, previewScale = 1 }: { src: str
     <>
       <video
         ref={videoRef}
-        src={src}
+        src={resolveCanvasSource(src, false).url}
         loop
         muted
         playsInline
@@ -88,15 +90,18 @@ export const BackgroundVideoPlayer = memo(({ src, previewScale = 1 }: { src: str
 BackgroundVideoPlayer.displayName = 'BackgroundVideoPlayer';
 
 // Slide items container
-export const SlideItemsPreview = memo(({ items, slide, staticMedia = false, enabled = true }: {
+export const SlideItemsPreview = memo(({ items, slide, staticMedia = false, enabled = true, viewport: measuredViewport }: {
   items: SlideItem[];
   slide: Slide;
   staticMedia?: boolean;
   enabled?: boolean;
+  viewport?: { width: number; height: number };
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
+  const externallyMeasured = measuredViewport !== undefined;
   useLayoutEffect(() => {
+    if (externallyMeasured) return;
     const container = containerRef.current;
     if (!container) return;
     const update = (width: number, height: number) => setViewport((previous) =>
@@ -105,10 +110,11 @@ export const SlideItemsPreview = memo(({ items, slide, staticMedia = false, enab
     const observer = new ResizeObserver(([entry]) => update(entry.contentRect.width, entry.contentRect.height));
     observer.observe(container);
     return () => observer.disconnect();
-  }, []);
-  const geometry = slidePreviewGeometry(viewport.width, viewport.height);
+  }, [externallyMeasured]);
+  const size = measuredViewport ?? viewport;
+  const geometry = slidePreviewGeometry(size.width, size.height);
   const bgColor = slide.styles?.backgroundColor ?? '#000000';
-  const bgImage = slide.styles?.backgroundImage;
+  const bgImage = usePreviewImage(slide.styles?.backgroundImage, size.width || 320, enabled);
   const bgGradient = slide.styles?.backgroundGradient;
   const bgBlur = (slide.styles as Record<string, unknown>)?.backgroundBlur as number | undefined;
 
@@ -176,7 +182,7 @@ export const SlideItemsPreview = memo(({ items, slide, staticMedia = false, enab
               style={getItemStyle(item)}
             >
               {item.type === 'image' ? (
-                <ImageItem item={item} />
+                <ImageItem item={item} width={(size.width || 320) * item.width / 100} enabled={enabled} />
               ) : (
                 <TextItem item={item} />
               )}
@@ -194,7 +200,7 @@ SlideItemsPreview.displayName = 'SlideItemsPreview';
 export const TextSlidePreview = memo(({ slide, cardWidth = 320, staticMedia = false, enabled = true }: { slide: Slide; cardWidth?: number; staticMedia?: boolean; enabled?: boolean }) => {
   const displayContent = getSlideDisplayContent(slide);
   const bgColor = slide.styles?.backgroundColor ?? '#000000';
-  const bgImage = slide.styles?.backgroundImage;
+  const bgImage = usePreviewImage(slide.styles?.backgroundImage, cardWidth, enabled);
   const bgGradient = slide.styles?.backgroundGradient;
   const bgBlur = (slide.styles as Record<string, unknown>)?.backgroundBlur as number | undefined;
 
@@ -306,15 +312,16 @@ export const SlidePreviewAny = memo(({ slide, cardWidth = 320, enabled = true }:
   switch (slide.type) {
     case 'image':
       return (
-        <img
-          src={slide.mediaUrl ? resolveCanvasSource(slide.mediaUrl, false).url : undefined}
+        <PreviewImage
+          source={slide.mediaUrl}
+          width={cardWidth}
+          enabled={enabled}
           style={{ filter: `grayscale(${slide.styles?.imageGrayscale ?? 0})` }}
           className={cn(
             'w-full h-full bg-black',
             slide.styles?.objectFit === 'cover' ? 'object-cover' : 'object-contain'
           )}
           alt="Slide"
-          loading="lazy"
         />
       );
 
@@ -330,7 +337,7 @@ export const SlidePreviewAny = memo(({ slide, cardWidth = 320, enabled = true }:
       if (first.type === 'video') return <div className="relative h-full w-full"><MediaPoster mediaUrl={first.mediaUrl} thumbnailUrl={first.thumbnailUrl} objectFit="cover" enabled={enabled} /><span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[9px] text-white">{t('common.loopLabel')} · {slide.loopItems?.length}</span></div>;
       const src = first.mediaUrl;
       return src ? (
-        <div className="relative h-full w-full"><img src={src} className="w-full h-full object-cover bg-black" alt="Loop" loading="lazy" /><span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[9px] text-white">{t('common.loopLabel')} · {slide.loopItems?.length}</span></div>
+        <div className="relative h-full w-full"><PreviewImage source={src} width={cardWidth} enabled={enabled} className="w-full h-full object-cover bg-black" alt="Loop" /><span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[9px] text-white">{t('common.loopLabel')} · {slide.loopItems?.length}</span></div>
       ) : (
         <PlaceholderPreview icon={ListOrdered} label={t('common.loopLabel')} />
       );

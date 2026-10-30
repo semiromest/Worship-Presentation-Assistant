@@ -1,3 +1,4 @@
+import ControlTooltip from './ControlTooltip';
 import { playSfx } from '../sfx';
 import { useState } from 'react';
 import { Popover } from '@base-ui/react/popover';
@@ -37,7 +38,7 @@ export default function DisplayOutputsPopover({ openOutput, closeOutput, label }
 
   return (
     <Popover.Root open={isOpen} onOpenChange={(next) => { if (next !== isOpen) playSfx(next ? 'open' : 'close'); setIsOpen(next); }}>
-      <Popover.Trigger
+      <ControlTooltip suppress={isOpen}><Popover.Trigger
         title={t('common.displayOutputs')}
         aria-label={t('common.displayOutputs')}
         className="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.96]"
@@ -45,7 +46,7 @@ export default function DisplayOutputsPopover({ openOutput, closeOutput, label }
         <Monitor className="w-4 h-4" aria-hidden="true" />
         {label && <span>{label}</span>}
         <span className="hidden xl:inline text-xs font-semibold">{outputDisplays.length}</span>
-      </Popover.Trigger>
+      </Popover.Trigger></ControlTooltip>
 
       <Popover.Portal>
         <Popover.Positioner side="bottom" align="end" sideOffset={8} className="z-[80]">
@@ -85,7 +86,7 @@ export default function DisplayOutputsPopover({ openOutput, closeOutput, label }
                         {display.bounds.width}×{display.bounds.height} · {display.bounds.x},{display.bounds.y}
                       </p>
                     </div>
-                    <button
+                    <ControlTooltip><button
                       type="button"
                       onClick={() => {
                         if (assignment.isOpen) void closeOutput(display.id);
@@ -97,7 +98,7 @@ export default function DisplayOutputsPopover({ openOutput, closeOutput, label }
                       aria-label={assignment.isOpen ? t('common.displayClose') : t('common.displayOpen')}
                     >
                       {assignment.isOpen ? t('common.displayClose') : t('common.displayOpen')}
-                    </button>
+                    </button></ControlTooltip>
                   </div>
 
                   {assignment.isOpen && (
@@ -115,7 +116,7 @@ export default function DisplayOutputsPopover({ openOutput, closeOutput, label }
                         </select>
                       </label>
 
-                      <button
+                      <ControlTooltip><button
                         type="button"
                         onClick={() => setOutputBlackout(display.id, (value) => !value)}
                         title={outputBlackout ? t('common.openBroadcast') : t('common.blackScreen')}
@@ -127,7 +128,7 @@ export default function DisplayOutputsPopover({ openOutput, closeOutput, label }
                         {outputBlackout
                           ? <Eye className="w-3.5 h-3.5" aria-hidden="true" />
                           : <EyeOff className="w-3.5 h-3.5" aria-hidden="true" />}
-                      </button>
+                      </button></ControlTooltip>
 
                       {assignment.mode === 'manual' ? (
                         <label className="col-span-2 min-w-0">

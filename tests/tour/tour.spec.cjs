@@ -31,7 +31,7 @@ test.afterEach(async ({}, info) => {
   }
   if (page && !page.isClosed()) await page.context().tracing.stop({ path: info.outputPath('trace.zip') }).catch(() => {});
   if (info.status !== info.expectedStatus) { await fs.mkdir(info.outputDir, { recursive: true }); await fs.writeFile(info.outputPath('electron.log'), processLog.join('')); }
-  if (app) await app.close();
+  if (app) await require('./workspace-test-utils.cjs').closeWorkspace(app);
   app = page = undefined;
   // Only remove the exact directory returned by mkdtemp, after Electron exits.
   if (profile && path.dirname(profile) === os.tmpdir() && path.basename(profile).startsWith('wpa-tour-e2e-'))
@@ -94,7 +94,7 @@ test('guide spike: renderer loss restores usable document without inherited iner
   await page.evaluate(async () => { const module = await import('/tests/tour/guide-spike.tsx'); module.mount(true); });
   await expect(page.locator('[data-guide-card]')).toBeVisible();
   await app.evaluate(async ({ BrowserWindow }) => { const contents = BrowserWindow.getAllWindows()[0].webContents; await new Promise(resolve => { contents.once('render-process-gone', resolve); contents.forcefullyCrashRenderer(); }); });
-  await app.close(); app = page = undefined; await launch();
+  await require('./workspace-test-utils.cjs').closeWorkspace(app); app = page = undefined; await launch();
   await expect(page.locator('[data-app-shell] > nav')).toBeVisible();
   await expect(page.locator('[data-app-shell]')).not.toHaveAttribute('inert');
   await page.getByRole('button', { name: 'Slides', exact: true }).click();

@@ -65,5 +65,25 @@ test('store slices preserve atomic updates, no-op snapshots and independent UI c
   assert.equal(useStore.getState().outputAssignments.secondary.isOpen, true);
   useStore.getState().setDisplays([]);
   assert.deepEqual(useStore.getState().outputAssignments, {});
+  // A warning and a content/history update in one turn must not lose the warning.
+  useStore.getState().setToastMessage('displayDisconnected');
+  useStore.getState().dispatchUndo({ type: 'SET', payload: { ...useStore.getState().presentation, name: 'After warning' } });
+  assert.equal(useStore.getState().importantNotification?.message, 'displayDisconnected');
+  useStore.getState().setToastMessage('undoNotification');
+  assert.equal(useStore.getState().toastMessage, 'undoNotification');
+  assert.equal(useStore.getState().importantNotification?.message, 'displayDisconnected');
+  useStore.getState().setToastMessage(null);
+  assert.equal(useStore.getState().importantNotification?.message, 'displayDisconnected');
+  useStore.getState().dismissImportantNotification();
+  assert.equal(useStore.getState().importantNotification, null);
+  useStore.getState().setToastMessage('phoneShareLocalOnly', 'info');
+  assert.equal(useStore.getState().importantNotification?.severity, 'info');
+  useStore.getState().setToastMessage('displayDisconnected');
+  assert.equal(useStore.getState().importantNotification?.severity, 'warning');
+  useStore.getState().setToastMessage('phoneShareLocalOnly', 'info');
+  assert.equal(useStore.getState().importantNotification?.message, 'displayDisconnected');
+  useStore.getState().setToastMessage('Actual failure', 'error');
+  assert.equal(useStore.getState().importantNotification?.severity, 'error');
+  useStore.getState().dismissImportantNotification();
   off();
 });

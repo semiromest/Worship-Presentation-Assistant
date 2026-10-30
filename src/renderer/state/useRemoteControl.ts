@@ -19,6 +19,7 @@ import { bibleRepository } from '../bibleRepository';
 import type { Slide } from '../types';
 import { playSfx, withSfxOutputTransition } from '../sfx';
 import { confirmDialog } from '../dialogs';
+import { desktopCommandsBlocked } from '../desktopState';
 
 const REMOTE_ACTIONS = {
   next: 'next',
@@ -189,12 +190,14 @@ export function useRemoteControl() {
     fetchRemoteUrl();
 
     // Remote action listener
-    const removeListener = window.electronAPI?.onRemoteAction?.(async (data: any) => {
+    const handleRemoteAction = async (data: any) => {
+      if (desktopCommandsBlocked()) return;
       if (!data?.action) return;
       if (isHelpActive()) finishTour('interrupted');
 
       const state = useStore.getState();
       const slides = state.presentation.slides;
+      if (!slides.length) return;
       const lastIndex = slides.length - 1;
       const currentIdx = slides.findIndex(s => s.id === state.selectedSlideId);
       const projOpen = state.isProjectorWindowOpen;
@@ -338,6 +341,10 @@ export function useRemoteControl() {
           break;
         }
       }
+    };
+    const removeListener = window.electronAPI?.onRemoteAction?.(handleRemoteAction);
+    const removeDesktopCommand = window.electronAPI?.onDesktopCommand?.(command => {
+      void handleRemoteAction({ action: command === 'previous' ? 'prev' : command });
     });
 
     // Projector mode listeners
@@ -451,6 +458,7 @@ export function useRemoteControl() {
 
 return () => {
   if (typeof removeListener === 'function') removeListener();
+  removeDesktopCommand?.();
   if (typeof removeProjectorUpdate === 'function') removeProjectorUpdate();
   if (typeof removeProjectorClosed === 'function') removeProjectorClosed();
   if (typeof removeDisplayListener === 'function') removeDisplayListener();

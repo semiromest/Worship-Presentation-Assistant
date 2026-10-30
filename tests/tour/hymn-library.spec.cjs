@@ -7,6 +7,42 @@ async function setup(info,records=seed){const f=await launchWorkspace(info,30000
   window.__hymnStore.getState().setActiveTab('hymns');
 },records);await expect(f.page.locator('[data-hymn-id="'+records[0].id+'"]')).toBeVisible();return f;}
 const row=(page,id)=>page.locator(`[data-hymn-id="${id}"]`);
+test('set link import respects title and author preference in both hymn layouts',async({},info)=>{
+  let app;
+  try{
+    const f=await setup(info,[{id:'set-fixture',title:'Yerel ilahi',lyrics:'Yerel sözler'}]);app=f.app;const page=f.page;
+    await page.route('https://songs.worshipleaderapp.com/api/get?*',route=>route.fulfill({
+      contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:JSON.stringify({success:true,data:{
+        id:1001,title:'Set İlahisi',songxml:'<verse>Birinci dize<br/>İkinci dize</verse><chorus>Nakarat sözleri</chorus>',
+        info:[{type:'author',value:'Set Yazarı'}],
+      }}),
+    }));
+    for(const partsMode of [true,false])for(const showCredit of [true,false]){
+      await page.evaluate(()=>window.__hymnStore.getState().setActiveTab('hymns'));
+      for(const [anchor,value] of [['hymns-mode',partsMode],['hymns-author',showCredit]]){
+        const button=page.locator(`[data-guide-anchor="${anchor}"]`);
+        await expect(button).toBeVisible();
+        if(await button.getAttribute('aria-pressed')!==String(value))await button.click();
+        await expect(button).toHaveAttribute('aria-pressed',String(value));
+      }
+      const before=await page.evaluate(()=>window.__hymnStore.getState().presentation.slides.length);
+      await page.getByRole('button',{name:'Set Linki',exact:true}).click();
+      const dialog=page.getByRole('dialog');
+      await dialog.locator('#set-link-input').fill('https://songs.worshipleaderapp.com/#page-set-list?song_ids=1001');
+      await dialog.getByRole('button',{name:'İlahileri Getir',exact:true}).click();
+      await expect(dialog.getByRole('checkbox')).toHaveCount(1);
+      await dialog.getByRole('button',{name:'Hepsini Slaytlara Ekle (1)',exact:true}).click();
+      await expect.poll(()=>page.evaluate(()=>window.__hymnStore.getState().activeTab)).toBe('slides');
+      const added=await page.evaluate(before=>window.__hymnStore.getState().presentation.slides.slice(before),before);
+      expect(added).toHaveLength(partsMode?1:2);
+      for(const slide of added){
+        expect(slide.group.title).toBe('Set İlahisi');
+        expect(slide.group.author).toBe(showCredit?'Set Yazarı':undefined);
+      }
+      if(partsMode)expect(added[0].parts).toHaveLength(2);
+    }
+  }finally{await closeWorkspace(app);}
+});
 test('hymn pointer activation adds immediately once without changing live',async({},info)=>{
   let app;
   try{
@@ -42,6 +78,8 @@ test('hymn library layout, zoom, virtualization, tooltip and focus survive conta
       await expect.poll(()=>page.locator('.hymn-column-header').evaluate(el=>getComputedStyle(el).display!=='none')).toBe(wide);
     }
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1366,768));
+    await expect.poll(()=>page.locator('.hymn-library').evaluate(el=>el.clientWidth)).toBeGreaterThan(1000);
+    await expect.poll(()=>page.locator('.hymn-row').first().evaluate(el=>el.getBoundingClientRect().height)).toBe(56);
     await page.locator('[data-testid="hymn-list"]').evaluate(el=>el.scrollTop=56*100);
     await expect(row(page,'library-100')).toBeVisible();
     await row(page,'library-100').locator('[data-hymn-action=edit]').focus();
@@ -78,11 +116,12 @@ test('new hymn, independent delete focus and clear confirmation preserve the lib
     await page.locator('#new-hymn-title').fill('Yeni Kütüphane İlahisi');await page.locator('#new-hymn-author').fill('Yeni Yazar');await page.locator('#new-hymn-lyrics').fill('Yeni sözler');
     await page.getByRole('button',{name:'EKLE',exact:true}).click();await expect(page.locator('[data-hymn-id]')).toHaveCount(2);
     expect(await page.evaluate(()=>window.__hymnStore.getState().activeTab)).toBe('hymns');
-    await app.evaluate(({dialog})=>{global.__clearPrompts=0;global.__confirmClear=false;dialog.showMessageBox=async()=>{global.__clearPrompts++;return{response:global.__confirmClear?1:0};};});
-    await page.getByRole('button',{name:'Temizle',exact:true}).click();await expect(page.locator('[data-hymn-id]')).toHaveCount(2);
-    expect(await app.evaluate(()=>global.__clearPrompts)).toBe(1);
-    await app.evaluate(()=>global.__confirmClear=true);await page.getByRole('button',{name:'Temizle',exact:true}).click();await expect(page.locator('[data-hymn-id]')).toHaveCount(0);
-    expect(await app.evaluate(()=>global.__clearPrompts)).toBe(2);
+    await page.getByRole('button',{name:'Temizle',exact:true}).click();
+    await page.locator('.app-choice-dialog').getByRole('button',{name:'İptal',exact:true}).click();
+    await expect(page.locator('[data-hymn-id]')).toHaveCount(2);
+    await page.getByRole('button',{name:'Temizle',exact:true}).click();
+    await page.locator('.app-choice-dialog').getByRole('button',{name:'Onayla',exact:true}).click();
+    await expect(page.locator('[data-hymn-id]')).toHaveCount(0);
   }finally{await closeWorkspace(app);}
 });
 

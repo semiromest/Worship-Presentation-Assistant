@@ -1,7 +1,6 @@
-interface ChoiceRequest {
-  title: string;
-  message: string;
-  choices: Array<{ value: string; label: string }>;
+import type { AppDialogOptions } from '../shared/appDialog';
+
+interface ChoiceRequest extends AppDialogOptions {
   resolve: (value: string | null) => void;
 }
 

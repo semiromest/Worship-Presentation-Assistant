@@ -1,3 +1,4 @@
+import { normalizeSlideColumns } from '../components/slideGridGeometry';
 import { shallow } from 'zustand/shallow';
 // UndoAction is used in setPresentationName to keep rename in undo history
 
@@ -25,6 +26,8 @@ export function createUiSlice(
   | 'setRemoteQr'
   | 'remoteDebug'
   | 'setRemoteDebug'
+  | 'slideColumns'
+  | 'setSlideColumns'
   | 'slideZoom'
   | 'setSlideZoom'
   | 'editorDirty'
@@ -74,6 +77,8 @@ export function createUiSlice(
     setRemoteQr: (qr) => set({ remoteQr: qr }),
     remoteDebug: null,
     setRemoteDebug: (debug) => set({ remoteDebug: debug }),
+    slideColumns: 4,
+    setSlideColumns: (columns) => set({ slideColumns: normalizeSlideColumns(columns) }),
     slideZoom: 1,
     setSlideZoom: (zoom) =>
       set((state) => {

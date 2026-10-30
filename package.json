@@ -1,18 +1,23 @@
 {
   "name": "worship-presentation-assistant",
-  "version": "1.4.25",
+  "version": "1.4.26",
   "main": "dist-electron/main.js",
   "description": "Worship Presentation Assistant - Simple Worship Presentation App",
   "author": "IPCA",
   "license": "MIT",
   "scripts": {
+    "test:unit": "node scripts/test-unit-all.cjs",
+    "test:release:e2e": "playwright test --config playwright.release.config.cjs",
+    "test:release": "npm run check:locales && npm run check:fonts && tsc --noEmit && npm run test:unit && vite build && npm run test:release:e2e",
     "dev": "vite",
-    "build": "rimraf dist dist-electron && tsc --noEmit && vite build && electron-builder",
+    "build": "node scripts/vendor-fonts.cjs --check && rimraf dist dist-electron && tsc --noEmit && vite build && electron-builder",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,html}\"",
     "test:sfx": "tsx --test src/renderer/sfx.test.ts",
-    "test:sections": "tsx --test src/shared/sectionModel.test.ts",
+    "test:sections": "tsx --test src/shared/sectionModel.test.ts src/shared/slideInsertion.test.ts",
+    "test:optimizations": "tsx --test src/renderer/state/slideEdits.test.ts src/renderer/components/mediaPosterQueue.test.ts src/renderer/components/sectionVirtualRows.test.ts src/renderer/editor/snapGuides.test.ts",
+    "bench:slide-optimizations": "tsx scripts/bench-slide-optimizations.ts",
     "test:updater": "tsx --test src/renderer/state/updaterReducer.test.ts",
     "test:presets": "tsx --test src/main/presetStore.test.ts",
     "test:media": "tsx --test src/main/mediaLibrary.test.ts",
@@ -36,7 +41,12 @@
     "test:music": "tsx --test src/main/youtubeSearchPager.test.ts src/main/youtubeMusicLookup.test.ts src/main/offlineMusicCache.test.ts src/renderer/musicSlides.test.ts src/renderer/audio/musicEnvelope.test.ts && node --test src/main/youtubeMusicContext.test.cjs",
     "test:workspace:e2e": "playwright test workspace-layout.spec.cjs hymn-part-keys.spec.cjs music-modal.spec.cjs slide-audio.spec.cjs offline-music.spec.cjs",
     "postinstall": "patch-package --error-on-fail",
-    "test:pptx": "tsx --test src/main/pptxRender.test.ts src/main/pptxFontFiles.test.ts"
+    "test:pptx": "tsx --test src/main/pptxRender.test.ts src/main/pptxFontFiles.test.ts",
+    "test:reliability": "tsx --test src/main/gpresReader.test.ts src/shared/desktop.test.ts src/renderer/previewEncoding.test.ts src/main/atomicFile.test.ts src/renderer/documentSession.test.ts src/main/presentationDownload.test.ts src/renderer/fontLoader.test.ts src/renderer/previewCache.test.ts src/renderer/previewQueue.test.ts",
+    "check:fonts": "node scripts/vendor-fonts.cjs --check",
+    "bench:reliability": "node perf/reliability-run.cjs",
+    "check:locales": "node scripts/check-locales.cjs",
+    "test:locales": "node --test scripts/check-locales.test.cjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -131,6 +141,13 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "resources/fonts",
+        "to": "fonts",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "files": [
@@ -155,6 +172,7 @@
       ]
     },
     "nsis": {
+      "include": "build/gpres-association.nsh",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
@@ -184,7 +202,16 @@
         }
       ],
       "artifactName": "Worship-Presentation-Assistant-${version}-${arch}-mac.${ext}"
-    }
+    },
+    "fileAssociations": [
+      {
+        "ext": "gpres",
+        "name": "WorshipPresentationAssistant.Project",
+        "description": "Worship Presentation Project",
+        "icon": "gpres",
+        "role": "Editor"
+      }
+    ]
   },
   "repository": {
     "type": "git",

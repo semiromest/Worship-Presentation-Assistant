@@ -1,15 +1,16 @@
+import { Menu } from '@base-ui/react/menu';
+import ControlTooltip from './ControlTooltip';
 import { useTranslation } from 'react-i18next';
-import { Image as ImageIcon, X, FlipHorizontal, FlipVertical, Layers, ChevronDown } from 'lucide-react';
+import { Image as ImageIcon, FlipHorizontal, FlipVertical, Layers, ChevronDown } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { resolveCanvasSource } from '../canvasSource';
 import { cn } from '../utils';
 import type { Slide } from '../types';
+import { usePractice } from '../hooks/usePractice';
 
 interface ImageSlideEditorProps {
   selectedSlide: Slide;
   updateSlideStyles: (styles: Partial<Slide['styles']>) => void;
-  replaceSlideMedia: () => void;
-  removeSlideMedia: () => void;
   applyStyleFieldToAll: (pick: Partial<Slide['styles']> | 'all') => void;
 }
 
@@ -18,11 +19,10 @@ const RANGE_STYLES = 'w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor
 export default function ImageSlideEditor({
   selectedSlide,
   updateSlideStyles,
-  replaceSlideMedia,
-  removeSlideMedia,
   applyStyleFieldToAll,
 }: ImageSlideEditorProps) {
   const { t } = useTranslation();
+  const practice = usePractice();
   const panels = useStore((s) => s.panels);
   const setPanels = useStore((s) => s.setPanels);
 
@@ -74,6 +74,12 @@ export default function ImageSlideEditor({
         </div>
       )}
 
+      <details className="design-image-settings" open={practice || undefined}>
+        <summary>
+          {t('common.editorImageSettings')}
+          <ChevronDown className="w-4 h-4" aria-hidden="true" />
+        </summary>
+        <div className="design-image-settings-content">
       {/* Object Fit */}
       <div className="space-y-1.5">
         <span className="block text-[10px] text-white/45 uppercase font-bold tracking-tight">
@@ -83,12 +89,13 @@ export default function ImageSlideEditor({
           {fitOptions.map((opt) => (
             <button
               key={opt.value}
+              aria-pressed={(styles.objectFit ?? 'contain') === opt.value}
               data-guide-anchor={opt.value === 'contain' ? 'image-fit' : undefined}
               onClick={() => update({ objectFit: opt.value })}
               className={cn(
                 'flex-1 px-2 py-1.5 rounded-lg text-[10px] font-semibold border transition-[background-color,border-color]',
-                styles.objectFit === opt.value
-                  ? 'bg-blue-600/20 border-blue-500/40 text-blue-300'
+                (styles.objectFit ?? 'contain') === opt.value
+                  ? 'workspace-selected-option'
                   : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10 active:scale-[0.95]'
               )}
             >
@@ -98,6 +105,7 @@ export default function ImageSlideEditor({
         </div>
       </div>
 
+      <div className="design-image-adjustments">
       {/* Opacity */}
       <div className="space-y-1.5">
         <div className="flex justify-between items-center">
@@ -207,61 +215,46 @@ export default function ImageSlideEditor({
         />
       </div>
 
+      </div>
+
       {/* Flip Buttons */}
       <div className="flex gap-2">
-        <button
+        <ControlTooltip><button
           onClick={() => update({ imageFlipX: !styles.imageFlipX })}
+          aria-pressed={!!styles.imageFlipX}
           aria-label={t('common.editorFlipX')}
           className={cn(
             'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-[background-color,border-color] border active:scale-[0.96]',
             styles.imageFlipX
-              ? 'bg-blue-600/20 border-blue-500/40 text-blue-300'
+              ? 'workspace-selected-option'
               : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
           )}
         >
           <FlipHorizontal className="w-3.5 h-3.5" aria-hidden="true" />
           {t('common.editorFlipX')}
-        </button>
-        <button
+        </button></ControlTooltip>
+        <ControlTooltip><button
           onClick={() => update({ imageFlipY: !styles.imageFlipY })}
+          aria-pressed={!!styles.imageFlipY}
           aria-label={t('common.editorFlipY')}
           className={cn(
             'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-[background-color,border-color] border active:scale-[0.96]',
             styles.imageFlipY
-              ? 'bg-blue-600/20 border-blue-500/40 text-blue-300'
+              ? 'workspace-selected-option'
               : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
           )}
         >
           <FlipVertical className="w-3.5 h-3.5" aria-hidden="true" />
           {t('common.editorFlipY')}
-        </button>
+        </button></ControlTooltip>
       </div>
 
-      {/* Media Buttons */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={replaceSlideMedia}
-          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-[background-color,border-color,color] border bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white active:scale-[0.96]"
-        >
-          <ImageIcon className="w-3.5 h-3.5" />
-          {t('common.imageReplace') || 'Replace Image'}
-        </button>
-        {imageUrl && (
-          <button
-            onClick={removeSlideMedia}
-            className="p-2 rounded-lg bg-red-600/20 text-red-400 border border-red-500/20 hover:bg-red-600/30 transition-colors"
-            title={t('common.removeImage')}
-            aria-label={t('common.removeImage')}
-          >
-            <X className="w-3.5 h-3.5" aria-hidden="true" />
-          </button>
-        )}
-      </div>
+        </div>
+      </details>
 
       {/* Apply to All Dropdown */}
-      <div className="relative apply-styles-dropdown">
-        <button
-          onClick={() => setPanels((p) => ({ ...p, imageStyles: !p.imageStyles }))}
+      <Menu.Root modal={false} open={panels.imageStyles} onOpenChange={open => setPanels(p => ({ ...p, imageStyles: open }))}><div className="relative apply-styles-dropdown">
+        <Menu.Trigger
           className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-[11px] font-semibold text-white/70 hover:bg-white/10 transition-[background-color] active:scale-[0.97] group"
         >
           <div className="flex items-center gap-2">
@@ -274,15 +267,14 @@ export default function ImageSlideEditor({
               panels.imageStyles && 'rotate-180'
             )}
           />
-        </button>
-        {panels.imageStyles && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
+        </Menu.Trigger>
+        <Menu.Portal><Menu.Positioner align="start" sideOffset={6} className="z-50"><Menu.Popup onKeyDown={e => e.stopPropagation()} className="design-action-menu apply-styles-dropdown">
             {[
               { label: t('common.applyObjectFit'), action: () => applyStyleFieldToAll({ objectFit: undefined }) },
               { label: t('common.applyImageAdjustments'), action: () => applyStyleFieldToAll({ opacity: undefined, imageBrightness: undefined, imageContrast: undefined, imageBlur: undefined, imageGrayscale: undefined, imageSepia: undefined, imageFlipX: undefined, imageFlipY: undefined }) },
               { label: t('common.applyAllProperties'), action: () => applyStyleFieldToAll('all'), important: true },
             ].map((item, idx) => (
-              <button
+              <Menu.Item
                 key={idx}
                 onClick={() => {
                   item.action();
@@ -294,11 +286,10 @@ export default function ImageSlideEditor({
                 )}
               >
                 {item.label}
-              </button>
+              </Menu.Item>
             ))}
-          </div>
-        )}
-      </div>
+          </Menu.Popup></Menu.Positioner></Menu.Portal>
+      </div></Menu.Root>
     </>
   );
 }

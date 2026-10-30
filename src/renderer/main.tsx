@@ -1,3 +1,4 @@
+import { Tooltip } from '@base-ui/react/tooltip';
 import './slides-workspace.css';
 import { PracticeFrame } from './components/PracticePanel';
 import React, { Profiler } from 'react';
@@ -53,5 +54,5 @@ const app = rendererPerf.enabled ? (
 );
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode><PracticeFrame>{app}</PracticeFrame></React.StrictMode>
+  <React.StrictMode><PracticeFrame><Tooltip.Provider delay={450} timeout={350}>{app}</Tooltip.Provider></PracticeFrame></React.StrictMode>
 );

@@ -3,6 +3,7 @@ import type { ImageStyle } from '../types';
 import { useImageSize } from '../hooks/useImageSize';
 import { normalizeCrop } from '../imageGeometry';
 import { resolveCanvasSource } from '../canvasSource';
+import { usePreviewImage } from '../hooks/usePreviewImage';
 
 /** All image-item surfaces share crop, fit, flip, and filters. */
 export const SlideImage = memo(function SlideImage({
@@ -10,13 +11,18 @@ export const SlideImage = memo(function SlideImage({
   styles = {},
   alt = '',
   lazy = false,
+  previewWidth = 320,
 }: {
   src?: string;
   styles?: ImageStyle;
   alt?: string;
   lazy?: boolean;
+  previewWidth?: number;
 }) {
-  src = src ? resolveCanvasSource(src, false).url : undefined;
+  const croppedWidth = styles.cropMode === 'source' && styles.crop
+    ? previewWidth / Math.max(0.05, styles.crop.width / 100) : previewWidth;
+  const preview = usePreviewImage(src, croppedWidth, lazy);
+  src = lazy ? preview : src ? resolveCanvasSource(src, false).url : undefined;
   const source = styles.cropMode === 'source' && !!styles.crop;
   const size = useImageSize(source ? src : undefined);
   const crop = normalizeCrop(styles.crop);
@@ -59,6 +65,7 @@ export const SlideImage = memo(function SlideImage({
             alt={alt}
             draggable={false}
             loading={lazy ? 'lazy' : undefined}
+            decoding="async"
             className="h-full w-full pointer-events-none"
             style={{ objectFit: styles.objectFit ?? 'contain' }}
           />

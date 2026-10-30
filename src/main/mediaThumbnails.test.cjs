@@ -28,6 +28,7 @@ async function setup(t, options = {}) {
             if (args.includes('-version'))
               return done(options.missing ? Object.assign(new Error('missing'), { code: 'ENOENT' }) : null, 'version');
             if (args.includes('-show_entries')) return done(null, '2');
+            if (args.includes('-i') && !args.includes('-frames:v')) return done(null, '', 'Duration: 00:00:02.00');
             const output = args.at(-1);
             syncFs.writeFileSync(output, Buffer.from('frame'));
             if (options.hold) return options.hold(() => done(null, ''));
@@ -47,7 +48,7 @@ async function setup(t, options = {}) {
     const st = await fs.stat(file);
     return crypto.createHash('sha1').update(`${file}:${st.size}:${st.mtimeMs}:400`).digest('hex').slice(0, 20);
   };
-  const frames = () => calls.filter((c) => c.args.includes('-vframes'));
+  const frames = () => calls.filter((c) => c.args.includes('-frames:v'));
   return { dir, api: apiModule.exports, video, cache, calls, frames };
 }
 test('existing JPEG cache is reused including a fresh module session', async (t) => {

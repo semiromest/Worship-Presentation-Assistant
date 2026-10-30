@@ -7,7 +7,17 @@ async function launchWorkspace(info, readyTimeout=10000) {
   delete env.ELECTRON_RUN_AS_NODE;
   const app=await electron.launch({args:[path.resolve('tests/tour/electron-bootstrap.cjs')],cwd:process.cwd(),env});
   const page=await app.firstWindow();page.setDefaultTimeout(10000);
+  const startupErrors=[];
+  page.on('pageerror',error=>startupErrors.push(error.message));
   await page.waitForFunction(()=>!!window.__tourTest,{},{timeout:readyTimeout});
+  // The dev seam is published before PracticeFrame's async initialization.
+  // Seed tests only after App mounts, otherwise its startup can overwrite the
+  // requested tab/deck and make unrelated workspace assertions race startup.
+  try { await page.locator('[data-app-shell]').waitFor({state:'visible',timeout:readyTimeout}); }
+  catch(error){
+    console.log('Workspace startup failed',JSON.stringify({url:page.url(),errors:startupErrors,body:await page.locator('body').innerText().catch(()=>'<closed>')}));
+    await closeWorkspace(app);throw error;
+  }
   return {app,page,profile};
 }
 async function closeWorkspace(app) {

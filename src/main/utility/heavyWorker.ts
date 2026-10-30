@@ -15,13 +15,14 @@
  * written content-addressed into the passed mediaDir (same algorithm as main).
  */
 
-import AdmZip from 'adm-zip';
-import { createCanvas, loadImage, type Image, type SKRSContext2D } from '@napi-rs/canvas';
+import { readGpres } from '../gpresReader';
+import { createCanvas, loadImage, GlobalFonts, type Image, type SKRSContext2D } from '@napi-rs/canvas';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { calculateFit, calculateCover, wrapCanvasText, canvasTypography, canvasLinePlacement } from '../../shared/canvasLayout';
 import { getPptxService } from '../pptxService';
 import { exportPresentationToPptx } from '../pptxExportService';
-import { buildGpresZip } from '../../shared/mediaTree';
-import { createMediaLibrary, rewriteGpresMedia } from '../mediaLibrary';
+import { writeGpresFile } from '../gpresWriter';
 import {
   THUMB_W, THUMB_H, PLACEHOLDER_BG, EMPTY_BG,
   type ThumbSlideData,
@@ -31,8 +32,9 @@ import { getSlideDisplayContent } from '../../shared/slideContent';
 type HeavyRequest =
   | { id: number; type: 'import-pptx'; payload: { filePath: string; mediaDir: string } }
   | { id: number; type: 'export-pptx'; payload: { content: string; filePath: string; mediaDir: string } }
-  | { id: number; type: 'build-gpres'; payload: { content: string; mediaDir: string } }
-  | { id: number; type: 'extract-gpres'; payload: { buffer: ArrayBuffer; mediaDir: string } }
+  | { id: number; type: 'write-gpres'; payload: { content: string; mediaDir: string; target: string } }
+  | { id: number; type: 'validate-gpres'; payload: { filePath: string; mediaDir: string } }
+  | { id: number; type: 'extract-gpres'; payload: { buffer?: ArrayBuffer; filePath?: string; mediaDir: string; serialize?: boolean } }
   | { id: number; type: 'generate-thumbnail'; payload: { slide: ThumbSlideData } };
 
 type Ctx = SKRSContext2D;
@@ -90,6 +92,28 @@ function createLimiter(max: number) {
   };
 }
 const thumbnailLimit = createLimiter(THUMBNAIL_CONCURRENCY);
+const registeredFontFamilies = new Set<string>();
+let fontManifest: Promise<{ base: string; families: { family: string; faces: { file: string }[] }[] }> | undefined;
+async function registerThumbnailFonts(slide: ThumbSlideData) {
+  const { base, families } = await (fontManifest ??= (async () => {
+    const root = path.join(process.resourcesPath ?? path.resolve(__dirname, '..'), 'fonts');
+    const devRoot = path.resolve(__dirname, '../resources/fonts');
+    const base = await fs.access(path.join(root, 'manifest.json')).then(() => root, () => devRoot);
+    return { base, families: JSON.parse(await fs.readFile(path.join(base, 'manifest.json'), 'utf8')).families };
+  })().catch(error => { fontManifest = undefined; throw error; }));
+  const requested = new Set<string>();
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return;
+    for (const [key, child] of Object.entries(value)) {
+      if (key === 'fontFamily' && typeof child === 'string') requested.add(child.split(',')[0].replace(/['"]/g, '').trim());
+      else if (child && typeof child === 'object') visit(child);
+    }
+  }; visit(slide);
+  for (const family of families) if (requested.has(family.family) && !registeredFontFamilies.has(family.family)) {
+    for (const face of family.faces) if (!GlobalFonts.registerFromPath(path.join(base, face.file), family.family)) throw new Error('Cannot register bundled font');
+    registeredFontFamilies.add(family.family);
+  }
+}
 
 async function handle(req: HeavyRequest): Promise<unknown> {
   switch (req.type) {
@@ -102,23 +126,17 @@ async function handle(req: HeavyRequest): Promise<unknown> {
       const data = JSON.parse(req.payload.content);
       return exportPresentationToPptx(data, req.payload.filePath, progressReporter(req.id), req.payload.mediaDir);
     }
-    case 'build-gpres': {
-      const data = JSON.parse(req.payload.content);
-      const { zip, embeddedCount } = await buildGpresZip(data, { mediaDir: req.payload.mediaDir });
-      // toBuffer() zaten Buffer döndürüyorsa ikinci bir kopya üretme.
-      const out = zip.toBuffer();
-      return { embeddedCount, zipBuffer: Buffer.isBuffer(out) ? out : Buffer.from(out) };
-    }
+    case 'write-gpres':
+      return writeGpresFile(req.payload.content, req.payload.target, req.payload.mediaDir);
+    case 'validate-gpres':
+      await readGpres(req.payload.filePath, req.payload.mediaDir, undefined, { validateOnly: true });
+      return true;
     case 'extract-gpres': {
-      const zip = new AdmZip(Buffer.from(req.payload.buffer)); // ArrayBuffer'dan Buffer.from kopyalamaz.
-      const jsonEntry = zip.getEntry('presentation.json');
-      if (!jsonEntry) throw new Error('Corrupt .gpres file: missing presentation.json');
-      const data = JSON.parse(zip.readAsText(jsonEntry));
-      const mediaCount = await rewriteGpresMedia(zip, data, createMediaLibrary(req.payload.mediaDir));
-      return { data, mediaCount };
+      const result = await readGpres(req.payload.filePath ?? Buffer.from(req.payload.buffer!), req.payload.mediaDir);
+      return req.payload.serialize ? { content: JSON.stringify(result.data), mediaCount: result.mediaCount } : result;
     }
     case 'generate-thumbnail':
-      return thumbnailLimit(() => generateThumbnail(req.payload.slide));
+      return thumbnailLimit(async () => { await registerThumbnailFonts(req.payload.slide); return generateThumbnail(req.payload.slide); });
     default:
       throw new Error(`Unknown heavy request type: ${(req as { type: string }).type}`);
   }

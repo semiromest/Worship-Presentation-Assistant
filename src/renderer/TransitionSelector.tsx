@@ -1,6 +1,7 @@
 import { playSfx } from './sfx';
 import { memo, useCallback } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Check, Clock3 } from 'lucide-react';
+import { Select } from '@base-ui/react/select';
 import type { TransitionType } from './types';
 import { TRANSITION_OPTIONS, DURATION_OPTIONS } from './constants';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +12,32 @@ interface TransitionSelectorProps {
   onChange: (update: Partial<{ type: TransitionType; duration: number }>) => void;
 }
 
+function EffectDropdown({ value, label, items, onChange, duration = false }: {
+  value: string; label: string; items: { value: string; label: string; icon?: string }[];
+  onChange: (value: string) => void; duration?: boolean;
+}) {
+  return <Select.Root value={value} items={items} onValueChange={next => { if (next !== null) onChange(next); }}>
+    <Select.Trigger aria-label={label} className="effect-select-trigger" data-duration={duration || undefined} onKeyDown={event => event.stopPropagation()}>
+      {duration && <Clock3 className="effect-select-clock" aria-hidden="true" />}
+      <Select.Value className="effect-select-value" />
+      <Select.Icon><ChevronDown aria-hidden="true" /></Select.Icon>
+    </Select.Trigger>
+    <Select.Portal>
+      <Select.Positioner side="bottom" align="start" sideOffset={6} alignItemWithTrigger={false} className="z-[80]">
+        <Select.Popup className="effect-select-popup" aria-label={label} data-duration={duration || undefined} onKeyDown={event => event.stopPropagation()}>
+          <Select.List className="effect-select-list">
+            {items.map(item => <Select.Item key={item.value} value={item.value} label={item.label} data-value={item.value} className="effect-select-option">
+              {item.icon && <span className="effect-select-symbol" aria-hidden="true">{item.icon}</span>}
+              <Select.ItemText>{item.label}</Select.ItemText>
+              <Select.ItemIndicator className="effect-select-check"><Check aria-hidden="true" /></Select.ItemIndicator>
+            </Select.Item>)}
+          </Select.List>
+        </Select.Popup>
+      </Select.Positioner>
+    </Select.Portal>
+  </Select.Root>;
+}
+
 export const TransitionSelector = memo(({
   transitionType,
   duration,
@@ -18,18 +45,18 @@ export const TransitionSelector = memo(({
 }: TransitionSelectorProps) => {
   const { t } = useTranslation();
   const handleTransitionChange = useCallback(
-    (e: React.ChangeEvent<HTMLSelectElement>) => {
-      if (e.target.value === transitionType) return;
-      onChange({ type: e.target.value as TransitionType });
+    (value: string) => {
+      if (value === transitionType) return;
+      onChange({ type: value as TransitionType });
       playSfx('press');
     },
     [onChange, transitionType]
   );
 
   const handleDurationChange = useCallback(
-    (e: React.ChangeEvent<HTMLSelectElement>) => {
-      if (parseInt(e.target.value) === duration) return;
-      onChange({ duration: parseInt(e.target.value) });
+    (value: string) => {
+      if (Number(value) === duration) return;
+      onChange({ duration: Number(value) });
       playSfx('press');
     },
     [onChange, duration]
@@ -39,41 +66,8 @@ export const TransitionSelector = memo(({
     <div className="design-transition-controls" role="group" aria-label={t('transition.settings')}>
       <span>{t('transition.label')}</span>
       <div className="design-transition-selects">
-        <div className="relative">
-          <select
-            value={transitionType}
-            onChange={handleTransitionChange}
-            aria-label={t('transition.type')}
-            className="w-full bg-white/5 border border-white/10 rounded-lg pl-2 pr-6 text-xs text-white/80 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 hover:bg-white/10 transition-colors appearance-none cursor-pointer"
-          >
-            {TRANSITION_OPTIONS.map(({ type, label }) => (
-              <option key={type} value={type} className="bg-[#181818]">
-                {t(label)}
-              </option>
-            ))}
-          </select>
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-white/40">
-            <ChevronDown className="w-3 h-3" />
-          </div>
-        </div>
-
-        <div className="relative">
-          <select
-            value={duration}
-            onChange={handleDurationChange}
-            aria-label={t('transition.duration')}
-            className="w-full bg-white/5 border border-white/10 rounded-lg pl-2 pr-6 text-xs text-white/80 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 hover:bg-white/10 transition-colors appearance-none cursor-pointer font-mono"
-          >
-            {DURATION_OPTIONS.map(ms => (
-              <option key={ms} value={ms} className="bg-[#181818]">
-                {ms}ms
-              </option>
-            ))}
-          </select>
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-white/40">
-            <ChevronDown className="w-3 h-3" />
-          </div>
-        </div>
+        <EffectDropdown value={transitionType} label={t('transition.type')} items={TRANSITION_OPTIONS.map(item => ({ value: item.type, label: t(item.label), icon: item.icon }))} onChange={handleTransitionChange} />
+        <EffectDropdown value={String(duration)} label={t('transition.duration')} items={DURATION_OPTIONS.map(ms => ({ value: String(ms), label: `${ms} ms` }))} onChange={handleDurationChange} duration />
       </div>
     </div>
   );

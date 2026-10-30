@@ -42,7 +42,7 @@ async function launch(mode = 'smoke') {
   if (mode === 'practice') expect(path.resolve(profile).toLowerCase().startsWith(path.resolve(smokeBase).toLowerCase() + path.sep)).toBe(true);
   return { app, page, profile };
 }
-async function close(app) { await app.context().tracing.stop().catch(() => {}); await require('./teardown.cjs').closeElectron(app); running = running.filter(item => item !== app); }
+async function close(app) { await app.context().tracing.stop().catch(() => {}); await require('./workspace-test-utils.cjs').closeWorkspace(app); running = running.filter(item => item !== app); }
 async function invoke(app, channel, args = [], unauthorized = false) {
   return app.evaluate(async ({ ipcMain, BrowserWindow }, { channel, args, unauthorized }) => {
     const wc = BrowserWindow.getAllWindows()[0].webContents;
@@ -65,7 +65,7 @@ test.afterEach(async ({}, info) => {
     await fs.mkdir(info.outputDir, { recursive: true });
     await fs.writeFile(info.outputPath('process-' + running.indexOf(app) + '.log'), (logs.get(app) ?? []).join(''));
     await app.context().tracing.stop(info.status !== info.expectedStatus ? { path: info.outputPath('trace-' + running.indexOf(app) + '.zip') } : {}).catch(() => {});
-    await require('./teardown.cjs').closeElectron(app);
+    await require('./workspace-test-utils.cjs').closeWorkspace(app);
   }
   running = [];
   for (const profile of smokeProfiles) {
@@ -98,7 +98,9 @@ test('packaged practice: language isolation, ten paused chapters, archived resta
     await expect(page.locator('[data-guide-anchor="nav-'+name+'"]').filter({visible:true})).toHaveAttribute('aria-current','page');
     expect((await page.evaluate(()=>window.electronAPI.readPracticeWorkspace(null))).guide.paused).toBe(true);
   }
-  await page.getByTestId('guide-restart').click();await expect(page.locator('[data-guide-step]')).toHaveAttribute('data-guide-step','welcome');
+  await page.getByTestId('guide-restart').click();
+  await page.locator('.app-choice-dialog').getByRole('button', { name: 'Baştan başla', exact: true }).click();
+  await expect(page.locator('[data-guide-step]')).toHaveAttribute('data-guide-step','welcome');
   const fresh=await page.evaluate(()=>window.electronAPI.readPracticeWorkspace(null));expect(fresh.runId).not.toBe(before.runId);expect(fresh.deck.slides).toEqual([]);
   expect((await fs.readdir(path.join(candidate.profile,'practice-archives')))).toHaveLength(1);
   await page.screenshot({path:test.info().outputPath('practice-start-800x600.png')});
@@ -297,6 +299,7 @@ test('guided learning: ten sections, real outcomes, Esc resume, crash and retain
   expect((await normal.page.evaluate(() => window.electronAPI.getPracticeProgress())).guide.step).toBe('done');
   expect(await candidate.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1);
   await candidate.page.getByTestId('guide-restart').click();
+  await candidate.page.locator('.app-choice-dialog').getByRole('button', { name: 'Start over', exact: true }).click();
   await expect(candidate.page.locator('[data-guide-step]')).toHaveAttribute('data-guide-step','welcome');
   const fresh=await candidate.page.evaluate(()=>window.electronAPI.readPracticeWorkspace(null));expect(fresh.runId).not.toBe(kept.runId);expect(fresh.deck.slides).toEqual([]);
   await expect.poll(()=>normal.page.evaluate(async()=>{

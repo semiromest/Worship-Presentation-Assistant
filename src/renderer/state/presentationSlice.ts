@@ -49,6 +49,8 @@ export function createPresentationSlice(
   | 'toastMessage'
   | 'toastKey'
   | 'setToastMessage'
+  | 'importantNotification'
+  | 'dismissImportantNotification'
   | 'dispatchUndo'
   | 'applyProjectorDelta'
   | 'selectedSlideId'
@@ -91,7 +93,12 @@ export function createPresentationSlice(
     presentation: initialUndoState.present,
     toastMessage: null,
     toastKey: 0,
-    setToastMessage: (msg) => set({ toastMessage: msg, toastKey: msg ? Date.now() : 0 }),
+    importantNotification: null,
+    dismissImportantNotification: () => set({ importantNotification: null }),
+    setToastMessage: (msg, severity) => set(state =>
+      msg && msg !== 'undoNotification' && msg !== 'redoNotification'
+        ? (severity === 'info' && state.importantNotification && state.importantNotification.severity !== 'info' ? state : { importantNotification: { message: msg, severity: severity ?? (msg === 'displayDisconnected' ? 'warning' : 'error'), key: Math.max(Date.now(), (state.importantNotification?.key ?? 0) + 1) } })
+        : { toastMessage: msg, toastKey: msg ? Date.now() : 0 }),
     dispatchUndo: (action) =>
       set((state) => {
         const normalizedAction =
@@ -108,7 +115,9 @@ export function createPresentationSlice(
         }
 
         const restoring = action.type === 'RESET';
-        const livePosition = resolveLiveSlidePosition(
+        const livePosition = action.type === 'EDIT_SLIDES'
+          ? { slideId: state.liveSlideId, index: state.liveIndex }
+          : resolveLiveSlidePosition(
           restoring ? nextUndoState.present.liveSlideId : state.liveSlideId,
           restoring ? (nextUndoState.present.liveIndex ?? 0) : state.liveIndex,
           nextUndoState.present.slides

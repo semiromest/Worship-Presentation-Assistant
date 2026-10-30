@@ -29,6 +29,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Check localization integrity
+        run: npm run check:locales
+      - name: Test localization checker
+        run: npm run test:locales
       - name: Build-only Drive credentials
         shell: pwsh
         run: |

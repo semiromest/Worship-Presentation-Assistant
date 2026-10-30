@@ -22,6 +22,10 @@ export default defineConfig({
             },
           }],
           build: {
+            // Main and preload share dist-electron. A main-only watch rebuild
+            // must not delete preload.js and leave the restarted app blank.
+            // The production build script already clears the output upfront.
+            emptyOutDir: false,
             target: 'node20',         // main process runs on Node.js
             minify: 'esbuild',
             sourcemap: false,
@@ -48,6 +52,7 @@ export default defineConfig({
         input: path.join(__dirname, 'src/main/preload.ts'),
         vite: {
           build: {
+            emptyOutDir: false,
             target: 'node20',         // preload runs in a Node.js environment
             minify: 'esbuild',
             sourcemap: false,
