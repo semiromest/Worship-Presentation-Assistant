@@ -1,0 +1,60 @@
+name: Bug report
+description: Report a reproducible problem with Worship Presentation Assistant.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve Worship Presentation Assistant. English or Turkish is welcome.
+        Search existing issues first. Keep credentials, private presentation content and QR codes out of public reports.
+        Report security vulnerabilities privately using the [Security Policy](https://github.com/semiromest/Worship-Presentation-Assistant/security/policy).
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Find this in Settings. For a source build, include the commit if known.
+      placeholder: "For example: 1.4.26"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Linux (source build)
+        - Other / not sure
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: OS version and installation source
+      placeholder: "For example: Windows 11, GitHub release installer"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include the relevant page and controls. Use a minimal example with non-private content.
+      placeholder: |
+        1. Open ...
+        2. Select ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Describe what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots, logs and additional context
+      description: For output issues, include the display setup. For media or imports, include the format. Remove personal data and secrets before attaching files.

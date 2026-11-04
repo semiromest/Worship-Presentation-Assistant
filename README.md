@@ -45,6 +45,7 @@ A modern desktop app for displaying song lyrics, scriptures, media and announcem
   - [Release Process (CI)](#release-process-ci)
   - [Project Structure](#project-structure)
 - [Tech Stack](#tech-stack)
+- [Contributing & Community](#contributing--community)
 - [License](#license)
 
 ---
@@ -439,6 +440,19 @@ docs/                   # Feature notes and validation records
 | Networking | ws (WebSocket remote control) |
 | Office | pptxgenjs (PowerPoint export) |
 | Backend | Node.js HTTP + WebSocket server (phone remote) |
+
+---
+
+## Contributing & Community
+
+Bug reports, documentation, translations and focused improvements are welcome. Start with the [contribution guide](CONTRIBUTING.md) for development setup, validation and pull requests.
+
+- [Support and troubleshooting](SUPPORT.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security Policy and private vulnerability reporting](SECURITY.md)
+- [Report a bug or suggest a feature](https://github.com/semiromest/Worship-Presentation-Assistant/issues/new/choose)
+
+Please remove credentials and private presentation content from public reports. English and Turkish contributions are welcome.
 
 ---
 

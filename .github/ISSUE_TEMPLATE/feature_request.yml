@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest a focused improvement for presentation preparation or live use.
+title: "[Feature] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing requests first. English or Turkish is welcome.
+        Describe the practical problem; a small improvement to an existing workflow is often the best solution.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Explain who encounters the problem and when it occurs during preparation or live use.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe a concrete example of how you would use the improvement.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Current workaround or alternatives
+      description: Could an existing control or workflow be extended to solve the problem?
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add a simple sketch, relevant platform details or related issues. Remove private content before uploading anything.

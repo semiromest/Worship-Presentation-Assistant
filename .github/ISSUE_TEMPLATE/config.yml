@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Usage help and troubleshooting
+    url: https://github.com/semiromest/Worship-Presentation-Assistant/blob/master/SUPPORT.md
+    about: Read the usage and support guide before opening an issue.
+  - name: Report a security vulnerability privately
+    url: https://github.com/semiromest/Worship-Presentation-Assistant/security/policy
+    about: Use the private reporting instructions. Do not post exploit details in a public issue.
