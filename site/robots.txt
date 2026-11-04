@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://semiromest.github.io/Worship-Presentation-Assistant/sitemap.xml

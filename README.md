@@ -9,6 +9,8 @@ A modern desktop app for displaying song lyrics, scriptures, media and announcem
 ![Platforms](https://img.shields.io/badge/installers-Windows%20%7C%20macOS-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+[Website](https://semiromest.github.io/Worship-Presentation-Assistant/) · [Interactive browser demo](https://semiromest.github.io/Worship-Presentation-Assistant/demo/) · [Download](https://github.com/semiromest/Worship-Presentation-Assistant/releases/latest)
+
 </div>
 
 ---
