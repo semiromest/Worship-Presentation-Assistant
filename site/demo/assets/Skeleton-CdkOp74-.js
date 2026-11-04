@@ -1,0 +1,1 @@
+import{j as a,z as n}from"./useUiMotionEnabled-Bu8YPLMy.js";function s({className:e,style:t}){return a.jsx("div",{className:n("animate-pulse rounded-lg bg-white/10",e),style:t,"aria-hidden":"true"})}export{s as S};

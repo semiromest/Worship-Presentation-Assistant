@@ -1,12 +1,20 @@
 # Website and browser demo
 
-This directory is a standalone static website for GitHub Pages. It has no build step, desktop imports, analytics or third-party runtime dependencies.
+This directory contains the static files published by GitHub Pages. The landing page has no build step. The demo is a prebuilt browser bundle of the application's actual React renderer and styles, with desktop capabilities replaced by a browser sandbox.
 
 - `/`: English/Turkish product introduction and GitHub release download links.
 - `/demo/`: A browser-only slide workspace with original sample lyrics, clearly labelled scripture paraphrases and optional local image/video files.
-- `assets/demo-model.mjs`: Slide selection, live cues, song parts and edit history, separate from DOM rendering.
+- `demo/assets/`: Generated renderer bundle; rebuild from `browser-demo/` rather than editing these files.
 
-The demo does not implement Electron APIs, real projector outputs, phone control, cloud transcription or XML/PowerPoint import. It does not upload files or persist presentations. Only the language preference is stored in localStorage; edits and object URLs belong to the current tab.
+The demo allows slide creation, text and appearance editing, local image/video selection, and exploring sample hymns and scripture. The Screen tab is intentionally inert. Projector outputs, screen capture, phone control, cloud services, import/export and other desktop integrations are disabled. Files are read locally through browser object URLs and never uploaded. The renderer can retain appearance preferences and library entries in browser storage; the open presentation resets on reload.
+
+To rebuild the demo from the current renderer working tree, run from the repository root:
+
+```sh
+npx vite build --config browser-demo/vite.config.mts
+```
+
+Commit the resulting `site/demo/` files together with changes to the sandbox source. Pages publishes this checked-in snapshot, so deployment does not depend on Electron packaging or unrelated desktop changes.
 
 ## Preview
 

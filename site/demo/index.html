@@ -1,54 +1,16 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#101516">
-  <title>Interactive demo — Worship Presentation Assistant</title>
-  <meta name="description" content="Try preparing a worship presentation in your browser. Edit slides, add sample songs and scripture, choose backgrounds and preview your service live.">
-  <link rel="canonical" href="https://semiromest.github.io/Worship-Presentation-Assistant/demo/">
-  <link rel="icon" href="../assets/logo.png" type="image/png">
-  <link rel="stylesheet" href="../assets/site.css"><link rel="stylesheet" href="../assets/demo.css">
-  <script type="module" src="../assets/demo.mjs"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f0f11">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="description" content="Explore the actual Worship Presentation Assistant interface with sample scripture and hymns. Create and style slides or add local images. Desktop services are disabled.">
+  <title>Worship Presentation Assistant — Browser demo</title>
+  <link rel="icon" href="../assets/logo.png">
+  <script type="module" crossorigin src="./assets/index-4EZn9ffU.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/useUiMotionEnabled-Bu8YPLMy.js">
+  <link rel="stylesheet" crossorigin href="./assets/index-DLJlemHW.css">
 </head>
-<body class="demo-page">
-  <a class="skip-link" href="#workspace" data-i18n="skip">Skip to content</a>
-  <header class="demo-header">
-    <a class="brand" href="../" data-i18n-label="backHome"><img src="../assets/logo.png" alt="" width="22" height="30"><span>Worship<span class="brand-small">Presentation Assistant</span></span></a>
-    <span class="demo-badge" data-i18n="demoBadge">BROWSER DEMO</span>
-    <div class="demo-header-actions"><a class="desktop-link" href="https://github.com/semiromest/Worship-Presentation-Assistant/releases/latest" data-i18n="getDesktop">Get desktop app ↗</a><button class="language" type="button" data-language aria-label="Switch to Turkish">TR</button></div>
-  </header>
-  <div class="demo-intro"><div><h1 data-i18n="demoIntro">Try preparing a service.</h1><p data-i18n="demoIntroText">Pick a slide, edit its words, then send it live. Everything here happens in this tab.</p></div><button class="subtle-button" id="reset" type="button" data-i18n="reset" data-i18n-label="resetHint">Start over</button></div>
-  <main class="demo-workspace" id="workspace">
-    <nav class="demo-nav" aria-label="Demo tools" data-i18n-label="demoTools">
-      <button type="button" data-panel="slides" aria-pressed="true" class="active"><span aria-hidden="true">▤</span><span data-i18n="slides">Slides</span></button>
-      <button type="button" data-panel="scripture" aria-pressed="false"><span aria-hidden="true">▥</span><span data-i18n="scripture">Scripture</span></button>
-      <button type="button" data-panel="hymns" aria-pressed="false"><span aria-hidden="true">♫</span><span data-i18n="hymns">Songs</span></button>
-      <button type="button" data-panel="media" aria-pressed="false"><span aria-hidden="true">▧</span><span data-i18n="media">Media</span></button>
-    </nav>
-    <aside class="demo-library">
-      <section id="panel-slides" class="library-panel"><div class="library-heading"><div><p class="small-kicker" data-i18n="service">My first service</p><h2 data-i18n="slides">Slides</h2></div><button class="icon-button" id="add-slide" type="button" data-i18n-label="addSlide">＋</button></div><div id="slide-list" class="slide-list" aria-label="Presentation slides" data-i18n-label="presentationSlides"></div></section>
-      <section id="panel-scripture" class="library-panel" hidden><div class="library-heading"><h2 data-i18n="scripture">Scripture</h2></div><p class="library-description" data-i18n="scriptureIntro">Two passages to explore. Add one to your service, then edit its wording or appearance.</p><div id="scripture-list"></div><p class="library-note" data-i18n="scriptureNote">Illustrative paraphrases, not a Bible translation. Import your preferred Bible in the desktop app.</p></section>
-      <section id="panel-hymns" class="library-panel" hidden><div class="library-heading"><h2 data-i18n="hymns">Songs</h2></div><p class="library-description" data-i18n="hymnIntro">An original sample song. Its verses stay together as parts of a single slide.</p><article class="sample-card"><h3 id="song-title"></h3><p id="song-text" class="song-sample"></p><button id="add-song" class="library-action" type="button" data-i18n="addSong">Add as song parts</button></article><p class="library-note" data-i18n="hymnCredit">Original demo lyrics · Worship Presentation Assistant</p></section>
-      <section id="panel-media" class="library-panel" hidden><div class="library-heading"><h2 data-i18n="media">Media</h2></div><p class="library-description" data-i18n="mediaIntro">Set the atmosphere with a background, or try a photo or video from your computer.</p><label class="import-button"><span aria-hidden="true">＋</span><span data-i18n="importMedia">Choose photo or video</span><input id="media-file" type="file" accept="image/*,video/*" aria-label="Choose photo or video" data-i18n-label="importMedia"></label><p class="library-note" data-i18n="mediaPrivacy">Your file is used locally in this tab. It is not uploaded.</p><div id="background-library"></div></section>
-    </aside>
-    <section class="demo-canvas-area" aria-label="Slide preview" data-i18n-label="slidePreview">
-      <div class="canvas-toolbar"><div class="view-switch" role="group" aria-label="Preview mode" data-i18n-label="previewMode"><button id="selected-view" class="active" type="button" aria-pressed="true" data-i18n="selectedView">Selected slide</button><button id="live-view" type="button" aria-pressed="false" data-i18n="liveView">Live preview</button></div><div class="history-buttons"><button class="icon-button" id="undo" type="button" data-i18n-label="undo">↶</button><button class="icon-button" id="redo" type="button" data-i18n-label="redo">↷</button></div></div>
-      <div class="canvas-preview-wrap" id="fullscreen-host"><div id="slide-stage" class="demo-stage theme-dawn" role="group" aria-label="Selected slide"><div id="stage-media" class="stage-media"></div><div id="stage-content" class="stage-content"></div><span id="stage-credit" class="stage-credit"></span><div id="stage-blackout" class="stage-blackout" hidden></div><button id="fullscreen-exit" class="fullscreen-exit" type="button" data-i18n="exitFullscreen" hidden>Exit full screen</button></div></div>
-      <div class="canvas-meta"><span id="preview-status"></span><span id="part-status"></span><span id="slide-count"></span></div>
-      <div class="part-controls" id="part-controls" role="group" aria-label="Song parts" data-i18n-label="songParts"></div>
-      <div class="live-controls"><button id="go-live" class="button primary" type="button"><span class="live-dot" aria-hidden="true"></span><span data-i18n="goLive">Send live</span></button><button id="blackout" type="button" class="subtle-button" aria-pressed="false" data-i18n="blackout">Black screen</button><button id="fullscreen" type="button" class="subtle-button" data-i18n="fullscreen">Full screen</button></div>
-      <p class="keyboard-note" data-i18n="keyboardHint">← → slides · ↑ ↓ song parts · B black screen · Esc exit full screen</p>
-      <div class="demo-limits"><span class="limit-mark" aria-hidden="true">i</span><div><h3 data-i18n="demoLimitsTitle">Explore here. Present with the desktop app.</h3><p data-i18n="demoLimits">Real projector outputs, remote control, live transcription and XML/PowerPoint import need the desktop app. This demo previews the slide workflow.</p></div></div>
-    </section>
-    <aside class="demo-inspector"><div class="inspector-heading"><h2 data-i18n="inspector">Slide settings</h2><span class="inspector-dot" aria-hidden="true"></span></div>
-      <div class="text-tools" id="text-tools"><label for="slide-text" data-i18n="text">Text</label><textarea id="slide-text" data-i18n-placeholder="textPlaceholder" placeholder="Write something for your community…" rows="7"></textarea><button id="split-part" class="split-button" type="button" data-i18n="split" disabled>Split at cursor</button><p class="field-note" data-i18n="splitHint">Place the cursor between two phrases to create another song part.</p><div class="field-row"><label for="font-size" data-i18n="fontSize">Text size</label><output id="font-size-value" for="font-size">52</output></div><input id="font-size" type="range" min="28" max="96" value="52" step="2"><p class="field-label" data-i18n="alignment">Alignment</p><div class="alignment-buttons" role="group" aria-label="Alignment" data-i18n-label="alignment"><button data-align="left" type="button" aria-pressed="false" data-i18n-label="alignLeft">☰</button><button data-align="center" type="button" aria-pressed="true" data-i18n-label="alignCenter">≡</button><button data-align="right" type="button" aria-pressed="false" data-i18n-label="alignRight">☷</button></div></div>
-      <p id="media-settings-note" class="library-description" data-i18n="mediaSettings" hidden>This is a local media slide. Choose another slide to edit text.</p>
-      <p class="field-label" data-i18n="background">Background</p><div id="background-swatches" class="background-swatches" role="group" aria-label="Slide background" data-i18n-label="slideBackground"></div>
-      <div class="slide-operations"><button id="move-up" type="button" class="icon-button" data-i18n-label="moveUp">↑</button><button id="move-down" type="button" class="icon-button" data-i18n-label="moveDown">↓</button><button id="duplicate" type="button" class="subtle-button" data-i18n="duplicate">Duplicate selected slide</button><button id="delete" type="button" class="icon-button danger" data-i18n-label="remove">×</button></div>
-      <p class="local-note"><span aria-hidden="true">◌</span><span data-i18n="savedLocally">Changes stay in this tab</span></p>
-    </aside>
-  </main>
-  <div id="demo-status" class="demo-toast" role="status" aria-live="polite"></div>
-  <noscript><p class="noscript-message">This interactive demo requires JavaScript. You can still <a href="../">visit the website</a> or <a href="https://github.com/semiromest/Worship-Presentation-Assistant/releases/latest">download the desktop app</a>.</p></noscript>
-</body>
+<body><div id="root"></div></body>
 </html>
