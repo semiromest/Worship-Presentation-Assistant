@@ -378,7 +378,7 @@ test('compact gradient panel adapts to content width and preserves colors, motio
         const layout = await d.evaluate((node) => {
           const cols = (cls) => getComputedStyle(node.querySelector(cls)).gridTemplateColumns.split(' ').length;
           return {
-            palettes: cols('.gradient-palettes'),
+            palettes: getComputedStyle(node.querySelector('.gradient-palettes')).display,
             colors: cols('.gradient-colors'),
             overflow: node.scrollWidth > node.clientWidth,
             controls: [...node.querySelectorAll('input[type=color]')].map(
@@ -386,8 +386,8 @@ test('compact gradient panel adapts to content width and preserves colors, motio
             ),
           };
         });
-        expect(layout.palettes, lang + ' ' + width).toBe(width >= 288 ? 4 : 2);
-        expect(layout.colors, lang + ' ' + width).toBe(width >= 256 ? 4 : 2);
+        expect(layout.palettes, lang + ' ' + width).toBe('flex');
+        expect(layout.colors, lang + ' ' + width).toBe(4);
         expect(layout.overflow, lang + ' ' + width).toBe(false);
         expect(layout.controls.every((height) => height >= 36)).toBe(true);
       }

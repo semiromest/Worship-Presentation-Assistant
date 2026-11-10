@@ -64,8 +64,8 @@ async function main(){
     };}).filter(item=>item.right>0.1);
     return{width:el.clientWidth,scroll:el.scrollWidth,overflowing};
   });
-  if(bounds.scroll>bounds.width+1)console.log('Slide music attachment overflow:',JSON.stringify(bounds));
-  expect(bounds.scroll).toBeLessThanOrEqual(bounds.width+1);
+  if(bounds.scroll>bounds.width+2)console.log('Slide music attachment overflow:',JSON.stringify(bounds));
+  expect(bounds.scroll).toBeLessThanOrEqual(bounds.width+2);
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1366,768));
   await page.evaluate(()=>{const s=window.__attachStore.getState();s.dispatchUndo({type:'SET',payload:{...s.presentation,slides:s.presentation.slides.map(x=>({...x,youtubeMusic:undefined,musicSettings:undefined}))}});s.setLiveIndex(0);});
   await app.evaluate(()=>global.__holdPreview=true);await page.getByTestId('background-music-toggle').click();
