@@ -138,7 +138,7 @@ test('inline gradient preview, persistent library and exact-selection quick appl
           return r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight;
         })
       ).toBe(true);
-      await expect(page.locator('.base-popover-popup[aria-label="Gradyan"]')).toHaveCSS('opacity', '1');
+      await expect(page.locator('.base-popover-popup:visible')).toHaveCSS('opacity', '1');
       await page.screenshot({ path: info.outputPath('gradient-gallery-' + w + '.png'), animations: 'disabled' });
       await page.keyboard.press('Escape');
       await expect(popup).toHaveCount(0);
@@ -354,7 +354,7 @@ test('compact gradient panel adapts to content width and preserves colors, motio
     await aurora.click();
     await expect(speed).toHaveValue(values[0]);
     await expect(amount).toHaveValue(values[1]);
-    await d.getByRole('button', { name: 'Akışkan', exact: true }).click();
+    await d.getByRole('group', { name: 'Durağan', exact: true }).getByRole('button', { name: 'Akışkan', exact: true }).click();
     await expect(d.locator('input[type=color]').first()).toHaveValue('#123456');
     await d.getByRole('button', { name: 'Okyanus', exact: true }).click();
     await expect(d.getByRole('button', { name: 'Okyanus', exact: true })).toHaveAttribute('aria-pressed', 'true');

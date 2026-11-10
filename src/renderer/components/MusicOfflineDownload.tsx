@@ -42,9 +42,9 @@ export default function MusicOfflineDownload({ videoId }: { videoId: string }) {
     <ControlTooltip descriptionKey={ready ? 'offlineMusic.localHint' : busy ? 'offlineMusic.cancel' : 'offlineMusic.hint'}><button type="button" data-testid="music-offline-download" disabled={checking || ready} onClick={() => void download()}
       title={t(ready ? 'offlineMusic.localHint' : busy ? 'offlineMusic.cancel' : 'offlineMusic.hint')}
       aria-label={t(busy ? 'offlineMusic.cancel' : ready ? 'offlineMusic.ready' : 'offlineMusic.download')}
-      className="inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-md border border-white/10 px-2 py-1 text-[11px] text-white/75 hover:bg-white/10 disabled:cursor-default disabled:opacity-75">
+      className="inline-flex min-h-8 min-w-0 max-w-full items-center gap-1.5 rounded-md border border-white/10 px-2 py-1 text-[11px] text-white/75 hover:bg-white/10 disabled:cursor-default disabled:opacity-75">
       {ready ? <MotionIcon name="check-circle" active className="text-emerald-300" /> : busy ? <MotionIcon name="loader" active loop /> : <Download className="h-3.5 w-3.5" />}
-      <span>{t(ready ? 'offlineMusic.ready' : busy ? 'offlineMusic.downloading' : 'offlineMusic.download')}</span>
+      <span className="min-w-0 truncate">{t(ready ? 'offlineMusic.ready' : busy ? 'offlineMusic.downloading' : 'offlineMusic.download')}</span>
       {busy && <X className="h-3 w-3" />}
     </button></ControlTooltip>
     {status.state === 'error' && <p role="alert" className="text-[11px] text-red-300">{t(status.error === 'busy' ? 'offlineMusic.busy' : 'offlineMusic.error')}</p>}

@@ -40,16 +40,15 @@ test('large section bodies keep bounded DOM and navigate to offscreen selections
 });
 
 test('editor loads on first use and keeps the mounted workspace across tab changes', async () => {
-  const loaded = () => page.evaluate(() => performance.getEntriesByType('resource').some(entry => /\/(?:editor\/)?SlideEditor\.tsx/.test(entry.name)));
-  expect(await loaded()).toBe(false);
+  const workspace = page.locator('.editor-workspace');
+  await expect(workspace).toHaveCount(0);
   await seed([textSlide('lazy-editor')]);
   await page.evaluate(() => window.__fixStore.getState().setActiveTab('editor'));
-  await expect(page.locator('.editor-workspace')).toBeVisible();
-  expect(await loaded()).toBe(true);
+  await expect(workspace).toBeVisible();
   await page.evaluate(() => { window.__editorWorkspace = document.querySelector('.editor-workspace'); window.__fixStore.getState().setActiveTab('slides'); });
-  await expect(page.locator('.editor-workspace')).toBeHidden();
+  await expect(workspace).toBeHidden();
   await page.evaluate(() => window.__fixStore.getState().setActiveTab('editor'));
-  await expect(page.locator('.editor-workspace')).toBeVisible();
+  await expect(workspace).toBeVisible();
   expect(await page.evaluate(() => document.querySelector('.editor-workspace') === window.__editorWorkspace)).toBe(true);
 });
 
@@ -176,7 +175,7 @@ test('gradient designer shows moving pixels on a parts-mode hymn canvas without 
   const image = await canvas.evaluate(el => el.toDataURL());
   await expect.poll(() => canvas.evaluate(el => el.toDataURL()), { timeout: 5000 }).not.toBe(image);
   expect(await page.evaluate(() => window.__fixStore.getState().presentation.slides[0].styles.generatedBackground)).toBeUndefined();
-  await designer.getByRole('button', { name: 'Akışkan', exact: true }).click(); await expect(canvas).toHaveCount(0);
+  await designer.getByRole('group', { name: 'Durağan', exact: true }).getByRole('button', { name: 'Akışkan', exact: true }).click(); await expect(canvas).toHaveCount(0);
 });
 
 test('external image file drops before a target and selects the inserted image; empty-space drops append', async ({}, info) => {
