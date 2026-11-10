@@ -1,4 +1,5 @@
 import { newToken, tokenMatches, queryToken } from './shareTransport';
+import { decodeFrame } from './screenShareFrame';
 /**
  * Live-screen phone broadcast service.
  *
@@ -20,8 +21,6 @@ import { SCREEN_SHARE_HTML } from './screen-share-html';
 const BACKPRESSURE_BYTES = 1024 * 1024;
 /** Tampon bu süre boyunca hiç boşalmazsa telefon ölü sayılır ve bağlantısı kesilir. */
 const STALL_LIMIT_MS = 10_000;
-/** 1080p JPEG'in base64 hali bile bunun çok altındadır; aşırı büyük veri yayına alınmaz. */
-const MAX_FRAME_CHARS = 8 * 1024 * 1024;
 /** Yayın bitince 'ended' mesajının ulaşması ve kapanış el sıkışması için tanınan süre. */
 const END_GRACE_MS = 1000;
 const SCREEN_PATH_RE = /^\/screen(?:[?#]|$)/;
@@ -43,7 +42,8 @@ interface Broadcast {
   token: string;
   /** Telefonlara verilen adres; ağ değişince `refreshScreenShareHost` günceller. */
   url: string;
-  lastFrame: string | null;
+  /** Decoded image bytes of the newest frame (sent as a binary WebSocket message). */
+  lastFrame: Buffer | null;
 }
 
 let broadcast: Broadcast | null = null;
@@ -109,11 +109,12 @@ export function isScreenShareActive(): boolean {
 
 /** Publish a JPEG frame (data URL) to every connected phone. */
 export function publishScreenFrame(frame: string): void {
-  if (!broadcast || typeof frame !== 'string' || !frame || frame.length > MAX_FRAME_CHARS) return;
-  broadcast.lastFrame = frame; // Sonradan katılan telefon ilk kareyi hemen görsün.
-  if (clients.size === 0) return; // Dinleyen yoksa büyük dizgiyi JSON'a çevirmenin anlamı yok.
+  if (!broadcast) return;
+  const message = decodeFrame(frame);
+  if (!message) return;
+  broadcast.lastFrame = message; // Sonradan katılan telefon ilk kareyi hemen görsün.
+  if (clients.size === 0) return;
 
-  const message = JSON.stringify({ type: 'frame', data: frame });
   const now = Date.now();
   for (const client of clients) {
     if (client.readyState !== WsSocket.OPEN) continue;
@@ -125,7 +126,7 @@ export function publishScreenFrame(frame: string): void {
       continue;
     }
     stalledSince.delete(client);
-    client.send(message);
+    client.send(message, { binary: true });
   }
 }
 
@@ -190,13 +191,17 @@ export function handleScreenShareConnection(client: WsSocket, req: IncomingMessa
   notifyClientCount();
 
   // Send the last frame so a phone joining mid-broadcast sees content immediately.
-  send(client, { type: 'hello', data: current.lastFrame });
+  send(client, { type: 'hello' });
+  if (current.lastFrame && client.readyState === WsSocket.OPEN) client.send(current.lastFrame, { binary: true });
 
   // Yalnızca soket gerçekten kümedeydiyse sayı bildirilir: `error` ardından gelen `close`
   // ve `stopScreenShare` sonrası kapanan eski telefonlar yinelenen bildirim üretmez.
   const drop = () => {
     stalledSince.delete(client);
-    if (clients.delete(client)) notifyClientCount();
+    if (clients.delete(client)) {
+      if (!clients.size && broadcast) broadcast.lastFrame = null;
+      notifyClientCount();
+    }
   };
   client.on('close', drop);
   client.on('error', () => {

@@ -1,3 +1,4 @@
+import ControlTooltip, { TOOLTIP_HOVER_DELAY } from './ControlTooltip';
 import { memo, useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -164,7 +165,7 @@ export const HymnRow = memo(function HymnRow({ hymn, top, index, count, onSelect
       if (!el || ![...el.querySelectorAll<HTMLElement>('[data-truncate]')].some(node => node.scrollWidth > node.clientWidth)) return;
       const r = el.getBoundingClientRect();
       setTip({ x: Math.max(8, Math.min(r.left, window.innerWidth - 368)), y: r.bottom < window.innerHeight / 2 ? r.bottom + 6 : r.top - 6, below: r.bottom < window.innerHeight / 2 });
-    }, 350);
+    }, TOOLTIP_HOVER_DELAY);
   };
   const hide = () => { clearTimeout(timer.current); setTip(null); };
   const leave = () => { clearTimeout(timer.current); timer.current = setTimeout(() => { if (!pointerInside.current && !focusInside.current) setTip(null); }, 150); };
@@ -191,8 +192,8 @@ export const HymnRow = memo(function HymnRow({ hymn, top, index, count, onSelect
       <span data-truncate className="hymn-author">{hymn.author || '—'}</span><span data-truncate className="hymn-source">{hymn.source || '—'}</span>
     </button>
     <div className="hymn-row-actions">
-      <button type="button" data-hymn-action="edit" disabled={hymn.id.startsWith('practice-hymn-')} onClick={() => { onEdit(hymn); }} aria-label={t('hymnLibrary.editNamed', { title: hymn.title })} title={t('common.hymnsEdit')}><Pencil size={16} aria-hidden="true" /></button>
-      <button type="button" data-hymn-action="remove" disabled={hymn.id.startsWith('practice-hymn-')} onClick={() => { onRemove(hymn.id); }} aria-label={t('hymnLibrary.deleteNamed', { title: hymn.title })} title={t('common.delete')}><Trash2 size={16} aria-hidden="true" /></button>
+      <ControlTooltip descriptionKey={'common.hymnsEdit'}><button type="button" data-hymn-action="edit" disabled={hymn.id.startsWith('practice-hymn-')} onClick={() => { onEdit(hymn); }} aria-label={t('hymnLibrary.editNamed', { title: hymn.title })} title={t('common.hymnsEdit')}><Pencil size={16} aria-hidden="true" /></button></ControlTooltip>
+      <ControlTooltip descriptionKey={'common.delete'}><button type="button" data-hymn-action="remove" disabled={hymn.id.startsWith('practice-hymn-')} onClick={() => { onRemove(hymn.id); }} aria-label={t('hymnLibrary.deleteNamed', { title: hymn.title })} title={t('common.delete')}><Trash2 size={16} aria-hidden="true" /></button></ControlTooltip>
     </div>
     {tip && createPortal(<div id={tooltipId} role="tooltip" className="hymn-tooltip" style={{ left: tip.x, top: tip.y, maxHeight: Math.max(0, Math.min(window.innerHeight * .7, tip.below ? window.innerHeight - tip.y - 8 : tip.y - 8)), transform: tip.below ? undefined : 'translateY(-100%)' }} onMouseEnter={() => { clearTimeout(timer.current); pointerInside.current = true; }} onMouseLeave={() => { pointerInside.current = false; leave(); }}><strong>{hymn.title}</strong><div>{firstLine}</div><div>{t('common.hymnsAuthorLabel')}: {hymn.author || '—'}</div><div>{t('common.hymnsSourceLabel')}: {hymn.source || '—'}</div></div>, document.body)}
   </div>;

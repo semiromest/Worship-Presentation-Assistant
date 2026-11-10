@@ -79,7 +79,7 @@ const TimerDisplay = memo(({
   const { t } = useTranslation();
   return (
     <div
-      className="relative w-full h-full flex items-center justify-center"
+      className="slide-surface relative w-full h-full flex items-center justify-center"
       style={{ backgroundColor: bgColor, aspectRatio: '16 / 9' }}
       role="timer"
       aria-label={t('countdown.remaining', { time: formatTime(timeLeft) })}

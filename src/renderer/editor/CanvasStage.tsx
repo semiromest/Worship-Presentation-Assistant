@@ -263,7 +263,7 @@ export function CanvasStage({
     <div className="isolate flex min-w-0 flex-1 items-center justify-center bg-[#0a0a0a] p-3 lg:p-6 overflow-hidden">
       <div
         ref={outerRef}
-        className="relative w-full max-w-5xl select-none touch-none overflow-clip rounded-2xl border border-white/10 bg-black shadow-2xl"
+        className="slide-surface relative w-full max-w-5xl select-none touch-none overflow-clip rounded-2xl border border-white/10 bg-black shadow-2xl"
         style={{ aspectRatio: '16 / 9', width: containerWidth, maxWidth: '100%' }}
       >
         <div
@@ -362,7 +362,7 @@ export function CanvasStage({
           {/* Empty state */}
           {items.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="rounded-2xl border border-dashed border-white/15 bg-black/20 px-6 py-4 text-center text-sm text-white/45 backdrop-blur-sm">
+              <div className="rounded-2xl border border-dashed border-white/15 bg-black/20 px-6 py-4 text-center text-sm text-white/60 backdrop-blur-sm">
                 {t('common.editorCanvasEmpty')}
               </div>
             </div>

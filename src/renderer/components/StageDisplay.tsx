@@ -117,14 +117,14 @@ export default function StageDisplay() {
             className="flex items-center gap-2 text-4xl font-semibold tabular-nums text-white/90"
             aria-label={t('stage.clock')}
           >
-            <Clock className="w-7 h-7 text-white/40" aria-hidden="true" />
+            <Clock className="w-7 h-7 text-white/55" aria-hidden="true" />
             {formatClock(now)}
           </div>
           <div
             className="flex items-center gap-2 text-4xl font-semibold tabular-nums text-white/90"
             aria-label={t('stage.elapsed')}
           >
-            <Timer className="w-7 h-7 text-white/40" aria-hidden="true" />
+            <Timer className="w-7 h-7 text-white/55" aria-hidden="true" />
             {formatElapsed(elapsedSeconds)}
           </div>
         </div>
@@ -151,7 +151,7 @@ export default function StageDisplay() {
             {currentText}
           </p>
         )}
-        <p className="mt-6 text-xl text-white/40 tabular-nums">
+        <p className="mt-6 text-xl text-white/55 tabular-nums">
           {liveIndex + 1} / {presentation.slides.length}
         </p>
         {current?.operatorNotes?.trim() && (
@@ -168,7 +168,7 @@ export default function StageDisplay() {
 
       {/* Next slide — smaller, dimmed */}
       <footer className="px-8 py-6 border-t border-white/10 bg-[#14141b]/80">
-        <p className="text-sm font-semibold uppercase tracking-widest text-white/35 mb-2">
+        <p className="text-sm font-semibold uppercase tracking-widest text-white/55 mb-2">
           {t('stage.next')}
         </p>
         {next ? (

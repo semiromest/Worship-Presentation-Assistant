@@ -1,3 +1,4 @@
+import ControlTooltip from '../../components/ControlTooltip';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Palette } from 'lucide-react';
@@ -48,7 +49,7 @@ export const SlideSettingsPanel = memo(function SlideSettingsPanel({
 
       {/* Background color */}
       <label className="block space-y-1">
-        <span className="block text-[10px] uppercase tracking-wide text-white/40">
+        <span className="block text-[11px] uppercase tracking-wide text-white/55">
           {t('common.editorBgColor')}
         </span>
         <div className="flex items-center gap-2">
@@ -64,7 +65,7 @@ export const SlideSettingsPanel = memo(function SlideSettingsPanel({
             onChange={e => onChange({ backgroundColor: e.target.value })}
             className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none transition focus:border-blue-500"
           />
-          <button
+          <ControlTooltip descriptionKey={'common.editorColorPalette'}><button
             type="button"
             onClick={() => setShowBgPalette(!showBgPalette)}
             className="h-8 w-8 shrink-0 rounded-lg border border-white/10 bg-black/20 flex items-center justify-center text-white/60 hover:bg-black/35"
@@ -72,7 +73,7 @@ export const SlideSettingsPanel = memo(function SlideSettingsPanel({
             aria-label={t('common.editorColorPalette')}
           >
             <span className="text-xs">🎨</span>
-          </button>
+          </button></ControlTooltip>
         </div>
         {showBgPalette && (
           <div className="mt-1 p-2 rounded-lg border border-white/10 bg-[#1e1e1e]">
@@ -86,7 +87,7 @@ export const SlideSettingsPanel = memo(function SlideSettingsPanel({
 
       {/* Text color */}
       <label className="block space-y-1">
-        <span className="block text-[10px] uppercase tracking-wide text-white/40">
+        <span className="block text-[11px] uppercase tracking-wide text-white/55">
           {t('common.editorTextColor')}
         </span>
         <div className="flex items-center gap-2">
@@ -102,7 +103,7 @@ export const SlideSettingsPanel = memo(function SlideSettingsPanel({
             onChange={e => onChange({ textColor: e.target.value })}
             className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none transition focus:border-blue-500"
           />
-          <button
+          <ControlTooltip descriptionKey={'common.editorColorPalette'}><button
             type="button"
             onClick={() => setShowTextPalette(!showTextPalette)}
             className="h-8 w-8 shrink-0 rounded-lg border border-white/10 bg-black/20 flex items-center justify-center text-white/60 hover:bg-black/35"
@@ -110,7 +111,7 @@ export const SlideSettingsPanel = memo(function SlideSettingsPanel({
             aria-label={t('common.editorColorPalette')}
           >
             <span className="text-xs">🎨</span>
-          </button>
+          </button></ControlTooltip>
         </div>
         {showTextPalette && (
           <div className="mt-1 p-2 rounded-lg border border-white/10 bg-[#1e1e1e]">
@@ -124,7 +125,7 @@ export const SlideSettingsPanel = memo(function SlideSettingsPanel({
 
       {/* Default font size */}
       <label className="block space-y-1">
-        <span className="block text-[10px] uppercase tracking-wide text-white/40">
+        <span className="block text-[11px] uppercase tracking-wide text-white/55">
           {t('common.editorDefaultFontSize')}
         </span>
         <input
@@ -142,7 +143,7 @@ export const SlideSettingsPanel = memo(function SlideSettingsPanel({
 
       {/* Object fit */}
       <label className="block space-y-1">
-        <span className="block text-[10px] uppercase tracking-wide text-white/40">
+        <span className="block text-[11px] uppercase tracking-wide text-white/55">
           {t('common.editorSlideFit')}
         </span>
         <select
@@ -158,7 +159,7 @@ export const SlideSettingsPanel = memo(function SlideSettingsPanel({
 
       {/* Background image */}
       <div className="space-y-2">
-        <div className="text-[10px] uppercase tracking-wide text-white/40">
+        <div className="text-[11px] uppercase tracking-wide text-white/55">
           {t('common.editorBgImage')}
         </div>
         <div className="flex gap-2">
@@ -186,10 +187,10 @@ export const SlideSettingsPanel = memo(function SlideSettingsPanel({
       {/* Background blur */}
       <label className="block space-y-1">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] uppercase tracking-wide text-white/40">
+          <span className="text-[11px] uppercase tracking-wide text-white/55">
             {t('common.editorBgBlur')}
           </span>
-          <span className="text-[10px] text-white/50">
+          <span className="text-[11px] text-white/50">
             {getNum('backgroundBlur', 0).toFixed(1)}px
           </span>
         </div>
@@ -207,7 +208,7 @@ export const SlideSettingsPanel = memo(function SlideSettingsPanel({
       {/* Grid & Snap settings */}
       {onGridToggle && (
         <div className="space-y-2 pt-1">
-          <div className="text-[10px] uppercase tracking-wide text-white/40">
+          <div className="text-[11px] uppercase tracking-wide text-white/55">
             {t('common.editorGridAndSnap')}
           </div>
 
@@ -224,7 +225,7 @@ export const SlideSettingsPanel = memo(function SlideSettingsPanel({
           {gridEnabled && (
             <>
               <label className="block space-y-1">
-                <span className="text-[10px] text-white/40">{t('common.editorGridSize')}</span>
+                <span className="text-[11px] text-white/55">{t('common.editorGridSize')}</span>
                 <input
                   type="number"
                   min={2}
@@ -239,7 +240,7 @@ export const SlideSettingsPanel = memo(function SlideSettingsPanel({
               </label>
               {onGridColorChange && (
                 <label className="block space-y-1">
-                  <span className="text-[10px] text-white/40">{t('common.editorGridColor')}</span>
+                  <span className="text-[11px] text-white/55">{t('common.editorGridColor')}</span>
                   <div className="flex items-center gap-2">
                     <input
                       type="color"
@@ -274,7 +275,7 @@ export const SlideSettingsPanel = memo(function SlideSettingsPanel({
         </div>
       )}
 
-      <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/45">
+      <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/60">
         {t('common.editorSettingsHint')}
       </div>
     </div>

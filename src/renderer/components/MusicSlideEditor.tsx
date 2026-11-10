@@ -40,7 +40,7 @@ export default function MusicSlideEditor({ slide, onPatch }: {
       {preparation && !isLive && <p role="status" className={preparation === 'ready' ? 'text-emerald-300' : 'text-white/50'}>
         {t(`musicSlide.connection${preparation === 'ready' ? 'Ready' : preparation === 'preparing' ? 'Preparing' : 'Unavailable'}`)}
       </p>}
-      <p className="leading-relaxed text-white/45">{t('musicSlide.independentTitle')}</p>
+      <p className="leading-relaxed text-white/60">{t('musicSlide.independentTitle')}</p>
     </div>
     <div className="space-y-2">
       <p className="text-xs font-semibold text-white/70">{t('musicSlide.appearance')}</p>
@@ -56,8 +56,8 @@ export default function MusicSlideEditor({ slide, onPatch }: {
       <SettingSlider id="music-slide-volume" testId="music-slide-volume" label={t('musicSlide.volume')}
         value={Math.round(musicGain(slide.musicSettings?.volume) * 100)} min={0} max={100} suffix="%"
         onChange={value => onPatch(slide.id, { musicSettings: { ...slide.musicSettings, volume: value / 100 } })} />
-      <p className="text-xs leading-relaxed text-white/45">{t('musicSlide.volumeHint')}</p>
+      <p className="text-xs leading-relaxed text-white/60">{t('musicSlide.volumeHint')}</p>
     </div>
-    <p className="text-xs leading-relaxed text-white/45">{t('musicSlide.fadeHint')}</p>
+    <p className="text-xs leading-relaxed text-white/60">{t('musicSlide.fadeHint')}</p>
   </section>;
 }

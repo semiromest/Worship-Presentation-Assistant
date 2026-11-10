@@ -368,7 +368,7 @@ export default function ServiceSections({
               >
                 <p className="px-2 py-1 text-sm font-semibold break-words">{deck.name}</p>
                 {blocks.map((b) => (
-                  <Menu.Item
+                  <ControlTooltip key={b.id} descriptionKey="sections.goTo"><Menu.Item
                     key={b.id}
                     className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                     title={t('sections.goTo')}
@@ -376,8 +376,8 @@ export default function ServiceSections({
                   >
                     <span style={{ color: b.color }}>{b.icon ?? '•'}</span>
                     <span className="min-w-0 flex-1 truncate">{title(b)}</span>
-                    <span className="text-white/40">{t('sections.slideCount', { count: b.slides.length })}</span>
-                  </Menu.Item>
+                    <span className="text-white/55">{t('sections.slideCount', { count: b.slides.length })}</span>
+                  </Menu.Item></ControlTooltip>
                 ))}
               </Menu.Popup></Menu.Positioner></Menu.Portal>
           </div>
@@ -460,7 +460,7 @@ export default function ServiceSections({
                     }
                   }}
                 >
-                  <span
+                  <ControlTooltip descriptionKey={'sections.dragSection'}><span
                     draggable={!restricted}
                     onDragStart={(e) => {
                       e.dataTransfer.setData('text/plain', b.id);
@@ -469,10 +469,10 @@ export default function ServiceSections({
                     }}
                     onDragEnd={resetDrag}
                     title={t('sections.dragSection')}
-                    className={cn('p-1 text-white/40', restricted ? 'opacity-30' : 'cursor-grab')}
+                    className={cn('p-1 text-white/55', restricted ? 'opacity-30' : 'cursor-grab')}
                   >
                     <GripVertical className="w-4 h-4" />
-                  </span>
+                  </span></ControlTooltip>
                   <button
                     className={cn(button, 'p-1 border-0')}
                     aria-expanded={!collapsed.has(b.id)}
@@ -497,7 +497,7 @@ export default function ServiceSections({
                     <div className="flex items-center gap-2">
                       <span style={{ color: b.color }}>{b.icon ?? '•'}</span>
                       <strong className="text-sm truncate">{title(b)}</strong>
-                      <input
+                      <ControlTooltip key={`${b.id}:${b.time ?? ''}`} descriptionKey={'sections.timeHint'}><input
                         key={`${b.id}:${b.time ?? ''}`}
                         type="text"
                         defaultValue={b.time ?? ''}
@@ -521,7 +521,7 @@ export default function ServiceSections({
                             event.currentTarget.blur();
                           }
                         }}
-                      />
+                      /></ControlTooltip>
                       <button
                         className={cn(button, 'p-1 border-0 opacity-0 group-hover/header:opacity-100 focus-visible:opacity-100')}
                         aria-label={t('sections.rename')}
@@ -538,19 +538,19 @@ export default function ServiceSections({
                     </p>
                   </div>
                   {isBroadcastOpen && b.id === liveSection?.id && (
-                    <span className="text-[10px] text-red-300">{t('sections.live')}</span>
+                    <span className="text-[11px] text-red-300">{t('sections.live')}</span>
                   )}
-                  <button
+                  <ControlTooltip descriptionKey={'sections.addSlide'}><button
                     className={cn(button, 'p-1.5 border-0')}
                     aria-label={t('sections.addSlide')}
                     title={t('sections.addSlide')}
                     onClick={() => addSlide(b.id)}
                   >
                     <Plus className="w-4 h-4" />
-                  </button>
+                  </button></ControlTooltip>
                   <Menu.Root modal={false} open={menu === b.id} onOpenChange={next => { if (next) { setContext(null); setMenu(b.id); } else setMenu(current => current === b.id ? null : current); }}>
                   <div className="relative" data-section-menu>
-                    <ControlTooltip suppress={menu === b.id}><Menu.Trigger data-section-actions={b.id} className={button} aria-label={t('sections.actions', { name: title(b) })}><MoreHorizontal className="w-4 h-4" aria-hidden="true" /></Menu.Trigger></ControlTooltip>
+                    <ControlTooltip suppress={menu === b.id} descriptionKey={'sections.actions'}><Menu.Trigger data-section-actions={b.id} className={button} aria-label={t('sections.actions', { name: title(b) })}><MoreHorizontal className="w-4 h-4" aria-hidden="true" /></Menu.Trigger></ControlTooltip>
                     <Menu.Portal><Menu.Positioner side="bottom" align="end" sideOffset={6} className="z-[80]">
                       <Menu.Popup data-section-menu aria-label={t('sections.actions', { name: title(b) })} finalFocus={() => editor ? false : true} className="design-action-menu w-60" onKeyDown={event => event.stopPropagation()}>
                         <Menu.Item className={button} onClick={() => openEditor({ kind: 'edit', sectionId: b.id })}>
@@ -667,7 +667,7 @@ export default function ServiceSections({
                         );
                       }}
                     </VirtualSectionSlides>
-                    {!b.slides.length && <p className="text-xs text-white/40">{t('sections.emptyHint')}</p>}
+                    {!b.slides.length && <p className="text-xs text-white/55">{t('sections.emptyHint')}</p>}
                     <div data-slide-end-drop className="h-4" />
                   </div>
                 </UiCollapse>
@@ -677,7 +677,7 @@ export default function ServiceSections({
         {!filter && !search.trim() && endPoint && (
           <div className="group/end">
             <button
-              className="flex h-7 w-full items-center justify-center gap-1 rounded-lg border border-dashed border-transparent text-[11px] text-white/45 opacity-0 transition-colors hover:border-white/15 hover:bg-blue-500/10 hover:text-blue-200 focus-visible:opacity-100 group-hover/end:opacity-100"
+              className="flex h-7 w-full items-center justify-center gap-1 rounded-lg border border-dashed border-transparent text-[11px] text-white/60 opacity-0 transition-colors hover:border-white/15 hover:bg-blue-500/10 hover:text-blue-200 focus-visible:opacity-100 group-hover/end:opacity-100"
               aria-label={t('sections.create')}
               onClick={() => openEditor({ kind: 'create', slideIds: [] })}
             >

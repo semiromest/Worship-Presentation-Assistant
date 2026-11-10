@@ -82,7 +82,7 @@ export default function ImageSlideEditor({
         <div className="design-image-settings-content">
       {/* Object Fit */}
       <div className="space-y-1.5">
-        <span className="block text-[10px] text-white/45 uppercase font-bold tracking-tight">
+        <span className="block text-[11px] text-white/60 font-bold">
           {t('common.editorFitLabel')}
         </span>
         <div className="flex gap-1.5">
@@ -93,7 +93,7 @@ export default function ImageSlideEditor({
               data-guide-anchor={opt.value === 'contain' ? 'image-fit' : undefined}
               onClick={() => update({ objectFit: opt.value })}
               className={cn(
-                'flex-1 px-2 py-1.5 rounded-lg text-[10px] font-semibold border transition-[background-color,border-color]',
+                'flex-1 px-2 py-1.5 rounded-lg text-[11px] font-semibold border transition-[background-color,border-color]',
                 (styles.objectFit ?? 'contain') === opt.value
                   ? 'workspace-selected-option'
                   : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10 active:scale-[0.95]'
@@ -109,8 +109,8 @@ export default function ImageSlideEditor({
       {/* Opacity */}
       <div className="space-y-1.5">
         <div className="flex justify-between items-center">
-          <span className="text-[10px] text-white/45 uppercase font-bold tracking-tight">{t('common.editorOpacity')}</span>
-          <span className="text-[10px] text-white/45 font-mono">{Math.round((styles.opacity ?? 1) * 100)}%</span>
+          <span className="text-[11px] text-white/60 font-bold">{t('common.editorOpacity')}</span>
+          <span className="text-[11px] text-white/60 font-mono">{Math.round((styles.opacity ?? 1) * 100)}%</span>
         </div>
         <input
           type="range"
@@ -127,8 +127,8 @@ export default function ImageSlideEditor({
       {/* Brightness */}
       <div className="space-y-1.5">
         <div className="flex justify-between items-center">
-          <span className="text-[10px] text-white/45 uppercase font-bold tracking-tight">{t('common.editorBrightness')}</span>
-          <span className="text-[10px] text-white/45 font-mono">{Math.round((styles.imageBrightness ?? 1) * 100)}%</span>
+          <span className="text-[11px] text-white/60 font-bold">{t('common.editorBrightness')}</span>
+          <span className="text-[11px] text-white/60 font-mono">{Math.round((styles.imageBrightness ?? 1) * 100)}%</span>
         </div>
         <input
           type="range"
@@ -145,8 +145,8 @@ export default function ImageSlideEditor({
       {/* Contrast */}
       <div className="space-y-1.5">
         <div className="flex justify-between items-center">
-          <span className="text-[10px] text-white/45 uppercase font-bold tracking-tight">{t('common.editorContrast')}</span>
-          <span className="text-[10px] text-white/45 font-mono">{Math.round((styles.imageContrast ?? 1) * 100)}%</span>
+          <span className="text-[11px] text-white/60 font-bold">{t('common.editorContrast')}</span>
+          <span className="text-[11px] text-white/60 font-mono">{Math.round((styles.imageContrast ?? 1) * 100)}%</span>
         </div>
         <input
           type="range"
@@ -163,8 +163,8 @@ export default function ImageSlideEditor({
       {/* Blur */}
       <div className="space-y-1.5">
         <div className="flex justify-between items-center">
-          <span className="text-[10px] text-white/45 uppercase font-bold tracking-tight">{t('common.editorBlur')}</span>
-          <span className="text-[10px] text-white/45 font-mono">{styles.imageBlur ?? 0}px</span>
+          <span className="text-[11px] text-white/60 font-bold">{t('common.editorBlur')}</span>
+          <span className="text-[11px] text-white/60 font-mono">{styles.imageBlur ?? 0}px</span>
         </div>
         <input
           type="range"
@@ -181,8 +181,8 @@ export default function ImageSlideEditor({
       {/* Grayscale */}
       <div className="space-y-1.5">
         <div className="flex justify-between items-center">
-          <span className="text-[10px] text-white/45 uppercase font-bold tracking-tight">{t('common.editorGrayscale')}</span>
-          <span className="text-[10px] text-white/45 font-mono">{Math.round((styles.imageGrayscale ?? 0) * 100)}%</span>
+          <span className="text-[11px] text-white/60 font-bold">{t('common.editorGrayscale')}</span>
+          <span className="text-[11px] text-white/60 font-mono">{Math.round((styles.imageGrayscale ?? 0) * 100)}%</span>
         </div>
         <input
           type="range"
@@ -200,8 +200,8 @@ export default function ImageSlideEditor({
       {/* Sepia */}
       <div className="space-y-1.5">
         <div className="flex justify-between items-center">
-          <span className="text-[10px] text-white/45 uppercase font-bold tracking-tight">{t('common.editorSepia')}</span>
-          <span className="text-[10px] text-white/45 font-mono">{Math.round((styles.imageSepia ?? 0) * 100)}%</span>
+          <span className="text-[11px] text-white/60 font-bold">{t('common.editorSepia')}</span>
+          <span className="text-[11px] text-white/60 font-mono">{Math.round((styles.imageSepia ?? 0) * 100)}%</span>
         </div>
         <input
           type="range"
@@ -219,7 +219,7 @@ export default function ImageSlideEditor({
 
       {/* Flip Buttons */}
       <div className="flex gap-2">
-        <ControlTooltip><button
+        <ControlTooltip descriptionKey={'common.editorFlipX'}><button
           onClick={() => update({ imageFlipX: !styles.imageFlipX })}
           aria-pressed={!!styles.imageFlipX}
           aria-label={t('common.editorFlipX')}
@@ -233,7 +233,7 @@ export default function ImageSlideEditor({
           <FlipHorizontal className="w-3.5 h-3.5" aria-hidden="true" />
           {t('common.editorFlipX')}
         </button></ControlTooltip>
-        <ControlTooltip><button
+        <ControlTooltip descriptionKey={'common.editorFlipY'}><button
           onClick={() => update({ imageFlipY: !styles.imageFlipY })}
           aria-pressed={!!styles.imageFlipY}
           aria-label={t('common.editorFlipY')}

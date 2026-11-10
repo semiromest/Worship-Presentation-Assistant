@@ -156,7 +156,7 @@ test('media bulk add emits one success; automatic navigation and general toasts 
 });
 
 test('desktop, Escape and remote output transitions stay silent and output windows never play effects', async () => {
-  await soundsFor(() => page.getByRole('button', { name: 'START BROADCAST', exact: true }).click(), 0);
+  await soundsFor(() => page.getByRole('button', { name: 'Start Broadcast', exact: true }).click(), 0);
   await expect.poll(() => page.evaluate(() => window.__sfxStore.getState().isProjectorWindowOpen)).toBe(true);
   const output = app.windows().find(window => window.url().includes('mode=projector'));
   expect(output).toBeTruthy();

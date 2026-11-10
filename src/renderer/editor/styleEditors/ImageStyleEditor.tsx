@@ -35,7 +35,7 @@ export const ImageStyleEditor = memo(function ImageStyleEditor({
       {/* Object fit + Opacity */}
       <div className="grid grid-cols-2 gap-3">
         <label className="space-y-1">
-          <span className="block text-[10px] uppercase tracking-wide text-white/40">{t('common.editorFitLabel')}</span>
+          <span className="block text-[11px] uppercase tracking-wide text-white/55">{t('common.editorFitLabel')}</span>
           <select
             disabled={styles.cropMode === 'source' && !!styles.crop}
             value={styles.objectFit || 'contain'}
@@ -49,7 +49,7 @@ export const ImageStyleEditor = memo(function ImageStyleEditor({
         </label>
 
         <label className="space-y-1">
-          <span className="block text-[10px] uppercase tracking-wide text-white/40">{t('common.editorOpacity')}</span>
+          <span className="block text-[11px] uppercase tracking-wide text-white/55">{t('common.editorOpacity')}</span>
           <div className="flex items-center gap-2">
             <input
               type="range"
@@ -60,7 +60,7 @@ export const ImageStyleEditor = memo(function ImageStyleEditor({
               onChange={(e) => update({ opacity: parseFloat(e.target.value) })}
               className="w-full accent-blue-500"
             />
-            <span className="text-[10px] text-white/50 min-w-[2.5rem] text-right">
+            <span className="text-[11px] text-white/50 min-w-[2.5rem] text-right">
               {Math.round((styles.opacity ?? 1) * 100)}%
             </span>
           </div>
@@ -107,8 +107,8 @@ export const ImageStyleEditor = memo(function ImageStyleEditor({
         ].map(({ labelKey, key, min, max, step }) => (
           <label key={key} className="space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase tracking-wide text-white/40">{t(labelKey)}</span>
-              <span className="text-[10px] text-white/50">
+              <span className="text-[11px] uppercase tracking-wide text-white/55">{t(labelKey)}</span>
+              <span className="text-[11px] text-white/50">
                 {(styles[key] ?? (key === 'brightness' || key === 'contrast' ? 1 : 0)).toFixed(2)}
               </span>
             </div>
@@ -128,8 +128,8 @@ export const ImageStyleEditor = memo(function ImageStyleEditor({
       {/* Blur */}
       <label className="space-y-1">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] uppercase tracking-wide text-white/40">{t('common.editorBlur')}</span>
-          <span className="text-[10px] text-white/50">{(styles.blur ?? 0).toFixed(1)}px</span>
+          <span className="text-[11px] uppercase tracking-wide text-white/55">{t('common.editorBlur')}</span>
+          <span className="text-[11px] text-white/50">{(styles.blur ?? 0).toFixed(1)}px</span>
         </div>
         <input
           type="range"

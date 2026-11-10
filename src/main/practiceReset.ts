@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { renameWithRetry } from './atomicFile';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { assertNoLinks } from './launchPolicy';
@@ -13,7 +14,7 @@ export async function atomicPracticeJson(file: string, value: unknown) {
   const temp = file + '.' + randomUUID() + '.tmp';
   try { const handle = await fs.open(temp,'wx');
     try { await handle.writeFile(JSON.stringify(value)); await handle.sync(); } finally { await handle.close(); }
-    assertNoLinks(file); await fs.rename(temp,file);
+    assertNoLinks(file); await renameWithRetry(temp,file);
   } finally { await fs.rm(temp,{force:true}); }
 }
 type Reset = { version:1; archive:string; createdAt:string; previous:PracticeWorkspace; previousProgress:PracticeProgress; next:PracticeWorkspace; nextProgress:PracticeProgress };

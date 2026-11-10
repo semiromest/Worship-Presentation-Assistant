@@ -1,47 +1,70 @@
 import { useSyncExternalStore } from 'react';
 import { useStore } from './state/useStore';
-import type { Presentation } from './types';
+import { documentSignature, sameDocument, type DocumentSignature } from './documentFingerprint';
+export { documentSignature, sameDocument } from './documentFingerprint';
 
-export function documentSignature(presentation: Presentation): string {
-  const document = { ...presentation };
-  delete document.liveIndex; delete document.liveSlideId; delete document.zoom;
-  return JSON.stringify({ ...document, slides: presentation.slides.map(slide => {
-    const rest = { ...slide }; delete rest.activePart;
-    return slide.partsMode && slide.parts?.length ? { ...rest, content: slide.parts.join('\n') } : rest;
-  }) });
+export interface DocumentSessionSnapshot {
+  dirty: boolean;
+  path: string | null;
+  generation: number;
+  canDrag: boolean;
 }
-let baseline = documentSignature(useStore.getState().presentation);
-let snapshot = { dirty: false, path: null as string | null, generation: 0, canDrag: false };
+
+const DEBOUNCE_MS = 150;
+// documentSignature already caches immutable presentation objects in a WeakMap.
+const currentSignature = () => documentSignature(useStore.getState().presentation);
+let baseline: DocumentSignature | undefined = currentSignature();
+let snapshot: DocumentSessionSnapshot = { dirty: false, path: null, generation: 0, canDrag: false };
 const listeners = new Set<() => void>();
 const emit = () => { for (const listener of listeners) listener(); };
+
+function commit(next: DocumentSessionSnapshot) {
+  if (next.dirty === snapshot.dirty && next.path === snapshot.path
+    && next.generation === snapshot.generation && next.canDrag === snapshot.canDrag) return;
+  snapshot = next;
+  emit();
+}
+
+const isDirtyNow = () => baseline === undefined || !sameDocument(baseline, currentSignature());
 let timer: ReturnType<typeof setTimeout> | undefined;
 function update() {
-  const dirty = documentSignature(useStore.getState().presentation) !== baseline;
-  if (dirty !== snapshot.dirty) { snapshot = { ...snapshot, dirty }; emit(); }
+  clearTimeout(timer);
+  timer = undefined;
+  const dirty = isDirtyNow();
+  if (dirty !== snapshot.dirty) commit({ ...snapshot, dirty });
 }
-useStore.subscribe(s => ({ presentation: s.presentation, version: s.editorSessionVersion }), (current, previous) => {
-  if (current.presentation.id !== previous.presentation.id || current.version !== previous.version) { snapshot = { ...snapshot, generation: snapshot.generation + 1, path: null, canDrag: false }; emit(); }
-  clearTimeout(timer); timer = setTimeout(update, 150);
-}, { equalityFn: (a, b) => a.presentation === b.presentation && a.version === b.version });
+useStore.subscribe((state, previous) => {
+  if (state.presentation === previous.presentation && state.editorSessionVersion === previous.editorSessionVersion) return;
+  if (state.presentation.id !== previous.presentation.id || state.editorSessionVersion !== previous.editorSessionVersion) {
+    commit({ ...snapshot, generation: snapshot.generation + 1, path: null, canDrag: false });
+  }
+  clearTimeout(timer);
+  timer = setTimeout(update, DEBOUNCE_MS);
+});
 export const documentSession = {
   current: () => snapshot,
   unsaved() {
-    baseline = '';
-    snapshot = { dirty: true, path: null, generation: snapshot.generation + 1, canDrag: false };
-    emit();
+    baseline = undefined;
+    commit({ dirty: true, path: null, generation: snapshot.generation + 1, canDrag: false });
   },
   isDirty() { update(); return snapshot.dirty; },
-  opened(file: string | null, signature = documentSignature(useStore.getState().presentation), generation = snapshot.generation) {
+  opened(file: string | null, signature: DocumentSignature = currentSignature(), generation = snapshot.generation) {
     if (generation !== snapshot.generation) return;
     baseline = signature;
-    snapshot = { dirty: documentSignature(useStore.getState().presentation) !== baseline, path: file, generation: snapshot.generation + 1, canDrag: false }; emit();
+    commit({ dirty: isDirtyNow(), path: file, generation: snapshot.generation + 1, canDrag: false });
   },
-  saved(file: string, signature: string, generation: number) {
+  saved(file: string, signature: DocumentSignature, generation: number) {
     if (generation !== snapshot.generation) return;
     baseline = signature;
-    snapshot = { ...snapshot, path: file, canDrag: true, dirty: documentSignature(useStore.getState().presentation) !== baseline }; emit();
+    commit({ ...snapshot, path: file, canDrag: true, dirty: isDirtyNow() });
   },
 };
+const subscribe = (callback: () => void) => {
+  listeners.add(callback);
+  return () => { listeners.delete(callback); };
+};
+const getSnapshot = () => snapshot;
+
 export function useDocumentSession() {
-  return useSyncExternalStore(callback => { listeners.add(callback); return () => { listeners.delete(callback); }; }, () => snapshot);
+  return useSyncExternalStore(subscribe, getSnapshot);
 }

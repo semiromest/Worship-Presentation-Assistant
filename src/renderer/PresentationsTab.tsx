@@ -1,3 +1,5 @@
+import { saveLibraryPreset, deleteLibraryPreset, renameLibraryPreset } from './presetLibrary';
+import ControlTooltip from './components/ControlTooltip';
 import { useListMotion } from './hooks/useListMotion';
 import { Menu } from '@base-ui/react/menu';
 import './PresentationsHeader.css';
@@ -53,9 +55,20 @@ type SortOrder = 'newest' | 'oldest' | 'name';
 // ─── LazyAnimatedPreview ─────────────────────────────────────────────────────
 // Defined at module level so it's not recreated on every PresetCard render,
 // which was breaking memo() optimization and causing unnecessary re-mounts.
-const LazyAnimatedPreview = memo(function LazyAnimatedPreview({ slide }: { slide: Slide | undefined }) {
+const LazyAnimatedPreview = memo(function LazyAnimatedPreview({ slide, preset }: { slide: Slide | undefined; preset: Preset }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [visible, setVisible] = useState(false);
+  const [loaded, setLoaded] = useState<{ version: string; slide: Slide | null } | null>(null);
+  const version = preset.summary?.version;
+  useEffect(() => {
+    if (!visible || !version || slide) return;
+    let alive = true;
+    void window.electronAPI.getPresetPreview(preset.name, version).then(cover => {
+      if (alive) setLoaded({ version, slide: cover });
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [visible, preset.name, version, slide]);
+  const cover = slide ?? (loaded?.version === version ? loaded?.slide : undefined);
 
   useEffect(() => {
     const el = ref.current;
@@ -77,8 +90,8 @@ const LazyAnimatedPreview = memo(function LazyAnimatedPreview({ slide }: { slide
 
   return (
     <div ref={ref} className="w-full h-full">
-      {visible && slide ? (
-        <AnimatedPreview slide={slide} transitionType="none" duration={0} size="preview" volume={0} muted isActive={false} />
+      {visible && cover ? (
+        <AnimatedPreview slide={cover} transitionType="none" duration={0} size="preview" volume={0} muted isActive={false} />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center text-white/10">
           <Layers className="w-10 h-10" aria-hidden="true" />
@@ -92,7 +105,6 @@ export interface PresentationsTabProps {
   presentation: Presentation;
   presets: Preset[];
   selectedPresetName: string | null;
-  onPresetsChange: (presets: Preset[]) => void;
   onApplyPreset: (preset: Preset) => void;
   onSelectedPresetNameChange: (name: string | null) => void;
   onOpenFile?: () => void | Promise<void>;
@@ -143,8 +155,8 @@ const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelet
       )}
     >
       <div className="relative aspect-video bg-black overflow-hidden pointer-events-none">
-        {firstSlide ? (
-          <LazyAnimatedPreview slide={firstSlide} />
+        {firstSlide || preset.summary ? (
+          <LazyAnimatedPreview slide={firstSlide} preset={preset} />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-white/20">
             <Layers className="w-10 h-10" aria-hidden="true" />
@@ -153,7 +165,7 @@ const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelet
 
         {isActive && (
           <div className="absolute top-2 left-2">
-            <span className="px-2 py-1 rounded-lg bg-blue-600/90 text-[10px] font-semibold uppercase tracking-wide">
+            <span className="px-2 py-1 rounded-lg bg-blue-600/90 text-[11px] font-semibold uppercase tracking-wide">
               {t('common.active')}
             </span>
           </div>
@@ -195,15 +207,15 @@ const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelet
                 {isLiveSave ? `${t('common.liveSaveBadge')} - ${preset.presentation.name}` : preset.name}
               </h3>
               {isLiveSave && (
-                <span
+                <ControlTooltip descriptionKey={'common.liveSaveBadge'}><span
                   className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"
                   aria-hidden="true"
                   title={t('common.liveSaveBadge')}
-                />
+                /></ControlTooltip>
               )}
             </>
           )}
-          <button
+          <ControlTooltip descriptionKey={'common.rename'}><button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
@@ -214,12 +226,12 @@ const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelet
             className="opacity-75 group-hover:opacity-100 focus-visible:opacity-100 transition-all w-8 h-8 rounded-lg hover:bg-white/10 text-white/65 hover:text-white flex items-center justify-center shrink-0"
           >
             <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
-          </button>
+          </button></ControlTooltip>
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/65">
           <span className="flex items-center gap-1">
             <LayoutGrid className="w-3 h-3" />
-            {t('library.slideCount', { count: preset.presentation.slides.length })}
+            {t('library.slideCount', { count: preset.summary?.slideCount ?? preset.presentation.slides.length })}
           </span>
           <span className="flex items-center gap-1 min-w-0 truncate">
             <Clock className="w-3 h-3 shrink-0" />
@@ -245,7 +257,7 @@ const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelet
         >
           {t('common.openPreset')}
         </button>
-        <button
+        <ControlTooltip descriptionKey={'common.deletePreset'}><button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
@@ -256,7 +268,7 @@ const PresetCard = memo(function PresetCard({ preset, isActive, onApply, onDelet
           className="w-8 h-8 self-center rounded-lg opacity-75 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-red-500/15 hover:text-red-300 text-red-400/80 flex items-center justify-center transition-colors"
         >
           <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-        </button>
+        </button></ControlTooltip>
       </div>
     </m.article>
   );
@@ -274,7 +286,7 @@ const EmptyLibrary = ({ onSave }: EmptyLibraryProps) => {
           <Layers className="w-8 h-8 text-blue-400/60" aria-hidden="true" />
         </div>
         <h2 className="font-medium text-white/80">{t('common.noSavedPresets')}</h2>
-        <p className="text-sm text-white/35 mt-2 leading-relaxed">{t('common.noSavedPresetsDesc')}</p>
+        <p className="text-sm text-white/55 mt-2 leading-relaxed">{t('common.noSavedPresetsDesc')}</p>
         <button type="button" onClick={onSave} className={`${BTN_SECONDARY_WIDE} mt-6`}>
           <Save className="w-4 h-4" aria-hidden="true" />
           {t('common.savePreset')}
@@ -312,7 +324,6 @@ export default function PresentationsTab({
   presentation,
   presets,
   selectedPresetName,
-  onPresetsChange,
   onApplyPreset,
   onSelectedPresetNameChange,
   onOpenFile,
@@ -479,11 +490,10 @@ export default function PresentationsTab({
       const existing = visiblePresets.find((preset) => preset.name === name);
       if (existing && existing.presentation.id !== presentation.id &&
           !(await confirmDialog(t('library.confirmOverwrite', { name })))) return;
-      const updated = await window.electronAPI?.savePreset?.({
+      const updated = await saveLibraryPreset({
         name, presentation: { ...presentation, name }, retentionMs: getLiveSaveRetention(),
       });
       if (!Array.isArray(updated)) throw new Error(t('library.saveFailed'));
-      onPresetsChange(updated);
       if (useStore.getState().presentation.id === presentation.id) {
         onSelectedPresetNameChange(name);
         setSavedSnapshot(presentation);
@@ -495,7 +505,7 @@ export default function PresentationsTab({
       operationRef.current = false;
       setIsSaving(false);
     }
-  }, [presentation, visiblePresets, onPresetsChange, onSelectedPresetNameChange, t]);
+  }, [presentation, visiblePresets, onSelectedPresetNameChange, t]);
 
   const deletePreset = useCallback(async (name: string) => {
     if (operationRef.current) return;
@@ -503,15 +513,14 @@ export default function PresentationsTab({
     setOperationError(null);
     try {
       if (!(await confirmDialog(t('common.confirmDeletePreset', { name })))) return;
-      const updated = await window.electronAPI?.deletePreset?.(name, getLiveSaveRetention());
+      const updated = await deleteLibraryPreset(name, getLiveSaveRetention());
       if (!Array.isArray(updated)) throw new Error(t('library.operationFailed'));
-      onPresetsChange(updated);
       if (name === selectedPresetName) { onSelectedPresetNameChange(null); setSavedSnapshot(null); }
       playSfx('delete');
     } catch (error) {
       setOperationError(error instanceof Error ? error.message : t('library.operationFailed'));
     } finally { operationRef.current = false; }
-  }, [selectedPresetName, onPresetsChange, onSelectedPresetNameChange, t]);
+  }, [selectedPresetName, onSelectedPresetNameChange, t]);
 
   const renamePreset = useCallback(async (oldName: string, newName: string) => {
     if (operationRef.current) return;
@@ -521,9 +530,8 @@ export default function PresentationsTab({
     }
     operationRef.current = true;
     try {
-      const updated = await window.electronAPI?.renamePreset?.(oldName, newName, getLiveSaveRetention());
+      const updated = await renameLibraryPreset(oldName, newName, getLiveSaveRetention());
       if (!Array.isArray(updated)) throw new Error(t('library.operationFailed'));
-      onPresetsChange(updated);
       if (selectedPresetName === oldName) {
         setSavedSnapshot(null);
         onSelectedPresetNameChange(newName);
@@ -532,7 +540,7 @@ export default function PresentationsTab({
     } catch (error) {
       setOperationError(error instanceof Error ? error.message : t('library.operationFailed'));
     } finally { operationRef.current = false; }
-  }, [selectedPresetName, visiblePresets, onPresetsChange, onSelectedPresetNameChange, setPresentationName, t]);
+  }, [selectedPresetName, visiblePresets, onSelectedPresetNameChange, setPresentationName, t]);
 
   const clearSearch = useCallback(() => setSearchQuery(''), []);
 
@@ -721,9 +729,9 @@ export default function PresentationsTab({
                 onChange={(e) => setDraftName(e.target.value)} onBlur={commitName}
                 onKeyDown={(e) => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') setIsEditingName(false); }}
                 aria-label={t('common.presetName')} className="presentation-name-input" />
-                : <button type="button" onClick={startNameEdit} title={t('common.clickToRename')} className="presentation-name">
-                    <span className="truncate" title={presentation.name}>{presentation.name}</span><Pencil className="w-4 h-4 shrink-0 text-white/50" aria-hidden="true" />
-                  </button>}
+                : <ControlTooltip descriptionKey={'common.clickToRename'}><button type="button" onClick={startNameEdit} title={t('common.clickToRename')} className="presentation-name">
+                    <ControlTooltip><span className="truncate" title={presentation.name}>{presentation.name}</span></ControlTooltip><Pencil className="w-4 h-4 shrink-0 text-white/50" aria-hidden="true" />
+                  </button></ControlTooltip>}
               <div className="presentation-current-status" role="status">
                 <span><Layers aria-hidden="true" />{t('library.slideCount', { count: presentation.slides.length })}</span>
                 <span className={saved ? 'text-emerald-300' : 'text-amber-200'}>
@@ -898,7 +906,7 @@ export default function PresentationsTab({
                 </div>
                 <div>
                   <h3 id="autosave-title" className="text-base font-semibold text-white">{t('nav.autosaves')}</h3>
-                  <p className="text-[11px] text-white/45">{t('common.liveSaveBadge')}</p>
+                  <p className="text-[11px] text-white/60">{t('common.liveSaveBadge')}</p>
                 </div>
               </div>
               <button type="button" aria-label={t('common.close')} onClick={() => setIsAutosaveOpen(false)} className="rounded-lg bg-white/5 p-2 text-white/60 hover:bg-white/10 hover:text-white">
@@ -920,7 +928,7 @@ export default function PresentationsTab({
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 text-emerald-200">
                             <ShieldCheck className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                            <span className="text-[10px] font-semibold uppercase tracking-[0.12em]">{t('common.liveSaveBadge')}</span>
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.12em]">{t('common.liveSaveBadge')}</span>
                           </div>
                           <h4 className="mt-2 text-sm font-semibold text-white break-words line-clamp-2">{preset.presentation.name}</h4>
                         </div>
@@ -971,7 +979,7 @@ export default function PresentationsTab({
               <LayoutGrid className="w-4 h-4 text-blue-400" aria-hidden="true" />
               {t('common.savedPresentations')}
             </h2>
-            <p className="text-xs text-white/40 mt-0.5">
+            <p className="text-xs text-white/55 mt-0.5">
               {t('common.presetCount', { count: visiblePresets.length })}
               {searchQuery && t('common.searchResults', { count: filteredPresets.length })}
             </p>
@@ -996,7 +1004,7 @@ export default function PresentationsTab({
                 </option>
               </select>
               <ChevronDown
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 pointer-events-none"
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/55 pointer-events-none"
                 aria-hidden="true"
               />
             </div>
@@ -1016,7 +1024,7 @@ export default function PresentationsTab({
                   type="button"
                   onClick={clearSearch}
                   aria-label={t('common.clearSearch')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/40"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/55"
                 >
                   <X className="w-3.5 h-3.5" aria-hidden="true" />
                 </button>

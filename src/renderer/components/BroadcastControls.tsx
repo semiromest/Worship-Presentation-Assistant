@@ -10,7 +10,7 @@ export default function BroadcastControls() {
   const blackout = useStore(s => s.isBlackout);
   const locked = useStore(s => s.presentation.slides.some(slide => slide.locked));
   return <div className="broadcast-controls" data-testid="broadcast-controls">
-    <ControlTooltip><button
+    <ControlTooltip descriptionKey={blackout ? 'common.openBroadcast' : 'common.blackScreen'}><button
       type="button"
       onClick={() => {
         const state = useStore.getState();
@@ -26,7 +26,7 @@ export default function BroadcastControls() {
       {blackout ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
       <span>{t(blackout ? 'common.openBroadcast' : 'common.blackScreen')}</span>
     </button></ControlTooltip>
-    <ControlTooltip><button
+    <ControlTooltip descriptionKey={locked ? 'common.slideLockActiveHint' : 'common.sendSelectedToLive'}><button
       type="button"
       onClick={() => {
         const state = useStore.getState();

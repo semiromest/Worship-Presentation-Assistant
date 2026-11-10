@@ -1,3 +1,4 @@
+import ControlTooltip from './components/ControlTooltip';
 import { playSfx } from './sfx';
 import { RangeVideo } from './components/RangeVideo';
 import { VideoOverlayLayer } from './components/VideoOverlayLayer';
@@ -50,7 +51,7 @@ const Badge = memo(({
 }) => (
   <span className={cn(
     'font-bold bg-black/60 rounded-md border tabular-nums whitespace-nowrap',
-    compact ? 'text-[8px] leading-none px-1 py-px' : 'text-[10px] px-2 py-1',
+    compact ? 'text-[8px] leading-none px-1 py-px' : 'text-[11px] px-2 py-1',
     variant === 'live'
       ? 'text-red-400 border-red-500/40'
       : variant === 'selected'
@@ -190,7 +191,7 @@ const SlideContent = memo(({ slide, cardWidth, viewport }: { slide: Slide; cardW
         );
       }
       return (
-        <div className="w-full h-full flex items-center justify-center bg-black/30 text-white/45 text-[10px]">
+        <div className="w-full h-full flex items-center justify-center bg-black/30 text-white/60 text-[11px]">
           {t('common.loopLabel')}
         </div>
       );
@@ -228,7 +229,7 @@ const SlideContent = memo(({ slide, cardWidth, viewport }: { slide: Slide; cardW
           className="w-full h-full flex items-center justify-center bg-black relative overflow-hidden"
           style={{ backgroundColor: slide.styles?.backgroundColor ?? '#000000' }}
         >
-          <span className="text-[10px] text-white/60 font-medium">
+          <span className="text-[11px] text-white/60 font-medium">
             {t('common.captionsSlide')}
           </span>
         </div>
@@ -280,19 +281,19 @@ const SlideBadges = memo(({ slide, index, isSelected, isLive, cardWidth, zoom }:
 
       {showGroup && !slide.partsMode && (
         <Badge color={groupColor} compact={tiny}>
-          <span title={groupLabel} className="max-w-[160px] truncate inline-block align-middle" style={{ color: groupColor }}>
+          <ControlTooltip><span title={groupLabel} className="max-w-[160px] truncate inline-block align-middle" style={{ color: groupColor }}>
             {!hideGroupTitle && `${slide.group!.title} `}{slide.group!.part}/{slide.group!.parts}
-          </span>
+          </span></ControlTooltip>
         </Badge>
       )}
 
       {slide.partsMode && slide.parts && slide.parts.length > 0 && slide.group && (
         <Badge color={groupColor} compact={tiny}>
-          <span title={groupLabel} className="flex items-center gap-1" style={{ color: groupColor }}>
+          <ControlTooltip><span title={groupLabel} className="flex items-center gap-1" style={{ color: groupColor }}>
             {!hideGroupTitle && <ListOrdered className="w-3 h-3 shrink-0" />}
             {!hideGroupTitle && <span className="max-w-[160px] truncate">{slide.group.title}</span>}
             {(slide.activePart ?? 0) + 1}/{slide.parts.length}
-          </span>
+          </span></ControlTooltip>
         </Badge>
       )}
 
@@ -313,13 +314,13 @@ SlideBadges.displayName = 'SlideBadges';
 const LockBadge = memo(() => {
   const { t } = useTranslation();
   return (
-    <span
+    <ControlTooltip descriptionKey={'common.slideLockOn'}><span
       className="absolute top-2 right-2 z-10 inline-flex items-center justify-center w-6 h-6 rounded-md bg-amber-500/90 text-black shadow-md"
       title={t('common.slideLockOn')}
       aria-label={t('common.slideLockOn')}
     >
       <Lock className="w-3.5 h-3.5" aria-hidden="true" />
-    </span>
+    </span></ControlTooltip>
   );
 });
 
@@ -333,7 +334,7 @@ const PreparationBadge = memo(({ slideId }: { slideId: string }) => {
   const Icon = error ? AlertCircle : AlertTriangle;
   const label = t(error ? 'prepCheck.slideErrors' : 'prepCheck.slideWarnings', { count: result.issues.length });
   return (
-    <button type="button" draggable={false} aria-label={label} title={label}
+    <ControlTooltip><button type="button" draggable={false} aria-label={label} title={label}
       data-preparation-badge={slideId}
       className={`absolute bottom-2 right-2 z-20 flex items-center gap-1 rounded-md px-2 py-1 text-xs shadow-md focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none ${error ? 'bg-red-600 text-white' : 'bg-amber-400 text-black'}`}
       onMouseDown={event => event.stopPropagation()}
@@ -346,7 +347,7 @@ const PreparationBadge = memo(({ slideId }: { slideId: string }) => {
       }}>
       <Icon className="w-3.5 h-3.5" aria-hidden="true" />
       {result.issues.length}
-    </button>
+    </button></ControlTooltip>
   );
 });
 PreparationBadge.displayName = 'PreparationBadge';

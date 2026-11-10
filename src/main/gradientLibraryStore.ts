@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { renameWithRetry } from './atomicFile';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { GradientLibraryEntry } from '../shared/gradientLibrary';
@@ -57,7 +58,7 @@ export function createGradientLibraryStore(userData: string) {
     const temp = `${file}.${randomUUID()}.tmp`;
     try {
       await fs.writeFile(temp, JSON.stringify(entries), 'utf8');
-      await fs.rename(temp, file);
+      await renameWithRetry(temp, file);
     } catch (error) {
       // Başarıda temp zaten rename edildi; yalnızca hata yolunda temizle.
       await fs.unlink(temp).catch(() => {});
@@ -83,7 +84,7 @@ export function createGradientLibraryStore(userData: string) {
 
     if (!Array.isArray(parsed)) {
       // Dosya tümüyle bozuk: yedeğe taşı, boş kütüphaneyle devam et.
-      await fs.rename(file, backupPath()).catch(() => {});
+      await renameWithRetry(file, backupPath()).catch(() => {});
       return [];
     }
 

@@ -1,6 +1,7 @@
 // ─── Remote HTML (mobile interface) ───────────────────────────────────────────
 /* eslint-disable */
 import remoteScript from './remote-script.js?raw';
+import { UI_WEB_FONT_CSS, UI_WEB_FONT_STACK, UI_WEB_MONO_STACK } from './uiWebFont';
 
 export const REMOTE_HTML_NEW = `<!DOCTYPE html>
 <html lang="en">
@@ -11,10 +12,8 @@ export const REMOTE_HTML_NEW = `<!DOCTYPE html>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#000000">
 <title>Worship Presentation Assistant Remote</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
 <style>
+${UI_WEB_FONT_CSS}
 /* ── Tokens ─────────────────────────────────────────────────────────── */
 :root {
   --ink:    #000000;
@@ -62,7 +61,7 @@ body {
   min-height: -webkit-fill-available;
   min-height: 100dvh; /* modern mobile browsers: ignores the two lines above */
   color: var(--tx);
-  font-family: 'Barlow', system-ui, sans-serif;
+  font-family: ${UI_WEB_FONT_STACK};
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
@@ -109,14 +108,14 @@ body::after {
 }
 .logo-icon svg { position: relative; z-index: 1; }
 .logo-name {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: ${UI_WEB_FONT_STACK};
   font-size: 1.05rem; font-weight: 700;
   letter-spacing: .08em; text-transform: uppercase;
   color: var(--tx); line-height: 1.1;
 }
 .logo-name span {
   display: block;
-  font-family: 'Barlow', sans-serif;
+  font-family: ${UI_WEB_FONT_STACK};
   font-size: .6rem; font-weight: 500;
   letter-spacing: .1em; color: var(--muted);
 }
@@ -137,7 +136,7 @@ body::after {
 /* Timer */
 .hdr-right { display: flex; align-items: center; gap: .5rem; }
 .timer {
-  font-family: 'Space Mono', monospace;
+  font-family: ${UI_WEB_MONO_STACK};
   font-size: .72rem; font-weight: 700;
   letter-spacing: .06em; color: var(--muted);
   background: var(--z2); border: 1px solid var(--rim);
@@ -229,7 +228,7 @@ body::after {
   display: flex; align-items: center; justify-content: space-between;
 }
 .bb-tag {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: ${UI_WEB_FONT_STACK};
   font-size: .65rem; font-weight: 700; letter-spacing: .14em;
   text-transform: uppercase;
   background: var(--red); color: #fff;
@@ -240,7 +239,7 @@ body::after {
 @keyframes bb-flash { 0%,100%{opacity:1}50%{opacity:.5} }
 
 .slide-chip {
-  font-family: 'Space Mono', monospace;
+  font-family: ${UI_WEB_MONO_STACK};
   font-size: .72rem; font-weight: 700;
   background: rgba(0,0,0,.6); backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -271,7 +270,7 @@ body::after {
   gap: .15rem; padding: .55rem 0 .3rem;
 }
 .cnt-cur {
-  font-family: 'Space Mono', monospace;
+  font-family: ${UI_WEB_MONO_STACK};
   font-size: 2.4rem; font-weight: 700; line-height: 1;
   color: var(--tx); letter-spacing: -.04em;
   transition: color .25s, transform .18s;
@@ -279,12 +278,12 @@ body::after {
 .cnt-cur.bump { transform: scale(1.08); }
 .cnt-cur.bb   { color: var(--red); }
 .cnt-sep {
-  font-family: 'Space Mono', monospace;
+  font-family: ${UI_WEB_MONO_STACK};
   font-size: 1.1rem; font-weight: 400;
   color: var(--muted); margin: 0 .05rem;
 }
 .cnt-total {
-  font-family: 'Space Mono', monospace;
+  font-family: ${UI_WEB_MONO_STACK};
   font-size: 1.2rem; font-weight: 400; color: var(--muted);
 }
 
@@ -335,7 +334,7 @@ body::after {
   display: flex; align-items: center; justify-content: center; gap: .5rem;
   height: var(--bh);
   border: none; border-radius: var(--r);
-  font-family: 'Barlow', system-ui, sans-serif;
+  font-family: ${UI_WEB_FONT_STACK};
   font-size: .95rem; font-weight: 700; letter-spacing: .02em;
   color: #fff; cursor: pointer;
   position: relative; overflow: hidden; outline: none;
@@ -405,13 +404,13 @@ body::after {
   flex: 1; height: var(--bh);
   background: var(--z2); border: 1.5px solid var(--rim);
   border-radius: var(--r); padding: 0 1rem; color: var(--tx);
-  font-family: 'Space Mono', monospace; font-size: 1rem; font-weight: 700;
+  font-family: ${UI_WEB_MONO_STACK}; font-size: 1rem; font-weight: 700;
   outline: none; -webkit-appearance: none;
   transition: border-color .2s, box-shadow .2s;
 }
 .goto-inp:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--bglow); }
 .goto-inp::placeholder {
-  font-family: 'Barlow', sans-serif; font-size: .85rem; font-weight: 500; color: var(--muted);
+  font-family: ${UI_WEB_FONT_STACK}; font-size: .85rem; font-weight: 500; color: var(--muted);
 }
 .goto-inp::-webkit-inner-spin-button,
 .goto-inp::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
@@ -419,7 +418,7 @@ body::after {
 .goto-inp.invalid { border-color: var(--red); box-shadow: 0 0 0 3px var(--rglow); }
 
 /* ── Quick verse ─────────────────────────────────────────────────────── */
-.verse-inp { font-family: 'Barlow', sans-serif; font-size: .95rem; font-weight: 600; }
+.verse-inp { font-family: ${UI_WEB_FONT_STACK}; font-size: .95rem; font-weight: 600; }
 .verse-live {
   display: flex; align-items: center; gap: .6rem;
   margin-top: .6rem; cursor: pointer; user-select: none; -webkit-user-select: none;
@@ -501,7 +500,7 @@ body::after {
 /* Thumb number badge */
 .thumb-num {
   position: absolute; bottom: 4px; right: 5px;
-  font-family: 'Space Mono', monospace;
+  font-family: ${UI_WEB_MONO_STACK};
   font-size: .58rem; font-weight: 700;
   background: rgba(0,0,0,.65); backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
@@ -550,7 +549,7 @@ body::after {
   min-width: 0;
 }
 .part-card-num {
-  font-family: 'Space Mono', monospace;
+  font-family: ${UI_WEB_MONO_STACK};
   font-size: .62rem; font-weight: 700;
   background: rgba(0,0,0,.65); backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
@@ -559,7 +558,7 @@ body::after {
   color: rgba(255,255,255,.75); flex-shrink: 0;
 }
 .part-card-title {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: ${UI_WEB_FONT_STACK};
   font-size: .85rem; font-weight: 600;
   letter-spacing: .04em; text-transform: uppercase;
   color: var(--tx);
@@ -567,7 +566,7 @@ body::after {
   min-width: 0; flex: 1;
 }
 .part-card-count {
-  font-family: 'Space Mono', monospace;
+  font-family: ${UI_WEB_MONO_STACK};
   font-size: .62rem; font-weight: 700;
   color: var(--blue2);
   background: var(--bglow2);
@@ -593,7 +592,7 @@ body::after {
   border: 1.5px solid var(--rim2);
   background: var(--z3);
   color: var(--tx2);
-  font-family: 'Barlow', system-ui, sans-serif;
+  font-family: ${UI_WEB_FONT_STACK};
   font-size: .78rem; font-weight: 600;
   letter-spacing: .01em;
   cursor: pointer;
@@ -633,7 +632,7 @@ body::after {
   display: flex; align-items: center; justify-content: space-between;
 }
 .parts-counter {
-  font-family: 'Space Mono', monospace;
+  font-family: ${UI_WEB_MONO_STACK};
   font-size: .65rem; font-weight: 700;
   color: var(--muted); letter-spacing: .04em;
 }

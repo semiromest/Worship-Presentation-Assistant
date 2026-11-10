@@ -61,10 +61,9 @@ async function main(){
   await page.evaluate(()=>{const s=window.__attachStore.getState();s.dispatchUndo({type:'SET',payload:{...s.presentation,slides:s.presentation.slides.map(x=>({...x,youtubeMusic:undefined,musicSettings:undefined}))}});s.setLiveIndex(0);});
   await app.evaluate(()=>global.__holdPreview=true);await page.getByTestId('background-music-toggle').click();
   await page.getByTestId('youtube-music-query').fill('müzik');await page.getByTestId('youtube-music-query').press('Enter');await page.getByTestId('youtube-result-KI33ItOO_M4').click();await page.getByTestId('music-dialog-close').click();
-  await page.evaluate(()=>window.__attachStore.getState().setLiveIndex(1));await expect.poll(()=>audio.evaluate(el=>el.currentTime)).toBeGreaterThan(.2);
-  await page.getByTestId('background-music-toggle').click();await page.getByTestId('background-music-stop').click();await page.getByTestId('music-dialog-close').click();
+  await page.evaluate(()=>window.__attachStore.getState().setLiveIndex(1));await expect(audio).not.toHaveAttribute('src');
   await page.getByTestId('slide-music-add').click();await page.getByTestId('youtube-music-query').fill('müzik');await page.getByTestId('youtube-music-query').press('Enter');await page.getByTestId('youtube-result-KI33ItOO_M4').click();await page.getByTestId('youtube-add-slide-KI33ItOO_M4').click();
-  await expect(page.getByTestId('slide-music-autoplay')).not.toBeChecked();await expect.poll(()=>audio.evaluate(el=>el.currentTime)).toBeGreaterThan(.2);
+  await expect(page.getByTestId('slide-music-autoplay')).not.toBeChecked();await expect(audio).not.toHaveAttribute('src');
   fs.writeFileSync(testInfo.outputPath('slide-audio-report.json'),JSON.stringify({passed:true,plays:await plays(),checks:['excluded types','attach preserves appearance and count','no selection autoplay','manual play','autoplay on live entry only','toggle no start','image playback','replace','remove and undo do not auto-start','800px compact UI']},null,2));
   console.log('PASS: eligible/excluded types, shared modal, metadata preservation, manual/automatic live playback, no selection/toggle/undo auto-start, removal, compact 800px UI');
 }

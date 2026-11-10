@@ -222,35 +222,7 @@ export function applyPatch(current: Presentation, patch: PresentationPatch): Pre
  * (no prevSlide needed), and the result preserves `current.id` (applyPatch
  * rebuilds the object without it).
  */
-export function applyProjectorPatch(current: Presentation, patch: ProjectorPatch): Presentation {
-  const byId = new Map(current.slides.map((s) => [s.id, s] as const));
-
-  for (const sp of patch.slidesPatch) {
-    if (sp.nextSlide) byId.set(sp.id, sp.nextSlide);
-    else byId.delete(sp.id); // removed — id-only entry
-  }
-
-  const order = patch.nextOrder ?? current.slides.map((s) => s.id);
-  const orderSet = new Set(order);
-  const reordered: Slide[] = [];
-  for (const id of order) {
-    const s = byId.get(id);
-    if (s) reordered.push(s);
-  }
-  for (const s of byId.values()) {
-    if (!orderSet.has(s.id)) reordered.push(s);
-  }
-
-  return {
-    id: current.id,
-    ...current,
-    sections: patch.nextSections ?? current.sections,
-    name: patch.nextName ?? current.name,
-    slides: reordered,
-    zoom: patch.nextZoom ?? current.zoom,
-    transition: patch.nextTransition ?? current.transition,
-  };
-}
+export { applyProjectorPatch } from '../../shared/projectorSnapshot';
 
 export function applyInversePatch(current: Presentation, patch: PresentationPatch): Presentation {
   if (patch.editOnly) return applyEditPatch(current, patch, true);

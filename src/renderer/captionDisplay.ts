@@ -72,8 +72,12 @@ export function measureCaptionText(text: string, size: number, bold: boolean, fa
 }
 export function drawCaptionsFrame(slide: Slide, state: CaptionDisplayState): string {
   const canvas = document.createElement('canvas'); canvas.width = 1280; canvas.height = 720;
-  const ctx = canvas.getContext('2d'); if (!ctx) return '';
-  const layout = layoutCaptions(slide, state, measureCaptionText);
+  paintCaptionsLayout(canvas, layoutCaptions(slide, state, measureCaptionText));
+  return canvas.toDataURL('image/jpeg', .85);
+}
+export function paintCaptionsLayout(canvas: HTMLCanvasElement, layout: CaptionLayout): void {
+  const ctx = canvas.getContext('2d'); if (!ctx) return;
+  ctx.save();
   ctx.scale(2 / 3, 2 / 3); ctx.fillStyle = layout.background; ctx.fillRect(0, 0, 1920, 1080);
   if (layout.band) { ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(76, layout.band.y, 1768, layout.band.height); }
   ctx.fillStyle = layout.color; ctx.textAlign = 'center';
@@ -81,5 +85,5 @@ export function drawCaptionsFrame(slide: Slide, state: CaptionDisplayState): str
     ctx.font = (row.bold ? '700' : '400') + ' ' + row.size + 'px ' + layout.family;
     ctx.globalAlpha = row.opacity; ctx.direction = row.rtl ? 'rtl' : 'ltr'; ctx.fillText(row.text, 960, row.y);
   }
-  return canvas.toDataURL('image/jpeg', .85);
+  ctx.restore();
 }

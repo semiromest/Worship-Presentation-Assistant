@@ -1,4 +1,5 @@
 import ControlTooltip from './ControlTooltip';
+import MotionIcon from './MotionIcon';
 import { playSfx } from '../sfx';
 import { useState } from 'react';
 import { Popover } from '@base-ui/react/popover';
@@ -38,7 +39,7 @@ export default function DisplayOutputsPopover({ openOutput, closeOutput, label }
 
   return (
     <Popover.Root open={isOpen} onOpenChange={(next) => { if (next !== isOpen) playSfx(next ? 'open' : 'close'); setIsOpen(next); }}>
-      <ControlTooltip suppress={isOpen}><Popover.Trigger
+      <ControlTooltip suppress={isOpen} descriptionKey={'common.displayOutputs'}><Popover.Trigger
         title={t('common.displayOutputs')}
         aria-label={t('common.displayOutputs')}
         className="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.96]"
@@ -58,7 +59,7 @@ export default function DisplayOutputsPopover({ openOutput, closeOutput, label }
             <Settings2 className="w-4 h-4 text-blue-400" aria-hidden="true" />
             <div className="min-w-0">
               <h2 className="text-xs font-bold text-white">{t('common.displayOutputs')}</h2>
-              <p className="text-[10px] text-white/45 truncate">{t('common.displayOutputsHint')}</p>
+              <p className="text-[11px] text-white/60 truncate">{t('common.displayOutputsHint')}</p>
             </div>
           </div>
 
@@ -79,22 +80,22 @@ export default function DisplayOutputsPopover({ openOutput, closeOutput, label }
                   aria-label={display.label}
                 >
                   <div className="flex items-center gap-2">
-                    <Monitor className="w-4 h-4 shrink-0 text-white/55" aria-hidden="true" />
+                    <MotionIcon name="projector" active={assignment.isOpen} className="text-white/55" />
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-semibold truncate">{display.label}</p>
-                      <p className="text-[10px] text-white/40 font-mono">
+                      <p className="text-[11px] text-white/55 font-mono">
                         {display.bounds.width}×{display.bounds.height} · {display.bounds.x},{display.bounds.y}
                       </p>
                     </div>
-                    <ControlTooltip><button
+                    <ControlTooltip descriptionKey={assignment.isOpen ? 'common.displayClose' : 'common.displayOpen'}><button
                       type="button"
                       onClick={() => {
                         if (assignment.isOpen) void closeOutput(display.id);
                         else void openOutput(display.id);
                       }}
                       className={assignment.isOpen
-                        ? 'px-2 py-1 rounded-md bg-red-600/20 border border-red-500/30 text-red-300 text-[10px] font-bold hover:bg-red-600/30'
-                        : 'px-2 py-1 rounded-md bg-green-600/20 border border-green-500/30 text-green-300 text-[10px] font-bold hover:bg-green-600/30'}
+                        ? 'px-2 py-1 rounded-md bg-red-600/20 border border-red-500/30 text-red-300 text-[11px] font-bold hover:bg-red-600/30'
+                        : 'px-2 py-1 rounded-md bg-green-600/20 border border-green-500/30 text-green-300 text-[11px] font-bold hover:bg-green-600/30'}
                       aria-label={assignment.isOpen ? t('common.displayClose') : t('common.displayOpen')}
                     >
                       {assignment.isOpen ? t('common.displayClose') : t('common.displayOpen')}
@@ -116,7 +117,7 @@ export default function DisplayOutputsPopover({ openOutput, closeOutput, label }
                         </select>
                       </label>
 
-                      <ControlTooltip><button
+                      <ControlTooltip descriptionKey={outputBlackout ? 'common.openBroadcast' : 'common.blackScreen'}><button
                         type="button"
                         onClick={() => setOutputBlackout(display.id, (value) => !value)}
                         title={outputBlackout ? t('common.openBroadcast') : t('common.blackScreen')}
@@ -146,12 +147,12 @@ export default function DisplayOutputsPopover({ openOutput, closeOutput, label }
                           </select>
                         </label>
                       ) : assignment.mode === 'stage' ? (
-                        <span className="col-span-2 inline-flex items-center gap-1 text-[10px] text-purple-300/80">
+                        <span className="col-span-2 inline-flex items-center gap-1 text-[11px] text-purple-300/80">
                           <Tv className="w-3 h-3 shrink-0" aria-hidden="true" />
                           {t('common.displayStageHint')}
                         </span>
                       ) : (
-                        <span className="col-span-2 inline-flex items-center gap-1 text-[10px] text-emerald-300/80">
+                        <span className="col-span-2 inline-flex items-center gap-1 text-[11px] text-emerald-300/80">
                           <Radio className="w-3 h-3" aria-hidden="true" />
                           {t('common.displayFollowingLive', { index: liveIndex + 1 })}
                         </span>

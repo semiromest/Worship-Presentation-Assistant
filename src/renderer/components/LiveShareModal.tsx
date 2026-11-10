@@ -91,7 +91,7 @@ export default function LiveShareModal({ onStartShare, onStopShare, onAddQrSlide
                 <img src={shareQr} alt={t('common.screenShareQrAlt')} className="w-56 h-56" />
               </div>
             ) : (
-              <div className="w-56 h-56 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-[10px] text-white/40">
+              <div className="w-56 h-56 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-[11px] text-white/55">
                 {t('common.remoteLoading')}
               </div>
             )}
@@ -99,7 +99,7 @@ export default function LiveShareModal({ onStartShare, onStopShare, onAddQrSlide
 
           {shareUrl && (
             <div className="space-y-1.5">
-              <p className="text-[10px] text-white/40 uppercase font-bold">{t('common.sttShareUrlLabel')}</p>
+              <p className="text-[11px] text-white/55 uppercase font-bold">{t('common.sttShareUrlLabel')}</p>
               <div className="text-xs text-white/70 bg-black/20 p-3 rounded-lg border border-white/10 break-all font-mono">
                 {shareUrl}
               </div>
@@ -111,7 +111,7 @@ export default function LiveShareModal({ onStartShare, onStopShare, onAddQrSlide
             {t('common.sttShareConnected', { count: shareClientCount })}
           </p>
 
-          <p className="text-[10px] text-white/40 text-center">{t('common.screenShareHint')}</p>
+          <p className="text-[11px] text-white/55 text-center">{t('common.screenShareHint')}</p>
 
           <div className="flex gap-2">
             <button

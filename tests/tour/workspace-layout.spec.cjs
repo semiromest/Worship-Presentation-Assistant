@@ -1,4 +1,6 @@
 const {test,expect}=require('@playwright/test');
+// Tooltips show the explanatory hint (controlHints / tooltipDescriptions / tour pages), not the short label.
+const localeStrings=lang=>require(`../../src/renderer/locales/${lang}/translation.json`);
 const {launchWorkspace,closeWorkspace}=require('./workspace-test-utils.cjs');
 test('slides workspace keeps live controls fixed and selection tools stable across sizes',async({},info)=>{
   let app;
@@ -144,7 +146,7 @@ test('control hints open on focus and hover, close on Escape and scroll, and pre
     const more=page.locator('[data-columns-action="increase"]');
     await expect(more).not.toHaveAttribute('title');
     await page.keyboard.press('Tab');await more.focus();
-    const hint=page.getByRole('tooltip');await expect(hint).toContainText('More slides per row');
+    const hint=page.getByRole('tooltip');await expect(hint).toContainText(localeStrings('en').controlHints.moreColumns);
     expect(await more.evaluate(el=>el.parentElement.classList.contains('design-slide-columns'))).toBe(true);
     const ids=await page.evaluate(()=>[...window.__uxStore.getState().selectedSlideIds]);
     await page.keyboard.press('Escape');await expect(hint).toHaveCount(0);
@@ -217,10 +219,10 @@ test('shared icon hints cover sidebar, style controls and composed toolbar popov
       await page.evaluate(lang=>window.__tourTest.language(lang),lang);
       const nav=page.locator('[data-guide-anchor="nav-slides"]');
       await page.keyboard.press('Tab');await nav.focus();
-      await expect(tooltip).toContainText(await nav.getAttribute('aria-label'));await expect(tooltip).toHaveAttribute('data-side','right');
+      await expect(tooltip).toContainText(localeStrings(lang).tour.pages.slides);await expect(tooltip).toHaveAttribute('data-side','right');
       await page.keyboard.press('Escape');
-      const upper=page.locator('[aria-pressed][aria-label]').filter({hasText:'AA'}).last();
-      await upper.focus();await expect(tooltip).toContainText(await upper.getAttribute('aria-label'));
+      const upper=page.locator('[aria-pressed][aria-label]').filter({hasText:/^AA$/}).last();
+      await upper.focus();await expect(tooltip).toContainText(localeStrings(lang).tooltipDescriptions['slidesWorkspace.textCaseUppercase']);
       await page.keyboard.press('Escape');
     }
     await page.evaluate(()=>window.__tourTest.language('en'));
@@ -263,7 +265,7 @@ test('narrow toolbars expose overflow and keep focused actions clear of the edge
     await expect(remove).toBeFocused();
     const bounds=await bar.boundingBox(),button=await remove.boundingBox();expect(button.x+button.width).toBeLessThanOrEqual(bounds.x+bounds.width-8);
     await expect(right).toBeHidden();
-    await expect(page.getByRole('tooltip')).toContainText('Delete');await page.keyboard.press('Escape');
+    await expect(page.getByRole('tooltip')).toContainText(localeStrings('en').controlHints.delete);await page.keyboard.press('Escape');
     await page.evaluate(()=>window.__toolsStore.getState().selectSlides({ids:new Set(['a','b'])}));
     expect((await bar.boundingBox()).height).toBe(before);
     await page.screenshot({path:info.outputPath('toolbar-overflow-800.png')});

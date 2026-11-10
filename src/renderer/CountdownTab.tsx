@@ -1,4 +1,5 @@
 import { playSfx } from './sfx';
+import MotionIcon from './components/MotionIcon';
 import { usePractice } from './hooks/usePractice';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -168,7 +169,7 @@ export default function CountdownTab({ onAddCountdownToPresentation }: Countdown
           <section className="countdown-preview-panel" aria-labelledby="countdown-preview-title">
             <div className="countdown-preview-heading">
               <h3 id="countdown-preview-title">{t('countdown.preview')}</h3>
-              <span role="status" aria-live="polite" className="countdown-state">{status}</span>
+              <span role="status" aria-live="polite" className="countdown-state inline-flex items-center gap-1.5"><MotionIcon name="timer-countdown" active={isRunning} />{status}</span>
             </div>
             <div className="countdown-preview" style={{ backgroundColor: countdownStyles.backgroundColor }}>
               <div role="timer" aria-live="off" aria-label={t('countdown.remaining', { time: formatTime(displayTime) })}

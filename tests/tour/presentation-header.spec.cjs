@@ -106,11 +106,11 @@ test('current presentation actions preserve rename, save, file and dialog behavi
     await p.evaluate(() => window.__tourTest.language('tr'));
     await app.evaluate(({ ipcMain }) => {
       global.headerCalls = { save: 0, file: 0, open: 0, ppt: 0 };
-      for (const c of ['save-preset', 'save-file', 'open-file', 'select-pptx-file'])
+      for (const c of ['save-preset-entry', 'save-file', 'open-file', 'select-pptx-file'])
         ipcMain.removeHandler(c);
-      ipcMain.handle('save-preset', (_, x) => {
+      ipcMain.handle('save-preset-entry', (_, x) => {
         global.headerCalls.save++;
-        return [{ ...x, createdAt: Date.now() }];
+        return { upsert: { name: x.name, createdAt: Date.now(), presentation: { id: x.presentation.id, name: x.presentation.name, slides: [] }, summary: { version: 'fixture', slideCount: x.presentation.slides.length } }, removed: [] };
       });
       ipcMain.handle('save-file', () => {
         global.headerCalls.file++;

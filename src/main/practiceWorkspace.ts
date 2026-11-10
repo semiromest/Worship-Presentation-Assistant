@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
+import { renameWithRetry } from './atomicFile';
 import path from 'node:path';
 import { fileURLToPath,pathToFileURL } from 'node:url';
 import { exerciseOperation,guideChapters,guideNarrative,guideSteps,isGuideResultStep,practiceExercises,type GuideObservation,type GuideResult,type GuideResultStep,type GuideStep,type PracticeExercise,type PracticeGuide,type PracticeWorkspace } from '../shared/practice';
@@ -65,7 +66,7 @@ export function createPracticeWorkspace(profile: string, progress: ReturnType<ty
     try {
       const handle = await fs.open(temp, 'wx');
       try { await handle.writeFile(JSON.stringify(state)); await handle.sync(); } finally { await handle.close(); }
-      await fs.rename(temp, file);
+      await renameWithRetry(temp, file);
     } finally { await fs.rm(temp, { force: true }); }
     committedState = JSON.parse(JSON.stringify(state));
     return JSON.parse(JSON.stringify(committedState));
@@ -178,7 +179,7 @@ export function createPracticeWorkspace(profile: string, progress: ReturnType<ty
     // A crash between the two files can then reconcile the outcome on resume.
     await persist();
     if (isGuideResultStep(step)) { await reconcileResult(); return; }
-    if (step === 'nav-slides' && input.tab === 'slides') await advance('add', label);
+    if (step === 'nav-slides' && input.tab === 'slides') await advance('slide-library-intro', label);
     else if (add && task) {
       const slides = next.slides.filter(slide => slide.type === 'text' && !task.baseline.includes(slide.id));
       await showResult('add-result', { exercise: 'slide-add', operation: 'slide-added', sessionId: task.id, resourceId: slides[0].id,

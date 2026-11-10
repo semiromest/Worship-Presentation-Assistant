@@ -1,10 +1,12 @@
 import { playSfx } from '../sfx';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Smartphone, Wrench, CheckCircle2, X, AlertTriangle, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Smartphone, Wrench, CheckCircle2, X, AlertTriangle, Loader2, ChevronDown, ChevronUp, UserX } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import Dialog from './Dialog';
 import type { FirewallDiagnostic } from '../../shared/remoteDiagnostics';
+import { applyRemoteUrl, startRemote } from '../remoteUrl';
+import { confirmDialog } from '../dialogs';
 
 interface DiagResult {
   ok: boolean;
@@ -29,6 +31,34 @@ export default function RemoteControlModal() {
   const [diag, setDiag] = useState<DiagResult | null>(null);
   const [diagRunning, setDiagRunning] = useState(false);
   const [diagOpen, setDiagOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
+
+  // The phone server starts when this window opens, not at app launch.
+  useEffect(() => {
+    if (!isRemoteOpen) return;
+    setResetDone(false);
+    void startRemote().catch(() => {});
+  }, [isRemoteOpen]);
+
+  const resetPairing = async () => {
+    const confirmed = await confirmDialog(t('remoteServer.resetConfirm'), {
+      title: t('remoteServer.resetTitle'),
+      confirmLabel: t('remoteServer.resetAction'),
+    });
+    if (!confirmed) return;
+    setResetting(true);
+    setResetDone(false);
+    try {
+      applyRemoteUrl(await window.electronAPI?.remoteResetPairing?.());
+      setResetDone(true);
+      playSfx('complete');
+    } catch {
+      playSfx('error');
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const runDiagnostics = async () => {
     setDiagRunning(true);
@@ -81,12 +111,27 @@ export default function RemoteControlModal() {
           </div>
           {remoteUrl && (
             <div className="space-y-1.5">
-              <p className="text-[10px] text-white/40 uppercase font-bold">{t('common.remoteUrlLabel')}</p>
+              <p className="text-[11px] text-white/55 uppercase font-bold">{t('common.remoteUrlLabel')}</p>
               <div className="text-sm text-white/70 bg-black/20 p-3 rounded-lg border border-white/10 break-all font-mono">
                 {remoteUrl}
               </div>
             </div>
           )}
+
+          {/* ── Paired phones ───────────────────────────────────────── */}
+          <div className="border-t border-white/10 pt-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-white/80">{t('remoteServer.resetTitle')}</p>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-white/50">{resetDone ? t('remoteServer.resetDone') : t('remoteServer.resetHint')}</p>
+              </div>
+              <button type="button" onClick={() => void resetPairing()} disabled={resetting}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-semibold text-white/75 hover:bg-white/10 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                {resetting ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <UserX className="h-3.5 w-3.5" aria-hidden="true" />}
+                {t('remoteServer.resetAction')}
+              </button>
+            </div>
+          </div>
 
           {/* ── Diagnostics ─────────────────────────────────────────── */}
           <div className="border-t border-white/10 pt-3">
@@ -168,7 +213,7 @@ export default function RemoteControlModal() {
                     )}
 
                     {/* Troubleshooting tips */}
-                    <div className="rounded-md bg-white/[0.03] border border-white/10 p-2.5 text-[10px] text-white/45 space-y-1.5">
+                    <div className="rounded-md bg-white/[0.03] border border-white/10 p-2.5 text-[11px] text-white/60 space-y-1.5">
                       <p className="font-bold text-white/55">{t('common.remoteDiagTroubleshooting')}</p>
                       <ul className="list-disc ml-4 space-y-1">
                         <li>{t('common.remoteDiagTrouble1')}</li>

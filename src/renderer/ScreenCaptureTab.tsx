@@ -303,11 +303,11 @@ function PreviewPlaceholder({
   const getIconColor = () => {
     if (status === 'error') return 'text-red-400';
     if (status === 'starting') return 'text-blue-400';
-    return 'text-white/45';
+    return 'text-white/60';
   };
 
   return (
-    <div className="flex flex-col items-center gap-2 text-white/45 text-xs">
+    <div className="flex flex-col items-center gap-2 text-white/60 text-xs">
       <Monitor size={32} className={getIconColor()} />
       <span>{getMessage()}</span>
     </div>
@@ -360,11 +360,11 @@ function EmptyState({ type, t }: { type: 'loading' | 'empty' | 'error'; t: (key:
   const config = {
     loading: {
       text: t('common.screenLoading'),
-      className: 'text-white/40',
+      className: 'text-white/55',
     },
     empty: {
       text: t('common.screenEmpty'),
-      className: 'text-white/40 whitespace-pre-line',
+      className: 'text-white/55 whitespace-pre-line',
     },
     error: {
       text: t('common.screenErrorGeneric'),

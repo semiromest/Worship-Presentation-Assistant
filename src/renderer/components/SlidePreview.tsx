@@ -146,7 +146,7 @@ export const SlideItemsPreview = memo(({ items, slide, staticMedia = false, enab
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full overflow-hidden bg-black"
+      className="slide-surface relative w-full h-full overflow-hidden bg-black"
     >
       <div
         className="absolute overflow-hidden"
@@ -220,7 +220,7 @@ export const TextSlidePreview = memo(({ slide, cardWidth = 320, staticMedia = fa
 
   return (
     <div
-      className="w-full h-full flex items-center justify-center text-center relative overflow-hidden"
+      className="slide-surface w-full h-full flex items-center justify-center text-center relative overflow-hidden"
       style={{
         backgroundColor: bgColor,
         backgroundImage: bgImage ? `url(${bgImage})` : undefined,
@@ -268,7 +268,7 @@ export const ScreenPreview = memo(({ content }: { content?: string }) => {
   return (
     <div className="w-full h-full flex flex-col items-center justify-center bg-[#1a1a2e]">
       <Monitor className="w-10 h-10 text-blue-400" aria-hidden="true" />
-      <span className="text-[10px] text-blue-300 mt-2">{t('common.slideScreenCapture')}</span>
+      <span className="text-[11px] text-blue-300 mt-2">{t('common.slideScreenCapture')}</span>
       {content && (
         <span className="text-[8px] text-white/50 mt-1">{content}</span>
       )}
@@ -281,8 +281,8 @@ ScreenPreview.displayName = 'ScreenPreview';
 /** Small icon-only placeholder for rail thumbnails of non-previewable slides. */
 const PlaceholderPreview = memo(({ icon: Icon, label }: { icon: typeof Video; label: string }) => (
   <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-[#141414]">
-    <Icon className="w-4 h-4 text-white/30" aria-hidden="true" />
-    <span className="text-[7px] leading-none text-white/35 truncate max-w-full px-1">{label}</span>
+    <Icon className="w-4 h-4 text-white/55" aria-hidden="true" />
+    <span className="text-[7px] leading-none text-white/55 truncate max-w-full px-1">{label}</span>
   </div>
 ));
 
@@ -307,7 +307,7 @@ export const SlidePreviewAny = memo(({ slide, cardWidth = 320, enabled = true }:
     return <SlideItemsPreview items={slide.items} slide={slide} staticMedia enabled={enabled} />;
   }
 
-  if (slide.partsMode) return <div className="relative h-full w-full"><TextSlidePreview slide={slide} cardWidth={cardWidth} staticMedia enabled={enabled} /><span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[9px] text-white">{(slide.activePart ?? 0) + 1} / {slide.parts?.length ?? 1}</span></div>;
+  if (slide.partsMode) return <div className="relative h-full w-full"><TextSlidePreview slide={slide} cardWidth={cardWidth} staticMedia enabled={enabled} /><span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[10px] text-white">{(slide.activePart ?? 0) + 1} / {slide.parts?.length ?? 1}</span></div>;
 
   switch (slide.type) {
     case 'image':
@@ -334,10 +334,10 @@ export const SlidePreviewAny = memo(({ slide, cardWidth = 320, enabled = true }:
     case 'loop': {
       const first = slide.loopItems?.[0];
       if (!first) return <PlaceholderPreview icon={ListOrdered} label={t('common.loopLabel')} />;
-      if (first.type === 'video') return <div className="relative h-full w-full"><MediaPoster mediaUrl={first.mediaUrl} thumbnailUrl={first.thumbnailUrl} objectFit="cover" enabled={enabled} /><span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[9px] text-white">{t('common.loopLabel')} · {slide.loopItems?.length}</span></div>;
+      if (first.type === 'video') return <div className="relative h-full w-full"><MediaPoster mediaUrl={first.mediaUrl} thumbnailUrl={first.thumbnailUrl} objectFit="cover" enabled={enabled} /><span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[10px] text-white">{t('common.loopLabel')} · {slide.loopItems?.length}</span></div>;
       const src = first.mediaUrl;
       return src ? (
-        <div className="relative h-full w-full"><PreviewImage source={src} width={cardWidth} enabled={enabled} className="w-full h-full object-cover bg-black" alt="Loop" /><span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[9px] text-white">{t('common.loopLabel')} · {slide.loopItems?.length}</span></div>
+        <div className="relative h-full w-full"><PreviewImage source={src} width={cardWidth} enabled={enabled} className="w-full h-full object-cover bg-black" alt="Loop" /><span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[10px] text-white">{t('common.loopLabel')} · {slide.loopItems?.length}</span></div>
       ) : (
         <PlaceholderPreview icon={ListOrdered} label={t('common.loopLabel')} />
       );

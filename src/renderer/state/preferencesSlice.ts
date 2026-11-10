@@ -24,6 +24,8 @@ export function createPreferencesSlice(
   | 'setSessionSaveStatus'
   | 'operatorNotesEnabled'
   | 'setOperatorNotesEnabled'
+  | 'nextSlidePreviewEnabled'
+  | 'setNextSlidePreviewEnabled'
   | 'sectionFilterId'
   | 'setSectionFilterId'
   | 'serviceSectionsEnabled'
@@ -96,6 +98,21 @@ export function createPreferencesSlice(
         /* storage unavailable */
       }
       set({ operatorNotesEnabled: enabled });
+    },
+    nextSlidePreviewEnabled: (() => {
+      try {
+        return localStorage.getItem('nextSlidePreviewEnabled') === '1';
+      } catch {
+        return false;
+      }
+    })(),
+    setNextSlidePreviewEnabled: (enabled) => {
+      try {
+        localStorage.setItem('nextSlidePreviewEnabled', enabled ? '1' : '0');
+      } catch {
+        /* storage unavailable */
+      }
+      set({ nextSlidePreviewEnabled: enabled });
     },
     sectionFilterId: '',
     setSectionFilterId: (sectionFilterId) => set({ sectionFilterId }),

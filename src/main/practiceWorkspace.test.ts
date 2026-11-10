@@ -195,7 +195,10 @@ test('guided sequence requires actual outcomes, rejects stale steps and resumes 
     await command('resume'); assert.equal(value.guide.step, 'presentations');
     await command('next'); await command('next'); assert.equal(value.guide.step, 'nav-slides');
     await command('observe'); assert.equal(value.guide.step, 'nav-slides');
-    await command('observe', input(value.deck, 'slides')); assert.equal(value.guide.step, 'add');
+    const beforeIntroduction = structuredClone(value.deck);
+    await command('observe', input(value.deck, 'slides')); assert.equal(value.guide.step, 'slide-library-intro');
+    assert.deepEqual(value.deck, beforeIntroduction); assert.equal(value.active, null);
+    await command('next', input(value.deck, 'slides')); assert.equal(value.guide.step, 'add');
     await assert.rejects(command('next'));
     const id = value.guide.id;
     const next = { ...value.deck, slides: [...value.deck.slides, { id: 'added-guided', type: 'text' as const, content: 'Added' }] };

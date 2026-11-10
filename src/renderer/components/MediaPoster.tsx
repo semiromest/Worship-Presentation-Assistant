@@ -157,11 +157,11 @@ export function MediaPoster({
       ) : (
         <div className="flex flex-col items-center gap-1 px-2 text-center text-white/60">
           <Video className="h-5 w-5" aria-hidden="true" />
-          <span className="text-[9px]">{t(failed ? 'common.editorPreviewFailed' : 'common.editorPreviewLoading')}</span>
+          <span className="text-[10px]">{t(failed ? 'common.editorPreviewFailed' : 'common.editorPreviewLoading')}</span>
           {failed && mediaUrl && (
             <button
               type="button"
-              className="rounded bg-white/10 px-2 py-1 text-[9px] hover:bg-white/20"
+              className="rounded bg-white/10 px-2 py-1 text-[10px] hover:bg-white/20"
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();

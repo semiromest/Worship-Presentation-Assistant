@@ -1,4 +1,6 @@
-import { resolveCanvasSource } from './canvasSource';
+import { loadPresetList } from './presetLibrary';
+import { useOptionalServiceWarmup } from './hooks/useOptionalServiceWarmup';
+import { startupReady } from './startupReady';
 import ControlTooltip from './components/ControlTooltip';
 import { lazy, Suspense, useEffect, useMemo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,8 +24,6 @@ import {
 const SlideEditor = lazy(() => import('./SlideEditor'));
 import { ChoiceDialogHost } from './choiceDialogs';
 import { mergeEditorCommit } from './editor/editorConflicts';
-import StageDisplay from './components/StageDisplay';
-import { AnimatedPreview } from './AnimatedPreview';
 
 const loadScriptureBrowser = () => import('./ScriptureBrowser');
 const ScriptureBrowser = lazy(loadScriptureBrowser);
@@ -35,7 +35,7 @@ const PresentationsTab = lazy(() => import('./PresentationsTab'));
 const HymnsTab = lazy(() => import('./HymnsTab'));
 const SettingsTab = lazy(() => import('./components/SettingsTab'));
 
-import { IS_PROJECTOR_MODE, DEFAULT__TRANSITION } from './constants';
+import { IS_PROJECTOR_MODE } from './constants';
 import { cn } from './utils';
 import { initSfx, playSfx } from './sfx';
 import { uiMotion } from './uiMotion';
@@ -52,6 +52,7 @@ import { useLiveSave, getLiveSaveRetention } from './hooks/useLiveSave';
 import { useSlideOperations } from './hooks/useSlideOperations';
 import { useStt } from './hooks/useStt';
 import { usePreparationCheck } from './hooks/usePreparationCheck';
+import { useMediaStorageMonitor } from './mediaStorage';
 import { useSttSlideTracker } from './hooks/useSttSlideTracker';
 import { useShare } from './hooks/useShare';
 import { useSttStore } from './state/useSttStore';
@@ -92,14 +93,16 @@ export default function App() {
   const { startShare, stopShare } = useShare();
   const { startShare: startScreenShare, stopShare: stopScreenShare } = useScreenShare();
   const commands = { ...remote, sttStart, sttStop, startShare, stopShare, startScreenShare, stopScreenShare };
-  return <><RuntimeSync />{IS_PROJECTOR_MODE ? <ProjectorView /> : <><ControlApp commands={commands} />{!practice && <DesktopHost />}</>}</>;
+  return <><RuntimeSync /><ControlApp commands={commands} />{!practice && <DesktopHost />}</>;
 }
 
 /** Reactive bridges have their own render boundary; no visual children. */
 function RuntimeSync() {
+  const practice = usePractice();
   useProjectorSync();
   usePreparationCheck();
   useLiveSave();
+  useMediaStorageMonitor(!practice && !IS_PROJECTOR_MODE);
   useSttSlideTracker();
   useLiveScreenShare();
   const { i18n } = useTranslation();
@@ -112,9 +115,9 @@ function RuntimeSync() {
     let alive = true;
 
     const hydratePresets = async () => {
-      const loaded = await window.electronAPI?.loadPresets?.(getLiveSaveRetention());
+      const loaded = await loadPresetList(getLiveSaveRetention());
       if (!alive || !Array.isArray(loaded)) return;
-      useStore.getState().setPresets(loaded);
+      startupReady('document');
     };
 
     void hydratePresets();
@@ -140,6 +143,8 @@ function RuntimeSync() {
 function ControlApp({ commands }: { commands: AppCommands }) {
   const [pptxWarnings, setPptxWarnings] = useState<string[]>([]);
   const [pptxImporting, setPptxImporting] = useState(false);
+  useOptionalServiceWarmup(pptxImporting);
+  useEffect(() => { startupReady('shell'); }, []);
   const { t } = useTranslation();
   const { openLive, closeLive, openOutput, closeOutput, startScreenShare, stopScreenShare } = commands;
   // Layout-only subscriptions. Deck and live state belong to local connectors.
@@ -280,7 +285,7 @@ function ControlApp({ commands }: { commands: AppCommands }) {
         className="w-[72px] flex-shrink-0 overflow-y-auto overflow-x-hidden bg-surface border-r border-white/10 flex flex-col items-center py-3 gap-1"
       >
         {SIDEBAR_TABS.map(({ id, icon: Icon, titleKey }) => (
-          <ControlTooltip key={id} side="right"><button
+          <ControlTooltip key={id} side="right" description={t(`tour.pages.${id}`)}><button
             key={id}
             data-guide-anchor={`nav-${id}`}
             onClick={() => { if (activeTab !== id) playSfx('forward'); setActiveTab(id as any); notifyPageVisit(id); }}
@@ -306,7 +311,7 @@ function ControlApp({ commands }: { commands: AppCommands }) {
               <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-blue-400" aria-hidden="true" />
             )}
             <Icon className="relative z-10 w-5 h-5 shrink-0" aria-hidden="true" />
-            <span className="relative z-10 text-[10px] font-semibold leading-tight text-white/65 max-w-[56px] truncate text-center text-balance">
+            <span className="relative z-10 text-[10px] font-semibold leading-tight text-white/80 max-w-[56px] truncate text-center text-balance">
               {t(titleKey)}
             </span>
           </button></ControlTooltip>
@@ -316,9 +321,6 @@ function ControlApp({ commands }: { commands: AppCommands }) {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Toolbar */}
         <Toolbar
-          moveSelectedSlides={moveSelectedSlides}
-          deleteSelectedSlides={deleteSelectedSlides}
-          duplicateSelectedSlides={duplicateSelectedSlides}
           addYouTubeMusicSlide={handleYouTubeMusicAdd}
           openLive={openLive}
           closeLive={closeLive}
@@ -383,7 +385,7 @@ function ControlApp({ commands }: { commands: AppCommands }) {
                     updateLoopItems={updateLoopItems}
                     updateSlideProperty={updateSlideProperty}
                 />
-                <ControlTooltip><button
+                <ControlTooltip descriptionKey={'common.panelOpen'}><button
                   data-testid="right-panel-opener"
                   onClick={() => { setIsRightPanelOpen(true); playSfx('open'); }}
                   tabIndex={isRightPanelOpen ? -1 : 0}
@@ -399,7 +401,7 @@ function ControlApp({ commands }: { commands: AppCommands }) {
                   title={t('common.panelOpen')}
                   aria-label={t('common.panelOpen')}
                 >
-                  <PanelRightOpen className="w-4 h-4 shrink-0 text-white/40 group-hover:text-white/70 transition-colors" />
+                  <PanelRightOpen className="w-4 h-4 shrink-0 text-white/55 group-hover:text-white/70 transition-colors" />
                 </button></ControlTooltip>
               </div>
             </div>
@@ -500,70 +502,16 @@ function ControlApp({ commands }: { commands: AppCommands }) {
   );
 }
 
-function ProjectorView() {
-  // Keep the focused output window's existing keyboard behavior (including
-  // local mute/Enter); moving the visual branch must not remove its listener.
-  const { deleteSelectedSlides, duplicateSelectedSlides } = useSlideOperations();
-  useKeyboardNavigation({ onDeleteSlides: deleteSelectedSlides, onDuplicateSlides: duplicateSelectedSlides });
-  const liveSlide = useStore(s => s.presentation.slides[s.liveIndex] ?? s.presentation.slides[0]);
-  const transition = useStore(s => s.presentation.transition);
-  const instantTransition = useStore(s => s.instantTransition);
-  const transitionType = instantTransition ? 'none' : transition?.type ?? DEFAULT__TRANSITION.type;
-  const transitionDuration = instantTransition ? 0 : transition?.duration ?? DEFAULT__TRANSITION.duration;
-  const projectorReady = useStore(s => s.projectorReady);
-  const isBlackout = useStore(s => s.isBlackout);
-  const mediaVolume = useStore(s => s.mediaVolume);
-  const isMediaMuted = useStore(s => s.isMediaMuted);
-  const outputMode = useStore(s => s.outputMode);
-  if (!projectorReady) {
-    return <div className="fixed inset-0 bg-black" data-projector-loading />;
-  }
-
-  if (isBlackout) {
-    return <div className="fixed inset-0 bg-black z-50" />;
-  }
-
-  // Stage display (confidence monitor): shows current + next slide text,
-  // a live clock and elapsed time — instead of the styled projector view.
-  if (outputMode === 'stage') {
-    return <StageDisplay />;
-  }
-
-  return (
-    <div
-      className="fixed inset-0 flex items-center justify-center overflow-hidden bg-black"
-      style={{
-        backgroundColor: liveSlide?.type === 'text' ? (liveSlide.styles?.backgroundColor ?? '#000') : '#000',
-        backgroundImage:
-          liveSlide?.type === 'text' && liveSlide.styles?.backgroundImage
-            ? `url(${resolveCanvasSource(liveSlide.styles.backgroundImage, false).url})`
-            : undefined,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-      }}
-    >
-      <AnimatedPreview
-        slide={liveSlide}
-        transitionType={transitionType}
-        duration={transitionDuration}
-        size="projector"
-        volume={mediaVolume}
-        muted={isMediaMuted}
-      />
-    </div>
-  );
-
-}
 
 function PresentationLibrary({ operations, onImportWarnings, onImportingChange }: { operations: Operations; onImportWarnings: (warnings: string[]) => void; onImportingChange: (importing: boolean) => void }) {
   const presentation = useStore(s => s.presentation);
   const presets = useStore(s => s.presets);
   const selectedPresetName = useStore(s => s.selectedPresetName);
-  const { setPresets, setSelectedPresetName } = useStore.getState();
+  const { setSelectedPresetName } = useStore.getState();
   const { applyPreset, openPresentation, savePresentation, importPptxPresentation, createNewPresentation } = operations;
   return <PresentationsTab
     presentation={presentation} presets={presets} selectedPresetName={selectedPresetName}
-    onPresetsChange={setPresets} onApplyPreset={applyPreset} onSelectedPresetNameChange={setSelectedPresetName}
+    onApplyPreset={applyPreset} onSelectedPresetNameChange={setSelectedPresetName}
     onOpenFile={openPresentation} onSaveFile={savePresentation} onImportPptx={importPptxPresentation} onImportWarnings={onImportWarnings} onImportingChange={onImportingChange}
     onNewPresentation={createNewPresentation} />;
 }

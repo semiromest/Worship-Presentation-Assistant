@@ -50,7 +50,7 @@ export function VideoOverlayLayer({
   return (
     <div
       ref={host}
-      className="absolute inset-0"
+      className="slide-surface absolute inset-0"
       style={{ pointerEvents: children ? undefined : 'none' }}
       data-video-overlay-scene
       onPointerDown={(event) => {

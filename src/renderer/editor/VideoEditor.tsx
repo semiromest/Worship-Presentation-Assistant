@@ -1,3 +1,4 @@
+import ControlTooltip from '../components/ControlTooltip';
 import { playSfx } from '../sfx';
 import {
   memo,
@@ -103,7 +104,7 @@ const IconButton = memo(function IconButton({
 }) {
   const { t } = useTranslation();
   return (
-    <button
+    <ControlTooltip descriptionKey={label}><button
       type="button"
       className="ve-icon-button"
       title={t(label)}
@@ -112,7 +113,7 @@ const IconButton = memo(function IconButton({
       disabled={disabled}
     >
       <Icon size={17} />
-    </button>
+    </button></ControlTooltip>
   );
 });
 
@@ -823,7 +824,7 @@ export default function VideoEditor({
           {overlays.length > 0 && (
             <div className="ve-overlay-tracks">
               {overlays.map((item, index) => (
-                <button
+                <ControlTooltip key={item.id}><button
                   type="button"
                   key={item.id}
                   className="ve-overlay-track"
@@ -843,28 +844,28 @@ export default function VideoEditor({
                   >
                     {item.content || t('common.videoEmptyText')}
                   </span>
-                </button>
+                </button></ControlTooltip>
               ))}
             </div>
           )}
           <div className="ve-timeline-help">
-            <span
+            <ControlTooltip descriptionKey={'common.videoShortcutsHint'}><span
               title={t('common.videoShortcutsHint', {
                 defaultValue: 'Space: play/pause · ←/→: step frame (Shift ×10) · I / O: set start / end at playhead',
               })}
             >
               {t('common.videoTrimHint')}
-            </span>
+            </span></ControlTooltip>
             {analyzing ? (
               <span>{t('common.videoFramesLoading')}</span>
             ) : analysisFailed ? (
-              <button
+              <ControlTooltip descriptionKey={'common.videoFramesUnavailable'}><button
                 type="button"
                 onClick={() => setRetry((value) => value + 1)}
                 title={t('common.videoFramesUnavailable')}
               >
                 {t('common.videoRetryFrames')}
-              </button>
+              </button></ControlTooltip>
             ) : null}
           </div>
         </section>

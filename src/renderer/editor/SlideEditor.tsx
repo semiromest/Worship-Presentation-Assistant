@@ -1,3 +1,5 @@
+import { saveLibraryPreset } from '../presetLibrary';
+import ControlTooltip from '../components/ControlTooltip';
 import {
 ChevronRight,
 Copy,
@@ -215,9 +217,15 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
   const effectiveScope: EditScope = multiSlide ? scope : 'active';
 
   // A bulk scope left over from a wider selection must never silently persist.
+  const bulkAvailable = multiSlide || (tab === 'slide' && gradientSelection.length > 1);
+  const wasBulkAvailable = useRef(false);
   useEffect(() => {
-    if (!multiSlide && !(tab === 'slide' && gradientSelection.length > 1) && scope !== 'active') setScope('active');
-  }, [multiSlide, gradientSelection.length, tab, scope]);
+    // Picking several slides means "edit these": start in the selected scope instead of
+    // silently changing only the last-clicked slide.
+    if (bulkAvailable && !wasBulkAvailable.current) setScope('selected');
+    wasBulkAvailable.current = bulkAvailable;
+    if (!bulkAvailable && scope !== 'active') setScope('active');
+  }, [bulkAvailable, scope]);
 
   useEffect(() => {
     try {
@@ -680,11 +688,10 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
           // Applying a draft only to memory before RESET would lose the saved
           // work. Keep the outgoing deck in the normal presentation library.
           const current = useStore.getState();
-          const updated = await window.electronAPI?.savePreset?.({
+          const updated = await saveLibraryPreset({
             name, presentation: { ...current.presentation, name }, retentionMs: getLiveSaveRetention(),
           });
           if (!Array.isArray(updated)) throw new Error(t('library.saveFailed'));
-          current.setPresets(updated);
           current.setSelectedPresetName(name);
           return true;
         } catch (error) {
@@ -858,7 +865,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                 {t('common.editorTitle')}
                 {session.isDirty && <span className="ml-2 text-xs text-amber-400">{t('common.editorPendingDraft')}</span>}
               </h2>
-              <div className="flex items-center gap-2 text-xs text-white/45">
+              <div className="flex items-center gap-2 text-xs text-white/60">
                 <span>{t('common.editorSlideCounter', { number: activeIndex + 1, count: deck.slides.length })}</span>
                 {session.touchedCount > 0 && (
                   <span className="text-amber-200/80">
@@ -922,7 +929,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                     <button
                       type="button"
                       onClick={() => setShowTemplates(false)}
-                      className="text-white/40 hover:text-white"
+                      className="text-white/55 hover:text-white"
                       aria-label={t('common.close')}
                     >
                       <X className="h-3 w-3" aria-hidden="true" />
@@ -934,7 +941,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
             </div>
 
 
-            <button
+            <ControlTooltip descriptionKey={'common.undo'}><button
               type="button"
               onClick={() => {
                 finishInteraction();
@@ -946,9 +953,9 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
               className="rounded-xl p-2 text-white/60 transition hover:bg-white/5 hover:text-white disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <Undo2 className="h-5 w-5" aria-hidden="true" />
-            </button>
+            </button></ControlTooltip>
 
-            <button
+            <ControlTooltip descriptionKey={'common.redo'}><button
               type="button"
               onClick={() => {
                 finishInteraction();
@@ -960,7 +967,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
               className="rounded-xl p-2 text-white/60 transition hover:bg-white/5 hover:text-white disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <Redo2 className="h-5 w-5" aria-hidden="true" />
-            </button>
+            </button></ControlTooltip>
 
             <button
               type="button"
@@ -980,7 +987,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
               className="flex h-full shrink-0 flex-col items-center gap-2 border-r border-white/10 bg-[#151515] py-2"
               style={{ width: RAIL_COLLAPSED_WIDTH }}
             >
-              <button
+              <ControlTooltip descriptionKey={'common.editorRailExpand'}><button
                 type="button"
                 onClick={() => setRailCollapsed(false)}
                 aria-label={t('common.editorRailExpand')}
@@ -988,8 +995,8 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                 className="rounded-lg p-1.5 text-white/50 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 <ChevronRight className="h-4 w-4" aria-hidden="true" />
-              </button>
-              <span className="text-[10px] tabular-nums text-white/40 [writing-mode:vertical-rl]">
+              </button></ControlTooltip>
+              <span className="text-[11px] tabular-nums text-white/55 [writing-mode:vertical-rl]">
                 {activeIndex + 1} / {deck.slides.length}
               </span>
             </div>
@@ -1166,10 +1173,10 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                     gridSize={gridSize}
                     gridColor={gridColor}
                     snapEnabled={snapEnabled}
-                    onGridToggle={(value) => session.setGridField('gridEnabled', value)}
-                    onGridSizeChange={(value) => session.setGridField('gridSize', value)}
-                    onGridColorChange={(value) => session.setGridField('gridColor', value)}
-                    onSnapToggle={(value) => session.setGridField('snapEnabled', value)}
+                    onGridToggle={(value) => session.setGridField('gridEnabled', value, selectedSlideIds, effectiveScope)}
+                    onGridSizeChange={(value) => session.setGridField('gridSize', value, selectedSlideIds, effectiveScope)}
+                    onGridColorChange={(value) => session.setGridField('gridColor', value, selectedSlideIds, effectiveScope)}
+                    onSnapToggle={(value) => session.setGridField('snapEnabled', value, selectedSlideIds, effectiveScope)}
                   />
                   </>}
                   {(activeSlide.type === 'text' || activeSlide.type === 'image') && <GradientDesigner key={activeSlide.id} slideId={activeSlide.id} initial={activeDraft.styles.generatedBackground as import('../../shared/generatedBackground').GeneratedBackground | undefined}
@@ -1214,7 +1221,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                             ] as const
                           ).map(({ key, label }) => (
                             <label key={key} className="space-y-1">
-                              <span className="text-[10px] uppercase tracking-wide text-white/40">{label}</span>
+                              <span className="text-[11px] uppercase tracking-wide text-white/55">{label}</span>
                               <input
                                 type="number"
                                 value={Math.round(primarySelected[key])}
@@ -1230,7 +1237,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                           ))}
 
                           <label className="space-y-1">
-                            <span className="text-[10px] uppercase tracking-wide text-white/40">
+                            <span className="text-[11px] uppercase tracking-wide text-white/55">
                               {t('common.editorWidth')}
                             </span>
                             <input
@@ -1255,7 +1262,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                           </label>
 
                           <label className="space-y-1">
-                            <span className="text-[10px] uppercase tracking-wide text-white/40">
+                            <span className="text-[11px] uppercase tracking-wide text-white/55">
                               {t('common.editorHeight')}
                             </span>
                             <input
@@ -1280,7 +1287,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                           </label>
 
                           <label className="col-span-2 space-y-1">
-                            <span className="text-[10px] uppercase tracking-wide text-white/40">
+                            <span className="text-[11px] uppercase tracking-wide text-white/55">
                               {t('common.editorRotation')}
                             </span>
                             <input
@@ -1299,7 +1306,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
 
                         <div className="grid grid-cols-3 gap-2 pt-1">
                           <label className="space-y-1">
-                            <span className="text-[10px] uppercase tracking-wide text-white/40">
+                            <span className="text-[11px] uppercase tracking-wide text-white/55">
                               {t('common.editorBorder')}
                             </span>
                             <input
@@ -1317,7 +1324,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                             />
                           </label>
                           <label className="space-y-1">
-                            <span className="text-[10px] uppercase tracking-wide text-white/40">
+                            <span className="text-[11px] uppercase tracking-wide text-white/55">
                               {t('common.editorBorderColor')}
                             </span>
                             <input
@@ -1328,7 +1335,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                             />
                           </label>
                           <label className="space-y-1">
-                            <span className="text-[10px] uppercase tracking-wide text-white/40">
+                            <span className="text-[11px] uppercase tracking-wide text-white/55">
                               {t('common.editorCornerRadius')}
                             </span>
                             <input
@@ -1447,7 +1454,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                       <PanelShell title={t('common.editorSelectedItemProperties')} icon={Palette}>
                         {primarySelected.type === 'text' ? (
                           <label className="block space-y-1">
-                            <span className="block text-[10px] uppercase tracking-wide text-white/40">
+                            <span className="block text-[11px] uppercase tracking-wide text-white/55">
                               {t('common.editorContent')}
                             </span>
                             <textarea
@@ -1478,7 +1485,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                               className="max-h-[50vh] min-h-[14rem] w-full resize-y rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm leading-relaxed outline-none transition focus:border-blue-500"
                             />
                             {effectiveScope === 'selected' && multiSlide && (
-                              <span className="block text-[10px] text-amber-200/80">
+                              <span className="block text-[11px] text-amber-200/80">
                                 {t('common.editorScopeTextBulk', { count: selectedSlideIds.length })}
                               </span>
                             )}
@@ -1610,7 +1617,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
         {/* Footer */}
         <footer className="editor-workspace-footer flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-t border-white/10 bg-[#1e1e1e] px-4 py-2">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
-            <span className="hidden shrink-0 items-center gap-2 text-xs text-white/40 xl:flex">
+            <span className="hidden shrink-0 items-center gap-2 text-xs text-white/55 xl:flex">
               <span>{t('common.editorRailHint')}</span>
               <span>·</span>
               <span>{t('common.editorMultiSelect')}</span>
@@ -1640,7 +1647,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-black/20 px-1 py-1">
-              <button
+              <ControlTooltip descriptionKey={'common.editorPreviousSlide'}><button
                 type="button"
                 onClick={() => navigate(-1)}
                 disabled={session.order.indexOf(session.activeId) <= 0}
@@ -1649,11 +1656,11 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                 className="rounded-lg p-1.5 text-white/60 transition hover:bg-white/10 hover:text-white disabled:opacity-25 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 <ChevronRight className="h-4 w-4 rotate-180" aria-hidden="true" />
-              </button>
+              </button></ControlTooltip>
               <span className="px-1 text-xs tabular-nums text-white/60">
                 {activeIndex + 1} / {deck.slides.length}
               </span>
-              <button
+              <ControlTooltip descriptionKey={'common.editorNextSlide'}><button
                 type="button"
                 onClick={() => navigate(1)}
                 disabled={session.order.length === 0 || session.order.indexOf(session.activeId) >= session.order.length - 1}
@@ -1662,7 +1669,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                 className="rounded-lg p-1.5 text-white/60 transition hover:bg-white/10 hover:text-white disabled:opacity-25 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 <ChevronRight className="h-4 w-4" aria-hidden="true" />
-              </button>
+              </button></ControlTooltip>
             </div>
 
             <button

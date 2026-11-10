@@ -37,3 +37,28 @@ test('save completion does not mark newer edits or same-ID replacement saved', a
   documentSession.saved('imported.gpres', documentSignature(useStore.getState().presentation), importedGeneration);
   assert.equal(documentSession.isDirty(), false);
 });
+
+test('unchanged save acknowledgements preserve snapshot identity and unsaved checks skip signatures', async () => {
+  const { useStore } = await import('./state/useStore');
+  const { documentSession, documentSignature } = await import('./documentSession');
+  const original = useStore.getState().presentation;
+  documentSession.opened('stable.gpres');
+  const signature = documentSignature(original), generation = documentSession.current().generation;
+  documentSession.saved('stable.gpres', signature, generation);
+  const saved = documentSession.current();
+  documentSession.saved('stable.gpres', signature, generation);
+  assert.equal(documentSession.current(), saved, 'identical save acknowledgements do not notify React');
+  documentSession.isDirty();
+  assert.equal(documentSession.current(), saved);
+  useStore.getState().setIsRightPanelOpen(!useStore.getState().isRightPanelOpen);
+  assert.equal(documentSession.current(), saved, 'unrelated UI state does not change the document session');
+
+  let reads = 0;
+  useStore.setState({ presentation: { ...original, get slides() { reads++; return original.slides; } } });
+  documentSession.unsaved();
+  assert.equal(documentSession.isDirty(), true);
+  assert.equal(reads, 0, 'a never-saved document does not need a fingerprint');
+  useStore.setState({ presentation: original });
+  documentSession.opened(null);
+  assert.equal(documentSession.isDirty(), false);
+});

@@ -17,7 +17,7 @@ const TARGET_WAIT_MS = 5000;
 const TARGET_TIMEOUT_MS = 10000;
 const STUCK_HELP_MS = 30000;
 /** Bu bölümlerde uygulamalı görev yok; kart bunu açıkça söylemeli. */
-const INTRO_ONLY = new Set<GuideStep>(['screen-intro', 'calendar-intro', 'settings-intro']);
+const INTRO_ONLY = new Set<GuideStep>(['slide-library-intro', 'screen-intro', 'calendar-intro', 'settings-intro']);
 const LANGUAGES = { tr: 'Türkçe', en: 'English', de: 'Deutsch', es: 'Español', ko: '한국어' } as const;
 
 class GuideErrorBoundary extends Component<{ children: ReactNode; fail: () => void }, { failed: boolean }> {
@@ -38,6 +38,7 @@ function findGuideTarget(step: GuideStep, sample?: string, peer?: string): HTMLE
     case 'delete': return anchor('delete-slide');
     case 'editor-select': return peer ? document.querySelector<HTMLElement>(`[data-editor-item-id="${CSS.escape(peer)}"]`) : null;
     case 'image-tools': return anchor('image-tools');
+    case 'slide-library-intro': return anchor('slide-library');
     case 'reorder': {
       const card = sample ? document.querySelector<HTMLElement>(`[data-slide-id="${CSS.escape(sample)}"]`) : null;
       const other = peer ? document.querySelector<HTMLElement>(`[data-slide-id="${CSS.escape(peer)}"]`) : null;
@@ -356,7 +357,7 @@ export default function PracticeRunner({ resetView }: { resetView: () => void })
 
   const paused = !!workspace?.guide.paused || suspended;
   const stepNumber = step ? Math.max(1, visibleGuideSteps.indexOf(step as typeof visibleGuideSteps[number]) + 1) : 1;
-  const content = <div data-testid="practice-guidance" data-guide-step={step} className="space-y-4 max-h-[calc(100vh-80px)] overflow-y-auto">
+  const content = <div data-testid="practice-guidance" data-guide-step={step} className="space-y-4 max-h-[calc(100vh-80px)] overflow-y-auto text-slate-900">
     <header className="space-y-3">
       <div className="flex items-center gap-3">
         <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700"><Compass className="h-5 w-5" /></span>

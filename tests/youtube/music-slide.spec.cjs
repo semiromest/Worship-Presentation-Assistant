@@ -37,7 +37,7 @@ test('production music slide: real YouTube, live output, editing and instant sto
       await window.electronAPI.openProjector(id);
       return id;
     });
-    await expect(page.getByRole('button', { name: /^(STOP BROADCAST|YAYINI DURDUR)$/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^(Stop Broadcast|Yayını Durdur)$/ })).toBeVisible();
     // Master controls appear with output open, before sending the music slide live.
     await page.getByRole('button', { name: /^(Mute|Sesi kapat)$/ }).click();
     const sentLiveAt = Date.now();

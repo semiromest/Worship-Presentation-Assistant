@@ -1,6 +1,7 @@
+import ControlTooltip from './ControlTooltip';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GRADIENT_PALETTES, type GeneratedBackground } from '../../shared/generatedBackground';
+import { GRADIENT_ANIMATIONS, GRADIENT_PALETTES, isTwoColorStyle, type GeneratedBackground, type GradientAnimation } from '../../shared/generatedBackground';
 import type { GradientDraft } from '../../shared/gradientDraft';
 import type { GradientStyle } from '../../shared/presentation';
 import type { GradientLibraryEntry } from '../../shared/gradientLibrary';
@@ -21,7 +22,36 @@ type Tab = 'design' | 'library';
 
 const CONTROL = 'gradient-control';
 const TABS: readonly Tab[] = ['design', 'library'];
-const ANIMATION_TYPES = ['flow', 'aurora', 'waves', 'fog'] as const;
+type Style = GeneratedBackground['style'];
+interface Look { id: string; style: Style; animation?: GradientAnimation }
+
+/** One list replaces the old style select + "live motion" switch + animation select. */
+const STILL_LOOKS: Look[] = (['linear', 'soft', 'flow', 'radial'] as const).map((style) => ({ id: style, style }));
+const LIVE_LOOKS: Look[] = GRADIENT_ANIMATIONS.map((animation) => ({ id: 'live:' + animation, style: 'flow', animation }));
+const LOOK_GROUPS = [
+  { group: 'still', looks: STILL_LOOKS },
+  { group: 'live', looks: LIVE_LOOKS },
+] as const;
+
+const lookIdOf = (recipe: GeneratedBackground): string =>
+  recipe.motion?.enabled && !isTwoColorStyle(recipe.style) ? 'live:' + (recipe.motion.type ?? 'flow') : recipe.style;
+
+/** Swatches show each look in the colors currently chosen, so the grid doubles as a preview. */
+function lookSwatch(look: Look, [a, b, c, d]: string[]): string {
+  if (look.id === 'linear') return `linear-gradient(135deg,${a},${d})`;
+  if (look.id === 'radial') return `radial-gradient(circle at 50% 50%,${c},${a} 85%)`;
+  const blobs = `radial-gradient(at 18% 22%,${b} 0,transparent 58%),radial-gradient(at 82% 30%,${c} 0,transparent 55%),radial-gradient(at 36% 88%,${d} 0,transparent 60%),${a}`;
+  switch (look.animation) {
+    case 'aurora': return `linear-gradient(100deg,transparent 15%,${c}99 38%,transparent 52%,${d}88 70%,transparent 90%),linear-gradient(180deg,${a},${b})`;
+    case 'waves': return `repeating-linear-gradient(165deg,${a} 0 9px,${b} 9px 18px,${c} 18px 27px,${d} 27px 36px)`;
+    case 'fog': return `radial-gradient(ellipse at 30% 40%,${c}aa,transparent 60%),radial-gradient(ellipse at 75% 65%,${d}aa,transparent 55%),linear-gradient(180deg,${a},${b})`;
+    case 'bokeh': return `radial-gradient(circle at 25% 30%,${c} 0 9%,transparent 11%),radial-gradient(circle at 68% 24%,${d} 0 12%,transparent 14%),radial-gradient(circle at 55% 72%,${c} 0 8%,transparent 10%),linear-gradient(180deg,${a},${b})`;
+    case 'rays': return `conic-gradient(from 160deg at 42% -18%,transparent 0 6%,${c}aa 9%,transparent 13% 20%,${d}99 24%,transparent 29% 36%,${c}88 40%,transparent 46%),linear-gradient(180deg,${a},${b})`;
+    case 'lava': return `radial-gradient(circle at 30% 65%,${c} 0 22%,transparent 24%),radial-gradient(circle at 66% 32%,${d} 0 18%,transparent 20%),linear-gradient(180deg,${a},${b})`;
+    case 'pulse': return `repeating-radial-gradient(circle at 50% 50%,${c} 0 6px,${b} 6px 13px,${a} 13px 20px)`;
+    default: return blobs;
+  }
+}
 const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
 const DEFAULT_MOTION: Motion = { enabled: false, type: 'flow', speed: 55, amount: 70 };
 const GENERATE_DEBOUNCE_MS = 180;
@@ -163,7 +193,7 @@ export function GradientDesigner({
 
   // Raster imzası motion'ı içermez; yalnızca recipe değişince yeniden hesaplanır (her render'da değil).
   const signature = useMemo(() => {
-    const { motion: _motion, ...base } = recipe;
+    const base = { ...recipe, motion: undefined };
     return JSON.stringify(base);
   }, [recipe]);
   // Imza aynı kaldıkça nesne kimliği de sabit kalır, böylece motion değişimi yeniden üretimi tetiklemez.
@@ -245,29 +275,46 @@ export function GradientDesigner({
 
   function changeStyle(style: GeneratedBackground['style']) {
     edit((current) => {
-      if (style === 'linear') {
+      if (isTwoColorStyle(style)) {
         return {
           style,
           colors: [current.colors[0], current.colors[current.colors.length - 1]],
           palette: 'custom',
-          angle: current.angle ?? 90,
+          angle: style === 'linear' ? current.angle ?? 90 : undefined,
           darkness: 0,
           motion: undefined,
         };
       }
-      const fromLinear = current.style === 'linear';
+      const fromLinear = isTwoColorStyle(current.style);
       return {
         style,
         angle: undefined,
+        motion: current.motion ? { ...current.motion, enabled: false } : undefined,
         colors: fromLinear ? [...GRADIENT_PALETTES.ocean] : current.colors,
         palette: fromLinear ? 'ocean' : current.palette,
       };
     });
   }
 
+  function chooseLook(look: Look) {
+    if (!look.animation) {
+      changeStyle(look.style);
+      return;
+    }
+    // Live looks run on a four-color field: leave a two-color style on the way in.
+    edit((current) => ({
+      style: isTwoColorStyle(current.style) ? 'flow' : current.style,
+      angle: undefined,
+      colors: isTwoColorStyle(current.style) ? [...GRADIENT_PALETTES.ocean] : current.colors,
+      palette: isTwoColorStyle(current.style) ? 'ocean' : current.palette,
+      darkness: isTwoColorStyle(current.style) ? 25 : current.darkness,
+      motion: { ...DEFAULT_MOTION, ...current.motion, enabled: true, type: look.animation },
+    }));
+  }
+
   function changeColor(index: number, value: string) {
     edit((current) => ({
-      ...(current.style !== 'linear' ? { palette: 'custom' } : {}),
+      ...(!isTwoColorStyle(current.style) ? { palette: 'custom' } : {}),
       colors: current.colors.map((color, i) => (i === index ? value : color)),
     }));
   }
@@ -338,6 +385,9 @@ export function GradientDesigner({
   }
 
   const motionSettings = recipe.motion;
+  const twoColor = isTwoColorStyle(recipe.style);
+  const currentLook = lookIdOf(recipe);
+  const swatchColors = recipe.colors.length === 4 ? recipe.colors : [...GRADIENT_PALETTES.ocean].map((color, i) => (i === 0 ? recipe.colors[0] : i === 3 ? recipe.colors[1] : color));
 
   return (
     <section
@@ -376,143 +426,127 @@ export function GradientDesigner({
           <fieldset disabled={busy || !enabled} className="min-w-0 space-y-4">
             {!notice && <p className="gradient-hint">{t('gradientLibrary.previewHint')}</p>}
             <fieldset className="gradient-section">
-              <legend>{t('gradient.style')}</legend>
-              <select
-                className={CONTROL}
-                aria-label={t('gradient.style')}
-                value={recipe.style}
-                onChange={(e) => changeStyle(e.target.value as GeneratedBackground['style'])}
-              >
-                <option value="linear">{t('gradient.linear')}</option>
-                <option value="soft">{t('gradient.soft')}</option>
-                <option value="flow">{t('gradient.flow')}</option>
-              </select>
-            </fieldset>
-            <fieldset className="gradient-section">
-              <legend>{t('gradient.colors')}</legend>
-              {recipe.style !== 'linear' && (
-                <>
+              <legend>{t('gradient.look')}</legend>
+              {LOOK_GROUPS.map(({ group, looks }) => (
+                <div key={group} className="space-y-1.5">
                   <div className="gradient-color-heading">
-                    <span>{t('gradient.presets')}</span>
-                    {recipe.palette === 'custom' && (
-                      <span className="text-violet-200">{t('gradient.customColors')}</span>
-                    )}
+                    <span>{t('gradient.' + group + 'Looks')}</span>
                   </div>
-                  <div className="gradient-palettes" data-testid="gradient-palettes">
-                    {PALETTES.map(({ key, colors, background }) => (
+                  <div className="gradient-looks" role="group" aria-label={t('gradient.' + group + 'Looks')}>
+                    {looks.map((look) => (
                       <button
-                        key={key}
+                        key={look.id}
                         type="button"
-                        aria-label={t('gradient.palettes.' + key)}
-                        aria-pressed={recipe.palette === key}
-                        onClick={() => edit({ palette: key, colors: [...colors] })}
-                        className="gradient-palette"
+                        aria-pressed={currentLook === look.id}
+                        onClick={() => chooseLook(look)}
+                        className="gradient-look"
+                        data-live={look.animation ? '' : undefined}
                       >
-                        <span className="gradient-palette-strip" aria-hidden="true" style={{ background }} />
-                        <span className="gradient-palette-name">
-                          <span>{t('gradient.palettes.' + key)}</span>
-                          {recipe.palette === key && <Check size={12} aria-hidden="true" className="shrink-0" />}
+                        <span className="gradient-look-swatch" aria-hidden="true" style={{ background: lookSwatch(look, swatchColors) }} />
+                        <span className="gradient-look-name">
+                          <span>{t('gradient.' + (look.animation ?? look.style))}</span>
+                          {currentLook === look.id && <Check size={12} aria-hidden="true" className="shrink-0" />}
                         </span>
                       </button>
                     ))}
                   </div>
-                </>
+                </div>
+              ))}
+            </fieldset>
+            <fieldset className="gradient-section">
+              <legend>{t('gradient.colors')}</legend>
+              {!twoColor && (
+                <div className="gradient-palettes" data-testid="gradient-palettes" role="group" aria-label={t('gradient.presets')}>
+                  {PALETTES.map(({ key, colors, background }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      aria-label={t('gradient.palettes.' + key)}
+                      title={t('gradient.palettes.' + key)}
+                      aria-pressed={recipe.palette === key}
+                      onClick={() => edit({ palette: key, colors: [...colors] })}
+                      className="gradient-palette-chip"
+                      style={{ background }}
+                    >
+                      {recipe.palette === key && <Check size={12} aria-hidden="true" />}
+                    </button>
+                  ))}
+                </div>
               )}
               <div
-                className={'gradient-colors' + (recipe.style === 'linear' ? ' gradient-colors-linear' : '')}
+                className={'gradient-colors' + (twoColor ? ' gradient-colors-linear' : ' gradient-colors-row')}
                 data-testid="gradient-colors"
               >
                 {recipe.colors.map((color, index) => (
                   <label key={index} className="gradient-color-label">
                     <span>
-                      {recipe.style === 'linear'
-                        ? t(index === 0 ? 'gradient.startColor' : 'gradient.endColor')
+                      {twoColor
+                        ? t(index === 0 ? (recipe.style === 'radial' ? 'gradient.centerColor' : 'gradient.startColor') : (recipe.style === 'radial' ? 'gradient.edgeColor' : 'gradient.endColor'))
                         : t('gradient.colorNumber', { number: index + 1 })}
                     </span>
-                    <input
+                    <ControlTooltip description={t('tooltipText.editColor', { color: color.toUpperCase() })}><input
                       type="color"
                       value={color}
                       title={color.toUpperCase()}
                       className="gradient-color"
                       onChange={(e) => changeColor(index, e.target.value)}
-                    />
+                    /></ControlTooltip>
                   </label>
                 ))}
               </div>
+              {recipe.palette === 'custom' && !twoColor && <span className="text-violet-200">{t('gradient.customColors')}</span>}
             </fieldset>
-            <fieldset className="gradient-section">
-              <legend>{t('gradient.appearance')}</legend>
-              <RangeField
-                label={t('gradient.darkness')}
-                value={recipe.darkness}
-                min={0}
-                max={85}
-                unit="%"
-                onChange={(darkness) => edit({ darkness })}
-              />
-              {recipe.style === 'linear' ? (
+            {motionSettings?.enabled && !twoColor && (
+              <fieldset className="gradient-section">
                 <RangeField
-                  label={t('gradient.angle')}
-                  value={recipe.angle ?? 90}
-                  min={0}
-                  max={360}
-                  step={1}
-                  unit="°"
-                  onChange={(angle) => edit({ angle })}
+                  label={t('gradient.speed')}
+                  value={motionSettings.speed ?? DEFAULT_MOTION.speed}
+                  min={1}
+                  max={100}
+                  unit="%"
+                  onChange={(speed) => editMotion({ speed })}
                 />
-              ) : (
-                <>
-                  <label className="gradient-motion-toggle">
-                    <span>{t('gradient.motion')}</span>
-                    <input
-                      type="checkbox"
-                      checked={!!motionSettings?.enabled}
-                      onChange={(e) => editMotion({ enabled: e.target.checked })}
-                    />
-                  </label>
-                  {motionSettings?.enabled && (
-                    <div className="gradient-motion-settings">
-                      <label className="gradient-color-label">
-                        <span>{t('gradient.animation')}</span>
-                        <select
-                          className={CONTROL}
-                          aria-label={t('gradient.animation')}
-                          value={motionSettings.type ?? 'flow'}
-                          onChange={(e) => editMotion({ type: e.target.value as Motion['type'], enabled: true })}
-                        >
-                          {ANIMATION_TYPES.map((type) => (
-                            <option key={type} value={type}>
-                              {t('gradient.' + type)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <RangeField
-                        label={t('gradient.speed')}
-                        value={motionSettings.speed ?? DEFAULT_MOTION.speed}
-                        min={1}
-                        max={100}
-                        unit="%"
-                        onChange={(speed) => editMotion({ speed })}
-                      />
-                      <RangeField
-                        label={t('gradient.amount')}
-                        value={motionSettings.amount ?? DEFAULT_MOTION.amount}
-                        min={1}
-                        max={100}
-                        unit="%"
-                        onChange={(amount) => editMotion({ amount })}
-                      />
-                    </div>
-                  )}
-                </>
-              )}
-              {(recipe.style !== 'linear' || !designing || error) && (
-                <button type="button" className="gradient-regenerate" onClick={() => edit({ seed: randomSeed() })}>
-                  {t('gradient.regenerate')}
-                </button>
-              )}
-            </fieldset>
+              </fieldset>
+            )}
+            <details className="gradient-more">
+              <summary>{t('gradient.moreOptions')}</summary>
+              <div className="gradient-section">
+                <RangeField
+                  label={t('gradient.darkness')}
+                  value={recipe.darkness}
+                  min={0}
+                  max={85}
+                  unit="%"
+                  onChange={(darkness) => edit({ darkness })}
+                />
+                {recipe.style === 'linear' && (
+                  <RangeField
+                    label={t('gradient.angle')}
+                    value={recipe.angle ?? 90}
+                    min={0}
+                    max={360}
+                    step={1}
+                    unit="°"
+                    onChange={(angle) => edit({ angle })}
+                  />
+                )}
+                {motionSettings?.enabled && !twoColor && (
+                  <RangeField
+                    label={t('gradient.amount')}
+                    value={motionSettings.amount ?? DEFAULT_MOTION.amount}
+                    min={1}
+                    max={100}
+                    unit="%"
+                    onChange={(amount) => editMotion({ amount })}
+                  />
+                )}
+                {(!twoColor || !designing || error) && (
+                  <button type="button" className="gradient-regenerate" onClick={() => edit({ seed: randomSeed() })}>
+                    {t('gradient.regenerate')}
+                  </button>
+                )}
+              </div>
+            </details>
             <div className="gradient-actions">
               {generating && (
                 <p role="status" className="gradient-hint">

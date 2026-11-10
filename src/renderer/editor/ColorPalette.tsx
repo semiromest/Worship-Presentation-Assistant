@@ -1,3 +1,4 @@
+import ControlTooltip from '../components/ControlTooltip';
 import { useTranslation } from 'react-i18next';
 import { COLOR_PALETTES, getRecentColors, addRecentColor, type PaletteName } from './colors';
 
@@ -28,12 +29,12 @@ export function ColorPalette({ onSelect, currentColor }: ColorPaletteProps) {
     <div className="space-y-2">
       {recentColors.length > 0 && (
         <div>
-          <div className="text-[10px] uppercase tracking-wide text-white/40 mb-1">
+          <div className="text-[11px] uppercase tracking-wide text-white/55 mb-1">
             {t('common.editorRecentColors')}
           </div>
           <div className="flex flex-wrap gap-1">
             {recentColors.map((color, i) => (
-              <button
+              <ControlTooltip key={i} description={t('tooltipText.chooseColor', { color })}><button
                 key={i}
                 type="button"
                 onClick={() => handleSelect(color)}
@@ -45,7 +46,7 @@ export function ColorPalette({ onSelect, currentColor }: ColorPaletteProps) {
                 style={{ backgroundColor: color }}
                 title={color}
                 aria-label={`${t('common.editorRecentColors')}: ${color}`}
-              />
+              /></ControlTooltip>
             ))}
           </div>
         </div>
@@ -53,12 +54,12 @@ export function ColorPalette({ onSelect, currentColor }: ColorPaletteProps) {
 
       {palettes.map(([name, palette]) => (
         <div key={name}>
-          <div className="text-[10px] uppercase tracking-wide text-white/40 mb-1">
+          <div className="text-[11px] uppercase tracking-wide text-white/55 mb-1">
             {paletteTitle[name] || palette.name}
           </div>
           <div className="flex flex-wrap gap-1">
             {palette.colors.map((color, i) => (
-              <button
+              <ControlTooltip key={i} description={t('tooltipText.chooseColor', { color })}><button
                 key={i}
                 type="button"
                 onClick={() => handleSelect(color)}
@@ -70,7 +71,7 @@ export function ColorPalette({ onSelect, currentColor }: ColorPaletteProps) {
                 style={{ backgroundColor: color }}
                 title={color}
                 aria-label={`${paletteTitle[name] || palette.name}: ${color}`}
-              />
+              /></ControlTooltip>
             ))}
           </div>
         </div>

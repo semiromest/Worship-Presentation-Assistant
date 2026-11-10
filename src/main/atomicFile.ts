@@ -132,7 +132,8 @@ function setHidden(file: string, hidden: boolean): Promise<void> {
   });
 }
 
-async function renameWithRetry(from: string, to: string): Promise<void> {
+/** Windows: antivirüs/dizinleyicinin kısa EPERM/EBUSY kilitlerinde yeniden dener; diğer hatalar aynen fırlatılır. */
+export async function renameWithRetry(from: string, to: string): Promise<void> {
   for (let attempt = 0; ; attempt++) {
     try {
       return await fs.rename(from, to);

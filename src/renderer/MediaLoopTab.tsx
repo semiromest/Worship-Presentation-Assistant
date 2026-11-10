@@ -1,3 +1,4 @@
+import ControlTooltip from './components/ControlTooltip';
 import { Menu } from '@base-ui/react/menu';
 import { isGuideActive } from './components/Tour/guideBoundary';
 import { useUiMotionEnabled } from './hooks/useUiMotionEnabled';
@@ -545,7 +546,7 @@ const DurationInput = memo(function DurationInput({
           disabled && 'opacity-40 cursor-not-allowed'
         )}
       />
-      <span className="text-[10px] text-zinc-500 select-none">s</span>
+      <span className="text-[11px] text-zinc-500 select-none">s</span>
     </div>
   );
 });
@@ -590,13 +591,13 @@ const LoopItemRow = memo(function LoopItemRow({
         isDragOver && 'ring-1 ring-amber-500/50 bg-zinc-800 scale-[1.01]'
       )}
     >
-      <div
+      <ControlTooltip descriptionKey={'common.loopDragToReorder'}><div
         className="text-zinc-600 hover:text-zinc-400 cursor-grab active:cursor-grabbing shrink-0"
         title={t('common.loopDragToReorder')}
       >
         <GripVertical className="w-3.5 h-3.5" />
-      </div>
-      <span className="text-[10px] font-mono text-zinc-600 w-5 shrink-0">{String(index + 1).padStart(2, '0')}</span>
+      </div></ControlTooltip>
+      <span className="text-[11px] font-mono text-zinc-600 w-5 shrink-0">{String(index + 1).padStart(2, '0')}</span>
       <div className="relative w-10 h-10 rounded-md overflow-hidden bg-zinc-900 shrink-0 ring-1 ring-white/5">
         {item.type === 'video' ? (
           <>
@@ -614,10 +615,10 @@ const LoopItemRow = memo(function LoopItemRow({
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-xs text-zinc-200 truncate font-medium leading-tight" title={item.fileName}>
+        <ControlTooltip><div className="text-xs text-zinc-200 truncate font-medium leading-tight" title={item.fileName}>
           {item.fileName}
-        </div>
-        <div className="flex items-center gap-1 text-[10px] text-zinc-500 mt-0.5">
+        </div></ControlTooltip>
+        <div className="flex items-center gap-1 text-[11px] text-zinc-500 mt-0.5">
           {item.type === 'video' ? (
             <>
               <Film className="w-2.5 h-2.5" />
@@ -632,20 +633,20 @@ const LoopItemRow = memo(function LoopItemRow({
         </div>
       </div>
       {item.type === 'video' && (
-        <button
+        <ControlTooltip descriptionKey={'common.loopUseVideoDuration'}><button
           type="button"
           onClick={() => onUseVideoDurationChange(item.id, !item.useVideoDuration)}
           aria-pressed={item.useVideoDuration}
           title={t('common.loopUseVideoDuration')}
           className={cn(
-            'w-6 h-6 rounded border text-[10px] font-bold transition-colors shrink-0',
+            'w-6 h-6 rounded border text-[11px] font-bold transition-colors shrink-0',
             item.useVideoDuration
               ? 'bg-blue-500/25 border-blue-400/60 text-blue-300'
               : 'bg-black/20 border-white/10 text-zinc-500 hover:text-zinc-300'
           )}
         >
           ▶
-        </button>
+        </button></ControlTooltip>
       )}
       <DurationInput
         valueSecs={Math.round(item.duration / 1000)}
@@ -653,14 +654,14 @@ const LoopItemRow = memo(function LoopItemRow({
         disabled={item.type === 'video' && item.useVideoDuration}
         aria-label={t('common.loopDuration')}
       />
-      <button
+      <ControlTooltip descriptionKey={'common.loopRemove'}><button
         onClick={() => onRemove(item.id)}
         className="text-zinc-600 hover:text-red-400 opacity-60 hover:opacity-100 focus-visible:opacity-100 transition-all shrink-0"
         title={t('common.loopRemove')}
         aria-label={t('common.loopRemove')}
       >
         <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-      </button>
+      </button></ControlTooltip>
     </div>
   );
 });
@@ -702,14 +703,14 @@ const MediaCard = memo(function MediaCard({
         background: selected ? (isImage ? 'rgba(184,134,11,0.15)' : 'rgba(106,79,200,0.15)') : undefined,
       }}
     >
-      <button
+      <ControlTooltip description={t(selected ? 'tooltipText.unselectMedia' : 'tooltipText.selectMedia', { name: item.name })}><button
         type="button"
         onClick={() => onToggleSelect(item.id)}
         aria-label={item.name}
         aria-pressed={selected}
         title={item.name}
         className="absolute inset-0 z-10 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400"
-      />
+      /></ControlTooltip>
       <div className="pointer-events-none relative w-full bg-black overflow-hidden" style={{ height: CARD_PREVIEW_HEIGHT }}>
         {thumbUrl ? (
           <img
@@ -760,10 +761,10 @@ const MediaCard = memo(function MediaCard({
         )}
       </div>
       <div className="pointer-events-none flex items-center gap-1 px-2 py-1.5 bg-black/30" style={{ height: CARD_HEIGHT - CARD_PREVIEW_HEIGHT - 2 }}>
-        <span className="text-xs text-white/70 font-medium flex-1 min-w-0 truncate" title={item.name}>
+        <ControlTooltip><span className="text-xs text-white/70 font-medium flex-1 min-w-0 truncate" title={item.name}>
           {item.name}
-        </span>
-        <button
+        </span></ControlTooltip>
+        <ControlTooltip descriptionKey={'common.mediaAddToSlide'}><button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
@@ -775,8 +776,8 @@ const MediaCard = memo(function MediaCard({
           aria-label={t('common.mediaAddToSlide')}
         >
           <Plus size={14} aria-hidden="true" />
-        </button>
-        <button
+        </button></ControlTooltip>
+        <ControlTooltip descriptionKey={'common.mediaRemove'}><button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
@@ -787,7 +788,7 @@ const MediaCard = memo(function MediaCard({
           aria-label={t('common.mediaRemove')}
         >
           <Trash2 size={14} aria-hidden="true" />
-        </button>
+        </button></ControlTooltip>
       </div>
     </div>
   );
@@ -1228,7 +1229,7 @@ export default function MediaLoopTab({
             {mediaItems.length > 0 && (
               <span
                 className={cn(
-                  'text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center',
+                  'text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center',
                   activeSub === 'media'
                     ? 'bg-white/20 text-white'
                     : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
@@ -1257,7 +1258,7 @@ export default function MediaLoopTab({
             {loopItems.length > 0 && (
               <span
                 className={cn(
-                  'text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center',
+                  'text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center',
                   activeSub === 'loop'
                     ? 'bg-white/20 text-white'
                     : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
@@ -1363,14 +1364,14 @@ export default function MediaLoopTab({
             <div className="shrink-0 mx-3 mb-2 px-2.5 py-2 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] space-y-2">
               <div className="flex items-center gap-1.5 min-w-0">
                 <FolderOpen className="w-3 h-3 text-amber-600 shrink-0" />
-                <span
-                  className="flex-1 min-w-0 truncate font-mono text-[10px] font-semibold text-white/65"
+                <ControlTooltip><span
+                  className="flex-1 min-w-0 truncate font-mono text-[11px] font-semibold text-white/65"
                   title={folderSettings.path}
                 >
                   {folderSettings.path}
-                </span>
+                </span></ControlTooltip>
                 {folderMissing && (
-                  <span className="shrink-0 text-[9px] font-bold text-red-300 bg-red-500/15 border border-red-500/35 rounded px-1.5 py-0.5 whitespace-nowrap">
+                  <span className="shrink-0 text-[10px] font-bold text-red-300 bg-red-500/15 border border-red-500/35 rounded px-1.5 py-0.5 whitespace-nowrap">
                     {t('common.mediaFolderMissing')}
                   </span>
                 )}
@@ -1381,8 +1382,8 @@ export default function MediaLoopTab({
                     type="button"
                     onClick={() => updateFolderSettings({ recursive: false })}
                     className={cn(
-                      'px-2 py-1 rounded-md text-[10px] font-semibold transition-all',
-                      !folderSettings.recursive ? 'bg-amber-500/20 text-amber-300' : 'text-white/45 hover:text-white/70'
+                      'px-2 py-1 rounded-md text-[11px] font-semibold transition-all',
+                      !folderSettings.recursive ? 'bg-amber-500/20 text-amber-300' : 'text-white/60 hover:text-white/70'
                     )}
                   >
                     {t('common.mediaFolderOnlyThis')}
@@ -1391,8 +1392,8 @@ export default function MediaLoopTab({
                     type="button"
                     onClick={() => updateFolderSettings({ recursive: true })}
                     className={cn(
-                      'px-2 py-1 rounded-md text-[10px] font-semibold transition-all',
-                      folderSettings.recursive ? 'bg-amber-500/20 text-amber-300' : 'text-white/45 hover:text-white/70'
+                      'px-2 py-1 rounded-md text-[11px] font-semibold transition-all',
+                      folderSettings.recursive ? 'bg-amber-500/20 text-amber-300' : 'text-white/60 hover:text-white/70'
                     )}
                   >
                     {t('common.mediaFolderWithSubs')}
@@ -1402,10 +1403,10 @@ export default function MediaLoopTab({
                   type="button"
                   onClick={() => updateFolderSettings({ includeImages: !folderSettings.includeImages })}
                   className={cn(
-                    'flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-semibold border transition-all',
+                    'flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-semibold border transition-all',
                     folderSettings.includeImages
                       ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                      : 'border-white/10 bg-white/[0.04] text-white/45'
+                      : 'border-white/10 bg-white/[0.04] text-white/60'
                   )}
                 >
                   <span
@@ -1422,10 +1423,10 @@ export default function MediaLoopTab({
                   type="button"
                   onClick={() => updateFolderSettings({ includeVideos: !folderSettings.includeVideos })}
                   className={cn(
-                    'flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-semibold border transition-all',
+                    'flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-semibold border transition-all',
                     folderSettings.includeVideos
                       ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                      : 'border-white/10 bg-white/[0.04] text-white/45'
+                      : 'border-white/10 bg-white/[0.04] text-white/60'
                   )}
                 >
                   <span
@@ -1443,11 +1444,11 @@ export default function MediaLoopTab({
                   type="button"
                   onClick={chooseFolder}
                   disabled={scanLoading}
-                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold tracking-wider border border-amber-500/40 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 transition-all disabled:opacity-40"
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold tracking-wider border border-amber-500/40 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 transition-all disabled:opacity-40"
                 >
                   {t('common.mediaFolderChange')}
                 </button>
-                <button
+                <ControlTooltip descriptionKey={'common.mediaFolderRefresh'}><button
                   type="button"
                   onClick={() => scanFolder(folderSettings, true)}
                   disabled={scanLoading}
@@ -1455,19 +1456,19 @@ export default function MediaLoopTab({
                   className="w-6 h-6 flex items-center justify-center rounded border border-white/[0.14] bg-white/[0.05] text-white/60 hover:text-white hover:bg-white/[0.1] transition-all disabled:opacity-40"
                 >
                   {scanLoading ? (
-                    <span className="text-[9px] font-bold px-0.5">{t('common.mediaFolderLoading')}</span>
+                    <span className="text-[10px] font-bold px-0.5">{t('common.mediaFolderLoading')}</span>
                   ) : (
                     <RefreshCw className="w-3 h-3" />
                   )}
-                </button>
-                <button
+                </button></ControlTooltip>
+                <ControlTooltip descriptionKey={'common.mediaFolderClear'}><button
                   type="button"
                   onClick={clearFolder}
                   title={t('common.mediaFolderClear')}
                   className="w-6 h-6 flex items-center justify-center rounded border border-white/[0.14] bg-white/[0.05] text-white/60 hover:text-red-400 hover:border-red-500/40 transition-all"
                 >
                   <X className="w-3 h-3" />
-                </button>
+                </button></ControlTooltip>
               </div>
             </div>
           )}
@@ -1480,7 +1481,7 @@ export default function MediaLoopTab({
                   <div className="absolute inset-0 rounded-full border border-white/[0.05]" />
                 </div>
                 <p className="text-sm font-bold text-white/75">{t('common.mediaEmpty')}</p>
-                <p className="text-[11px] text-white/35 mt-1.5 leading-relaxed">{t('common.mediaEmptyDesc')}</p>
+                <p className="text-[11px] text-white/55 mt-1.5 leading-relaxed">{t('common.mediaEmptyDesc')}</p>
               </div>
             </div>
           ) : (
@@ -1516,7 +1517,7 @@ export default function MediaLoopTab({
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
-                <button
+                <ControlTooltip descriptionKey={'common.loopAddMedia'}><button
                   onClick={addLoopFiles}
                   disabled={isLoading}
                   title={t('common.loopAddMedia')}
@@ -1528,8 +1529,8 @@ export default function MediaLoopTab({
                   ) : (
                     <Plus className="w-3.5 h-3.5" />
                   )}
-                </button>
-                <button
+                </button></ControlTooltip>
+                <ControlTooltip descriptionKey={'common.loopClearAll'}><button
                   onClick={clearLoop}
                   disabled={loopItems.length === 0}
                   title={t('common.loopClearAll')}
@@ -1537,7 +1538,7 @@ export default function MediaLoopTab({
                   className="flex items-center justify-center w-8 h-8 rounded-lg border bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/20 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                </button></ControlTooltip>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -1553,7 +1554,7 @@ export default function MediaLoopTab({
                   onChange={handleDefaultDuration}
                   className="min-h-9 w-16 bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-sm text-white text-center font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 transition-colors"
                 />
-                <span className="text-[10px] text-zinc-500 select-none">s</span>
+                <span className="text-[11px] text-zinc-500 select-none">s</span>
               </div>
             </div>
           </div>
@@ -1567,7 +1568,7 @@ export default function MediaLoopTab({
                 <Repeat className="w-6 h-6 opacity-60" />
                 <div className="text-center space-y-0.5">
                   <div className="text-xs font-medium">{t('common.loopClickToAdd')}</div>
-                  <div className="text-[10px] text-zinc-600">{t('common.loopDragFiles')}</div>
+                  <div className="text-[11px] text-zinc-600">{t('common.loopDragFiles')}</div>
                 </div>
               </button>
             ) : (
@@ -1598,7 +1599,7 @@ export default function MediaLoopTab({
 
           {loopItems.length > 0 && (
             <div className="shrink-0 px-3 py-3 border-t border-white/[0.07] space-y-2">
-              <div className="flex items-center justify-between text-[10px] text-zinc-500">
+              <div className="flex items-center justify-between text-[11px] text-zinc-500">
                 <span>{t('common.loopItemCount', { count: loopItems.length })}</span>
                 <span className="flex items-center gap-1" aria-live="polite">
                   <Clock className="w-2.5 h-2.5" />

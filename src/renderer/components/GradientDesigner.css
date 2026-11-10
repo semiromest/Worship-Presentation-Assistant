@@ -200,3 +200,97 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+
+/* Looks: one grid replaces the old style select, live-motion switch and animation select. */
+.gradient-looks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+@container gradient-designer (min-width: 330px) {
+  .gradient-looks {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.gradient-look {
+  min-width: 0;
+  padding: 5px;
+  border: 1px solid rgb(255 255 255 / 0.15);
+  border-radius: 8px;
+  text-align: left;
+  background: rgb(255 255 255 / 0.025);
+}
+.gradient-look:hover {
+  background: rgb(255 255 255 / 0.07);
+}
+.gradient-look[aria-pressed='true'] {
+  border-color: #a78bfa;
+  background: rgb(139 92 246 / 0.14);
+}
+.gradient-look-swatch {
+  display: block;
+  height: 38px;
+  border-radius: 5px;
+  background-size: 140% 140%;
+}
+.gradient-look-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  margin-top: 4px;
+  min-height: 16px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+/* Live looks drift slowly so they read as "moving" before they are applied. */
+html:not([data-ui-motion='off']) .gradient-look[data-live] .gradient-look-swatch {
+  animation: gradient-look-drift 5s ease-in-out infinite alternate;
+}
+@keyframes gradient-look-drift {
+  from {
+    background-position: 0% 30%;
+  }
+  to {
+    background-position: 100% 70%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gradient-look[data-live] .gradient-look-swatch {
+    animation: none !important;
+  }
+}
+
+/* Palettes shrink to round chips (names stay available as labels/tooltips). */
+.gradient-palettes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.gradient-palette-chip {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 2px solid rgb(255 255 255 / 0.2);
+  border-radius: 999px;
+  color: #fff;
+}
+.gradient-palette-chip[aria-pressed='true'] {
+  border-color: #c4b5fd;
+  box-shadow: 0 0 0 2px rgb(139 92 246 / 0.5);
+}
+.gradient-colors-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* Advanced controls stay out of the way until asked for. */
+.gradient-more > summary {
+  cursor: pointer;
+  padding: 6px 0;
+  color: rgb(255 255 255 / 0.7);
+  font-weight: 600;
+}
+.gradient-more[open] > summary {
+  margin-bottom: 6px;
+}

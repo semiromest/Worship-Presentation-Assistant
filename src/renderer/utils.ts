@@ -12,6 +12,16 @@ import { encodePreview } from './previewEncoding';
 import { imagePreviewEdge, preparePreviewImages } from './imagePreviewSource';
 import { loadGoogleFont, slideFonts } from './fontLoader';
 import { resolveCanvasSource } from './canvasSource';
+import type { ThumbnailRenderContext } from './screenFrameScene';
+
+export function captureThumbnailContext(): ThumbnailRenderContext {
+  return structuredClone({ watermark: useWatermarkStore.getState().config,
+    authorPosition: readHymnAuthorPosition(), authorSize: readHymnAuthorSize() });
+}
+export interface ThumbnailOptions {
+  scale?: number; quality?: number; status?: ThumbnailStatus; eligible?: () => boolean;
+  context?: ThumbnailRenderContext;
+}
 
 // Precompiled regexes (compiled once, not per call)
 const SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
@@ -163,6 +173,7 @@ async function renderTextSlide(
   slide: Slide,
   W: number,
   H: number,
+  context: ThumbnailRenderContext,
 ): Promise<boolean> {
   if (slide.items?.length) return false; // item-based text slides handled in another branch
 
@@ -219,8 +230,8 @@ async function renderTextSlide(
   // at add-time), positioned according to the hymnAuthorPosition setting.
   const hymnCredit = formatHymnCredit(slide.group);
   if (hymnCredit) {
-    const pos = readHymnAuthorPosition();
-    const sizePct = readHymnAuthorSize();
+    const pos = context.authorPosition;
+    const sizePct = context.authorSize;
     const isTop   = pos.startsWith('top');
     const isLeft  = pos.endsWith('left');
     const isRight = pos.endsWith('right');
@@ -766,9 +777,11 @@ async function drawWatermarkOnCanvas(
 
 async function generateSlideThumbnailInner(
   slide: Slide,
-  opts?: { scale?: number; quality?: number; status?: ThumbnailStatus; eligible?: () => boolean },
+  opts?: ThumbnailOptions,
 ): Promise<string | null> {
-  await Promise.all(slideFonts(slide).map(loadGoogleFont));
+  const context = opts?.context ?? captureThumbnailContext();
+  const fontResults = await Promise.all(slideFonts(slide).map(loadGoogleFont));
+  if (opts?.status && fontResults.some(loaded => !loaded)) opts.status.usedFallback = true;
   const status = opts?.status;
   // High-resolution output for phone broadcasts: draw everything in the base
   // 320×180 coordinate space and let ctx.scale upscale uniformly, so every
@@ -800,7 +813,7 @@ async function generateSlideThumbnailInner(
     if (slide.type === 'text' && slide.items?.length) {
       rendered = await renderItemsSlide(ctx, slide, BASE_W, BASE_H, status);
     } else if (slide.type === 'text') {
-      rendered = await renderTextSlide(ctx, slide, BASE_W, BASE_H);
+      rendered = await renderTextSlide(ctx, slide, BASE_W, BASE_H, context);
     } else if (slide.type === 'image') {
       rendered = await renderImageSlide(ctx, slide, BASE_W, BASE_H, status);
     } else if (slide.type === 'video') {
@@ -833,7 +846,7 @@ async function generateSlideThumbnailInner(
 
   try {
     if (typeof useWatermarkStore === 'function') {
-      const wmConfig: WatermarkConfig = useWatermarkStore.getState().config;
+      const wmConfig = context.watermark;
       if (shouldRenderWatermark(slide, wmConfig)) {
         await drawWatermarkOnCanvas(ctx, wmConfig, BASE_W, BASE_H);
       }
@@ -889,7 +902,7 @@ export interface ThumbnailStatus {
 /** Phase 0: times thumbnail generation (dev-only, zero overhead in prod). */
 export async function generateSlideThumbnail(
   slide: Slide,
-  opts?: { scale?: number; quality?: number; status?: ThumbnailStatus; eligible?: () => boolean },
+  opts?: ThumbnailOptions,
 ): Promise<string | null> {
   if (!rendererPerf.enabled) return generateSlideThumbnailInner(slide, opts);
   const t0 = performance.now();

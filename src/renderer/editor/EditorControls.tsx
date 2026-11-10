@@ -1,3 +1,4 @@
+import ControlTooltip from '../components/ControlTooltip';
 import { ClipboardCheck, X } from 'lucide-react';
 import { memo, type ComponentType, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -80,7 +81,7 @@ export const ScopeSelector = memo(function ScopeSelector({
       {scope === 'selected' && (
         <p
           role="status"
-          className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-100"
+          className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-100"
         >
           {t('common.editorScopeNotice', { count: Math.min(selectedCount, slideCount) })}
         </p>
@@ -119,15 +120,15 @@ export const ClipboardChip = memo(function ClipboardChip({
           {t('common.editorApplyToSelected', { count: targetCount })}
         </button>
       )}
-      <button
+      <ControlTooltip descriptionKey={'common.editorClearClipboard'}><button
         type="button"
         onClick={onClear}
         aria-label={t('common.editorClearClipboard')}
         title={t('common.editorClearClipboard')}
-        className="rounded p-0.5 text-white/40 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        className="rounded p-0.5 text-white/55 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
       >
         <X className="h-3 w-3" aria-hidden="true" />
-      </button>
+      </button></ControlTooltip>
     </div>
   );
 });

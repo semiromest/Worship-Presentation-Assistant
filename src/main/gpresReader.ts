@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { renameWithRetry } from './atomicFile';
 import type { FileHandle } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import path from 'node:path';
@@ -287,7 +288,7 @@ async function extractEntry(ctx: ExtractContext, entry: Entry, kind: Kind): Prom
   if (kind === 'json') return { json: Buffer.concat(chunks), sha256 };
   if (kind === 'media') {
     const filename = sha256 + (ext || '.bin');
-    if (!ctx.validateOnly) await fs.rename(temp, path.join(ctx.staging, filename));
+    if (!ctx.validateOnly) await renameWithRetry(temp, path.join(ctx.staging, filename));
     return { filename, sha256 };
   }
   return { sha256 };
@@ -323,11 +324,13 @@ async function promote(from: string, to: string): Promise<void> {
     return;
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code ?? '';
-    if (code === 'EEXIST') return;
+    // Already in the library: mark it as just used, so storage cleanup's grace period protects it
+    // until the opened document references it.
+    if (code === 'EEXIST') { const now = new Date(); await fs.utimes(to, now, now).catch(() => {}); return; }
     if (!LINK_UNSUPPORTED.has(code)) throw error;
   }
   try {
-    await fs.rename(from, to);
+    await renameWithRetry(from, to);
   } catch (error) {
     if (!(await fs.access(to).then(() => true, () => false))) throw error; // başka biri aynı dosyayı koymuşsa sorun yok
   }

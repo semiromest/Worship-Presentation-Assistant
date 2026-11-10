@@ -58,3 +58,26 @@ test('projector stays black until a full snapshot arrives; early navigation does
     await expect(blackout.locator('[data-slide-transition]')).toHaveCount(0);expect(await blackout.locator('body').innerText()).toBe('');
   }finally{await closeWorkspace(app);}
 });
+
+test('projector reload recovers cached patches without a control resync and rejects old receiver tokens',async({},info)=>{
+ let app;
+ try{
+  const f=await setup(info);app=f.app;const page=f.page;
+  await app.evaluate(({BrowserWindow,app})=>{
+   const control=BrowserWindow.getAllWindows()[0],send=control.webContents.send.bind(control.webContents);
+   control.webContents.send=(channel,...args)=>{if(channel==='projector-ready-ack')return;return send(channel,...args);};
+   app.on('browser-window-created',(_,win)=>{const original=win.webContents.send.bind(win.webContents);global.__cacheOutput=win;
+    win.webContents.send=(channel,...args)=>{if(channel==='projector-update')global.__lastReceiver=args[0].receiverToken;return original(channel,...args);};});
+  });
+  const opening=app.waitForEvent('window');await page.locator('.design-broadcast-button').click();const output=await opening;
+  await expect(output.locator('body')).toContainText('SELECTED CORRECT SLIDE');
+  const oldToken=await app.evaluate(()=>global.__lastReceiver);
+  await page.evaluate(async()=>{const s=window.__startupStore.getState(),slide={...s.presentation.slides[1],content:'PATCHED CACHED SLIDE'};
+   await window.electronAPI.updateProjector({patch:{slidesPatch:[{id:slide.id,nextSlide:slide}]},liveIndex:1,liveSlideId:slide.id});});
+  await expect(output.locator('body')).toContainText('PATCHED CACHED SLIDE');
+  await output.reload();await expect(output.locator('body')).toContainText('PATCHED CACHED SLIDE');
+  expect(await app.evaluate(()=>global.__lastReceiver)).not.toBe(oldToken);
+  await app.evaluate((_electron,token)=>global.__cacheOutput.webContents.send('projector-update',{receiverToken:token,isBlackout:true}),oldToken);
+  await output.waitForTimeout(100);await expect(output.locator('body')).toContainText('PATCHED CACHED SLIDE');
+ }finally{await closeWorkspace(app);}
+});

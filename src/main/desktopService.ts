@@ -1,6 +1,7 @@
 import { showAppDialog } from './appDialogs';
 import { app, ipcMain, globalShortcut, Menu, nativeTheme, nativeImage, Notification, shell, type BrowserWindow, type IpcMainInvokeEvent, type NativeImage } from 'electron';
 import fs from 'node:fs/promises';
+import { renameWithRetry } from './atomicFile';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DEFAULT_DESKTOP, GLOBAL_SHORTCUTS, normalizeDesktopPreferences, safePathLabel, type DesktopPreferences, type DesktopStatus, type DesktopCommand } from '../shared/desktop';
@@ -160,7 +161,7 @@ export function createDesktopService(getWindow: () => BrowserWindow | null, rest
     const temp = `${settingsFile}.${randomUUID()}.tmp`;
     try {
       await fs.writeFile(temp, JSON.stringify(value), { flag: 'wx' });
-      await fs.rename(temp, settingsFile);
+      await renameWithRetry(temp, settingsFile);
     } catch (error) {
       await fs.rm(temp, { force: true }).catch(() => {});
       throw error;

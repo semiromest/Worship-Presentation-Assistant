@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { renameWithRetry } from './atomicFile';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileUrlToPath, mediaRefToName } from '../shared/mediaTree';
@@ -46,7 +47,7 @@ export function cacheGoogleFont(family: string, cacheDir: string): Promise<strin
     }
     await fs.mkdir(cacheDir, { recursive: true });
     await fs.writeFile(filename + '.tmp', css);
-    await fs.rename(filename + '.tmp', filename);
+    await renameWithRetry(filename + '.tmp', filename);
     return css;
   })();
   pending.set(key, promise);

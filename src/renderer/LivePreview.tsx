@@ -79,7 +79,7 @@ function LoopRenderer({ slide, width, height, isActive = true, volume = 1, muted
   if (!items.length) {
     return (
       <div className="bg-black flex items-center justify-center" style={{ width, height }}>
-        <span className="text-white/45 text-sm">{t('loop.noItems')}</span>
+        <span className="text-white/60 text-sm">{t('loop.noItems')}</span>
       </div>
     );
   }
@@ -526,7 +526,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
   return (
     <div 
       ref={outerRef} 
-      className="w-full h-full flex items-center justify-center overflow-hidden"
+      className="slide-surface w-full h-full flex items-center justify-center overflow-hidden"
       style={{ backgroundColor: '#000' }}
     >
       {renderContent()}

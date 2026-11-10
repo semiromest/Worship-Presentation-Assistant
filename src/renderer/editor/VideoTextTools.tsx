@@ -1,3 +1,4 @@
+import ControlTooltip from '../components/ControlTooltip';
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, Copy, Type } from 'lucide-react';
@@ -159,7 +160,7 @@ export const VideoTextTools = memo(function VideoTextTools({
       <h4>
         <Type size={15} />
         {t('common.videoTextLayers')}
-        <button
+        <ControlTooltip descriptionKey={'common.videoAddText'}><button
           type="button"
           className="ve-icon-button"
           onClick={onAdd}
@@ -167,7 +168,7 @@ export const VideoTextTools = memo(function VideoTextTools({
           title={t('common.videoAddText')}
         >
           <Plus size={16} />
-        </button>
+        </button></ControlTooltip>
       </h4>
 
       {overlays.length === 0 ? (

@@ -4,6 +4,7 @@ import MusicSlideEditor from './MusicSlideEditor';
 import SlideMusicAttachment from './SlideMusicAttachment';
 import { SlideSelectionStatus, SlidePositionLabels } from './OutputStatus';
 import BroadcastControls from './BroadcastControls';
+import NextSlidePreview from './NextSlidePreview';
 import { canAttachSlideMusic } from '../../shared/youtubeMusic';
 import { isEditorEditableSlide } from '../editor/slideCapabilities';
 import { useEffect, useRef } from 'react';
@@ -77,6 +78,7 @@ export default function RightPanel({
   const searchQuery = useStore((s) => s.searchQuery);
   const setSearchQuery = useStore((s) => s.setSearchQuery);
   const operatorNotesEnabled = useStore((s) => s.operatorNotesEnabled);
+  const nextSlidePreviewEnabled = useStore((s) => s.nextSlidePreviewEnabled);
   const sectionFilterId = useStore(s => s.sectionFilterId);
   const sectionsEnabled = useStore(s => s.serviceSectionsEnabled);
   const sectionOrderRestricted = sectionsEnabled && (!!searchQuery.trim() || !!sectionFilterId);
@@ -140,6 +142,7 @@ export default function RightPanel({
           />}
 
         </div>
+        {isRightPanelOpen && nextSlidePreviewEnabled && <NextSlidePreview />}
 
 </div><div className="design-editor-scroll" data-design-editor-scroll>
 
@@ -147,7 +150,7 @@ export default function RightPanel({
         {isProjectorWindowOpen && (
           <div className="px-4 py-2 border-b border-white/10 bg-[#161616]">
             <div className="flex items-center gap-2">
-              <ControlTooltip><button
+              <ControlTooltip descriptionKey={isMediaMuted ? 'common.unmute' : 'common.mute'}><button
                 onClick={() => {
                   const next = !useStore.getState().isMediaMuted;
                   playSfx(next ? 'toggle-on' : 'toggle-off');
@@ -173,7 +176,7 @@ export default function RightPanel({
                 aria-label={t('common.mediaVolume')}
                 className="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
               />
-              <span className="text-[10px] text-white/50 font-mono w-8 text-right">{Math.round(mediaVolume * 100)}%</span>
+              <span className="text-[11px] text-white/50 font-mono w-8 text-right">{Math.round(mediaVolume * 100)}%</span>
             </div>
           </div>
         )}
@@ -191,7 +194,7 @@ export default function RightPanel({
             {selectedSlide && (
               <div className="design-editor-actions flex items-center gap-1.5">
                 {/* Broadcast lock toggle — pins the live output to this slide. */}
-                <ControlTooltip><button
+                <ControlTooltip descriptionKey={selectedSlideLocked ? 'common.slideLockOff' : 'common.slideLockOn'}><button
                   onClick={() => toggleSlideLock(selectedSlide.id)}
                   aria-pressed={selectedSlideLocked}
                   title={selectedSlideLocked ? t('common.slideLockOff') : t('common.slideLockOn')}
@@ -210,7 +213,7 @@ export default function RightPanel({
                   )}
                 </button></ControlTooltip>
                 {selectedSlide && (
-                  <ControlTooltip><button
+                  <ControlTooltip descriptionKey={isEditorEditableSlide(selectedSlide) ? 'common.detailedEdit' : 'common.editorPreview'}><button
                     data-guide-anchor="image-tools"
                     onClick={() => selectedSlide && openEditor(selectedSlide.id)}
                     className="p-1.5 rounded-lg text-white/60 hover:bg-white/10 hover:text-white border border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
@@ -224,7 +227,7 @@ export default function RightPanel({
                 {canAttachSlideMusic(selectedSlide) && !selectedSlide.youtubeMusic && (
                   <SlideMusicAttachment key={selectedSlide.id} slide={selectedSlide} onPatch={updateSlideProperty} inline compact />
                 )}
-                <ControlTooltip shortcut="Alt+↑"><button
+                <ControlTooltip shortcut="Alt+↑" descriptionKey={'common.moveUp'}><button
                   onClick={() => moveSelectedSlide(-1)}
                   disabled={sectionOrderRestricted || selectedSlideIndex <= 0}
                   className="p-1.5 rounded-lg bg-white/5 text-white hover:bg-white/10 disabled:opacity-20 border border-white/10 transition-colors"
@@ -232,7 +235,7 @@ export default function RightPanel({
                 >
                   <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
                 </button></ControlTooltip>
-                <ControlTooltip shortcut="Alt+↓"><button
+                <ControlTooltip shortcut="Alt+↓" descriptionKey={'common.moveDown'}><button
                   onClick={() => moveSelectedSlide(1)}
                   disabled={sectionOrderRestricted || selectedSlideIndex === slideCount - 1}
                   className="p-1.5 rounded-lg bg-white/5 text-white hover:bg-white/10 disabled:opacity-20 border border-white/10 transition-colors"
@@ -240,7 +243,7 @@ export default function RightPanel({
                 >
                   <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
                 </button></ControlTooltip>
-                <ControlTooltip><button
+                <ControlTooltip descriptionKey={selectedSlideLocked ? 'common.slideLockActiveHint' : 'common.delete'}><button
                   data-guide-anchor="delete-slide"
                   onClick={() => removeSlide(selectedSlide.id)}
                   disabled={selectedSlideLocked}
@@ -287,7 +290,7 @@ export default function RightPanel({
                 <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2">
                   <div className="flex items-center gap-2">
                     <Monitor className="w-4 h-4 text-blue-400" />
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-white/65">
+                    <span className="text-[11px] font-semibold text-white/65">
                       {t('common.screenCaptureSource')}
                     </span>
                   </div>
@@ -333,7 +336,7 @@ export default function RightPanel({
           <div className="m-4 rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
             <label
               htmlFor="operator-notes"
-              className="block text-[10px] font-bold uppercase tracking-widest text-white/40"
+              className="block text-[11px] font-bold text-white/55"
             >
               {t('common.operatorNotes')}
             </label>
@@ -395,7 +398,7 @@ function CaptionsSlideEditor({
       <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Captions className="w-4 h-4 text-blue-400" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+          <span className="text-[11px] font-bold text-white/55">
             {t('common.captionsEditor')}
           </span>
         </div>
@@ -421,7 +424,7 @@ function CaptionsSlideEditor({
         </label>
 
         <div className="space-y-1.5 pt-1">
-          <span className="text-[11px] uppercase tracking-wide text-white/65">
+          <span className="text-[11px] text-white/65">
             {t('common.captionsLayout')}
           </span>
           <div className="grid grid-cols-3 gap-1.5">
@@ -446,12 +449,12 @@ function CaptionsSlideEditor({
       </div>
 
       <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
-        <div className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+        <div className="text-[11px] font-bold text-white/55">
           {t('common.editorSlideSettings')}
         </div>
 
         <label className="block space-y-1">
-          <span className="text-[10px] uppercase tracking-wide text-white/40">
+          <span className="text-[11px] text-white/55">
             {t('common.editorBgColor')}
           </span>
           <div className="flex items-center gap-2">
@@ -471,7 +474,7 @@ function CaptionsSlideEditor({
         </label>
 
         <label className="block space-y-1">
-          <span className="text-[10px] uppercase tracking-wide text-white/40">
+          <span className="text-[11px] text-white/55">
             {t('common.editorTextColor')}
           </span>
           <div className="flex items-center gap-2">
@@ -491,7 +494,7 @@ function CaptionsSlideEditor({
         </label>
 
         <label className="block space-y-1">
-          <span className="text-[10px] uppercase tracking-wide text-white/40">
+          <span className="text-[11px] text-white/55">
             {t('common.editorDefaultFontSize')}
           </span>
           <input
@@ -587,7 +590,7 @@ function LoopEditor({
       <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Repeat className="w-4 h-4 text-purple-400" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+          <span className="text-[11px] font-bold text-white/55">
             {t('common.loopSlide')}
           </span>
         </div>
@@ -604,22 +607,22 @@ function LoopEditor({
             <div key={item.id} className="flex items-center gap-1.5 bg-black/20 rounded-lg px-2 py-1.5 group">
               <span className="text-[11px] text-white/60 w-4 shrink-0">{idx + 1}</span>
               {item.type === 'video' ? (
-                <Video className="w-3 h-3 text-white/40 shrink-0" />
+                <Video className="w-3 h-3 text-white/55 shrink-0" />
               ) : (
-                <ImageIcon className="w-3 h-3 text-white/40 shrink-0" />
+                <ImageIcon className="w-3 h-3 text-white/55 shrink-0" />
               )}
               <span className="inspector-item-name text-[11px] text-white/65 flex-1 truncate">
                 {item.fileName ?? (item.type === 'video' ? t('common.video') : t('common.image'))}
               </span>
 
               {item.type === 'video' && (
-                <ControlTooltip><button
+                <ControlTooltip descriptionKey={'common.loopUseVideoDuration'}><button
                   type="button"
                   onClick={() => updateItem(item.id, { useVideoDuration: !item.useVideoDuration })}
                   aria-pressed={item.useVideoDuration}
                   title={t('common.loopUseVideoDuration')}
                   className={cn(
-                    'w-6 h-6 rounded border text-[10px] font-bold transition-colors shrink-0',
+                    'w-6 h-6 rounded border text-[11px] font-bold transition-colors shrink-0',
                     item.useVideoDuration
                       ? 'workspace-selected-option'
                       : 'bg-black/20 border-white/10 text-white/65 hover:text-white/90'
@@ -646,7 +649,7 @@ function LoopEditor({
               />
 
               <div className="flex items-center gap-0.5 opacity-60 hover:opacity-100 focus-visible:opacity-100 transition-opacity">
-                <ControlTooltip shortcut="Alt+↑"><button
+                <ControlTooltip shortcut="Alt+↑" descriptionKey={'common.moveUp'}><button
                   onClick={() => moveItem(idx, -1)}
                   disabled={idx === 0}
                   className="min-h-6 min-w-6 p-1 rounded hover:bg-white/10 text-white/65 hover:text-white/90 disabled:opacity-20"
@@ -654,15 +657,15 @@ function LoopEditor({
                 >
                   <ChevronUp className="w-4 h-4" aria-hidden="true" />
                 </button></ControlTooltip>
-                <ControlTooltip shortcut="Alt+↓"><button
+                <ControlTooltip shortcut="Alt+↓" descriptionKey={'common.moveDown'}><button
                   onClick={() => moveItem(idx, 1)}
                   disabled={idx === items.length - 1}
-                  className="p-1 rounded hover:bg-white/10 text-white/40 hover:text-white/70 disabled:opacity-20"
+                  className="p-1 rounded hover:bg-white/10 text-white/55 hover:text-white/70 disabled:opacity-20"
                   aria-label={t('common.moveDown')}
                 >
                   <ChevronDown className="w-4 h-4" aria-hidden="true" />
                 </button></ControlTooltip>
-                <ControlTooltip><button
+                <ControlTooltip descriptionKey={'common.delete'}><button
                   onClick={() => removeItem(item.id)}
                   className="p-1 rounded hover:bg-red-400/20 text-red-400"
                   aria-label={t('common.delete')}
@@ -687,7 +690,7 @@ function LoopEditor({
       <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Settings2 className="w-3 h-3 text-purple-400" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+          <span className="text-[11px] font-bold text-white/55">
             {t('transition.settings')}
           </span>
         </div>
@@ -706,7 +709,7 @@ function LoopEditor({
                 </option>
               ))}
             </select>
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-white/40">
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-white/55">
               <ChevronDown className="w-3 h-3" />
             </div>
           </div>
@@ -724,7 +727,7 @@ function LoopEditor({
                 </option>
               ))}
             </select>
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-white/40">
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-white/55">
               <ChevronDown className="w-3 h-3" />
             </div>
           </div>

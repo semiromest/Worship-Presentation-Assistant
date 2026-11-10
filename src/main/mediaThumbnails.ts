@@ -23,6 +23,7 @@
  */
 
 import fs from 'node:fs/promises';
+import { renameWithRetry } from './atomicFile';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import os from 'node:os';
@@ -292,7 +293,7 @@ async function createThumbnail(filePath: string, key: string, maxEdge: number): 
     const temp = `${dest}.${crypto.randomUUID()}.tmp`;
     try {
       await fs.writeFile(temp, result.data);
-      await fs.rename(temp, dest);
+      await renameWithRetry(temp, dest);
     } catch (error) {
       // Başarıda temp zaten rename edildi; yalnızca hata yolunda temizle.
       await fs.rm(temp, { force: true }).catch(() => {});

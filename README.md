@@ -9,7 +9,7 @@ A modern desktop app for displaying song lyrics, scriptures, media and announcem
 ![Platforms](https://img.shields.io/badge/installers-Windows%20%7C%20macOS-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-[Website](https://semiromest.github.io/Worship-Presentation-Assistant/) · [Interactive browser demo](https://semiromest.github.io/Worship-Presentation-Assistant/demo/) · [Download](https://github.com/semiromest/Worship-Presentation-Assistant/releases/latest)
+[Website](https://semiromest.github.io/Worship-Presentation-Assistant/) · [Web app](https://semiromest.github.io/Worship-Presentation-Assistant/app/) · [Download](https://github.com/semiromest/Worship-Presentation-Assistant/releases/latest)
 
 </div>
 
@@ -18,6 +18,7 @@ A modern desktop app for displaying song lyrics, scriptures, media and announcem
 ## Table of Contents
 
 - [Features](#features)
+- [Web App](#web-app)
 - [Screenshots](#screenshots)
 - [Download & Install](#download--install)
   - [Windows](#windows)
@@ -82,6 +83,16 @@ A modern desktop app for displaying song lyrics, scriptures, media and announcem
 - 📄 Save/open presentations in the native **`.gpres`** format, a ZIP archive containing the presentation and embedded local media.
 - 📊 Import **PowerPoint** (`.pptx` / `.pptm`) and export `.pptx`.
 - ☁️ Optional **Google Drive** integration for storing and sharing presentations.
+
+---
+
+## Web App
+
+Use the [web app](https://semiromest.github.io/Worship-Presentation-Assistant/app/) in a modern browser without installing the desktop application. It shares the presentation renderer and supports live output in separate browser windows, `.gpres` open/save, media and presentation storage in the browser, and PowerPoint export. Install it as an app or use it offline after the first online visit; browser storage stays in that browser profile, so export a `.gpres` file or configure Google Drive when you need to move work between devices.
+
+Allow pop-ups for the site so presentation outputs can open. Extended-display selection and media-folder access work best in Chrome or Edge; other browsers may offer a simpler output or file-picker fallback. Offline caching requires HTTPS (the hosted app already uses it) or localhost.
+
+PowerPoint import, live captions, YouTube music, phone remote control/sharing, and automatic updates are desktop-only. See the [web app guide](web/README.md) for its full feature comparison, browser requirements, Google Drive setup and local development instructions.
 
 ---
 
@@ -324,6 +335,16 @@ Use your Google OAuth credentials to enable Drive sign-in. Keep this local file 
 
 ### Tests
 
+Run the release validation gate before preparing a release:
+
+```bash
+npm run test:release
+```
+
+It checks locales and bundled fonts, runs the TypeScript check and unit suite, builds the app and runs the release Electron end-to-end tests. To run only the unit suite, use `npm run test:unit`; `npm run test:release:e2e` runs only the release E2E suite.
+
+Focused test groups are also available:
+
 ```bash
 npm run test:sections   # service sections and slide grouping
 npm run test:updater    # updater reducer
@@ -337,8 +358,14 @@ npm run test:gradients  # generated backgrounds and gradient media
 npm run test:sfx        # interface sound behavior
 npm run test:zoom       # slide grid zoom behavior
 npm run test:tour       # guide, practice, persistence and isolation unit checks
+npm run test:optimizations # slide editing, media queue, virtual rows and snap guides
+npm run test:recent-ux  # YouTube search paging and hymn author settings
+npm run test:canvas     # canvas source behavior
 npm run test:architecture # IPC, preview updates, canvas layout and store contracts
 npm run test:music      # YouTube links, paging, offline downloads and playback contracts
+npm run test:pptx       # PowerPoint rendering and bundled font files
+npm run test:reliability # project files, atomic writes and preview/font handling
+npm run test:locales    # locale validation script tests
 
 npx tsc --noEmit --incremental false
 npx vite build         # build Electron entry points before source E2E/worker checks
@@ -347,7 +374,7 @@ npm run test:tour:e2e   # all configured source Electron E2E groups
 npm run test:workspace:e2e # workspace layout, hymn keys, music window, attachments and offline restart
 ```
 
-There is no combined `npm test` script. Source E2E uses isolated profiles and starts its own renderer server. Packaged E2E requires a built Windows unpacked app:
+There is no `npm test` script; use `npm run test:unit` or the release gate above. Source E2E uses isolated profiles and starts its own renderer server. Packaged E2E requires a built Windows unpacked app:
 
 ```bash
 npx electron-builder --win --dir --publish never

@@ -72,7 +72,8 @@ async function main() {
   if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error('Invalid commit');
   const source = await fs.readFile(path.join(__dirname, '../src/renderer/editor/editorUtils.ts'), 'utf8');
   const presets = [...source.slice(source.indexOf('// Google Fonts'), source.indexOf('] as const;')).matchAll(/name: '([^']+)'/g)].map(m => m[1]);
-  const priority = ['Open Sans', 'Inter', 'Montserrat', 'Lora'];
+  // Atkinson Hyperlegible Next, Inter, Figtree, Manrope and Work Sans are also the control-panel UI fonts (src/renderer/index.css).
+  const priority = ['Open Sans', 'Inter', 'Montserrat', 'Lora', 'Atkinson Hyperlegible Next', 'Figtree', 'Manrope', 'Work Sans'];
   const order = [...priority, ...presets.filter(name => !priority.includes(name)).sort()];
   const manifest = { source: 'https://github.com/google/fonts', commit, budgetBytes: BUDGET, compressedBudgetBytes: COMPRESSED_BUDGET, requiredCharacters: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzİıĞğŞşÇçÖöÜü', families: [], skipped: [] };
   await fs.mkdir(ROOT, { recursive: true });

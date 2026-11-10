@@ -21,13 +21,13 @@ export function SlideNavigation() {
   const setLiveIndex = useStore(s => s.setLiveIndex);
   const locked = useStore(s => s.presentation.slides.some(slide => slide.locked));
   return <div className="design-navigation">
-      <ControlTooltip><button type="button" onClick={() => setLiveIndex(index => Math.max(0, index - 1))}
+      <ControlTooltip descriptionKey={locked ? 'common.slideLockActiveHint' : 'common.prevSlide'}><button type="button" onClick={() => setLiveIndex(index => Math.max(0, index - 1))}
         disabled={liveIndex <= 0 || locked || slideCount === 0}
         title={t(locked ? 'common.slideLockActiveHint' : 'common.prevSlide')} aria-label={t('common.prevSlide')}
         className="rounded-md text-white/60 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
         <ChevronLeft className="h-4 w-4" aria-hidden="true" />
       </button></ControlTooltip>
-      <ControlTooltip><button type="button" onClick={() => setLiveIndex(index => Math.min(slideCount - 1, index + 1))}
+      <ControlTooltip descriptionKey={locked ? 'common.slideLockActiveHint' : 'common.nextSlide'}><button type="button" onClick={() => setLiveIndex(index => Math.min(slideCount - 1, index + 1))}
         disabled={liveIndex >= slideCount - 1 || locked || slideCount === 0}
         title={t(locked ? 'common.slideLockActiveHint' : 'common.nextSlide')} aria-label={t('common.nextSlide')}
         className="rounded-md text-white/60 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">

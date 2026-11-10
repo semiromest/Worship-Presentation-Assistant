@@ -1,3 +1,4 @@
+import ControlTooltip from '../components/ControlTooltip';
 import { isEditorEditableSlide } from './slideCapabilities';
 import {
   memo,
@@ -67,6 +68,7 @@ function sameSlideInputs(prev: RailThumbProps, next: RailThumbProps): boolean {
     prev.index === next.index &&
     prev.isActive === next.isActive &&
     prev.isSelected === next.isSelected &&
+    prev.multi === next.multi &&
     prev.isLive === next.isLive &&
     prev.isDropTarget === next.isDropTarget &&
     prev.enabled === next.enabled &&
@@ -80,6 +82,8 @@ interface RailThumbProps {
   index: number;
   isActive: boolean;
   isSelected: boolean;
+  /** More than one slide is selected: every selected slide shows the check marker. */
+  multi: boolean;
   isLive: boolean;
   isDropTarget: boolean;
   thumbWidth: number;
@@ -97,6 +101,7 @@ const RailThumb = memo(function RailThumb({
   index,
   isActive,
   isSelected,
+  multi,
   isLive,
   isDropTarget,
   thumbWidth,
@@ -132,7 +137,7 @@ const RailThumb = memo(function RailThumb({
   );
 
   return (
-    <div
+    <ControlTooltip><div
       role="option"
       tabIndex={isActive ? 0 : -1}
       onKeyDown={(event) => {
@@ -146,6 +151,10 @@ const RailThumb = memo(function RailThumb({
       aria-label={t('common.editorRailSlideLabel', { number: index + 1 })}
       data-rail-slide={slide.id}
       title={isEditorEditableSlide(slide) ? undefined : t('common.editorRailReadOnly')}
+      onMouseDown={(event) => {
+        // Shift+click would otherwise select page text and flash a text highlight.
+        if (event.shiftKey || event.ctrlKey || event.metaKey) event.preventDefault();
+      }}
       onClick={(event) => {
         onActivate(slide, { ctrl: event.ctrlKey || event.metaKey, shift: event.shiftKey });
       }}
@@ -154,9 +163,9 @@ const RailThumb = memo(function RailThumb({
       onDragLeave={onDragLeaveThumb}
       onDrop={(event) => { if (editable) onDropThumb(event, slide.id); }}
       className={cn(
-        'group relative flex cursor-pointer flex-col gap-1 rounded-lg p-1 transition-colors',
+        'group relative flex cursor-pointer select-none flex-col gap-1 rounded-lg p-1 transition-colors',
         'focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none',
-        isSelected ? 'bg-blue-500/10' : 'hover:bg-white/5',
+        isSelected ? (multi ? 'bg-blue-500/20 ring-1 ring-blue-400/60' : 'bg-blue-500/10') : 'hover:bg-white/5',
         !isEditorEditableSlide(slide) && 'border border-white/10'
       )}
     >
@@ -164,7 +173,7 @@ const RailThumb = memo(function RailThumb({
         className={cn(
           'relative w-full overflow-hidden rounded-md border bg-black',
           isActive ? 'border-blue-500 ring-2 ring-blue-500/60' : 'border-white/10',
-          isSelected && !isActive && 'border-blue-400/50',
+          isSelected && !isActive && 'border-blue-400 ring-2 ring-blue-400/50',
           isDropTarget && 'border-blue-300 ring-2 ring-blue-300/70'
         )}
         style={{ height: thumbWidth * THUMB_ASPECT }}
@@ -172,7 +181,7 @@ const RailThumb = memo(function RailThumb({
         <SlidePreviewAny slide={previewSlide} cardWidth={thumbWidth} enabled={enabled} />
 
         {/* Selected marker: distinguishable from the active ring at a glance. */}
-        {isSelected && !isActive && (
+        {isSelected && (multi || !isActive) && (
           <span className="absolute right-1 top-1 grid h-4 w-4 place-items-center rounded-full bg-blue-500 text-white shadow">
             <Check className="h-2.5 w-2.5" aria-hidden="true" />
           </span>
@@ -194,7 +203,7 @@ const RailThumb = memo(function RailThumb({
         )}
 
         {isDropTarget && (
-          <span className="absolute inset-x-0 bottom-0 bg-blue-500/90 px-1 py-0.5 text-center text-[9px] font-medium text-white">
+          <span className="absolute inset-x-0 bottom-0 bg-blue-500/90 px-1 py-0.5 text-center text-[10px] font-medium text-white">
             {t('common.editorRailDropHere')}
           </span>
         )}
@@ -202,13 +211,13 @@ const RailThumb = memo(function RailThumb({
 
       <span
         className={cn(
-          'text-center text-[10px] tabular-nums leading-none',
-          isActive ? 'font-semibold text-blue-200' : 'text-white/45'
+          'text-center text-[11px] tabular-nums leading-none',
+          isActive ? 'font-semibold text-blue-200' : 'text-white/60'
         )}
       >
         {index + 1}
       </span>
-    </div>
+    </div></ControlTooltip>
   );
 }, sameSlideInputs);
 
@@ -363,23 +372,23 @@ export default function EditorSlideRail({
       data-editor-rail
     >
       <div className="flex items-center justify-between gap-1 border-b border-white/10 px-2 py-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-white/45">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-white/60">
           {t('common.editorRailTitle', { count: allSlides.length })}{editableOnly && ` · ${slides.length}`}
         </span>
-        <button
+        <ControlTooltip descriptionKey={'common.editorRailCollapse'}><button
           type="button"
           onClick={onCollapse}
           aria-label={t('common.editorRailCollapse')}
           title={t('common.editorRailCollapse')}
-          className="rounded-md p-1 text-white/40 transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+          className="rounded-md p-1 text-white/55 transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
         >
           <ChevronsLeft className="h-3.5 w-3.5" aria-hidden="true" />
-        </button>
+        </button></ControlTooltip>
       </div>
 
       <div className="flex gap-1 border-b border-white/10 p-1">
         {[false, true].map(value => <button type="button" key={String(value)} aria-pressed={editableOnly === value}
-          onClick={() => onFilterChange(value)} className={cn('flex-1 rounded px-1 py-2 text-[9px]', editableOnly === value ? 'bg-blue-600/30 text-blue-100' : 'text-white/60 hover:bg-white/10')}>
+          onClick={() => onFilterChange(value)} className={cn('flex-1 rounded px-1 py-2 text-[10px]', editableOnly === value ? 'bg-blue-600/30 text-blue-100' : 'text-white/60 hover:bg-white/10')}>
           {t(value ? 'common.editorFilterEditable' : 'common.editorFilterAll')}
         </button>)}
       </div>
@@ -390,18 +399,18 @@ export default function EditorSlideRail({
           role="status"
           className="flex items-center justify-between gap-1 border-b border-blue-500/30 bg-blue-500/15 px-2 py-1"
         >
-          <span className="text-[10px] font-semibold text-blue-100">
+          <span className="text-[11px] font-semibold text-blue-100">
             {t('common.editorSlidesSelected', { count: activeCount })}
           </span>
           <span className="flex items-center gap-0.5">
             <button
               type="button"
               onClick={onSelectAll}
-              className="rounded px-1 py-0.5 text-[9px] text-blue-100/80 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:outline-none"
+              className="rounded px-1 py-0.5 text-[10px] text-blue-100/80 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:outline-none"
             >
               {t('common.editorSelectAllSlides')}
             </button>
-            <button
+            <ControlTooltip descriptionKey={'common.editorClearSlideSelection'}><button
               type="button"
               onClick={onClearSelection}
               aria-label={t('common.editorClearSlideSelection')}
@@ -409,7 +418,7 @@ export default function EditorSlideRail({
               className="rounded p-0.5 text-blue-100/80 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:outline-none"
             >
               <X className="h-3 w-3" aria-hidden="true" />
-            </button>
+            </button></ControlTooltip>
           </span>
         </div>
       ) : (
@@ -417,7 +426,7 @@ export default function EditorSlideRail({
           <button
             type="button"
             onClick={onSelectAll}
-            className="text-[9px] text-white/40 hover:text-white/70 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+            className="text-[10px] text-white/55 hover:text-white/70 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
           >
             {t('common.editorSelectAllSlides')}
           </button>
@@ -462,6 +471,7 @@ export default function EditorSlideRail({
                   enabled={enabled}
                   isActive={slide.id === activeId}
                   isSelected={selectedSet.has(slide.id)}
+                  multi={selectedIds.length > 1}
                   isLive={slide.id === liveSlideId}
                   isDropTarget={dropTargetId === slide.id}
                   thumbWidth={thumbWidth}
@@ -478,7 +488,7 @@ export default function EditorSlideRail({
       </div>
 
       <div className="flex items-center justify-between gap-1 border-t border-white/10 px-1.5 py-1">
-        <button
+        <ControlTooltip descriptionKey={'common.editorPreviousSlide'}><button
           type="button"
           onClick={() => activate(slides[Math.max(0, slides.findIndex((s) => s.id === activeId) - 1)], {})}
           disabled={slides.findIndex((s) => s.id === activeId) <= 0}
@@ -487,11 +497,11 @@ export default function EditorSlideRail({
           className="rounded-md p-1 text-white/50 transition hover:bg-white/10 hover:text-white disabled:opacity-25 disabled:hover:bg-transparent focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
         >
           <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
-        </button>
-        <span className="px-1 text-[10px] tabular-nums text-white/50">
+        </button></ControlTooltip>
+        <span className="px-1 text-[11px] tabular-nums text-white/50">
           {allSlides.findIndex((s) => s.id === activeId) + 1} / {allSlides.length}
         </span>
-        <button
+        <ControlTooltip descriptionKey={'common.editorNextSlide'}><button
           type="button"
           onClick={() =>
             activate(slides[Math.min(slides.length - 1, slides.findIndex((s) => s.id === activeId) + 1)], {})
@@ -502,7 +512,7 @@ export default function EditorSlideRail({
           className="rounded-md p-1 text-white/50 transition hover:bg-white/10 hover:text-white disabled:opacity-25 disabled:hover:bg-transparent focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
         >
           <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-        </button>
+        </button></ControlTooltip>
       </div>
     </div>
   );

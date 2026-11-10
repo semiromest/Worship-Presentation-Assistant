@@ -1,3 +1,4 @@
+import ControlTooltip from './ControlTooltip';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Trash2 } from 'lucide-react';
@@ -63,7 +64,7 @@ export function GradientLibraryGallery({
     <ul className="grid grid-cols-2 gap-2" aria-label={t('gradientLibrary.library')}>
       {entries.map((entry) => (
         <li key={entry.id} className="min-w-0 rounded-lg border border-white/15 bg-white/[0.025]">
-          <button
+          <ControlTooltip description={t('tooltipText.useGradient', { name: entry.name })}><button
             type="button"
             disabled={disabled}
             title={entry.name}
@@ -74,7 +75,7 @@ export function GradientLibraryGallery({
           >
             <img src={entry.image} alt="" loading="lazy" className="aspect-video w-full rounded object-cover" />
             <span className="mt-1 block truncate px-0.5 text-xs text-white/90">{entry.name}</span>
-          </button>
+          </button></ControlTooltip>
           {onRemove && (
             <button
               type="button"

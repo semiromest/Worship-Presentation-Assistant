@@ -119,7 +119,7 @@ test('failed resource check can be retried and never gates desktop or remote out
   });
   await load([{ id: 'media', type: 'image', content: '', mediaUrl: 'file:///missing-preparation-test.png' }]);
   await expect(toolbar()).toHaveAttribute('data-preparation-status', 'failed');
-  await page.getByRole('button', { name: 'START BROADCAST', exact: true }).click();
+  await page.getByRole('button', { name: 'Start Broadcast', exact: true }).click();
   await expectProjection();
   await remote('closeProjector');
   await expect.poll(() => page.evaluate(() => window.__preparationApp.getState().isProjectorWindowOpen)).toBe(false);
@@ -153,7 +153,7 @@ test('pending checks never gate output and late results cannot replace a differe
   });
   await load([{ id: 'pending', type: 'image', content: '', mediaUrl: 'file:///pending-preparation-test.png' }]);
   await expect(toolbar()).toHaveAttribute('data-preparation-status', 'checking');
-  await page.getByRole('button', { name: 'START BROADCAST', exact: true }).click();
+  await page.getByRole('button', { name: 'Start Broadcast', exact: true }).click();
   await expectProjection();
   await remote('closeProjector');
   await expect.poll(() => page.evaluate(() => window.__preparationApp.getState().isProjectorWindowOpen)).toBe(false);

@@ -1,3 +1,4 @@
+import ControlTooltip from '../components/ControlTooltip';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SlideItem } from '../types';
@@ -36,7 +37,7 @@ export function AlignmentTools({ selectedItems, items, onUpdateItems }: Alignmen
   return (
     <div className="space-y-3 rounded-2xl border border-white/10 bg-[#1a1a1a] p-3">
       <h3 className="text-xs text-white/60">{t('common.editorAlignment')}</h3>
-      <p className="text-[10px] text-white/45">{t('common.editorLayoutActiveOnly')}</p>
+      <p className="text-[11px] text-white/60">{t('common.editorLayoutActiveOnly')}</p>
       <label className="flex items-center justify-between gap-2 text-xs text-white/60">
         {t('common.editorAlignTarget')}
         <select
@@ -52,7 +53,7 @@ export function AlignmentTools({ selectedItems, items, onUpdateItems }: Alignmen
       </label>
       <div className="grid grid-cols-6 gap-1">
         {alignButtons.map((button) => (
-          <button
+          <ControlTooltip key={button.id} descriptionKey={'common.' + button.label}><button
             key={button.id}
             type="button"
             className={buttonClass}
@@ -61,7 +62,7 @@ export function AlignmentTools({ selectedItems, items, onUpdateItems }: Alignmen
             onClick={() => apply(button.id)}
           >
             {button.icon}
-          </button>
+          </button></ControlTooltip>
         ))}
       </div>
       {eligible.length >= 2 && (

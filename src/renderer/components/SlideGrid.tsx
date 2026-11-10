@@ -7,7 +7,7 @@ import ServiceSections from './ServiceSections';
 import { TransitionSelector } from '../TransitionSelector';
 import { DEFAULT__TRANSITION } from '../constants';
 import type { TransitionType } from '../types';
-import { GradientQuickApply } from './GradientQuickApply';
+import SlideLibraryPopover from './SlideLibraryPopover';
 import { SlideNavigation } from './OutputStatus';
 import { slideGridGeometry, slideGridScrollTop, ROW_GAP, CONTENT_PADDING } from './slideGridGeometry';
 import { memo, useMemo, useEffect, useLayoutEffect, useCallback, useRef, useState } from 'react';
@@ -84,18 +84,20 @@ function useVirtualRows(
 const GhostSlide = memo(({ onClick }: { onClick: () => void }) => {
   const { t } = useTranslation();
   return (
-    <ControlTooltip><button
+    <ControlTooltip descriptionKey={'common.addSlideHint'}><button
       type="button"
       data-guide-anchor="add-slide"
       onClick={onClick}
       aria-label={t('common.addNewSlide')}
       aria-describedby="add-slide-hint"
       title={t('common.addSlideHint')}
-      className="group relative w-full aspect-video rounded-xl border border-dashed border-white/12 bg-white/[0.015] overflow-hidden cursor-pointer text-left transition-colors duration-150 hover:border-white/25 hover:bg-white/[0.035] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+      // `border-white/12` is not on Tailwind's opacity scale, so it compiled to nothing and the dashed
+      // edge fell back to the bright default border colour. Use real scale steps; quiet until hover.
+      className="group relative w-full aspect-video rounded-xl border border-dashed border-white/10 bg-transparent overflow-hidden cursor-pointer text-left transition-colors duration-150 hover:border-white/20 hover:bg-white/[0.03] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
     >
       <span className="relative flex flex-col items-center justify-center gap-2 h-full">
-        <Plus className="w-4 h-4 text-white/35" aria-hidden="true" />
-        <span className="text-xs font-medium text-white/40">
+        <Plus className="w-4 h-4 text-white/50 transition-colors group-hover:text-white/70" aria-hidden="true" />
+        <span className="text-xs font-medium text-white/50 transition-colors group-hover:text-white/70">
           {t('common.addNewSlide')}
         </span>
       </span>
@@ -361,11 +363,12 @@ export default function SlideGrid({
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('common.searchPlaceholder')}
+              placeholder={t('common.searchPlaceholderShort')}
+              title={t('common.searchPlaceholder')}
               className="slide-search-input"
             />
             {searchQuery && (
-              <ControlTooltip><button
+              <ControlTooltip descriptionKey={'common.clearSearch'}><button
                 type="button"
                 onClick={() => { setSearchQuery(''); searchInputRef.current?.focus(); }}
                 aria-label={t('common.clearSearch')}
@@ -416,8 +419,8 @@ export default function SlideGrid({
         </div>
         <div className="design-slide-actions">
           <div className="design-search-history design-search-tool-group" role="group" aria-label={`${t('common.undo')} / ${t('common.redo')}`}>
-            <ControlTooltip shortcut="Ctrl+Z"><button type="button" onClick={() => dispatchUndo({ type: 'UNDO' })} disabled={!canUndo} title={t('common.undo')} aria-label={t('common.undo')}><Undo2 aria-hidden="true" /></button></ControlTooltip>
-            <ControlTooltip shortcut="Ctrl+Y"><button type="button" onClick={() => dispatchUndo({ type: 'REDO' })} disabled={!canRedo} title={t('common.redo')} aria-label={t('common.redo')}><Redo2 aria-hidden="true" /></button></ControlTooltip>
+            <ControlTooltip shortcut="Ctrl+Z" description={t('controlHints.undo')}><button type="button" onClick={() => dispatchUndo({ type: 'UNDO' })} disabled={!canUndo} title={t('common.undo')} aria-label={t('common.undo')}><Undo2 aria-hidden="true" /></button></ControlTooltip>
+            <ControlTooltip shortcut="Ctrl+Y" description={t('controlHints.redo')}><button type="button" onClick={() => dispatchUndo({ type: 'REDO' })} disabled={!canRedo} title={t('common.redo')} aria-label={t('common.redo')}><Redo2 aria-hidden="true" /></button></ControlTooltip>
           </div>
           <div className="design-search-navigation design-search-tool-group" role="group" aria-label={t('common.navigation')}>
             <SlideNavigation />
@@ -425,15 +428,15 @@ export default function SlideGrid({
           <div className="design-slide-view-tools">
           <div className="design-slide-columns design-search-tool-group" role="group" aria-label={t('slidesWorkspace.slidesPerRow')}
             onKeyDown={event => event.stopPropagation()}>
-            <ControlTooltip><button type="button" data-columns-action="decrease" onClick={() => changeColumns(slideColumns - 1)} disabled={slideColumns <= 1}
+            <ControlTooltip description={t('controlHints.fewerColumns')}><button type="button" data-columns-action="decrease" onClick={() => changeColumns(slideColumns - 1)} disabled={slideColumns <= 1}
               aria-label={t('slidesWorkspace.fewerSlidesPerRow')} title={t('slidesWorkspace.fewerSlidesPerRow')}>
               <Minus aria-hidden="true" />
             </button></ControlTooltip>
-            <output className="design-slide-columns-value" aria-live="polite" aria-atomic="true" title={t('slidesWorkspace.slidesPerRow')}>
+            <ControlTooltip descriptionKey={'slidesWorkspace.slidesPerRow'}><output className="design-slide-columns-value" aria-live="polite" aria-atomic="true" title={t('slidesWorkspace.slidesPerRow')}>
               <Grid2X2 aria-hidden="true" />
               <span className="sr-only">{t('slidesWorkspace.slidesPerRow')}: </span>{slideColumns}
-            </output>
-            <ControlTooltip><button type="button" data-columns-action="increase" onClick={() => changeColumns(slideColumns + 1)} disabled={slideColumns >= 8}
+            </output></ControlTooltip>
+            <ControlTooltip description={t('controlHints.moreColumns')}><button type="button" data-columns-action="increase" onClick={() => changeColumns(slideColumns + 1)} disabled={slideColumns >= 8}
               aria-label={t('slidesWorkspace.moreSlidesPerRow')} title={t('slidesWorkspace.moreSlidesPerRow')}>
               <Plus aria-hidden="true" />
             </button></ControlTooltip>
@@ -444,26 +447,27 @@ export default function SlideGrid({
             onChange={updateTransition}
           />
           </div>
-        <div className="design-selection-tools" role="group" aria-label={t('slidesWorkspace.selectionTools')}>
+        <div className="design-selection-tools" data-guide-anchor="slide-library" role="group" aria-label={t('slidesWorkspace.selectionTools')}>
           <span className="design-selection-count">{selectedSlideIds.size} {t('common.selected')}</span>
-          <ControlTooltip><button type="button" onClick={() => setSelectedSlideIds(new Set([selectedSlideId]))}
+          <ControlTooltip description={t('controlHints.clearSelection')}><button type="button" onClick={() => setSelectedSlideIds(new Set([selectedSlideId]))}
             disabled={selectedSlideIds.size <= 1} aria-label={t('common.clearSelection')} title={t('common.clearSelection')}
             className={selectedSlideIds.size <= 1 ? 'invisible' : undefined}><X /></button></ControlTooltip>
-          <GradientQuickApply />
+          <SlideLibraryPopover kind="gallery" />
+          <SlideLibraryPopover kind="templates" />
           <div className="design-selection-actions design-search-tool-group">
-          <ControlTooltip shortcut="Alt+↑"><button onClick={()=>moveSelectedSlides(-1)} disabled={orderRestricted || !selectedSlideIds.size} title={t('common.moveSelectedUp')} aria-label={t('common.moveSelectedUp')}><ChevronUp /></button></ControlTooltip>
-          <ControlTooltip shortcut="Alt+↓"><button onClick={()=>moveSelectedSlides(1)} disabled={orderRestricted || !selectedSlideIds.size} title={t('common.moveSelectedDown')} aria-label={t('common.moveSelectedDown')}><ChevronDown /></button></ControlTooltip>
+          <ControlTooltip shortcut="Alt+↑" description={t('controlHints.moveUp')}><button onClick={()=>moveSelectedSlides(-1)} disabled={orderRestricted || !selectedSlideIds.size} title={t('common.moveSelectedUp')} aria-label={t('common.moveSelectedUp')}><ChevronUp /></button></ControlTooltip>
+          <ControlTooltip shortcut="Alt+↓" description={t('controlHints.moveDown')}><button onClick={()=>moveSelectedSlides(1)} disabled={orderRestricted || !selectedSlideIds.size} title={t('common.moveSelectedDown')} aria-label={t('common.moveSelectedDown')}><ChevronDown /></button></ControlTooltip>
           <span className="design-tool-divider" aria-hidden="true" />
-          <ControlTooltip shortcut="Ctrl+D"><button onClick={duplicateSelectedSlides} disabled={!selectedSlideIds.size} title={t('common.duplicateSelected')} aria-label={t('common.duplicateSelected')}><Copy /></button></ControlTooltip>
-          <ControlTooltip shortcut="Del"><button onClick={deleteSelectedSlides} disabled={!selectedSlideIds.size} title={t('common.deleteSelected')} aria-label={t('common.deleteSelected')} className="design-delete"><Trash2 /></button></ControlTooltip>
+          <ControlTooltip shortcut="Ctrl+D" description={t('controlHints.duplicate')}><button onClick={duplicateSelectedSlides} disabled={!selectedSlideIds.size} title={t('common.duplicateSelected')} aria-label={t('common.duplicateSelected')}><Copy /></button></ControlTooltip>
+          <ControlTooltip shortcut="Del" description={t('controlHints.delete')}><button onClick={deleteSelectedSlides} disabled={!selectedSlideIds.size} title={t('common.deleteSelected')} aria-label={t('common.deleteSelected')} className="design-delete"><Trash2 /></button></ControlTooltip>
           </div>
         </div>
         </div>
       </div>
 
       {(tools.edges.left || tools.edges.right) && <>
-        <ControlTooltip><button type="button" className="design-toolbar-scroll design-toolbar-scroll-left" disabled={!tools.edges.left} aria-label={t('slidesWorkspace.previousTools')} onClick={() => tools.scroll(-1)}><ChevronLeft aria-hidden="true" /></button></ControlTooltip>
-        <ControlTooltip><button type="button" className="design-toolbar-scroll design-toolbar-scroll-right" disabled={!tools.edges.right} aria-label={t('slidesWorkspace.nextTools')} onClick={() => tools.scroll(1)}><ChevronRight aria-hidden="true" /></button></ControlTooltip>
+        <ControlTooltip descriptionKey={'slidesWorkspace.previousTools'}><button type="button" className="design-toolbar-scroll design-toolbar-scroll-left" disabled={!tools.edges.left} aria-label={t('slidesWorkspace.previousTools')} onClick={() => tools.scroll(-1)}><ChevronLeft aria-hidden="true" /></button></ControlTooltip>
+        <ControlTooltip descriptionKey={'slidesWorkspace.nextTools'}><button type="button" className="design-toolbar-scroll design-toolbar-scroll-right" disabled={!tools.edges.right} aria-label={t('slidesWorkspace.nextTools')} onClick={() => tools.scroll(1)}><ChevronRight aria-hidden="true" /></button></ControlTooltip>
       </>}
       </div>
       {indicator && createPortal(<div aria-hidden="true" className="design-insertion-overlay">
@@ -475,7 +479,7 @@ export default function SlideGrid({
           top: Math.max(8, Math.min(indicator.y >= 48 ? indicator.y - 34 : indicator.y + 14, window.innerHeight - 40)),
         }}>
           {movingIds.size > 1 && <span className="design-insertion-count"><Copy aria-hidden="true" />{movingIds.size}</span>}
-          {indicator.section && <span className="design-insertion-section" title={indicator.section}>{indicator.section}</span>}
+          {indicator.section && <ControlTooltip><span className="design-insertion-section" title={indicator.section}>{indicator.section}</span></ControlTooltip>}
         </div>}
       </div>, document.body)}
       {draggedSlideId && movingIds.size > 1 && <span className="sr-only" role="status">{movingIds.size} {t('common.selected')}</span>}
@@ -485,7 +489,7 @@ export default function SlideGrid({
         <div aria-live="polite">
           {filteredSlides.length === 0 && searchQuery.trim() ? (
             <div data-testid="slides-empty-search" className="flex min-h-48 flex-col items-center justify-center gap-3 px-6 py-8 text-center">
-              <Search className="h-7 w-7 text-white/40" aria-hidden="true" />
+              <Search className="h-7 w-7 text-white/55" aria-hidden="true" />
               <p className="text-sm font-medium text-white/80">{t('slidesWorkspace.noSearchResults')}</p>
               <button type="button" onClick={() => { setSearchQuery(''); searchInputRef.current?.focus(); }} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') event.stopPropagation(); }} className="rounded-lg border border-white/15 px-3 py-2 text-xs text-white/80 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">{t('common.clearSearch')}</button>
             </div>

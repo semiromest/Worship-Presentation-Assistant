@@ -118,7 +118,7 @@ function ErrorState({ sourceName, error }: { sourceName: string; error?: string 
     <div className="w-full h-full flex flex-col items-center justify-center bg-[#1a1a2e] text-white/60 p-4">
       <Monitor className="w-16 h-16 text-red-400 mb-4" />
       <p className="text-sm font-medium">{t('screen.captureFailed')}</p>
-      <p className="text-xs text-white/40 mt-2 mb-1">{sourceName}</p>
+      <p className="text-xs text-white/55 mt-2 mb-1">{sourceName}</p>
       {error && (
         <p className="text-xs text-red-400/60 mt-2 max-w-[200px] text-center">
           {error}
@@ -131,7 +131,7 @@ function ErrorState({ sourceName, error }: { sourceName: string; error?: string 
 function ConnectingState() {
   const { t } = useTranslation();
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center text-white/40 z-10 pointer-events-none">
+    <div className="absolute inset-0 flex flex-col items-center justify-center text-white/55 z-10 pointer-events-none">
       <Monitor className="w-12 h-12 animate-pulse mb-2" />
       <span className="text-sm">{t('screen.connecting')}</span>
     </div>
@@ -189,7 +189,7 @@ export default function ScreenCaptureRenderer({
   // Idle state (no source selected)
   if (status === 'idle') {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-[#1a1a2e] text-white/40">
+      <div className="w-full h-full flex items-center justify-center bg-[#1a1a2e] text-white/55">
         <Monitor className="w-16 h-16 mb-4" />
         <p className="text-sm">{t('screen.noSource')}</p>
       </div>

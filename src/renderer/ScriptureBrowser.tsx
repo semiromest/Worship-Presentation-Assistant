@@ -438,37 +438,40 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
     setDirectoryLoading(false);
   }, [t, directoryOpen]);
   const directory = useMemo<DirectoryItem[]>(() => {
+    // Catalogs come from live third-party APIs; an entry may lack any of these fields.
+    // Missing text must not reach the sort/filter below (that crashed the whole app).
+    const text = (...values: unknown[]) => (values.find((value) => typeof value === 'string' && value) as string | undefined) ?? '';
     const items: DirectoryItem[] = [
       ...githubBibles.map((item) => ({
         id: item.filename,
-        name: item.name,
-        language: item.language,
-        detail: item.version,
+        name: text(item.name, item.filename),
+        language: text(item.language),
+        detail: text(item.version),
         source: 'github' as const,
         data: item,
       })),
       ...helloBibles.map((item) => ({
         id: item.id,
-        name: item.englishName || item.name,
-        language: item.languageEnglishName || item.languageName,
+        name: text(item.englishName, item.name, item.id),
+        language: text(item.languageEnglishName, item.languageName),
         detail: t('common.scriptureBookCount', { count: item.numberOfBooks }),
         source: 'helloao' as const,
         data: item,
       })),
       ...fetchBibles.map((item) => ({
         id: item.id,
-        name: item.name_bilingual || item.name || item.name_english || item.id,
-        language: item.language || '',
+        name: text(item.name_bilingual, item.name, item.name_english, item.id),
+        language: text(item.language),
         detail: '',
         source: 'fetchbible' as const,
         data: item,
       })),
       ...(getBibleCatalog?.translations ?? []).map((item) => ({
         id: item.abbreviation,
-        name: item.translation,
-        language: item.language,
+        name: text(item.translation, item.abbreviation),
+        language: text(item.language),
         languageCode: item.lang,
-        detail: item.distribution_abbreviation || item.description,
+        detail: text(item.distribution_abbreviation, item.description),
         license: item.distribution_license,
         versionDate: item.distribution_version_date,
         source: 'getbible' as const,
@@ -706,7 +709,7 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
                         {item.detail ? ` · ${item.detail}` : ''}
                       </span>
                       {(item.versionDate || item.license) && (
-                        <span className="mt-0.5 block truncate text-[10px] text-zinc-600">
+                        <span className="mt-0.5 block truncate text-[11px] text-zinc-600">
                           {[item.versionDate, item.license].filter(Boolean).join(' · ')}
                         </span>
                       )}
@@ -719,7 +722,7 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
                         </span>
                       )}
                     </span>
-                    <span className="text-[9px] font-bold uppercase text-zinc-600">{PROVIDER_LABELS[item.source]}</span>
+                    <span className="text-[10px] font-bold uppercase text-zinc-600">{PROVIDER_LABELS[item.source]}</span>
                   </button>
                 );
               })}
@@ -805,7 +808,7 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">{bible.name}</p>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-600">
                 {t('common.scriptureTitle')}
               </p>
             </div>
@@ -871,7 +874,7 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
                       <Trash2 className="h-4 w-4 shrink-0" />
                       <span>
                         <span className="block">{t('common.scriptureRemoveBible')}</span>
-                        <span className="mt-0.5 block text-[10px] font-normal text-red-300/60">
+                        <span className="mt-0.5 block text-[11px] font-normal text-red-300/60">
                           {t('common.scriptureRemoveBibleDesc')}
                         </span>
                       </span>
@@ -1004,7 +1007,7 @@ export default function ScriptureBrowser({ onSendToLive, active = true }: Script
         <aside className="flex w-[112px] lg:w-[176px] shrink-0 flex-col border-r border-white/10 bg-[#0a0a0d]">
           <div className="border-b border-white/10 px-4 py-4">
             <p className="truncate text-sm font-semibold text-zinc-200">{book.name}</p>
-            <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-600">
+            <p className="mt-1 text-[11px] font-bold uppercase tracking-widest text-zinc-600">
               {t('common.scriptureChapters', { count: book.chapters.length })}
             </p>
           </div>

@@ -69,9 +69,22 @@
     }, 4000);
   }
 
-  function applyFrame(data) {
-    if (ended || !data) return;
-    img.src = data;
+  // Frames arrive as binary image messages; each is shown through a short-lived blob URL.
+  // The previous URL is released once the next image has decoded, so memory stays flat.
+  var currentUrl = null;
+  img.onload = img.onerror = function () {
+    var shown = img.getAttribute('data-blob');
+    if (shown && shown !== currentUrl) { try { URL.revokeObjectURL(shown); } catch (e) { /* ignore */ } }
+    img.setAttribute('data-blob', currentUrl || '');
+  };
+
+  function applyFrame(blob) {
+    if (ended || !blob || !blob.size) return;
+    var previous = currentUrl;
+    currentUrl = URL.createObjectURL(blob);
+    img.src = currentUrl;
+    // A frame that was never painted (superseded before load) is released right away.
+    if (previous && previous !== img.getAttribute('data-blob')) { try { URL.revokeObjectURL(previous); } catch (e) { /* ignore */ } }
     setStatus(L.live, 'on');
     lastFrameAt = Date.now();
     armStallTimer();
@@ -97,14 +110,13 @@
       if (!lastFrameAt) setStatus(L.connecting, 'wait');
     };
 
+    socket.binaryType = 'blob';
+
     socket.onmessage = function (ev) {
+      if (typeof ev.data !== 'string') { applyFrame(ev.data); return; }
       var msg;
       try { msg = JSON.parse(ev.data); } catch (e) { return; }
-      if (msg.type === 'hello') {
-        applyFrame(msg.data);
-      } else if (msg.type === 'frame') {
-        applyFrame(msg.data);
-      } else if (msg.type === 'ended') {
+      if (msg.type === 'ended') {
         showEnded();
       }
     };

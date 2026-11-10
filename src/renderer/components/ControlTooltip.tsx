@@ -1,24 +1,33 @@
-import { cloneElement, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ReactElement } from 'react';
+import { cloneElement, useEffect, useId, useRef, useState, type HTMLAttributes, type ReactElement } from 'react';
 import { Tooltip } from '@base-ui/react/tooltip';
+import { useTranslation } from 'react-i18next';
+
+export const TOOLTIP_HOVER_DELAY = 2000;
 
 /** Keeps the actual button and its layout; explanations are also available on focus. */
-export default function ControlTooltip({ children, shortcut, side = 'bottom', suppress = false }: {
-  children: ReactElement<ButtonHTMLAttributes<HTMLButtonElement>>;
+export default function ControlTooltip({ children, description, descriptionKey, shortcut, side = 'bottom', suppress = false }: {
+  children: ReactElement<HTMLAttributes<HTMLElement> & { disabled?: boolean }>;
+  /** Explain the action without changing the button's accessible name. */
+  description?: string;
+  /** Original translation key, so identical short labels keep their own meaning. */
+  descriptionKey?: string;
   shortcut?: string;
   side?: 'top' | 'bottom' | 'left' | 'right';
   /** Don't compete with a popup opened by the same trigger. */
   suppress?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const { i18n } = useTranslation();
   const tooltipId = useId();
-  const label = children.props.title || children.props['aria-label'];
-  const disabled = children.props.disabled;
+  const resources = i18n.getResourceBundle(i18n.resolvedLanguage ?? i18n.language, 'translation');
+  const originalLabel = children.props.title || children.props['aria-label'];
+  const label = description || (descriptionKey && resources?.tooltipDescriptions?.[descriptionKey]) || originalLabel;
   const focusReveal = useRef(false);
   const focusFrame = useRef(0);
   useEffect(() => () => cancelAnimationFrame(focusFrame.current), []);
-  useEffect(() => { if (disabled || !label || suppress) setOpen(false); }, [disabled, label, suppress]);
+  useEffect(() => { if (!label || suppress) setOpen(false); }, [label, suppress]);
   useEffect(() => {
-    if (!open || disabled || !label || suppress) return;
+    if (!open || !label || suppress) return;
     const close = (event: Event) => {
       // Native focus and the toolbar's reveal can scroll before the next paint.
       // Keep the newly focused control's hint; explicit wheel scrolling still closes it.
@@ -47,15 +56,15 @@ export default function ControlTooltip({ children, shortcut, side = 'bottom', su
       window.removeEventListener('wheel', close);
       window.removeEventListener('keydown', escape, true);
     };
-  }, [open, disabled, label, suppress]);
+  }, [open, label, suppress]);
   const button = cloneElement(children, {
     title: undefined,
     ...(!children.props['aria-label'] && !children.props['aria-labelledby'] && children.props.title
       ? { 'aria-label': children.props.title } : {}),
   });
-  if (!label || disabled) return button;
+  if (!label) return button;
   return <Tooltip.Root open={open && !suppress} onOpenChange={setOpen} disabled={suppress} disableHoverablePopup>
-    <Tooltip.Trigger render={button} delay={450} className="control-tooltip-trigger" aria-describedby={open && !suppress ? tooltipId : undefined}
+    <Tooltip.Trigger render={button} delay={TOOLTIP_HOVER_DELAY} className="control-tooltip-trigger" aria-describedby={[children.props['aria-describedby'], open && !suppress ? tooltipId : undefined].filter(Boolean).join(' ') || undefined}
       onFocus={() => {
         focusReveal.current = true;
         cancelAnimationFrame(focusFrame.current);
@@ -64,7 +73,9 @@ export default function ControlTooltip({ children, shortcut, side = 'bottom', su
         });
       }}
       onBlur={() => { focusReveal.current = false; cancelAnimationFrame(focusFrame.current); }}
-      onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') event.stopPropagation(); }} />
+      onKeyDown={event => {
+        if ((children.type === 'button' || typeof children.type !== 'string' || children.props.role === 'button') && (event.key === 'Enter' || event.key === ' ')) event.stopPropagation();
+      }} />
     <Tooltip.Portal>
       <Tooltip.Positioner side={side} sideOffset={7} className="z-[110] pointer-events-none">
         <Tooltip.Popup id={tooltipId} role="tooltip" aria-hidden={!open || suppress} className="control-tooltip">

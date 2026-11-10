@@ -38,7 +38,8 @@ async function reachAdd() {
   await page.getByTestId('guide-resume').click(); await step('presentations');
   await page.getByTestId('guide-next').click(); await step('sidebar');
   await page.getByTestId('guide-next').click(); await step('nav-slides');
-  await page.getByRole('button', { name: 'Slides', exact: true }).click(); await step('add');
+  await page.getByRole('button', { name: 'Slides', exact: true }).click(); await step('slide-library-intro');
+  await page.getByTestId('guide-next').click(); await step('add');
 }
 test('guided startup language, paused chapter chooser and archived fresh restart',async()=>{
   for(const language of ['tr','de','es','ko','en']){

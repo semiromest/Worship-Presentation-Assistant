@@ -4,13 +4,21 @@ export interface GeneratedBackground {
   seed: number;
   colors: string[];
   palette: string;
-  style: 'soft' | 'flow' | 'linear';
+  /** `linear` and `radial` use two colors and are always still; the others use four. */
+  style: 'soft' | 'flow' | 'linear' | 'radial';
   angle?: number;
   darkness: number;
   width: 1920;
   height: 1080;
-  motion?: { enabled: boolean; speed: number; amount: number; type?: 'flow' | 'aurora' | 'waves' | 'fog' };
+  motion?: { enabled: boolean; speed: number; amount: number; type?: GradientAnimation };
 }
+
+/** Live animations, drawn by AnimatedGradientBackground over the still image. */
+export const GRADIENT_ANIMATIONS = ['flow', 'aurora', 'waves', 'fog', 'bokeh', 'rays', 'lava', 'pulse'] as const;
+export type GradientAnimation = (typeof GRADIENT_ANIMATIONS)[number];
+export const GRADIENT_STYLES = ['soft', 'flow', 'linear', 'radial'] as const;
+/** Styles that hold two colors and cannot be animated. */
+export const isTwoColorStyle = (style: string): boolean => style === 'linear' || style === 'radial';
 
 export const GRADIENT_PALETTES = {
   night: ['#0c122f', '#35347d', '#695c99', '#183356'],
@@ -21,6 +29,10 @@ export const GRADIENT_PALETTES = {
   amber: ['#352a25', '#9a6740', '#c9a575', '#645370'],
   rose: ['#3d223c', '#914b75', '#c187a2', '#676a91'],
   smoke: ['#17212e', '#4e6676', '#9babb2', '#605f7b'],
+  dawn: ['#1d2a4d', '#5b6aa8', '#f0a389', '#f6d3a1'],
+  crimson: ['#2a0d1a', '#7d1f3f', '#c4455c', '#4c2a6b'],
+  forest: ['#0a1f17', '#1f5a3a', '#7aa874', '#2f4b52'],
+  gold: ['#241a0c', '#7a5a1f', '#d6aa4c', '#4b3a5e'],
 } as const;
 
 export function validateGradient(value: unknown): GeneratedBackground {
@@ -28,8 +40,8 @@ export function validateGradient(value: unknown): GeneratedBackground {
   if (r?.angle !== undefined && (!Number.isInteger(r.angle) || r.angle < 0 || r.angle > 360)) {
     throw new Error('Invalid gradient angle');
   }
-  if (r?.style === 'linear' && r.motion?.enabled) throw new Error('Linear gradients are static');
-  if (r?.motion?.type !== undefined && !['flow', 'aurora', 'waves', 'fog'].includes(r.motion.type)) {
+  if (isTwoColorStyle(r?.style) && r.motion?.enabled) throw new Error('Linear and radial gradients are static');
+  if (r?.motion?.type !== undefined && !(GRADIENT_ANIMATIONS as readonly string[]).includes(r.motion.type)) {
     throw new Error('Invalid gradient animation');
   }
   if (
@@ -55,11 +67,11 @@ export function validateGradient(value: unknown): GeneratedBackground {
     !Number.isInteger(r.darkness) ||
     r.darkness < 0 ||
     r.darkness > 85 ||
-    !['soft', 'flow', 'linear'].includes(r.style) ||
+    !(GRADIENT_STYLES as readonly string[]).includes(r.style) ||
     typeof r.palette !== 'string' ||
     r.palette.length > 32 ||
     !Array.isArray(r.colors) ||
-    r.colors.length !== (r.style === 'linear' ? 2 : 4) ||
+    r.colors.length !== (isTwoColorStyle(r.style) ? 2 : 4) ||
     !r.colors.every((c) => /^#[0-9a-f]{6}$/i.test(c))
   ) {
     throw new Error('Invalid gradient recipe');
@@ -104,6 +116,21 @@ export function renderGradient(input: GeneratedBackground): Uint8Array {
   const r = validateGradient(input);
   const colors = r.colors.map((c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)));
   const data = new Uint8Array(r.width * r.height * 4);
+  if (r.style === 'radial') {
+    // First color at the centre, second at the corners; sqrt is correctly rounded, so this is portable.
+    const shade = (100 - r.darkness) / 100;
+    const reach = Math.hypot(r.width / 2, r.height / 2) * 0.82;
+    for (let y = 0; y < r.height; y++)
+      for (let x = 0; x < r.width; x++) {
+        const distance = Math.sqrt((x + 0.5 - r.width / 2) ** 2 + (y + 0.5 - r.height / 2) ** 2) / reach;
+        const t = Math.min(1, distance);
+        const eased = t * t * (3 - 2 * t);
+        const i = (y * r.width + x) * 4;
+        for (let c = 0; c < 3; c++) data[i + c] = Math.round((colors[0][c] * (1 - eased) + colors[1][c] * eased) * shade);
+        data[i + 3] = 255;
+      }
+    return data;
+  }
   if (r.style === 'linear') {
     // Match CSS linear-gradient: 0° points up, 90° points right.
     const radians = ((r.angle ?? 90) * Math.PI) / 180;

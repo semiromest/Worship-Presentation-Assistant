@@ -1,5 +1,6 @@
 // ─── Phone live-screen share: mobile client HTML shell ─────────────────────
 import screenShareClient from './screen-share-client.js?raw';
+import { UI_WEB_FONT_CSS, UI_WEB_FONT_STACK } from './uiWebFont';
 
 export const SCREEN_SHARE_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -11,8 +12,9 @@ export const SCREEN_SHARE_HTML = `<!DOCTYPE html>
 <meta name="theme-color" content="#000000">
 <title>Live Screen</title>
 <style>
+${UI_WEB_FONT_CSS}
 *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-html,body { height: 100%; background: #000; color: #e8f0ff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif; overflow: hidden; }
+html,body { height: 100%; background: #000; color: #e8f0ff; font-family: ${UI_WEB_FONT_STACK}; overflow: hidden; }
 #stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #000; }
 #frame { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; display: block; }
 #bar { position: fixed; top: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 8px; padding: max(12px, env(safe-area-inset-top)) 16px 12px; font-size: 13px; font-weight: 600; color: #cfe0f5; background: linear-gradient(to bottom, rgba(0,0,0,.55), rgba(0,0,0,0)); z-index: 10; transition: opacity .3s; }

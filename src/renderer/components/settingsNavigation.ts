@@ -1,4 +1,4 @@
-export const settingsCategories = ['general', 'presentation', 'appearance', 'captions', 'autosave', 'updates', 'learning'] as const;
+export const settingsCategories = ['general', 'presentation', 'appearance', 'captions', 'autosave', 'updates', 'learning', 'support'] as const;
 export type SettingsCategoryId = typeof settingsCategories[number];
 
 interface SettingDefinition {
@@ -14,9 +14,12 @@ export const settingsItems = [
   { id: 'language', category: 'general', titleKey: 'settings.language', descriptionKey: 'settings.languageDesc' },
   { id: 'sound', category: 'general', titleKey: 'settings.soundEffects', descriptionKey: 'settings.soundEffectsDesc' },
   { id: 'motion', category: 'general', titleKey: 'settings.uiMotion', descriptionKey: 'settings.uiMotionDesc' },
+  { id: 'support', category: 'support', titleKey: 'support.title', descriptionKey: 'settings.navigation.categories.support.description' },
   { id: 'auto-live', category: 'presentation', titleKey: 'common.autoGoLive', descriptionKey: 'common.autoGoLiveHint' },
   { id: 'sections', category: 'presentation', titleKey: 'sections.title', descriptionKey: 'sections.description' },
   { id: 'notes', category: 'presentation', titleKey: 'common.operatorNotes', descriptionKey: 'settings.operatorNotesDesc' },
+  { id: 'next-slide', category: 'presentation', titleKey: 'common.upcomingSlide', descriptionKey: 'settings.nextSlidePreviewDesc' },
+  { id: 'phone-server', category: 'presentation', titleKey: 'remoteServer.autoStart', descriptionKey: 'remoteServer.autoStartHint' },
   { id: 'appearance-preview', category: 'appearance', titleKey: 'settings.appearancePreview', descriptionKey: 'settings.appearancePreviewHint' },
   { id: 'hymn-position', category: 'appearance', titleKey: 'common.hymnsAuthorPosition', descriptionKey: 'common.hymnsAuthorPositionDesc' },
   { id: 'hymn-size', category: 'appearance', titleKey: 'common.hymnsAuthorSize', descriptionKey: 'settings.navigation.descriptions.hymn-size' },

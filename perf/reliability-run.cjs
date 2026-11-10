@@ -34,7 +34,7 @@ async function main(){
  const report={kind:'packaged',executable,executableSha256:crypto.createHash('sha256').update(await fs.readFile(executable)).digest('hex'),host:{platform:os.platform(),release:os.release(),cpu:os.cpus()[0]?.model,totalMemory:os.totalmem()},started:new Date().toISOString(),cacheCondition:'OS disk cache uncontrolled; each launch uses a fresh isolated smoke profile',runs:[],samples:[],limitations:['No physical multi-display, occlusion, AltGr or macOS verification is implied.','No baseline comparison is inferred from candidate-only runs.','Legacy roundTrip fields are outer automation-loop wall time, including frame readback waits for nonempty decks; they are not pure renderer IPC round trips.']};
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'wpa-reliability-'));
  if(process.platform==='win32')report.host.powerScheme=await new Promise(resolve=>execFile('powercfg.exe',['/GETACTIVESCHEME'],{windowsHide:true},(error,stdout)=>resolve(error?'unavailable':stdout.trim())));
- report.protocol='reliability-v6-nofocus-capture-mixed-color-v1';report.frameObservation='Command to matching capturePage image readback; 8ms polling; includes capture overhead and can force composition; not physical screen scanout or passive frame presentation. Test windows cannot take native keyboard focus.';report.mode=duration?'soak':'benchmark';report.commandsPerScenario=duration?30:300;
+ report.protocol='reliability-v7-http-visible12-v1';report.previewObservation='First 12 visible previews fetched and validated, including HTTP assets; never wait for hidden slides.';report.frameObservation='Command to matching capturePage image readback; 8ms polling; includes capture overhead and can force composition; not physical screen scanout or passive frame presentation. Test windows cannot take native keyboard focus.';report.mode=duration?'soak':'benchmark';report.commandsPerScenario=duration?30:300;
  const decks=new Map();
  for(const count of [0,100,500]){
   const zip=new AdmZip(),mediaCount=Math.floor(count/5);
@@ -84,13 +84,30 @@ async function main(){
    if(!['baseline','candidate'].includes(report.previewOptimization))throw new Error('Measurement build does not expose its optimization variant');
    let phonePreviews=[],expectation;
    const remoteUrl=new URL(await invoke(app,'get-remote-url'));remoteUrl.protocol='ws:';remoteUrl.hostname='127.0.0.1';remoteUrl.pathname='/remote';
+   const assetBase=new URL(remoteUrl);assetBase.protocol='http:';
+   const verifyVisible=async()=>{
+    const current=expectation;
+    if(!current||current.completedAt||current.checking||phonePreviews.length!==current.count)return;
+    const visible=phonePreviews.slice(0,12);if(visible.some(url=>!url))return;
+    current.checking=true;
+    try{
+     await Promise.all(visible.map(async url=>{
+      if(url.startsWith('data:image/'))return;
+      const asset=new URL(url,assetBase);if(asset.origin!==assetBase.origin)throw Error('Unexpected preview origin');
+      const response=await fetch(asset,{signal:AbortSignal.timeout(30000)});
+      if(!response.ok||!response.headers.get('content-type')?.startsWith('image/'))throw Error('Preview HTTP response invalid');
+      if(!(await response.arrayBuffer()).byteLength)throw Error('Empty preview asset');
+     }));
+     if(expectation===current)current.completedAt=performance.now();
+    }catch(error){current.error=String(error);}finally{current.checking=false;}
+   };
    phone=new WebSocket(remoteUrl);
    phone.on('message',raw=>{
     const message=JSON.parse(String(raw));
     if(message.type==='welcome')phonePreviews=message.data.allPreviews||[];
     if(message.type==='allPreviews')phonePreviews=message.data;
     if(message.type==='previewsDelta')for(const patch of message.data)phonePreviews[patch.i]=patch.url;
-    if(expectation&&!expectation.completedAt&&phonePreviews.length===expectation.count&&phonePreviews.every(value=>typeof value==='string'&&value.startsWith('data:image/')))expectation.completedAt=performance.now();
+    void verifyVisible();
    });
    await new Promise((resolve,reject)=>{phone.once('open',resolve);phone.once('error',reject);});
    await app.evaluate(({dialog})=>{dialog.showMessageBox=async()=>({response:1,checkboxChecked:false});});
@@ -133,8 +150,8 @@ async function main(){
      else await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>!w.webContents.getURL().includes('mode=projector')).webContents.send('remote-action',{action:'goto',value:0}));
      timings.push(performance.now()-t);
     }
-    const previewDeadline=Date.now()+120000;while(!expectation.completedAt&&Date.now()<previewDeadline)await sleep(50);
-    if(!expectation.completedAt)throw new Error('Phone preview grid did not finish');
+    const previewDeadline=Date.now()+120000;while(!expectation.completedAt&&Date.now()<previewDeadline){if(expectation.error)throw Error(expectation.error);await sleep(50);}
+    if(!expectation.completedAt)throw new Error('Visible phone previews did not finish');
     const previewCompleteMs=expectation.completedAt-expectation.startedAt;
     const previewTasks=await page.evaluate(({start,end})=>window.__reliability.longTasks.filter(task=>task.start>=start&&task.start<=end),{start:previewStart,end:previewStart+previewCompleteMs});
     run.scenarios.push({count,openMs,previewCompleteMs,previewLongTaskMs:previewTasks.reduce((sum,task)=>sum+task.duration,0),perf:await invoke(app,'perf:snapshot'),roundTripMedianMs:median(timings),roundTripP95Ms:quantile(timings,.95),roundTripMs:timings,composedFrameMedianMs:frames.length?median(frames):null,composedFrameP95Ms:frames.length?quantile(frames,.95):null,composedFrameMs:frames});

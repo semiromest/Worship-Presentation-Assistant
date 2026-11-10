@@ -11,51 +11,15 @@
  */
 
 import fs from 'node:fs/promises';
+import { renameWithRetry } from './atomicFile';
 import path from 'node:path';
 import { PerfBuffer, measureSync, measureAsync, defaultPerfEnabled } from '../shared/perf';
+import { createPresetCatalog } from './presetCatalog';
 
 export type PresetItem = { name: string; presentation: unknown; createdAt: number };
 
-export const DEFAULT_LIVE_SAVE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
-
-export function isLiveSavePresetName(name: string): boolean {
-  return name === '__live_autosave__' || (name.startsWith('__live_autosave_') && name.endsWith('__'));
-}
-
-export function getLiveSaveBaseKey(name: string): string {
-  if (!isLiveSavePresetName(name)) return name;
-  return name.replace(/^__live_autosave_/, '').replace(/__$/, '');
-}
-
-export function prunePresetStore(
-  list: PresetItem[],
-  now = Date.now(),
-  retentionMs = DEFAULT_LIVE_SAVE_RETENTION_MS,
-): PresetItem[] {
-  const regular: PresetItem[] = [];
-  const latestLiveByEntry = new Map<string, PresetItem>();
-
-  for (const item of list) {
-    if (!isLiveSavePresetName(item.name)) {
-      regular.push(item);
-      continue;
-    }
-
-    // retentionMs <= 0 means "keep forever" — only age-prune when > 0.
-    if (retentionMs > 0) {
-      const age = now - item.createdAt;
-      if (age > retentionMs) continue;
-    }
-
-    const key = getLiveSaveBaseKey(item.name);
-    const current = latestLiveByEntry.get(key);
-    if (!current || item.createdAt > current.createdAt) {
-      latestLiveByEntry.set(key, item);
-    }
-  }
-
-  return [...regular, ...Array.from(latestLiveByEntry.values())].sort((a, b) => b.createdAt - a.createdAt);
-}
+export { DEFAULT_LIVE_SAVE_RETENTION_MS, isLiveSavePresetName, getLiveSaveBaseKey, prunePresetStore } from '../shared/presetRetention';
+import { DEFAULT_LIVE_SAVE_RETENTION_MS, getLiveSaveBaseKey, prunePresetStore } from '../shared/presetRetention';
 
 const presetFileName = (name: string): string =>
   Buffer.from(name, 'utf-8').toString('base64url') + '.json';
@@ -68,6 +32,7 @@ const presetNameFromFile = (file: string): string | null => {
 };
 
 export interface PresetStore {
+  catalog: ReturnType<typeof createPresetCatalog>;
   readPresets: (retentionMs?: number) => Promise<PresetItem[]>;
   savePreset: (preset: { name: string; presentation: unknown; retentionMs?: number }) => Promise<PresetItem[]>;
   deletePreset: (name: string, retentionMs?: number) => Promise<PresetItem[]>;
@@ -88,7 +53,7 @@ export function createPresetStore(userDataDir: string, perf?: PerfBuffer): Prese
     const tempFile = `${file}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
     const serialized = measureSync(buf, 'stringify', 'preset-file', () => JSON.stringify(item));
     await measureAsync(buf, 'fs', 'writePreset-temp', () => fs.writeFile(tempFile, serialized, 'utf-8'));
-    await measureAsync(buf, 'fs', 'writePreset-rename', () => fs.rename(tempFile, file));
+    await measureAsync(buf, 'fs', 'writePreset-rename', () => renameWithRetry(tempFile, file));
   }
 
   /** Deletes per-preset files whose entries are no longer in the store (prune GC). */
@@ -223,5 +188,12 @@ export function createPresetStore(userDataDir: string, perf?: PerfBuffer): Prese
     return cache ?? list;
   }
 
-  return { readPresets, savePreset, deletePreset, renamePreset };
+  const catalog = createPresetCatalog(userDataDir, retention => { cache = null; return readPresets(retention); }, () => { cache = null; });
+  return {
+    readPresets: retention => catalog.exclusive(() => { cache = null; return readPresets(retention); }),
+    savePreset: preset => catalog.exclusive(() => { cache = null; return savePreset(preset); }),
+    deletePreset: (name, retention) => catalog.exclusive(() => { cache = null; return deletePreset(name, retention); }),
+    renamePreset: (oldName, name, retention) => catalog.exclusive(() => { cache = null; return renamePreset(oldName, name, retention); }),
+    catalog,
+  };
 }

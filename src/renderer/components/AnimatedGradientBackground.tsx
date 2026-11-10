@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { GeneratedBackground } from '../../shared/generatedBackground';
+import { isTwoColorStyle, type GeneratedBackground } from '../../shared/generatedBackground';
 import './AnimatedGradientBackground.css';
 
 const WIDTH = 192;
@@ -205,6 +205,153 @@ function createAuroraRender(pixels: Uint32Array, colors: Rgb[], strength: number
   };
 }
 
+const ASPECT = WIDTH / HEIGHT;
+const clamp255 = (v: number) => (v > 255 ? 255 : v);
+const smoothstep = (a: number, b: number, v: number) => {
+  const t = v <= a ? 0 : v >= b ? 1 : (v - a) / (b - a);
+  return t * t * (3 - 2 * t);
+};
+
+/** Dikey iki renkli taban: özel animasyonların (bokeh, ışınlar, lav) hepsi bunun üstüne çizilir. */
+function createBase(colors: Rgb[]) {
+  const [[r0, g0, b0], [r1, g1, b1]] = colors;
+  const r = new Float64Array(HEIGHT), g = new Float64Array(HEIGHT), b = new Float64Array(HEIGHT);
+  for (let y = 0; y < HEIGHT; y++) {
+    const m = Y_NORM[y];
+    r[y] = r0 + (r1 - r0) * m; g[y] = g0 + (g1 - g0) * m; b[y] = b0 + (b1 - b0) * m;
+  }
+  return { r, g, b };
+}
+
+// Merkezden/üstten uzaklık ve açı tabloları kareden kareye değişmez.
+const CENTER_DISTANCE = (() => {
+  const out = new Float64Array(WIDTH * HEIGHT);
+  for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) {
+    out[y * WIDTH + x] = Math.hypot((X_NORM[x] - .5) * ASPECT, Y_NORM[y] - .5);
+  }
+  return out;
+})();
+const RAY_ANGLE = new Float64Array(WIDTH * HEIGHT);
+const RAY_FALLOFF = new Float64Array(WIDTH * HEIGHT);
+for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) {
+  const dx = (X_NORM[x] - .42) * ASPECT, dy = Y_NORM[y] + .22;
+  RAY_ANGLE[y * WIDTH + x] = Math.atan2(dx, dy);
+  RAY_FALLOFF[y * WIDTH + x] = Math.max(0, 1 - Math.hypot(dx, dy) / 1.75);
+}
+
+/** Yumuşak, süzülen ışık küreleri (bokeh). Her satır için yalnızca değen küreler gezilir. */
+function createBokehRender(pixels: Uint32Array, colors: Rgb[], strength: number, phase: number): Render {
+  const base = createBase(colors);
+  const COUNT = 10;
+  const orbX = new Float64Array(COUNT), orbY = new Float64Array(COUNT), orbR2 = new Float64Array(COUNT);
+  const tint = colors.slice(1).map(([r, g, b]) => [r * 1.25, g * 1.25, b * 1.25]);
+  const active = new Int32Array(COUNT);
+  return t => {
+    for (let i = 0; i < COUNT; i++) {
+      const p = phase + i * 2.39;
+      const radius = .07 + (i % 4) * .028;
+      orbX[i] = ((.5 + .5 * Math.sin(t * (.21 + (i % 3) * .06) + p)) * 1.2 - .1) * ASPECT;
+      orbY[i] = (.5 + .5 * Math.cos(t * (.17 + (i % 4) * .05) + p * 1.3)) * 1.2 - .1;
+      orbR2[i] = radius * radius * (.8 + .35 * Math.sin(t * .6 + p));
+    }
+    let o = 0;
+    for (let y = 0; y < HEIGHT; y++) {
+      const ny = Y_NORM[y];
+      let count = 0;
+      for (let i = 0; i < COUNT; i++) { const dy = ny - orbY[i]; if (dy * dy < orbR2[i]) active[count++] = i; }
+      const br = base.r[y], bg = base.g[y], bb = base.b[y];
+      for (let x = 0; x < WIDTH; x++) {
+        let r = br, g = bg, b = bb;
+        const px = X_NORM[x] * ASPECT;
+        for (let k = 0; k < count; k++) {
+          const i = active[k];
+          const dx = px - orbX[i], dy = ny - orbY[i];
+          const d2 = dx * dx + dy * dy;
+          if (d2 >= orbR2[i]) continue;
+          const f = 1 - d2 / orbR2[i];
+          const w = f * f * (.5 + strength * .35);
+          const c = tint[i % 3];
+          r += c[0] * w; g += c[1] * w; b += c[2] * w;
+        }
+        pixels[o++] = pack(clamp255(r), clamp255(g), clamp255(b));
+      }
+    }
+  };
+}
+
+/** Üstten sızan ışık huzmeleri: açıya bağlı iki sinüsün çarpımı, uzaklıkla sönümlenir. */
+function createRaysRender(pixels: Uint32Array, colors: Rgb[], strength: number): Render {
+  const base = createBase(colors);
+  const [, , [lr, lg, lb], [mr, mg, mb]] = colors;
+  return t => {
+    const drift = t * .42;
+    let o = 0;
+    for (let y = 0; y < HEIGHT; y++) {
+      const br = base.r[y], bg = base.g[y], bb = base.b[y];
+      for (let x = 0; x < WIDTH; x++, o++) {
+        const a = RAY_ANGLE[o];
+        let beam = .5 + .28 * Math.sin(a * 9 + drift) + .22 * Math.sin(a * 17 - drift * .7 + 1.3);
+        beam = beam * beam * RAY_FALLOFF[o] * (.45 + strength * .5);
+        const warm = beam * .22;
+        pixels[o] = pack(clamp255(br + lr * beam + mr * warm), clamp255(bg + lg * beam + mg * warm), clamp255(bb + lb * beam + mb * warm));
+      }
+    }
+  };
+}
+
+/** Lav lambası: beş metaball, eşik yumuşatılır; dolgu ve kenar parıltısı paletin renkleri. */
+function createLavaRender(pixels: Uint32Array, colors: Rgb[], strength: number, phase: number): Render {
+  const base = createBase(colors);
+  const [, [fr, fg, fb], [gr, gg, gb], [hr, hg, hb]] = colors;
+  const COUNT = 5;
+  const bx = new Float64Array(COUNT), by = new Float64Array(COUNT), br2 = new Float64Array(COUNT);
+  return t => {
+    for (let i = 0; i < COUNT; i++) {
+      const p = phase + i * 1.9;
+      bx[i] = (.5 + Math.sin(t * (.33 + i * .05) + p) * .38 * strength) * ASPECT;
+      by[i] = .5 + Math.sin(t * (.27 + i * .04) + p * 1.7) * .36 * strength;
+      br2[i] = Math.pow(.11 + (i % 3) * .035, 2);
+    }
+    let o = 0;
+    for (let y = 0; y < HEIGHT; y++) {
+      const ny = Y_NORM[y];
+      const r0 = base.r[y], g0 = base.g[y], b0 = base.b[y];
+      for (let x = 0; x < WIDTH; x++) {
+        const px = X_NORM[x] * ASPECT;
+        let field = 0;
+        for (let i = 0; i < COUNT; i++) {
+          const dx = px - bx[i], dy = ny - by[i];
+          field += br2[i] / (dx * dx + dy * dy + .0008);
+        }
+        const body = smoothstep(.75, 1.25, field);
+        const rim = smoothstep(.35, .8, field) * (1 - body);
+        const inner = smoothstep(1.2, 2.6, field);
+        pixels[o++] = pack(
+          clamp255(r0 + (fr - r0) * body + (gr - fr) * inner * .6 + hr * rim * .55),
+          clamp255(g0 + (fg - g0) * body + (gg - fg) * inner * .6 + hg * rim * .55),
+          clamp255(b0 + (fb - b0) * body + (gb - fb) * inner * .6 + hb * rim * .55),
+        );
+      }
+    }
+  };
+}
+
+/** Merkezden yayılan, nefes alan halkalar: mesafe + yavaş sinüs paletin döngüsel rampasından okunur. */
+function createPulseRender(pixels: Uint32Array, ramp: Uint32Array, strength: number): Render {
+  return t => {
+    const breathe = .06 * Math.sin(t * .55) * strength;
+    let o = 0;
+    for (let y = 0; y < HEIGHT; y++) {
+      for (let x = 0; x < WIDTH; x++, o++) {
+        const d = CENTER_DISTANCE[o];
+        let p = d * 2.4 + breathe + .16 * strength * Math.sin(d * 11 - t * 1.1) + t * .04;
+        p = ((p % 4) + 4) % 4;
+        pixels[o] = ramp[(p * LUT_STEPS) | 0];
+      }
+    }
+  };
+}
+
 interface Scene {
   pixels: Uint32Array;
   palette: Rgb[];
@@ -227,6 +374,14 @@ function createRender(animation: string, { pixels, palette, shade, strength, amo
     }
     case 'aurora':
       return createAuroraRender(pixels, shaded, strength, amount);
+    case 'bokeh':
+      return createBokehRender(pixels, shaded, strength, phase);
+    case 'rays':
+      return createRaysRender(pixels, shaded, strength);
+    case 'lava':
+      return createLavaRender(pixels, shaded, strength, phase);
+    case 'pulse':
+      return createPulseRender(pixels, buildRamp(shaded), strength);
     default:
       return createBlobRender(pixels, shaded, strength, warp, phase);
   }
@@ -238,7 +393,7 @@ export function AnimatedGradientBackground({ recipe, active = true }: { recipe?:
   const elapsedRef = useRef(0);
   const activeRef = useRef(active);
   const resumeRef = useRef<(() => void) | null>(null);
-  const enabled = recipe?.motion?.enabled === true && recipe.style !== 'linear';
+  const enabled = recipe?.motion?.enabled === true && !isTwoColorStyle(recipe.style);
   const speed = Math.max(1, Math.min(100, recipe?.motion?.speed ?? 40));
   const amount = Math.max(1, Math.min(100, recipe?.motion?.amount ?? 50));
   const colorsKey = recipe?.colors.join(',') ?? '';

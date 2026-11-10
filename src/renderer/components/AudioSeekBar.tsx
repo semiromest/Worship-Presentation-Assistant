@@ -41,7 +41,7 @@ export default function AudioSeekBar({ audioRef, trackKey }: { audioRef: RefObje
         try { audio.currentTime = destination; setPosition(audio.currentTime); }
         catch { setPosition(audio.currentTime); }
       }} />
-    {trackKey && !seekable && <p className="text-xs text-white/45">{t('settings.musicSeekUnavailable')}</p>}
+    {trackKey && !seekable && <p className="text-xs text-white/60">{t('settings.musicSeekUnavailable')}</p>}
     <div className="flex justify-between text-xs tabular-nums text-white/55"><span>{clock(position)}</span><span>{duration ? clock(duration) : '—:—'}</span></div>
   </div>;
 }

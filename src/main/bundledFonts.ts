@@ -10,6 +10,18 @@ export function bundledFontManifest() {
     return { root, families: manifest.families as Family[] };
   })().catch(error => { manifestPromise = undefined; throw error; });
 }
+const webFontCache = new Map<string, Promise<Buffer>>();
+/** Reads a whitelisted served-page font (see uiWebFont.ts); null for unknown routes. */
+export function readUiWebFont(file: string | null): Promise<Buffer> | null {
+  if (!file) return null;
+  let cached = webFontCache.get(file);
+  if (!cached) {
+    cached = bundledFontManifest().then(({ root }) => fs.readFile(path.join(root, file)));
+    cached.catch(() => webFontCache.delete(file));
+    webFontCache.set(file, cached);
+  }
+  return cached;
+}
 export async function bundledFontCss(name: string): Promise<string | null> {
   const { root, families } = await bundledFontManifest();
   const family = families.find(value => value.family === name);

@@ -444,7 +444,10 @@ export function useEditorDeck({ deck, initialSlide, editableOnly = false }: UseE
 
   const activateSlide = useCallback(
     (slide: Slide, modifiers?: SelectModifiers) => {
-      dispatch({ type: 'activate', slide, order, editableIds, modifiers: (isItemEditableSlide(slide) || slide.type === 'text') ? modifiers : undefined });
+      const editable = isItemEditableSlide(slide) || slide.type === 'text';
+      // Ctrl/Shift on a slide the editor cannot bulk-edit must not wipe the selection.
+      if (!editable && (modifiers?.ctrl || modifiers?.shift)) return;
+      dispatch({ type: 'activate', slide, order, editableIds, modifiers: editable ? modifiers : undefined });
     },
     [order, editableIds]
   );
@@ -459,7 +462,7 @@ export function useEditorDeck({ deck, initialSlide, editableOnly = false }: UseE
     [order, editableIds]
   );
 
-  const selectEverySlide = useCallback(() => dispatch({ type: 'selectAll', order: order.filter(id => editableIds.includes(id)) }), [order, slideById]);
+  const selectEverySlide = useCallback(() => dispatch({ type: 'selectAll', order: order.filter(id => editableIds.includes(id)) }), [order, editableIds]);
   const collapseSlideSelection = useCallback(() => dispatch({ type: 'clearSlideSelection', order }), [order]);
 
   const setItemSelection = useCallback(
@@ -489,10 +492,22 @@ export function useEditorDeck({ deck, initialSlide, editableOnly = false }: UseE
   );
 
   const setGridField = useCallback(
-    (field: 'gridEnabled' | 'gridSize' | 'gridColor' | 'snapEnabled', value: boolean | number | string) => {
-      mutateActive((draft) => ({ ...draft, [field]: value }), true);
+    (field: 'gridEnabled' | 'gridSize' | 'gridColor' | 'snapEnabled', value: boolean | number | string, slideIds?: string[], scope: EditScope = 'active') => {
+      if (scope === 'active' || !slideIds || slideIds.length <= 1) {
+        mutateActive((draft) => ({ ...draft, [field]: value }), true);
+        return;
+      }
+      const drafts = new Map(session.drafts);
+      const touched: string[] = [];
+      for (const slideId of slideIds) {
+        const slide = slideById.get(slideId);
+        if (!slide || !isItemEditableSlide(slide)) continue;
+        drafts.set(slideId, { ...(drafts.get(slideId) ?? createDraft(slide)), [field]: value });
+        touched.push(slideId);
+      }
+      dispatch({ type: 'bulk', drafts, touched, notice: { key: 'common.editorScopeApplied', count: touched.length, tone: 'info' } });
     },
-    [mutateActive]
+    [mutateActive, session.drafts, slideById]
   );
 
   // ── Gesture batching (drag / resize / rotate / typing) ─────────────────────

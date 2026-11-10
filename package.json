@@ -1,6 +1,6 @@
 {
   "name": "worship-presentation-assistant",
-  "version": "1.4.26",
+  "version": "1.4.27",
   "main": "dist-electron/main.js",
   "description": "Worship Presentation Assistant - Simple Worship Presentation App",
   "author": "IPCA",
@@ -20,7 +20,7 @@
     "bench:slide-optimizations": "tsx scripts/bench-slide-optimizations.ts",
     "test:updater": "tsx --test src/renderer/state/updaterReducer.test.ts",
     "test:presets": "tsx --test src/main/presetStore.test.ts",
-    "test:media": "tsx --test src/main/mediaLibrary.test.ts",
+    "test:media": "tsx --test src/main/mediaLibrary.test.ts src/main/mediaOptimizer.test.ts",
     "test:matcher": "tsx --test src/renderer/stt/slideMatcher.test.ts",
     "test:stt": "tsx --test src/renderer/state/useSttStore.test.ts",
     "test:readiness": "tsx --test src/shared/readiness.test.ts src/main/preparationResources.test.ts src/renderer/preparationCheck.test.ts",
@@ -160,6 +160,14 @@
     "asarUnpack": [
       "node_modules/@napi-rs/**/*"
     ],
+    "electronFuses": {
+      "runAsNode": false,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": true,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "grantFileProtocolExtraPrivileges": true
+    },
     "win": {
       "icon": "build/ico.png",
       "target": [
@@ -180,7 +188,7 @@
       "shortcutName": "Worship Presentation Assistant",
       "artifactName": "Worship-Presentation-Assistant-${version}-Windows-Setup.${ext}",
       "uninstallDisplayName": "Worship Presentation Assistant",
-      "deleteAppDataOnUninstall": true
+      "deleteAppDataOnUninstall": false
     },
     "mac": {
       "icon": "build/icon.png",

@@ -1,6 +1,7 @@
 import ControlTooltip from './ControlTooltip';
+import MotionIcon from './MotionIcon';
 import { useEffect, useRef, useState } from 'react';
-import { Check, Download, Loader2, X } from 'lucide-react';
+import { Download, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { OfflineMusicStatus } from '../../shared/youtubeMusic';
 
@@ -38,11 +39,11 @@ export default function MusicOfflineDownload({ videoId }: { videoId: string }) {
   const ready = status.state === 'ready';
   const busy = status.state === 'downloading';
   return <div className="space-y-1">
-    <ControlTooltip><button type="button" data-testid="music-offline-download" disabled={checking || ready} onClick={() => void download()}
+    <ControlTooltip descriptionKey={ready ? 'offlineMusic.localHint' : busy ? 'offlineMusic.cancel' : 'offlineMusic.hint'}><button type="button" data-testid="music-offline-download" disabled={checking || ready} onClick={() => void download()}
       title={t(ready ? 'offlineMusic.localHint' : busy ? 'offlineMusic.cancel' : 'offlineMusic.hint')}
       aria-label={t(busy ? 'offlineMusic.cancel' : ready ? 'offlineMusic.ready' : 'offlineMusic.download')}
       className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-white/10 px-2 py-1 text-[11px] text-white/75 hover:bg-white/10 disabled:cursor-default disabled:opacity-75">
-      {ready ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+      {ready ? <MotionIcon name="check-circle" active className="text-emerald-300" /> : busy ? <MotionIcon name="loader" active loop /> : <Download className="h-3.5 w-3.5" />}
       <span>{t(ready ? 'offlineMusic.ready' : busy ? 'offlineMusic.downloading' : 'offlineMusic.download')}</span>
       {busy && <X className="h-3 w-3" />}
     </button></ControlTooltip>

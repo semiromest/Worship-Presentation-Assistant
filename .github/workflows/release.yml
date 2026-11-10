@@ -68,6 +68,53 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
+      # ── Windows code signing via SignPath Foundation (free for OSS) ──────────────
+      # Inert until the repository variables SIGNPATH_ORGANIZATION_ID, SIGNPATH_PROJECT_SLUG,
+      # SIGNPATH_SIGNING_POLICY_SLUG and the secret SIGNPATH_API_TOKEN exist.
+      # The SignPath artifact configuration must be: <zip-file><pe-file path="*.exe"><authenticode-sign/></pe-file></zip-file>
+      - name: Locate unsigned Windows installer
+        id: installer
+        if: runner.os == 'Windows' && vars.SIGNPATH_ORGANIZATION_ID != ''
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem release -Recurse -Filter 'Worship-Presentation-Assistant-*-Windows-Setup.exe' | Select-Object -First 1
+          if (-not $setup) { throw 'Windows installer not found' }
+          "path=$($setup.FullName)" >> $env:GITHUB_OUTPUT
+          "dir=$($setup.DirectoryName)" >> $env:GITHUB_OUTPUT
+
+      - name: Stage unsigned installer for SignPath
+        id: stage-unsigned
+        if: steps.installer.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-windows-installer
+          path: ${{ steps.installer.outputs.path }}
+          if-no-files-found: error
+
+      - name: Sign installer with SignPath
+        if: steps.installer.outcome == 'success'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.stage-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed-windows
+
+      - name: Replace installer and refresh auto-update metadata
+        if: steps.installer.outcome == 'success'
+        shell: pwsh
+        run: |
+          $signed = Get-ChildItem signed-windows -Recurse -Filter '*-Windows-Setup.exe' | Select-Object -First 1
+          if (-not $signed) { throw 'Signed installer missing from SignPath output' }
+          $status = Get-AuthenticodeSignature $signed.FullName
+          if ($status.Status -ne 'Valid') { throw "Signature is not valid: $($status.Status)" }
+          Copy-Item $signed.FullName '${{ steps.installer.outputs.path }}' -Force
+          # Signing changes the bytes: latest.yml sha512/size and the .blockmap must match the signed file.
+          node scripts/refresh-update-metadata.cjs '${{ steps.installer.outputs.dir }}'
+
       # Advisory for the first three releases; promotion requires explicit approval.
       - name: Packaged Windows tour and practice smoke
         id: packaged-smoke

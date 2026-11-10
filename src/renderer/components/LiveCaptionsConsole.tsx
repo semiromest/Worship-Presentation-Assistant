@@ -1,3 +1,4 @@
+import ControlTooltip from './ControlTooltip';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -76,11 +77,11 @@ function Section({
         className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/5 transition-colors"
       >
         <ChevronDown
-          className={cn('w-3.5 h-3.5 text-white/40 transition-transform shrink-0', open ? '' : '-rotate-90')}
+          className={cn('w-3.5 h-3.5 text-white/55 transition-transform shrink-0', open ? '' : '-rotate-90')}
           aria-hidden="true"
         />
         <span className="flex-1 min-w-0 text-xs font-semibold truncate">{title}</span>
-        {badge ? <span className="shrink-0 text-[11px] font-semibold text-white/40">{badge}</span> : null}
+        {badge ? <span className="shrink-0 text-[11px] font-semibold text-white/55">{badge}</span> : null}
       </button>
       {open && <div className="px-3 pb-2.5 pt-0.5 space-y-2">{children}</div>}
     </div>
@@ -302,7 +303,7 @@ export default function LiveCaptionsConsole({
   return (
     <section aria-label={t('common.sttPanelTitle')} className="flex flex-col h-full bg-surface overflow-hidden">
       {/* Header — unified status */}
-      <div
+      <ControlTooltip descriptionKey={'common.sttPanelDesc'}><div
         className="flex items-center justify-between gap-2 px-4 py-1.5 border-b border-white/10 bg-surface-raised shrink-0"
         title={t('common.sttPanelDesc')}
       >
@@ -339,7 +340,7 @@ export default function LiveCaptionsConsole({
           </span>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button
+          <ControlTooltip descriptionKey={active ? 'common.sttNextStart' : 'common.sttClear'}><button
             type="button"
             onClick={() => { clearAll(); void window.electronAPI?.sttClear?.(); }}
             disabled={active}
@@ -348,8 +349,8 @@ export default function LiveCaptionsConsole({
             className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 hover:text-white/80 transition-colors disabled:opacity-40 disabled:hover:bg-white/5"
           >
             <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
-          </button>
-          <button
+          </button></ControlTooltip>
+          <ControlTooltip descriptionKey={'common.sttOpenSettings'}><button
             type="button"
             onClick={onOpenSettings}
             title={t('common.sttOpenSettings')}
@@ -357,8 +358,8 @@ export default function LiveCaptionsConsole({
             className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 hover:text-white/80 transition-colors"
           >
             <Settings2 className="w-3.5 h-3.5" aria-hidden="true" />
-          </button>
-          <button
+          </button></ControlTooltip>
+          <ControlTooltip descriptionKey={'common.close'}><button
             type="button"
             onClick={onClose}
             title={t('common.close')}
@@ -366,25 +367,25 @@ export default function LiveCaptionsConsole({
             className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 hover:text-white/80 transition-colors"
           >
             <X className="w-3.5 h-3.5" aria-hidden="true" />
-          </button>
+          </button></ControlTooltip>
         </div>
-      </div>
+      </div></ControlTooltip>
 
       {/* Body — broadcast desk grid */}
       <div className="flex-1 min-h-0 grid grid-cols-1 max-lg:grid-rows-[minmax(140px,200px)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)] gap-3 p-3">
         {/* Output monitor */}
         <div className="flex flex-col gap-1.5 min-h-0 min-w-0">
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-white/55">
               {t('common.sttMonitor')}
             </span>
             {detectedName && active && (
-              <span
+              <ControlTooltip descriptionKey={'common.sttDetected'}><span
                 className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[11px] font-semibold text-white/55"
                 title={t('common.sttDetected')}
               >
                 {detectedName}
-              </span>
+              </span></ControlTooltip>
             )}
             {active && (
               <span className="ml-auto flex items-center gap-1.5 text-[11px] font-semibold text-white/50">
@@ -476,9 +477,9 @@ export default function LiveCaptionsConsole({
                   {status === 'connected' && micActive ? t('common.sttListening') : sessionLabel}
                 </span>
                 {tickerOpen ? (
-                  <ChevronUp className="w-3.5 h-3.5 text-white/35 shrink-0" aria-hidden="true" />
+                  <ChevronUp className="w-3.5 h-3.5 text-white/55 shrink-0" aria-hidden="true" />
                 ) : (
-                  <ChevronDown className="w-3.5 h-3.5 text-white/35 shrink-0" aria-hidden="true" />
+                  <ChevronDown className="w-3.5 h-3.5 text-white/55 shrink-0" aria-hidden="true" />
                 )}
               </button>
               {tickerOpen && (
@@ -525,7 +526,7 @@ export default function LiveCaptionsConsole({
                   >
                     <span className="truncate">{item.label}</span>
                     {item.badge ? (
-                      <span className="shrink-0 rounded-full bg-white/15 px-1.5 py-px text-[10px] font-bold text-white/70">
+                      <span className="shrink-0 rounded-full bg-white/15 px-1.5 py-px text-[11px] font-bold text-white/70">
                         {item.badge}
                       </span>
                     ) : null}
@@ -543,7 +544,7 @@ export default function LiveCaptionsConsole({
                   className="space-y-2.5"
                 >
                   {active && (
-                    <p className="text-[11px] text-white/45 leading-snug">{t('common.sttLangLocked')}</p>
+                    <p className="text-[11px] text-white/60 leading-snug">{t('common.sttLangLocked')}</p>
                   )}
 
                   {/* Languages — always visible */}
@@ -553,7 +554,7 @@ export default function LiveCaptionsConsole({
                     <label className="block space-y-1">
                       <FieldLabel>{t('common.sttSpokenLanguage')}</FieldLabel>
                       <div className="flex items-center gap-2">
-                        <Mic className="w-4 h-4 text-white/35 shrink-0" aria-hidden="true" />
+                        <Mic className="w-4 h-4 text-white/55 shrink-0" aria-hidden="true" />
                         <select
                           value={sttLanguage}
                           onChange={(e) => setSttLanguage(e.target.value)}
@@ -572,7 +573,7 @@ export default function LiveCaptionsConsole({
                         </select>
                       </div>
                       {!isAutoSttLanguage(sttLanguage) && (
-                        <span className="block text-[11px] text-white/40">{t('common.sttSpokenLanguageHint')}</span>
+                        <span className="block text-[11px] text-white/55">{t('common.sttSpokenLanguageHint')}</span>
                       )}
                     </label>
 
@@ -581,13 +582,13 @@ export default function LiveCaptionsConsole({
                         <Languages
                           className={cn(
                             'w-4 h-4 shrink-0',
-                            translationEnabled ? 'text-emerald-300' : 'text-white/35'
+                            translationEnabled ? 'text-emerald-300' : 'text-white/55'
                           )}
                           aria-hidden="true"
                         />
                         <div className="min-w-0">
                           <p className="text-xs font-semibold truncate">{t('common.sttTranslationToggle')}</p>
-                          <p className="text-[11px] text-white/45 truncate">
+                          <p className="text-[11px] text-white/60 truncate">
                             {translationEnabled
                               ? t('common.sttTranslationOnDesc')
                               : t('common.sttTranslationOffDesc')}
@@ -647,19 +648,19 @@ export default function LiveCaptionsConsole({
                                       : 'bg-white/5 text-white/65 hover:bg-white/10 hover:text-white'
                                   )}
                                 >
-                                  {lang.name} <span className="text-white/35">({lang.code})</span>
+                                  {lang.name} <span className="text-white/55">({lang.code})</span>
                                 </button>
                               );
                             })
                           ) : (
-                            <span className="col-span-2 px-2 py-2 text-[11px] text-white/40">
+                            <span className="col-span-2 px-2 py-2 text-[11px] text-white/55">
                               {t('common.sttTargetLanguageNoResults')}
                             </span>
                           )}
                         </div>
                         <div className="flex flex-wrap gap-1">
                           {targetLanguages.map((code) => (
-                            <button
+                            <ControlTooltip key={code} descriptionKey={'common.sttTargetLanguageRemove'}><button
                               key={code}
                               type="button"
                               onClick={() => toggleTargetLanguage(code)}
@@ -669,7 +670,7 @@ export default function LiveCaptionsConsole({
                               className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[11px] text-emerald-100 hover:bg-red-400/15 hover:border-red-400/40 hover:text-red-100 disabled:opacity-50"
                             >
                               {languageName(code)} ×
-                            </button>
+                            </button></ControlTooltip>
                           ))}
                         </div>
                       </label>
@@ -685,7 +686,7 @@ export default function LiveCaptionsConsole({
                     <label className="block space-y-1">
                       <FieldLabel>{t('common.sttInputDevice')}</FieldLabel>
                       <div className="flex items-center gap-2">
-                        <Mic className="w-4 h-4 text-white/35 shrink-0" aria-hidden="true" />
+                        <Mic className="w-4 h-4 text-white/55 shrink-0" aria-hidden="true" />
                         <select
                           value={inputDeviceId}
                           onChange={(e) => setInputDeviceId(e.target.value)}
@@ -708,7 +709,7 @@ export default function LiveCaptionsConsole({
                           )}
                         </select>
                       </div>
-                      <span className="block text-[11px] text-white/40">{t('common.sttInputDeviceHint')}</span>
+                      <span className="block text-[11px] text-white/55">{t('common.sttInputDeviceHint')}</span>
                     </label>
                   </Section>
 
@@ -723,7 +724,7 @@ export default function LiveCaptionsConsole({
                         <LocateFixed className="w-4 h-4 text-violet-300 shrink-0" aria-hidden="true" />
                         <div className="min-w-0">
                           <p className="text-xs font-semibold truncate">{t('common.sttTrackerTitle')}</p>
-                          <p className="text-[11px] text-white/45 truncate">{t('common.sttTrackerDesc')}</p>
+                          <p className="text-[11px] text-white/60 truncate">{t('common.sttTrackerDesc')}</p>
                         </div>
                       </div>
                       <button
@@ -762,7 +763,7 @@ export default function LiveCaptionsConsole({
                           aria-label={t('common.sttTrackerSensitivity')}
                           className="w-full accent-violet-500"
                         />
-                        <span className="block text-[11px] text-white/40">
+                        <span className="block text-[11px] text-white/55">
                           {t('common.sttTrackerSensitivityHint')}
                         </span>
                       </label>
@@ -772,7 +773,7 @@ export default function LiveCaptionsConsole({
                       <p
                         className={cn(
                           'text-[11px]',
-                          trackerLastResult.confident ? 'text-violet-200/80' : 'text-white/40'
+                          trackerLastResult.confident ? 'text-violet-200/80' : 'text-white/55'
                         )}
                       >
                         {trackerLastResult.index === null
@@ -806,8 +807,8 @@ export default function LiveCaptionsConsole({
                   className="space-y-2"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-semibold text-white/45">{t('common.sttTabHistory')}</span>
-                    <button
+                    <span className="text-[11px] font-semibold text-white/60">{t('common.sttTabHistory')}</span>
+                    <ControlTooltip descriptionKey={'common.sttExportHistory'}><button
                       type="button"
                       onClick={downloadHistory}
                       disabled={utterances.length === 0}
@@ -816,10 +817,10 @@ export default function LiveCaptionsConsole({
                       className="inline-flex items-center justify-center rounded-md border border-white/10 bg-white/5 p-1.5 text-white/55 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
                     >
                       <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
+                    </button></ControlTooltip>
                   </div>
                   {utterances.length === 0 ? (
-                    <p className="text-[11px] text-white/45 py-4 text-center">{t('common.sttEmpty')}</p>
+                    <p className="text-[11px] text-white/60 py-4 text-center">{t('common.sttEmpty')}</p>
                   ) : (
                     utterances
                       .slice()
@@ -839,14 +840,14 @@ export default function LiveCaptionsConsole({
                               <p
                                 className={cn(
                                   'text-[11px] leading-snug whitespace-pre-wrap',
-                                  translationEnabled ? 'text-white/45' : 'text-white/80'
+                                  translationEnabled ? 'text-white/60' : 'text-white/80'
                                 )}
                               >
                                 {u.original}
                               </p>
                             )}
                           </div>
-                          <button
+                          <ControlTooltip descriptionKey={'common.sttAddUtteranceSlide'}><button
                             type="button"
                             onClick={() => onAddUtteranceSlide(u.original, u.translation)}
                             title={t('common.sttAddUtteranceSlide')}
@@ -854,7 +855,7 @@ export default function LiveCaptionsConsole({
                             className="shrink-0 p-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 hover:text-white/90 transition-colors"
                           >
                             <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-                          </button>
+                          </button></ControlTooltip>
                         </div>
                       ))
                   )}
@@ -944,7 +945,7 @@ function FitStage({
       {!showWysiwyg && !active && size && (
         <div className="flex flex-col items-center gap-3 px-6 text-center" style={{ width: size.w }}>
           <Captions className="w-8 h-8 text-white/20" aria-hidden="true" />
-          <p className="text-xs text-white/45 max-w-md leading-relaxed">{t('common.sttAddCaptionsSlideHint')}</p>
+          <p className="text-xs text-white/60 max-w-md leading-relaxed">{t('common.sttAddCaptionsSlideHint')}</p>
           <button
             type="button"
             onClick={onAddCaptionsSlide}

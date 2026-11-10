@@ -1,3 +1,4 @@
+import ControlTooltip from './ControlTooltip';
 import { useTranslation } from 'react-i18next';
 import { Captions, ChevronUp, MicOff } from 'lucide-react';
 import { useSttStore } from '../state/useSttStore';
@@ -88,7 +89,7 @@ export default function LiveCaptionsSessionBar({ onStop, onExpand }: LiveCaption
         <p className="text-xs text-white/55 italic truncate">{liveText || t('common.sttWaiting')}</p>
       </div>
 
-      <button
+      <ControlTooltip descriptionKey={'common.sttOpenConsole'}><button
         type="button"
         onClick={onExpand}
         title={t('common.sttOpenConsole')}
@@ -97,7 +98,7 @@ export default function LiveCaptionsSessionBar({ onStop, onExpand }: LiveCaption
       >
         <ChevronUp className="w-3 h-3" aria-hidden="true" />
         {t('common.sttOpenConsole')}
-      </button>
+      </button></ControlTooltip>
 
       <button
         type="button"

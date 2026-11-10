@@ -1,11 +1,14 @@
 import { PreviewAssets } from './previewAssets';
+import { supportAvailability, supportUrl } from '../shared/support';
+import { mergeProjectorSnapshot } from '../shared/projectorSnapshot';
 import type { PreviewDeck, PreviewAssetResult } from '../shared/remotePreview';
 import { attachAppDialogs, appDialogsReady, showAppDialog } from './appDialogs';
 import { applyPreviewUpdates } from './previewUpdates';
 import { createDesktopService } from './desktopService';
 import { systemMessageCopy } from './desktopDialogCopy';
-import { recoverAtomicWrites, writeAtomicGeneratedDocument } from './atomicFile';
-import { bundledFontCss } from './bundledFonts';
+import { recoverAtomicWrites, renameWithRetry, writeAtomicGeneratedDocument } from './atomicFile';
+import { bundledFontCss, readUiWebFont } from './bundledFonts';
+import { uiWebFontFile } from './uiWebFont';
 import { observeServiceHealth, serviceRequest } from './serviceHealth';
 import { installNativeDialogGate, nativeDialogBusy } from './nativeDialogGate';
 import { inspectRemoteFirewall } from './remoteFirewallDiagnostics';
@@ -19,7 +22,7 @@ import { resetFile, recoverPracticeReset } from './practiceReset';
 import { spawn } from 'node:child_process';
 import { inspectTourProfile, isTourProfileSender } from './tourProfile';
 import { resolvePosterSource } from './mediaPosterSource';
-import { YouTubeMusicService } from './youtubeMusicService';
+import { LazyService } from './lazyService';
 import { checkMediaResources, cacheGoogleFont } from './preparationResources';
 /**
  * Electron main process: presentation control, projector window,
@@ -49,7 +52,7 @@ import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { WebSocketServer, WebSocket as WsSocket, type RawData } from 'ws';
 import { REMOTE_HTML_NEW } from './remote-html';
-import { driveService } from './driveService';
+const driveService = new LazyService(async () => (await import('./driveService')).driveService, service => service.cancelSignIn());
 import { initUpdater } from './updater';
 import {
   startPublicTunnel,
@@ -59,10 +62,17 @@ import {
   setPublicTunnelStatusListener,
 } from './cloudflareTunnelService';
 import { initPerfMonitor, mainPerf, recordWs } from './perfMonitor';
+import { installIpcSenderPolicy } from './ipcSenderPolicy';
+import { hardenAppWindow, isAppDocument } from './windowSecurity';
+import { readWindowState, writeWindowState } from './windowState';
+import { pathToFileURL } from 'node:url';
+import { isRemoteAuthorized, loadOrCreateRemoteToken, readRemoteSettings, remoteAuthCookie, remoteTokenFromQuery, writeNewRemoteToken, writeRemoteSettings } from './remoteAuth';
 import { createPresetStore, isLiveSavePresetName } from './presetStore';
 import { localResourceUrlToPath, mediaRefToName } from '../shared/mediaTree';
 import { getMediaLibrary } from './mediaLibrary';
 import { registerGradientService } from './gradientService';
+import { mediaStorageReport, removeUnusedMedia, updateMediaStorageSettings } from './mediaStorage';
+import { createVideoSinks, libraryFileSize, optimizeLibraryImage } from './mediaOptimizer';
 import { getOrCreateThumbnail, thumbRefToPath, pruneThumbnailCache } from './mediaThumbnails';
 import { heavyClient } from './heavyWorkerClient';
 import { registerSttIpc, cleanupStt } from './sonioxService';
@@ -115,6 +125,13 @@ const tourProfile = inspectTourProfile(app.getPath('userData'));
 const progressStore = createProgressStore(practiceProfile);
 const practiceWorkspace = createPracticeWorkspace(practiceProfile, progressStore);
 
+// Fail-closed IPC sender gate — MUST run before any ipcMain handler is registered.
+// Closures read `win` / `projectorWindows` lazily, only when a message arrives.
+installIpcSenderPolicy({
+  control: () => (win && !win.isDestroyed() ? win.webContents : null),
+  projectors: () => [...projectorWindows.values()].filter(entry => !entry.window.isDestroyed()).map(entry => entry.window.webContents),
+});
+
 // Phase 0 perf monitor — MUST run before any ipcMain handler is registered.
 initPerfMonitor();
 
@@ -128,6 +145,9 @@ const desktop = createDesktopService(() => win, restricted, () => projectorWindo
 installNativeDialogGate();
 observeServiceHealth((name, ok) => desktop.service(name, ok, app.isReady() && !net.isOnline()));
 if (process.platform !== 'darwin') Menu.setApplicationMenu(null);
+// Must match build.appId: the NSIS shortcuts carry it, so taskbar pinning, jump lists and
+// notifications group under the installed app. Dev runs keep a separate identity.
+if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'com.worship-presentation-assistant' : process.execPath);
 if (!restricted) {
   if (!app.requestSingleInstanceLock()) app.exit(0);
   app.on('second-instance', (_event, argv) => { for (const value of argv) desktop.enqueue(value); });
@@ -145,7 +165,29 @@ async function routeNativeHistory(redo: boolean): Promise<void> {
   if (editable) { if (redo) target.webContents.redo(); else target.webContents.undo(); }
   else if (target === win) target.webContents.send('desktop:history', redo ? 'redo' : 'undo');
 }
-let youtubeMusicService = new YouTubeMusicService();
+function createMusicService() {
+  return new LazyService(async () => { const { YouTubeMusicService } = await import('./youtubeMusicService'); return new YouTubeMusicService(); }, service => service.dispose());
+}
+let youtubeMusicService = createMusicService();
+ipcMain.handle('optimization:flags', event => {
+  requireControl(event);
+  return { screenFrameCache: process.env.WPA_DISABLE_SCREEN_FRAME_CACHE !== '1' };
+});
+ipcMain.handle('support:availability', event => { requireControl(event); return supportAvailability(); });
+ipcMain.handle('support:open', async (event, platform: unknown) => {
+  requireControl(event);
+  const url = supportUrl(platform);
+  if (!url) return false;
+  await shell.openExternal(url);
+  return true;
+});
+ipcMain.handle('optimization:warm', async (event, service: unknown) => {
+  requireControl(event);
+  if (restricted || projectorWindows.size || nativeDialogBusy() || (service !== 'drive' && service !== 'youtube')) return;
+  const started = performance.now();
+  if (service === 'drive') await driveService.get(); else await youtubeMusicService.get();
+  mainPerf.push({ kind: 'startup', label: 'warm-' + service, ms: performance.now() - started, bytes: 0, t: Date.now() });
+});
 let closingPractice = false;
 let practiceRendererReady=false;
 let practiceClosePending=false;
@@ -162,12 +204,23 @@ function dialogParent(): BrowserWindow | null {
   return win && !win.isDestroyed() ? win : BrowserWindow.getFocusedWindow();
 }
 
+/** Owned (modal) file dialogs: on Windows an unowned dialog can fall behind the maximized control window. */
+function showOpenDialogOwned(options: Electron.OpenDialogOptions): Promise<Electron.OpenDialogReturnValue> {
+  const parent = dialogParent();
+  return parent ? dialog.showOpenDialog(parent, options) : dialog.showOpenDialog(options);
+}
+
+function showSaveDialogOwned(options: Electron.SaveDialogOptions): Promise<Electron.SaveDialogReturnValue> {
+  const parent = dialogParent();
+  return parent ? dialog.showSaveDialog(parent, options) : dialog.showSaveDialog(options);
+}
+
 /** Geçici dosya + rename: yazma yarıda kesilirse mevcut dosya bozulmaz. */
 async function writeFileAtomic(filePath: string, data: string | Uint8Array): Promise<void> {
   const temp = `${filePath}.${randomUUID()}.tmp`;
   try {
     await fs.writeFile(temp, data);
-    await fs.rename(temp, filePath);
+    await renameWithRetry(temp, filePath);
   } catch (error) {
     await fs.rm(temp, { force: true }).catch(() => {});
     throw error;
@@ -178,6 +231,8 @@ type ProjectorEntry = {
   displayId: string;
   window: BrowserWindow;
   pendingPayload: any;
+  lastFrame?: Record<string, any>;
+  receiverToken?: string;
   ready: boolean;
 };
 
@@ -286,8 +341,13 @@ const NO_STORE_HEADERS = {
   'Referrer-Policy': 'no-referrer',
 } as const;
 const REMOTE_PAGE = Buffer.from(REMOTE_HTML_NEW, 'utf-8');
+const REMOTE_UNAUTHORIZED_PAGE = '<!DOCTYPE html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+  + '<title>Remote</title><body style="font-family:system-ui;background:#111;color:#eee;display:grid;place-items:center;min-height:90vh;text-align:center;padding:16px">'
+  + '<p>This remote link is missing its access key or has expired.<br>Scan the QR code shown in the app again.</p></body>';
 
 let remoteServer: http.Server | null = null;
+/** LAN kumanda erişim anahtarı; sunucu başlarken userData'dan okunur ya da üretilir. */
+let remoteToken: string | null = null;
 let wss: WebSocketServer | null = null;
 let remoteServerError: string | null = null;
 
@@ -489,6 +549,18 @@ function handleRemoteRequest(req: http.IncomingMessage, res: http.ServerResponse
     return;
   }
 
+  // Served-page fonts (OFL files from resources/fonts, exact whitelist, no user input in
+  // the path). Public like the pages' own markup, so /share and /screen work over the tunnel.
+  const webFont = readUiWebFont(uiWebFontFile(pathname));
+  if (webFont) {
+    void webFont.then(bytes => {
+      if (res.destroyed) return;
+      res.writeHead(200, { 'Content-Type': 'font/ttf', 'Content-Length': bytes.length, 'Cache-Control': 'public, max-age=86400', 'X-Content-Type-Options': 'nosniff' });
+      res.end(bytes);
+    }, () => { if (!res.destroyed) { res.writeHead(404, NO_STORE_HEADERS); res.end(); } });
+    return;
+  }
+
   // Token korumalı paylaşım sayfaları: tünelden de erişilebilen tek yollar.
   if (pathname === '/share' && handleShareHttp(req, res)) return;
   if (pathname === '/screen' && handleScreenShareHttp(req, res)) return;
@@ -500,9 +572,18 @@ function handleRemoteRequest(req: http.IncomingMessage, res: http.ServerResponse
     return;
   }
 
+  // Aynı ağdaki herkes kumandayı kullanamasın: QR/URL'deki token (ya da sayfanın bıraktığı çerez) zorunlu.
+  if (!isRemoteAuthorized(req, remoteToken)) {
+    res.writeHead(401, { 'Content-Type': 'text/html; charset=utf-8', ...NO_STORE_HEADERS });
+    res.end(REMOTE_UNAUTHORIZED_PAGE);
+    return;
+  }
+
   // Remote control web UI
   if (pathname === '/' || pathname === '/remote') {
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': REMOTE_PAGE.length, ...NO_STORE_HEADERS });
+    const headers: Record<string, string | number> = { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': REMOTE_PAGE.length, ...NO_STORE_HEADERS };
+    if (remoteToken && remoteTokenFromQuery(req.url)) headers['Set-Cookie'] = remoteAuthCookie(remoteToken);
+    res.writeHead(200, headers);
     res.end(REMOTE_PAGE);
     return;
   }
@@ -570,7 +651,7 @@ function handleRemoteConnection(client: WsSocket, req: http.IncomingMessage): vo
   // Phone live-screen clients connect to /screen?token=… (view-only frames).
   if (handleScreenShareConnection(client, req)) return;
 
-  if (isTunneled(req) || !isSameOrigin(req)) {
+  if (isTunneled(req) || !isSameOrigin(req) || !isRemoteAuthorized(req, remoteToken)) {
     client.close(1008, 'Forbidden');
     return;
   }
@@ -622,31 +703,82 @@ function getRemotePort(): number {
   return address && typeof address === 'object' ? address.port : 0;
 }
 
-function createRemoteServer(): void {
-  const server = http.createServer(handleRemoteRequest);
-  remoteServer = server;
-  // Dinleme hatası (EADDRINUSE/EACCES) süreci düşürmesin; tanılamada gösterilir.
-  server.on('error', (error: NodeJS.ErrnoException) => {
-    remoteServerError = error.code ?? error.message;
-    console.error('[REMOTE SERVER] error:', error);
+const remoteTokenFile = () => path.join(app.getPath('userData'), 'remote-control-token');
+const remoteSettingsFile = () => path.join(app.getPath('userData'), 'remote-control.json');
+
+/** Binds an HTTP server on all interfaces; resolves null if the port cannot be used. */
+function bindRemoteServer(port: number): Promise<http.Server | null> {
+  return new Promise((resolve) => {
+    const server = http.createServer(handleRemoteRequest);
+    const onError = (error: NodeJS.ErrnoException) => {
+      remoteServerError = error.code ?? error.message;
+      server.close();
+      resolve(null);
+    };
+    server.once('error', onError);
+    server.listen(port, '0.0.0.0', () => {
+      server.off('error', onError);
+      resolve(server);
+    });
   });
+}
 
-  wss = new WebSocketServer({ server, maxPayload: WS_MAX_PAYLOAD });
-  wss.on('error', (error) => console.error('[REMOTE SERVER] websocket error:', error));
-  wss.on('connection', handleRemoteConnection);
-  startHeartbeat();
+let remoteServerStarting: Promise<number> | null = null;
 
-  // Random port, all interfaces
-  server.listen(0, '0.0.0.0', () => {
+/**
+ * The phone server (remote control, caption share, screen share, tunnel) starts on first
+ * use, not at launch, unless "start with the app" is on. It reuses the last port so a
+ * bookmarked remote link keeps working; if that port is taken it picks a free one.
+ * Resolves to the port, or 0 when it could not start (practice mode, bind failure).
+ */
+function ensureRemoteServer(): Promise<number> {
+  if (restricted) return Promise.resolve(0);
+  if (getRemotePort()) return Promise.resolve(getRemotePort());
+  remoteServerStarting ??= (async () => {
+    remoteToken ??= loadOrCreateRemoteToken(remoteTokenFile());
+    const saved = readRemoteSettings(remoteSettingsFile()).port;
+    const server = (saved ? await bindRemoteServer(saved) : null) ?? await bindRemoteServer(0);
+    if (!server) {
+      console.error('[REMOTE SERVER] could not listen:', remoteServerError);
+      return 0;
+    }
+    remoteServer = server;
     remoteServerError = null;
+    // Dinleme sonrası hatalar süreci düşürmesin; tanılamada gösterilir.
+    server.on('error', (error: NodeJS.ErrnoException) => {
+      remoteServerError = error.code ?? error.message;
+      console.error('[REMOTE SERVER] error:', error);
+    });
+    wss = new WebSocketServer({ server, maxPayload: WS_MAX_PAYLOAD });
+    wss.on('error', (error) => console.error('[REMOTE SERVER] websocket error:', error));
+    wss.on('connection', handleRemoteConnection);
+    startHeartbeat();
+
+    const port = getRemotePort();
+    if (port !== saved) writeRemoteSettings(remoteSettingsFile(), { port });
     const scanned = scanNetwork(true);
-    remoteDebugInfo.port = getRemotePort();
+    remoteDebugInfo.port = port;
     announcedRemoteUrl = currentRemoteUrl();
     startNetworkWatch();
-    console.info('[REMOTE SERVER] Listening on all interfaces');
-    console.info('[REMOTE SERVER] URL:', announcedRemoteUrl);
+    sendToControl('remote-url-changed', { url: announcedRemoteUrl });
+    console.info('[REMOTE SERVER] Listening on all interfaces, port', port);
     console.info('[REMOTE SERVER] Candidates:', scanned.candidates);
-  });
+    return port;
+  })().finally(() => { remoteServerStarting = null; });
+  return remoteServerStarting;
+}
+
+/** New token: every paired phone is disconnected and must scan the new QR code. */
+function resetRemotePairing(): string {
+  remoteToken = writeNewRemoteToken(remoteTokenFile());
+  for (const client of wsClients.keys()) {
+    try { client.close(4001, 'Pairing reset'); } catch { client.terminate(); }
+  }
+  wsClients.clear();
+  broadcastClientCount();
+  announcedRemoteUrl = currentRemoteUrl();
+  sendToControl('remote-url-changed', { url: announcedRemoteUrl });
+  return announcedRemoteUrl;
 }
 
 // ─── Yerel IPv4 tespiti (puanlı, kısa ömürlü önbellek) ─────────────────────
@@ -731,7 +863,7 @@ const getLocalIPv4 = (): string => scanNetwork().ip;
 
 function currentRemoteUrl(): string {
   const port = getRemotePort();
-  return port ? `http://${getLocalIPv4()}:${port}/remote` : '';
+  return port && remoteToken ? `http://${getLocalIPv4()}:${port}/remote?token=${encodeURIComponent(remoteToken)}` : '';
 }
 
 // Ağ izleme: IP değişince (Wi-Fi yeniden bağlanma, kablo takma) uzak URL ve paylaşım URL'leri yenilenir.
@@ -830,6 +962,36 @@ const presetStore = createPresetStore(app.getPath('userData'), mainPerf);
 // Persistent media library (Phase 6): userData/media/, see mediaLibrary.ts.
 const mediaLibrary = getMediaLibrary();
 registerGradientService(mediaLibrary, app.getPath('userData'));
+
+// Media storage card (Settings → Autosave): usage, limit warning and approved removal of unused library files.
+const mediaStorageDeps = { mediaDir: mediaLibrary.dir, userData: app.getPath('userData'), readPresets: () => presetStore.readPresets(0) };
+ipcMain.handle('media-storage:report', (event, referenced: unknown) => { requireControl(event); return mediaStorageReport(mediaStorageDeps, referenced); });
+ipcMain.handle('media-storage:remove', (event, names: unknown, referenced: unknown) => { requireControl(event); return removeUnusedMedia(mediaStorageDeps, names, referenced); });
+ipcMain.handle('media-storage:settings', (event, patch: unknown) => {
+  requireControl(event);
+  const input = (patch && typeof patch === 'object' ? patch : {}) as Record<string, unknown>;
+  const valid = (value: unknown) => value === null || (typeof value === 'number' && Number.isFinite(value) && value > 0 && value < 2 ** 53);
+  const clean: { limitBytes?: number | null; snoozeUntilBytes?: number | null } = {};
+  if ('limitBytes' in input && valid(input.limitBytes)) clean.limitBytes = input.limitBytes as number | null;
+  if ('snoozeUntilBytes' in input && valid(input.snoozeUntilBytes)) clean.snoozeUntilBytes = input.snoozeUntilBytes as number | null;
+  return updateMediaStorageSettings(mediaStorageDeps, clean);
+});
+
+// One-click media optimizer: sharp image pass here, chunked sink for renderer-side video transcodes.
+const videoSinks = createVideoSinks(mediaLibrary.dir);
+void videoSinks.clean();
+const refList = (value: unknown): string[] => (Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string').slice(0, 5000) : []);
+ipcMain.handle('media-optimize:sizes', async (event, refs: unknown) => {
+  requireControl(event);
+  const sizes: Record<string, number> = {};
+  for (const ref of refList(refs)) sizes[ref] = await libraryFileSize(mediaLibrary, ref);
+  return sizes;
+});
+ipcMain.handle('media-optimize:image', (event, ref: unknown) => { requireControl(event); return optimizeLibraryImage(mediaLibrary, String(ref)); });
+ipcMain.handle('media-optimize:video-begin', event => { requireControl(event); return videoSinks.begin(); });
+ipcMain.handle('media-optimize:video-write', (event, id: unknown, position: unknown, bytes: unknown) => { requireControl(event); return videoSinks.write(String(id), Number(position), bytes); });
+ipcMain.handle('media-optimize:video-finish', (event, id: unknown, ext: unknown) => { requireControl(event); return videoSinks.finish(String(id), String(ext)); });
+ipcMain.handle('media-optimize:video-abort', (event, id: unknown) => { requireControl(event); return videoSinks.abort(String(id)); });
 
 // Generic recursive file finder
 // One directory walker, parametrized by a filter, replaces two near-identical
@@ -997,17 +1159,44 @@ function attachQuitConfirm(window: BrowserWindow): void {
   });
 }
 
+/** The only document app windows may show: the Vite dev server or the packaged index.html. */
+function appDocumentUrl(): string {
+  return process.env.VITE_DEV_SERVER_URL || pathToFileURL(path.join(DIST, 'index.html')).href;
+}
+
+/**
+ * Media permission (microphone for captions, desktop capture for screen slides) is granted only to the
+ * app's own windows showing the app's own document — the control window and projector outputs, which
+ * render live screen-capture slides. Iframes, foreign pages and any other webContents stay denied.
+ */
+function isAppMediaRequester(contents: Electron.WebContents | null, requestingUrl: string | undefined): boolean {
+  if (!contents || contents.isDestroyed()) return false;
+  const ownWindow = (win && !win.isDestroyed() && win.webContents.id === contents.id)
+    || [...projectorWindows.values()].some(entry => !entry.window.isDestroyed() && entry.window.webContents.id === contents.id);
+  if (!ownWindow) return false;
+  const appUrl = appDocumentUrl();
+  if (!isAppDocument(contents.getURL(), appUrl)) return false;
+  // Chromium may report only the origin ("file:///") for file pages, so compare the scheme there.
+  const requester = requestingUrl || contents.getURL();
+  return requester.startsWith('file:') ? appUrl.startsWith('file:') : isAppDocument(requester, appUrl);
+}
+
 function createWindow(): void {
   youtubeMusicService.dispose();
-  youtubeMusicService = new YouTubeMusicService();
+  youtubeMusicService = createMusicService();
   const musicForWindow = youtubeMusicService;
   if(restricted){practiceRendererReady=false;practiceClosePending=false;practiceWorkspaceReady=false;}
+  // Practice opens in a fixed, deterministic layout; the normal app reopens where the user left it.
+  const stateFile = path.join(app.getPath('userData'), 'window-state.json');
+  const savedState = restricted ? null : readWindowState(stateFile, screen.getAllDisplays().map(display => display.workArea));
   win = new BrowserWindow({
     icon: ICON_PATH,
-    width: 1200,
-    height: 800,
+    ...(savedState?.bounds ?? { width: 1200, height: 800 }),
     minWidth: 800,
     minHeight: 600,
+    // Hidden until the first paint, on the app's own dark background: no white flash at launch.
+    show: false,
+    backgroundColor: '#0f0f11',
     fullscreenable: true,
     autoHideMenuBar: true,
     title: restricted ? 'Worship Presentation Assistant — PRACTICE' : 'Worship Presentation Assistant - Control Panel',
@@ -1015,9 +1204,12 @@ function createWindow(): void {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
       webSecurity: true,
+      webviewTag: false,
     },
   });
+  hardenAppWindow(win.webContents, appDocumentUrl);
   attachAppDialogs(win);
   const controlWindow = win;
   desktop.windowCreated(controlWindow);
@@ -1035,7 +1227,20 @@ function createWindow(): void {
     ? win.loadURL(process.env.VITE_DEV_SERVER_URL)
     : win.loadFile(path.join(DIST, 'index.html'));
 
-  win.maximize();
+  let shown = false;
+  const reveal = () => {
+    if (shown || controlWindow.isDestroyed()) return;
+    shown = true;
+    if (savedState?.maximized ?? true) controlWindow.maximize();
+    controlWindow.show();
+  };
+  controlWindow.once('ready-to-show', reveal);
+  // A stalled renderer must never leave the app invisible.
+  setTimeout(reveal, 8000).unref?.();
+  if (!restricted) controlWindow.on('close', () => {
+    if (controlWindow.isDestroyed() || controlWindow.isMinimized() || controlWindow.isFullScreen()) return;
+    writeWindowState(stateFile, { bounds: controlWindow.getNormalBounds(), maximized: controlWindow.isMaximized() });
+  });
 
   if (restricted) win.on('close', event => { if(!closingPractice){event.preventDefault();if(practiceRendererReady)win?.webContents.send('practice:close-request');else practiceClosePending=true;} });
   else attachQuitConfirm(win);
@@ -1104,17 +1309,24 @@ function createProjectorWindow(requestedDisplayId?: string, initialData?: any): 
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
       webSecurity: true,
+      webviewTag: false,
     },
   });
+  hardenAppWindow(projectorWindow.webContents, appDocumentUrl);
 
   const entry: ProjectorEntry = {
     displayId,
     window: projectorWindow,
     pendingPayload: initialData ?? null,
+    lastFrame: initialData?.fullPresentation ? initialData : undefined,
     ready: false,
   };
   projectorWindows.set(displayId, entry);
+  projectorWindow.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => {
+    if (mainFrame && !inPlace) { entry.ready = false; entry.pendingPayload = entry.lastFrame ?? null; entry.receiverToken = undefined; }
+  });
   remoteStatus.isProjectorOpen = true;
   broadcast({ type: 'status', data: publicStatus() });
 
@@ -1200,13 +1412,15 @@ function createProjectorWindow(requestedDisplayId?: string, initialData?: any): 
   return true;
 }
 
-ipcMain.on('projector-ready', (event) => {
+ipcMain.on('projector-ready', (event, _displayId?: string, receiverToken?: unknown) => {
   const entry = [...projectorWindows.values()].find((candidate) => candidate.window.webContents.id === event.sender.id);
   if (!entry || entry.window.isDestroyed()) return;
 
   entry.ready = true;
-  if (entry.pendingPayload) {
-    entry.window.webContents.send('projector-update', entry.pendingPayload);
+  entry.receiverToken = typeof receiverToken === 'string' && receiverToken.length <= 100 ? receiverToken : undefined;
+  const snapshot = entry.lastFrame ?? entry.pendingPayload;
+  if (snapshot) {
+    entry.window.webContents.send('projector-update', { ...snapshot, receiverToken: entry.receiverToken });
     entry.pendingPayload = null;
   }
 
@@ -1355,15 +1569,21 @@ function setupMediaPermissionHandlers(): void {
   if (restricted) return;
   const ses = session.defaultSession;
 
-  ses.setPermissionRequestHandler((_webContents, permission, callback) => {
+  ses.setPermissionRequestHandler((webContents, permission, callback, details) => {
     // 'media' covers both getUserMedia microphone requests and the app's own
     // screen-capture stream. Everything else (camera, geolocation,
-    // notifications, …) stays denied.
-    callback(permission === 'media');
+    // notifications, …) stays denied — and 'media' only for our own windows.
+    callback(permission === 'media' && isAppMediaRequester(webContents, details.requestingUrl));
   });
 
-  ses.setPermissionCheckHandler((_webContents, permission) => {
-    return permission === 'media';
+  ses.setPermissionCheckHandler((webContents, permission, requestingOrigin) => {
+    if (permission !== 'media') return false;
+    // Check calls may arrive without webContents (e.g. device enumeration); fall back to the origin.
+    if (!webContents) {
+      const appUrl = appDocumentUrl();
+      return requestingOrigin.startsWith('file:') ? appUrl.startsWith('file:') : isAppDocument(requestingOrigin, appUrl);
+    }
+    return isAppMediaRequester(webContents, undefined);
   });
 
   // macOS: getUserMedia inside Electron will not open the mic until the app
@@ -1458,7 +1678,8 @@ app.whenReady().then(async () => {
   if (win && !restricted) initUpdater(win, (value, success) => desktop.progress('update', value, success));
   if (restricted) ipcMain.handle('updater:get-info', () => ({ version: app.getVersion(), updaterActive: false }));
   attachDisplayWatch();
-  if (!restricted) createRemoteServer();
+  // The phone server starts on first use; only "start with the app" opens it at launch.
+  if (!restricted && readRemoteSettings(remoteSettingsFile()).autoStart) void ensureRemoteServer();
   setPublicTunnelStatusListener((next) => sendToControl('public-tunnel:status', next));
   setClientCountListener((count) => sendToControl('share:client-count', count));
   setScreenShareClientCountListener((count) => sendToControl('screen-share:client-count', count));
@@ -1476,6 +1697,7 @@ app.on('activate', () => {
 
 app.on('will-quit', () => {
   desktop.dispose();
+  driveService.dispose();
   youtubeMusicService.dispose();
   for (const timer of [captureTimer, displayTimer]) if (timer) clearTimeout(timer);
   for (const timer of [heartbeatTimer, networkTimer]) if (timer) clearInterval(timer);
@@ -1561,7 +1783,7 @@ async function readProjectWithRecovery(filePath: string): Promise<{ content: str
 ipcMain.handle('save-file', async (event, content: unknown) => {
   requireControl(event);
   if (typeof content !== 'string') throw new Error('Invalid presentation data');
-  const { filePath, canceled } = await dialog.showSaveDialog({
+  const { filePath, canceled } = await showSaveDialogOwned({
     defaultPath: lastDialogDir,
     filters: [{ name: 'Worship Presentation Assistant Files', extensions: ['gpres'] }],
   });
@@ -1599,7 +1821,7 @@ ipcMain.handle('open-file', async (event, requestId?: unknown, confirmation?: im
     const { content } = await readProjectWithRecovery(filePath);
     return { path: filePath, content, token: desktop.prepare(filePath, requestId) };
   }
-  const { filePaths, canceled } = await dialog.showOpenDialog({
+  const { filePaths, canceled } = await showOpenDialogOwned({
     defaultPath: lastDialogDir,
     filters: [{ name: 'Worship Presentation Assistant Files', extensions: ['gpres'] }],
     properties: ['openFile'],
@@ -1647,6 +1869,30 @@ ipcMain.handle('show-alert-dialog', async (event, options: { message: string; ti
 });
 
 // IPC: preset CRUD
+
+function requirePresetControl(event: Electron.IpcMainInvokeEvent): void {
+  // Practice has its own profile and IPC allowlist; only its main frame can access that library.
+  if (restricted) {
+    if (!isTourProfileSender(event.sender, event.senderFrame, win?.webContents ?? null)) throw new Error('Unauthorized practice sender');
+  } else requireControl(event);
+}
+ipcMain.handle('list-preset-entries', (event, retentionMs?: number) => { requirePresetControl(event); return presetStore.catalog.list(retentionMs); });
+ipcMain.handle('get-preset-entry', (event, name: string) => { requirePresetControl(event); return presetStore.catalog.get(name); });
+ipcMain.handle('get-preset-preview', (event, name: string, version: string) => { requirePresetControl(event); return presetStore.catalog.preview(name, version); });
+ipcMain.handle('save-preset-entry', async (event, preset: { name: string; presentation: unknown; retentionMs?: number }) => {
+  requirePresetControl(event);
+  const sessionId = practiceWorkspace.sessionId();
+  if (restricted && !isLiveSavePresetName(preset.name)) await practiceWorkspace.prepareSave(sessionId, preset);
+  const change = await presetStore.catalog.save(preset);
+  if (restricted && !isLiveSavePresetName(preset.name) && change.upsert) {
+    const record = { name: preset.name, presentation: preset.presentation, createdAt: change.upsert.createdAt };
+    const workspace = await practiceWorkspace.saved(preset.presentation, sessionId, record);
+    if (workspace) sendToControl('practice:workspace-changed', { sessionId, workspace });
+  }
+  return change;
+});
+ipcMain.handle('delete-preset-entry', (event, name: string, retention?: number) => { requirePresetControl(event); return presetStore.catalog.remove(name, retention); });
+ipcMain.handle('rename-preset-entry', (event, oldName: string, name: string, retention?: number) => { requirePresetControl(event); return presetStore.catalog.rename(oldName, name, retention); });
 
 ipcMain.handle('load-presets', (_, retentionMs?: number) => presetStore.readPresets(retentionMs));
 
@@ -1799,15 +2045,13 @@ ipcMain.handle('update-projector', (_, data: unknown) => {
         : { outputDisplayId: entry.displayId }),
     };
 
+    entry.lastFrame = mergeProjectorSnapshot(entry.lastFrame, frame);
     if (!entry.ready) {
-      // Keep the initial full snapshot when a newly opened output receives a
-      // navigation-only update before its renderer sends `projector-ready`.
-      entry.pendingPayload = entry.pendingPayload?.fullPresentation
-        ? { ...entry.pendingPayload, ...frame, fullPresentation: entry.pendingPayload.fullPresentation }
-        : frame;
+      // Replay a complete, current snapshot, including patches received while loading.
+      entry.pendingPayload = entry.lastFrame ?? frame;
       continue;
     }
-    entry.window.webContents.send('projector-update', frame);
+    entry.window.webContents.send('projector-update', { ...frame, receiverToken: entry.receiverToken });
   }
   return projectorWindows.size > 0;
 });
@@ -1825,10 +2069,27 @@ ipcMain.handle('cleanup-temp-dir', async () => {
 
 // IPC: remote control
 
+// Reading the URL never starts the server ('' while it is off); opening Phone Control does.
 ipcMain.handle('get-remote-url', () => currentRemoteUrl());
+ipcMain.handle('remote:start', async (event) => {
+  requireControl(event);
+  await ensureRemoteServer();
+  return currentRemoteUrl();
+});
+ipcMain.handle('remote:reset-pairing', async (event) => {
+  requireControl(event);
+  if (!(await ensureRemoteServer())) return '';
+  return resetRemotePairing();
+});
+ipcMain.handle('remote:get-settings', () => ({ autoStart: readRemoteSettings(remoteSettingsFile()).autoStart }));
+ipcMain.handle('remote:set-auto-start', (event, enabled: unknown) => {
+  requireControl(event);
+  if (typeof enabled !== 'boolean') throw new Error('Invalid setting');
+  return { autoStart: writeRemoteSettings(remoteSettingsFile(), { autoStart: enabled }).autoStart };
+});
 
 ipcMain.handle('public-tunnel:start', async () => {
-  const port = getRemotePort();
+  const port = await ensureRemoteServer();
   if (!port) return { active: false, url: '', state: 'error', error: 'server-not-ready' };
   return startPublicTunnel(port);
 });
@@ -1877,12 +2138,12 @@ function httpProbe(host: string, port: number, urlPath: string, json = false, ti
 }
 
 /** WebSocket el sıkışması + sunucudan ilk mesaj. /diag yolu istemci listesine girmez. */
-function wsProbe(host: string, port: number, timeoutMs = 3000): Promise<ProbeResult> {
+function wsProbe(host: string, port: number, query = '', timeoutMs = 3000): Promise<ProbeResult> {
   return new Promise((resolve) => {
     const started = Date.now();
     let settled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const socket = new WsSocket(`ws://${host}:${port}/diag`, { handshakeTimeout: timeoutMs });
+    const socket = new WsSocket(`ws://${host}:${port}/diag${query}`, { handshakeTimeout: timeoutMs });
     const finish = (result: Omit<ProbeResult, 'ms'>) => {
       if (settled) return;
       settled = true;
@@ -1898,7 +2159,7 @@ function wsProbe(host: string, port: number, timeoutMs = 3000): Promise<ProbeRes
 }
 
 ipcMain.handle('get-remote-diagnostics', async () => {
-  const port = getRemotePort();
+  const port = await ensureRemoteServer();
   const listening = port > 0;
   const netInfo = scanNetwork(true);
   const ip = netInfo.ip;
@@ -1910,13 +2171,14 @@ ipcMain.handle('get-remote-diagnostics', async () => {
   let page: ProbeResult | null = null;
   let socket: ProbeResult | null = null;
   let firewall: FirewallDiagnostic | undefined;
+  const authQuery = remoteToken ? `?token=${encodeURIComponent(remoteToken)}` : '';
   if (listening) {
     // Dört yol paralel: yerel döngü, LAN IP üzerinden HTTP, uzak sayfa, WebSocket; güvenlik duvarı sorgusu da aynı anda.
     [loopback, lan, page, socket, firewall] = await Promise.all([
-      httpProbe('127.0.0.1', port, '/api/status', true),
-      httpProbe(ip, port, '/api/status', true),
-      httpProbe(ip, port, '/remote'),
-      wsProbe(ip, port),
+      httpProbe('127.0.0.1', port, `/api/status${authQuery}`, true),
+      httpProbe(ip, port, `/api/status${authQuery}`, true),
+      httpProbe(ip, port, `/remote${authQuery}`),
+      wsProbe(ip, port, authQuery),
       inspectRemoteFirewall(ip, port).catch(() => undefined),
     ]);
   }
@@ -2066,7 +2328,7 @@ ipcMain.handle('get-remote-diagnostics', async () => {
 // ─── Phone captions/translation share IPC ──────────────────────────────────
 ipcMain.handle('share:start', async (_, subdomain?: string) => {
   try {
-    const port = getRemotePort();
+    const port = await ensureRemoteServer();
     if (!port) return { ok: false, error: 'server-not-ready' };
     const result = startShare(getLocalIPv4(), port);
     if (!result) return { ok: false, error: 'already-active' };
@@ -2108,8 +2370,8 @@ ipcMain.handle('share:get-status', () => {
 });
 
 // ─── Live-screen phone broadcast IPC ────────────────────────────────────────
-ipcMain.handle('screen-share:start', () => {
-  const port = getRemotePort();
+ipcMain.handle('screen-share:start', async () => {
+  const port = await ensureRemoteServer();
   if (!port) return { ok: false, error: 'server-not-ready' };
   const result = startScreenShare(getLocalIPv4(), port);
   if (!result) return { ok: false, error: 'already-active' };
@@ -2268,21 +2530,25 @@ ipcMain.handle('send-remote-notice', (_, notice: { text?: string; tone?: 'ok' | 
 
 // IPC: media / import
 
+const MAX_BIBLE_XML_BYTES = 64 * 1024 * 1024;
+
 ipcMain.handle('import-bible-xml', async (_, filePath?: string) => {
   if (restricted) {
     if (filePath && path.resolve(filePath) !== path.join(app.getPath('userData'), 'practice-assets', 'practice-bible.xml')) throw new Error('Only the practice sample is available');
     return practiceWorkspace.sampleBible(!filePath);
   }
-  let selected = filePath;
+  // Kayıtlı yol renderer'dan gelir: yalnızca makul boyutta bir .xml dosyası okunur, rastgele dosya okunamaz.
+  let selected = typeof filePath === 'string' && filePath.length < 4096 && /\.xml$/i.test(filePath) ? path.resolve(filePath) : undefined;
   if (selected) {
     try {
-      if (!(await fs.stat(selected)).isFile()) selected = undefined;
+      const stat = await fs.stat(selected);
+      if (!stat.isFile() || stat.size > MAX_BIBLE_XML_BYTES) selected = undefined;
     } catch {
       selected = undefined;
     }
   }
   if (!selected) {
-    const { filePaths } = await dialog.showOpenDialog({
+    const { filePaths } = await showOpenDialogOwned({
       defaultPath: lastDialogDir,
       filters: [{ name: 'Zefania XML Bible', extensions: ['xml'] }],
       properties: ['openFile'],
@@ -2351,7 +2617,7 @@ ipcMain.handle('select-media-file', async (_, type: 'image' | 'video') => {
     type === 'image'
       ? [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp'] }]
       : [{ name: 'Videos', extensions: ['mp4', 'webm', 'ogg', 'mov'] }];
-  const { filePaths } = await dialog.showOpenDialog({ defaultPath: lastDialogDir, filters, properties: ['openFile'] });
+  const { filePaths } = await showOpenDialogOwned({ defaultPath: lastDialogDir, filters, properties: ['openFile'] });
   rememberDir(filePaths?.[0]);
   return filePaths?.[0] ?? null;
 });
@@ -2361,7 +2627,7 @@ ipcMain.handle('select-media-files-all', async () => {
   const filters = [
     { name: 'Media', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'mp4', 'webm', 'mov', 'mkv', 'avi'] },
   ];
-  const { filePaths } = await dialog.showOpenDialog({
+  const { filePaths } = await showOpenDialogOwned({
     defaultPath: lastDialogDir,
     filters,
     properties: ['openFile', 'multiSelections'],
@@ -2371,7 +2637,7 @@ ipcMain.handle('select-media-files-all', async () => {
 });
 
 ipcMain.handle('select-media-folder', async () => {
-  const result = await dialog.showOpenDialog({
+  const result = await showOpenDialogOwned({
     defaultPath: lastDialogDir,
     properties: ['openDirectory', 'createDirectory'],
   });
@@ -2390,29 +2656,29 @@ ipcMain.handle('soniox:open-website', async event => {
   return { ok: true };
 });
 ipcMain.handle('youtube-music:search', (event, query: unknown, cursor?: unknown) => isMusicControl(event)
-  ? serviceRequest('music', () => youtubeMusicService.search(query, cursor)) : { ok: false, error: 'unavailable' });
+  ? serviceRequest('music', async () => (await youtubeMusicService.get()).search(query, cursor)) : { ok: false, error: 'unavailable' });
 ipcMain.handle('youtube-music:play', (event, id: unknown) => isMusicControl(event)
-  ? serviceRequest('music', () => youtubeMusicService.play(id)) : { ok: false, error: 'unavailable' });
-ipcMain.handle('youtube-music:prepare', (event, id: unknown) => isMusicControl(event)
-  ? youtubeMusicService.prepare(id) : { ok: false });
-ipcMain.handle('youtube-music:offline-status', (event, id: unknown) => isMusicControl(event)
-  ? youtubeMusicService.offlineStatus(id) : { state: 'error', error: 'unavailable' });
+  ? serviceRequest('music', async () => (await youtubeMusicService.get()).play(id)) : { ok: false, error: 'unavailable' });
+ipcMain.handle('youtube-music:prepare', async (event, id: unknown) => isMusicControl(event)
+  ? (await youtubeMusicService.get()).prepare(id) : { ok: false });
+ipcMain.handle('youtube-music:offline-status', async (event, id: unknown) => isMusicControl(event)
+  ? (await youtubeMusicService.get()).offlineStatus(id) : { state: 'error', error: 'unavailable' });
 ipcMain.handle('youtube-music:download', async (event, id: unknown) => {
   if (!isMusicControl(event)) return { state: 'error', error: 'unavailable' };
   const task = 'music-' + randomUUID(); desktop.progress(task, 2); let successful = false;
-  try { const result = await youtubeMusicService.download(id); successful = result.state === 'ready'; desktop.service('music', successful, !net.isOnline()); return result; }
+  try { const result = await (await youtubeMusicService.get()).download(id); successful = result.state === 'ready'; desktop.service('music', successful, !net.isOnline()); return result; }
   finally { desktop.progress(task, null, successful); }
 });
 ipcMain.handle('youtube-music:cancel-download', (event, id: unknown) => {
-  if (isMusicControl(event)) youtubeMusicService.cancelDownload(id);
+  if (isMusicControl(event)) youtubeMusicService.peek()?.cancelDownload(id);
 });
 ipcMain.handle('youtube-music:stop', (event, streamId?: unknown) => {
   if (isMusicControl(event) && (streamId === undefined || typeof streamId === 'string'))
-    youtubeMusicService.stop(streamId);
+    { const service = youtubeMusicService.peek(); if (service) service.stop(streamId); else youtubeMusicService.dispose(); }
 });
 
 ipcMain.handle('select-audio-folder', async () => {
-  const result = await dialog.showOpenDialog({
+  const result = await showOpenDialogOwned({
     defaultPath: lastDialogDir,
     properties: ['openDirectory', 'createDirectory'],
   });
@@ -2432,7 +2698,7 @@ ipcMain.handle('read-audio-folder', async (_, folderPath: string, recursive = tr
 });
 
 ipcMain.handle('select-audio-file', async () => {
-  const { filePaths } = await dialog.showOpenDialog({
+  const { filePaths } = await showOpenDialogOwned({
     defaultPath: lastDialogDir,
     filters: [{ name: 'Audio Files', extensions: ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma'] }],
     properties: ['openFile'],
@@ -2466,7 +2732,7 @@ ipcMain.handle('media:getThumbnail', async (_evt, filePath: string, maxEdge: num
 // IPC: PowerPoint
 
 ipcMain.handle('select-pptx-file', async () => {
-  const { filePaths } = await dialog.showOpenDialog({
+  const { filePaths } = await showOpenDialogOwned({
     defaultPath: lastDialogDir,
     filters: [{ name: 'PowerPoint Presentations', extensions: ['pptx', 'pptm'] }],
     properties: ['openFile'],
@@ -2503,7 +2769,7 @@ ipcMain.handle('export-pptx', async (event, content: string) => {
       .replace(/[\\/:*?"<>|]/g, '_')
       .trim() || 'presentation';
 
-  const { filePath, canceled } = await dialog.showSaveDialog({
+  const { filePath, canceled } = await showSaveDialogOwned({
     title: 'Export PowerPoint',
     defaultPath: `${baseName}.pptx`,
     filters: [{ name: 'PowerPoint Presentations', extensions: ['pptx'] }],
@@ -2530,7 +2796,7 @@ ipcMain.handle('import-hymn-archive', async (_, dirPath?: string) => {
     }
   }
   if (!selected) {
-    const { filePaths } = await dialog.showOpenDialog({ defaultPath: lastDialogDir, properties: ['openDirectory'] });
+    const { filePaths } = await showOpenDialogOwned({ defaultPath: lastDialogDir, properties: ['openDirectory'] });
     selected = filePaths?.[0];
     if (selected) lastDialogDir = selected;
   }
@@ -2595,7 +2861,7 @@ ipcMain.handle('capture-screen-source', async (_, sourceId: unknown) => {
 
 ipcMain.handle('drive-sign-in', async () => {
   try {
-    return await driveService.signIn();
+    return await (await driveService.get()).signIn();
   } catch (error) {
     console.error('Drive sign-in error:', error);
     return { signedIn: false, email: null };
@@ -2603,18 +2869,18 @@ ipcMain.handle('drive-sign-in', async () => {
 });
 
 ipcMain.handle('drive-sign-in-cancel', () => {
-  driveService.cancelSignIn();
+  driveService.dispose();
 });
 
-ipcMain.handle('drive-sign-out', () => {
-  driveService.cancelSignIn();
-  driveService.signOut();
+ipcMain.handle('drive-sign-out', async () => {
+  driveService.peek()?.cancelSignIn();
+  (await driveService.get()).signOut();
 });
-ipcMain.handle('drive-status', async () => driveService.getStatus());
+ipcMain.handle('drive-status', async () => (await driveService.get()).getStatus());
 
 ipcMain.handle('drive-list-files', async () => {
   try {
-    return await driveService.listFiles();
+    return await (await driveService.get()).listFiles();
   } catch (error) {
     console.error('Drive list error:', error);
     return [];
@@ -2624,7 +2890,7 @@ ipcMain.handle('drive-list-files', async () => {
 ipcMain.handle('drive-upload', async (_, name: unknown, content: unknown) => {
   if (typeof name !== 'string' || typeof content !== 'string') return { ok: false, error: 'Invalid upload' };
   try {
-    const id = await driveService.uploadFile(name, content);
+    const id = await (await driveService.get()).uploadFile(name, content);
     return { ok: true, id };
   } catch (error) {
     console.error('Drive upload error:', error);
@@ -2638,7 +2904,7 @@ ipcMain.handle('drive-download', async (event, fileId: string) => {
   const directory = await fs.mkdtemp(path.join(app.getPath('temp'), 'wpa-drive-'));
   const target = path.join(directory, 'download.gpres');
   try {
-    await driveService.downloadToFile(fileId, target);
+    await (await driveService.get()).downloadToFile(fileId, target);
     const { content } = await heavyClient.readGpresFile(target, mediaLibrary.dir);
     return { ok: true, data: content };
   } catch (error) {
@@ -2652,7 +2918,7 @@ ipcMain.handle('drive-download', async (event, fileId: string) => {
 
 ipcMain.handle('drive-delete-file', async (_, fileId: string) => {
   try {
-    await driveService.deleteFile(fileId);
+    await (await driveService.get()).deleteFile(fileId);
     return { ok: true };
   } catch (error) {
     console.error('Drive delete error:', error);
@@ -2683,7 +2949,7 @@ ipcMain.handle('drive-save-presentation', async (event, content: unknown, custom
     const file = path.join(directory, 'upload.gpres');
     try {
       await heavyClient.writeGpres(payload, file, mediaLibrary.dir);
-      const id = await driveService.uploadProjectFile(name, file);
+      const id = await (await driveService.get()).uploadProjectFile(name, file);
       return { ok: true, id };
     } finally { await fs.unlink(file).catch(() => {}); await fs.rmdir(directory).catch(() => {}); }
   } catch (error) {

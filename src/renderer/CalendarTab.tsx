@@ -1,3 +1,4 @@
+import ControlTooltip from './components/ControlTooltip';
 import { useUiMotionEnabled } from './hooks/useUiMotionEnabled';
 import { uiMotion } from './uiMotion';
 import * as m from 'motion/react-m';
@@ -326,7 +327,7 @@ export default function CalendarTab({
                   {t('common.calendarTitle')}
                 </h2>
 
-                <p className="text-xs text-white/40 mt-0.5">
+                <p className="text-xs text-white/55 mt-0.5">
                   {t('common.calendarSubtitle')}
                 </p>
               </div>
@@ -388,7 +389,7 @@ export default function CalendarTab({
                 {dayNames.map(day => (
                   <div
                     key={day}
-                    className="h-8 sm:h-10 flex items-center justify-center text-[10px] sm:text-xs uppercase tracking-wider text-white/35 font-semibold"
+                    className="h-8 sm:h-10 flex items-center justify-center text-[11px] sm:text-xs uppercase tracking-wider text-white/55 font-semibold"
                   >
                     {/* Show short form on mobile */}
                     <span className="hidden sm:inline">{day}</span>
@@ -443,7 +444,7 @@ export default function CalendarTab({
                         </span>
 
                         {dayEvents.length > 0 && (
-                          <div className="min-w-5 sm:min-w-6 h-5 sm:h-6 px-1 rounded-full bg-blue-500/20 border border-blue-500/20 text-[10px] sm:text-[11px] flex items-center justify-center text-blue-300 font-medium">
+                          <div className="min-w-5 sm:min-w-6 h-5 sm:h-6 px-1 rounded-full bg-blue-500/20 border border-blue-500/20 text-[11px] sm:text-[11px] flex items-center justify-center text-blue-300 font-medium">
                             {dayEvents.length}
                           </div>
                         )}
@@ -463,14 +464,14 @@ export default function CalendarTab({
                               )}
                             />
 
-                            <span className="text-[10px] sm:text-[11px] text-white/80 truncate">
+                            <span className="text-[11px] sm:text-[11px] text-white/80 truncate">
                               {event.title}
                             </span>
                           </div>
                         ))}
 
                         {dayEvents.length > 3 && (
-                          <div className="text-[10px] sm:text-[11px] text-white/35 px-1">
+                          <div className="text-[11px] sm:text-[11px] text-white/55 px-1">
                             {t('common.calendarMoreEvents', { count: dayEvents.length - 3 })}
                           </div>
                         )}
@@ -493,7 +494,7 @@ export default function CalendarTab({
                   </div>
 
                   <div>
-                    <p className="text-xs uppercase tracking-wider text-white/35">
+                    <p className="text-xs uppercase tracking-wider text-white/55">
                       {t('common.calendarSelectedDay')}
                     </p>
 
@@ -519,7 +520,7 @@ export default function CalendarTab({
                     {t('common.calendarEvents')}
                   </h4>
 
-                  <span className="text-xs text-white/35">
+                  <span className="text-xs text-white/55">
                     {t('common.calendarEventCount', { count: selectedDayEvents.length })}
                   </span>
                 </div>
@@ -535,7 +536,7 @@ export default function CalendarTab({
                       {t('common.calendarNoEvents')}
                     </h5>
 
-                    <p className="text-sm text-white/35 mt-2 leading-relaxed">
+                    <p className="text-sm text-white/55 mt-2 leading-relaxed">
                       {t('common.calendarNoEventsDesc')}
                     </p>
                   </div>
@@ -564,15 +565,15 @@ export default function CalendarTab({
                                 <div className="flex gap-3 mt-1.5 text-xs text-white/50">
                                   {event.time && <span>🕐 {event.time}</span>}
                                   {event.presentationName && (
-                                    <span className="truncate" title={event.presentationName}>
+                                    <ControlTooltip><span className="truncate" title={event.presentationName}>
                                       📊 {event.presentationName}
-                                    </span>
+                                    </span></ControlTooltip>
                                   )}
                                 </div>
                               )}
 
                               {event.description && (
-                                <p className="text-xs text-white/45 mt-2 leading-relaxed">
+                                <p className="text-xs text-white/60 mt-2 leading-relaxed">
                                   {event.description}
                                 </p>
                               )}
@@ -635,7 +636,7 @@ export default function CalendarTab({
                       : t('common.calendarModalTitle')}
                   </h3>
 
-                  <p className="text-sm text-white/45 mt-1">
+                  <p className="text-sm text-white/60 mt-1">
                     {new Date(selectedDate).toLocaleDateString(currentLocale)}
                   </p>
                 </div>
@@ -652,7 +653,7 @@ export default function CalendarTab({
               {/* BODY */}
               <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
                 <div>
-                  <label htmlFor="cal-event-title" className="block text-xs uppercase tracking-wider text-white/35 mb-2">
+                  <label htmlFor="cal-event-title" className="block text-xs uppercase tracking-wider text-white/55 mb-2">
                     {t('common.calendarTitleLabel')}
                   </label>
 
@@ -672,7 +673,7 @@ export default function CalendarTab({
                 </div>
 
                 <div>
-                  <label htmlFor="cal-event-desc" className="block text-xs uppercase tracking-wider text-white/35 mb-2">
+                  <label htmlFor="cal-event-desc" className="block text-xs uppercase tracking-wider text-white/55 mb-2">
                     {t('common.calendarDescLabel')}
                   </label>
 
@@ -692,7 +693,7 @@ export default function CalendarTab({
 
                 {/* COLORS */}
                 <div>
-                  <label className="block text-xs uppercase tracking-wider text-white/35 mb-3">
+                  <label className="block text-xs uppercase tracking-wider text-white/55 mb-3">
                     {t('common.calendarColorLabel')}
                   </label>
 
@@ -723,7 +724,7 @@ export default function CalendarTab({
 
                 {/* TIME */}
                 <div>
-                  <label htmlFor="cal-event-time" className="block text-xs uppercase tracking-wider text-white/35 mb-2">
+                  <label htmlFor="cal-event-time" className="block text-xs uppercase tracking-wider text-white/55 mb-2">
                     {t('common.calendarTimeLabel')}
                   </label>
 
@@ -743,7 +744,7 @@ export default function CalendarTab({
 
                 {/* Presentation name */}
                 <div>
-                  <label htmlFor="cal-event-pres-name" className="block text-xs uppercase tracking-wider text-white/35 mb-2">
+                  <label htmlFor="cal-event-pres-name" className="block text-xs uppercase tracking-wider text-white/55 mb-2">
                     {t('common.calendarPresNameLabel')}
                   </label>
 
@@ -766,7 +767,7 @@ export default function CalendarTab({
                     )}
                     {savedPresentationNames.map(name => <option key={name} value={name} className="bg-surface-overlay">{name}</option>)}
                   </select>
-                  <p className="text-[11px] text-white/45 mt-2">
+                  <p className="text-[11px] text-white/60 mt-2">
                     {t('common.calendarPresHint')}
                   </p>
                 </div>

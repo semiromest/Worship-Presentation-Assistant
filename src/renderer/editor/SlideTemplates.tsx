@@ -40,7 +40,7 @@ export function SlideTemplates({ onSelect }: SlideTemplatesProps) {
           <span className="text-xs font-medium text-white/80">
             {t(tplNameKeys[tpl.id] || 'common.templateTitleOnly')}
           </span>
-          <span className="text-[10px] text-white/40 leading-tight">
+          <span className="text-[11px] text-white/55 leading-tight">
             {t(tplDescKeys[tpl.id] || 'common.templateTitleOnlyDesc')}
           </span>
         </button>

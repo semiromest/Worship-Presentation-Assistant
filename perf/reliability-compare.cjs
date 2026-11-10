@@ -2,7 +2,7 @@ const fs=require('node:fs');const {compare}=require('./reliability-math.cjs');
 const [a,b,c]=process.argv.slice(2);if(!c)throw new Error('Usage: node reliability-compare.cjs baseline-a.json baseline-b.json candidate.json');
 const reports=[a,b,c].map(file=>JSON.parse(fs.readFileSync(file,'utf8')));
 if(reports.some(r=>r.kind!=='packaged'))throw new Error('Packaged reports required');
-if(reports.some(r=>r.protocol!=='reliability-v6-nofocus-capture-mixed-color-v1'||r.mode!=='benchmark'||r.commandsPerScenario!==300))throw new Error('Matching benchmark protocol required; soak/older reports cannot be compared');
+if(reports.some(r=>r.protocol!=='reliability-v7-http-visible12-v1'||r.mode!=='benchmark'||r.commandsPerScenario!==300))throw new Error('Matching benchmark protocol required; soak/older reports cannot be compared');
 if(reports.some(r=>r.runs.some(run=>run.errors?.length||run.samplingError)))throw new Error('Reports contain runtime or sampling errors');
 const boot=reports.map(r=>r.runs.map(run=>run.bootToShellMs).filter(value=>typeof value==='number'&&Number.isFinite(value)));
 const longTasks=reports.map(r=>r.runs.map(run=>run.longTasks.reduce((sum,t)=>sum+t.duration,0)));

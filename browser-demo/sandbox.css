@@ -1,5 +1,0 @@
-/* The application itself uses its original CSS. Only the demo's outer notice is added. */
-.browser-demo-root{height:100dvh;display:flex;flex-direction:column;overflow:hidden;background:#0f0f11}
-.browser-demo-banner{height:32px;min-height:32px;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:0 14px;background:#17212c;border-bottom:1px solid #ffffff15;color:#a9bfd4;font:11px/1.4 'Segoe UI',system-ui,sans-serif;white-space:nowrap;overflow:auto}
-.browser-demo-banner>div{display:flex;gap:18px;flex:none}.browser-demo-banner a{color:#d0e4f8;text-decoration:none}.browser-demo-banner a:hover{text-decoration:underline}.browser-demo-banner a:focus-visible{outline:2px solid #60a5fa;outline-offset:3px}
-.browser-demo-app{flex:1;min-height:0;position:relative;overflow:hidden}

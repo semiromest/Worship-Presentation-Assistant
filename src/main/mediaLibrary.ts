@@ -13,6 +13,7 @@
  */
 
 import fs from 'node:fs/promises';
+import { renameWithRetry } from './atomicFile';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import AdmZip from 'adm-zip';
@@ -43,7 +44,7 @@ export async function storeBytesTo(dir: string, data: Buffer, ext: string): Prom
   const tempFile = `${file}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
   try {
     await fs.writeFile(tempFile, data);
-    await fs.rename(tempFile, file);
+    await renameWithRetry(tempFile, file);
     return `${MEDIA_REF_PREFIX}${name}`;
   } catch {
     try { await fs.rm(tempFile, { force: true }); } catch { /* best-effort */ }

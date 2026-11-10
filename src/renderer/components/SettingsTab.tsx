@@ -1,3 +1,9 @@
+import { deleteLibraryPreset } from '../presetLibrary';
+import StorageSettings from './StorageSettings';
+import MediaOptimizeSettings from './MediaOptimizeSettings';
+import RemoteAutoStartSetting from './RemoteAutoStartSetting';
+import WebFullscreenSetting from './WebFullscreenSetting';
+import ControlTooltip from './ControlTooltip';
 import { useUiMotionEnabled } from '../hooks/useUiMotionEnabled';
 import { uiMotion } from '../uiMotion';
 import * as m from 'motion/react-m';
@@ -9,7 +15,7 @@ import { PracticePanel } from './PracticePanel';
 import { registerTourAnchor } from './Tour/tourController';
 import { useMemo, useState, useEffect, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Globe, Zap, Settings2, Save, Trash2, DatabaseBackup, Volume2, Mic, KeyRound, Languages, Check, Loader2, Music, Palette, Sparkles, Search, X, ChevronRight, BookOpen, Monitor, RefreshCw, Keyboard } from 'lucide-react';
+import { Globe, Zap, Settings2, Save, Trash2, DatabaseBackup, Volume2, Mic, KeyRound, Languages, Check, Loader2, Music, Palette, Sparkles, Search, X, ChevronRight, BookOpen, Monitor, RefreshCw, Keyboard, Heart } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { useUpdaterStore } from '../state/useUpdaterStore';
 import { WatermarkSettingsPanel } from './WatermarkSettingsPanel';
@@ -23,10 +29,11 @@ import SettingSwitch from './SettingSwitch';
 import { settingsCategories, settingsItems, normalizeSettingsSearch, type SettingsCategoryId, type SettingsItemId } from './settingsNavigation';
 import './SettingsTab.css';
 import DesktopSettings from './DesktopSettings';
+import SupportDevelopment from './SupportDevelopment';
 
 // Navigation is session-only; it never changes a saved presentation or user setting.
 let lastSettingsCategory: SettingsCategoryId = 'general';
-const CATEGORY_ICONS = { general: Settings2, presentation: Monitor, appearance: Palette, captions: Mic, autosave: DatabaseBackup, updates: RefreshCw, learning: BookOpen };
+const CATEGORY_ICONS = { general: Settings2, presentation: Monitor, appearance: Palette, captions: Mic, autosave: DatabaseBackup, updates: RefreshCw, learning: BookOpen, support: Heart };
 
 const HYMN_POSITION_KEYS: Record<Position, string> = {
   'bottom-left': 'common.hymnsAuthorPosBottomLeft',
@@ -38,24 +45,31 @@ const HYMN_POSITION_KEYS: Record<Position, string> = {
 };
 
 
+/** Categories that stay listed but cannot be opened yet. */
+const INACTIVE_CATEGORIES: ReadonlySet<SettingsCategoryId> = new Set<SettingsCategoryId>(['support']);
+
 export default function SettingsTab() {
 
   const { t, i18n } = useTranslation();
   const practice = usePractice();
+  const categories = settingsCategories.filter(id => !practice || id !== 'support');
   const motionEnabled = useUiMotionEnabled();
-  const [category, setCategory] = useState<SettingsCategoryId>(() => lastSettingsCategory);
+  const [category, setCategory] = useState<SettingsCategoryId>(() => INACTIVE_CATEGORIES.has(lastSettingsCategory) ? 'general' : lastSettingsCategory);
   const [query, setQuery] = useState('');
   const [focusItem, setFocusItem] = useState<SettingsItemId | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const normalizedQuery = normalizeSettingsSearch(query);
   const searchResults = settingsItems.filter(item => {
+    if ((practice && item.id === 'support') || INACTIVE_CATEGORIES.has(item.category)) return false;
+    if (item.id === 'phone-server' && (practice || !window.electronAPI?.remoteSetAutoStart)) return false;
     const copy = [item.id === 'sound' ? `${t('settings.muteSfxDuringLive')} ${t('settings.muteSfxDuringLiveDesc')}` : '', t(item.titleKey), t(item.descriptionKey), t(`settings.navigation.categories.${item.category}.title`), t(`settings.navigation.keywords.${item.id}`)];
     const haystack = normalizeSettingsSearch(copy.join(' '));
     return normalizedQuery.split(/\s+/).every(word => haystack.includes(word));
   });
 
   const chooseCategory = (next: SettingsCategoryId) => {
+    if (INACTIVE_CATEGORIES.has(next)) return;
     if (next !== category || query) playSfx('swipe');
     lastSettingsCategory = next;
     setCategory(next);
@@ -88,6 +102,8 @@ export default function SettingsTab() {
   const setSectionsEnabled = useStore(s => s.setServiceSectionsEnabled);
   const operatorNotesEnabled = useStore((s) => s.operatorNotesEnabled);
   const setOperatorNotesEnabled = useStore((s) => s.setOperatorNotesEnabled);
+  const nextSlidePreviewEnabled = useStore((s) => s.nextSlidePreviewEnabled);
+  const setNextSlidePreviewEnabled = useStore((s) => s.setNextSlidePreviewEnabled);
   const autoGoLive = useStore((s) => s.autoGoLive);
   const setAutoGoLive = useStore((s) => s.setAutoGoLive);
   const setIsUpdatesOpen = useStore((s) => s.setIsUpdatesOpen);
@@ -98,7 +114,6 @@ export default function SettingsTab() {
   const liveSaveRetentionMs = useStore((s) => s.liveSaveRetentionMs);
   const setLiveSaveRetentionMs = useStore((s) => s.setLiveSaveRetentionMs);
   const presets = useStore((s) => s.presets);
-  const setPresets = useStore((s) => s.setPresets);
   const uiSfxMuteDuringLive = useStore(s => s.uiSfxMuteDuringLive);
   const setUiSfxMuteDuringLive = useStore(s => s.setUiSfxMuteDuringLive);
   const uiSfxEnabled = useStore((s) => s.uiSfxEnabled);
@@ -181,13 +196,9 @@ export default function SettingsTab() {
     const names = liveSavePresets.map((preset) => preset.name);
     if (names.length === 0) return;
 
-    let next = [...presets];
     for (const name of names) {
-      const updated = await window.electronAPI?.deletePreset?.(name, getLiveSaveRetention());
-      if (Array.isArray(updated)) next = updated;
+      await deleteLibraryPreset(name, getLiveSaveRetention());
     }
-
-    setPresets(next);
   };
 
   const categoryContent: Record<SettingsCategoryId, ReactNode> = {
@@ -217,7 +228,7 @@ export default function SettingsTab() {
         <section id="settings-item-sound" tabIndex={-1} className="settings-simple-card rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.soundEffects')}>
           <div className="settings-row flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 min-w-0">
-              <Volume2 className={cn('w-4 h-4 shrink-0', uiSfxEnabled ? 'text-emerald-300' : 'text-white/35')} aria-hidden="true" />
+              <Volume2 className={cn('w-4 h-4 shrink-0', uiSfxEnabled ? 'text-emerald-300' : 'text-white/55')} aria-hidden="true" />
               <div className="min-w-0">
                 <h3 className="text-sm font-semibold">{t('settings.soundEffects')}</h3>
                 <p className="text-sm leading-relaxed text-white/60">{t('settings.soundEffectsDesc')}</p>
@@ -234,7 +245,7 @@ export default function SettingsTab() {
         <section id="settings-item-motion" tabIndex={-1} className="settings-simple-card rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.uiMotion')}>
           <div className="settings-row flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 min-w-0">
-              <Sparkles className={cn('w-4 h-4 shrink-0', uiMotionEnabled ? 'text-violet-300' : 'text-white/35')} aria-hidden="true" />
+              <Sparkles className={cn('w-4 h-4 shrink-0', uiMotionEnabled ? 'text-violet-300' : 'text-white/55')} aria-hidden="true" />
               <div className="min-w-0">
                 <h3 className="text-sm font-semibold">{t('settings.uiMotion')}</h3>
                 <p className="text-sm leading-relaxed text-white/60">{t('settings.uiMotionDesc')}</p>
@@ -252,7 +263,7 @@ export default function SettingsTab() {
         <section id="settings-item-auto-live" tabIndex={-1} className="settings-simple-card rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('common.autoGoLive')}>
           <div className="settings-row flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 min-w-0">
-              <Zap className={cn('w-4 h-4 shrink-0', autoGoLive ? 'text-emerald-300' : 'text-white/35')} aria-hidden="true" />
+              <Zap className={cn('w-4 h-4 shrink-0', autoGoLive ? 'text-emerald-300' : 'text-white/55')} aria-hidden="true" />
               <div className="min-w-0">
                 <h3 className="text-sm font-semibold">{t('common.autoGoLive')}</h3>
                 <p className="text-sm leading-relaxed text-white/60">{t('common.autoGoLiveHint')}</p>
@@ -273,7 +284,18 @@ export default function SettingsTab() {
             <p className="text-sm leading-relaxed text-white/60">{t('settings.operatorNotesDesc')}</p>
           </div>
           <SettingSwitch checked={operatorNotesEnabled} onCheckedChange={setOperatorNotesEnabled} label={t('common.operatorNotes')} />
-        </section></>,
+        </section>
+
+        <section id="settings-item-next-slide" tabIndex={-1} className="settings-simple-card rounded-xl border border-white/10 bg-surface-raised p-4 settings-row flex items-center justify-between gap-4" aria-label={t('common.upcomingSlide')}>
+          <div>
+            <h3 className="text-sm font-semibold">{t('common.upcomingSlide')}</h3>
+            <p className="text-sm leading-relaxed text-white/60">{t('settings.nextSlidePreviewDesc')}</p>
+          </div>
+          <SettingSwitch checked={nextSlidePreviewEnabled} onCheckedChange={setNextSlidePreviewEnabled} label={t('common.upcomingSlide')} />
+        </section>
+
+        {!practice && <RemoteAutoStartSetting />}
+        {!practice && <WebFullscreenSetting />}</>,
     appearance: <>
         {!normalizedQuery && category === 'appearance' && <SettingsAppearancePreview authorPosition={hymnAuthorPosition} authorSize={hymnAuthorSize} />}
         <div className="grid gap-4 mt-4 lg:grid-cols-2 items-start">
@@ -354,9 +376,9 @@ export default function SettingsTab() {
               </>
             )}
             {sttKeyHint && (
-              <span className="ml-auto font-mono text-xs leading-5 text-white/55" title={sttKeyHint}>
+              <ControlTooltip><span className="ml-auto font-mono text-xs leading-5 text-white/55" title={sttKeyHint}>
                 {sttKeyHint}
-              </span>
+              </span></ControlTooltip>
             )}
           </div>
 
@@ -410,7 +432,7 @@ export default function SettingsTab() {
               {t('settings.sonioxSttLanguage')}
             </label>
             <div className="flex items-center gap-2">
-              <Mic className="w-4 h-4 text-white/35 shrink-0" aria-hidden="true" />
+              <Mic className="w-4 h-4 text-white/55 shrink-0" aria-hidden="true" />
               <select
                 id="soniox-stt-language"
                 value={sttSpokenLanguage}
@@ -437,7 +459,7 @@ export default function SettingsTab() {
               {t('settings.sonioxTargetLanguage')}
             </label>
             <div className="flex items-center gap-2">
-              <Languages className="w-4 h-4 text-white/35 shrink-0" aria-hidden="true" />
+              <Languages className="w-4 h-4 text-white/55 shrink-0" aria-hidden="true" />
               <select
                 id="soniox-target-language"
                 value={sttTargetLanguage}
@@ -458,7 +480,7 @@ export default function SettingsTab() {
     autosave: <section id="settings-item-live-save" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.liveSave')}>
           <div className="settings-row flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 min-w-0">
-              <Save className={cn('w-4 h-4 shrink-0', liveSaveEnabled ? 'text-emerald-300' : 'text-white/35')} aria-hidden="true" />
+              <Save className={cn('w-4 h-4 shrink-0', liveSaveEnabled ? 'text-emerald-300' : 'text-white/55')} aria-hidden="true" />
               <div className="min-w-0">
                 <h3 className="text-sm font-semibold">{t('settings.liveSave')}</h3>
                 {liveSaveEnabled && liveSaveLastSaved && (
@@ -524,7 +546,7 @@ export default function SettingsTab() {
                 <button
                   type="button"
                   onClick={clearLiveSaves}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-medium text-white/75 hover:bg-white/10 transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] font-medium text-white/75 hover:bg-white/10 transition-colors"
                 >
                   <Trash2 className="w-3 h-3" aria-hidden="true" />
                   {t('settings.navigation.clearLiveSaves')}
@@ -552,11 +574,11 @@ export default function SettingsTab() {
             >
               {t('settings.openUpdates')}
               {(updaterStatus === 'available' || updaterStatus === 'downloaded') && (
-                <span
+                <ControlTooltip descriptionKey={updaterStatus === 'downloaded' ? 'updates.updateDownloadedBadge' : 'updates.updateAvailableBadge'}><span
                   className="w-2 h-2 rounded-full bg-green-500"
                   aria-hidden="true"
                   title={updaterStatus === 'downloaded' ? t('updates.updateDownloadedBadge') : t('updates.updateAvailableBadge')}
-                />
+                /></ControlTooltip>
               )}
             </button>
           </div>
@@ -572,6 +594,7 @@ export default function SettingsTab() {
         <section id="settings-item-learn" tabIndex={-1} ref={element => registerTourAnchor('help', element)} className="rounded-xl border border-white/10 bg-surface-raised p-4 space-y-3">
           <PracticePanel />
         </section></>,
+    support: practice ? null : <SupportDevelopment />,
   };
 
   return (
@@ -580,7 +603,7 @@ export default function SettingsTab() {
         <div className="settings-header-layout mx-auto max-w-6xl">
           <h2 className="flex items-center gap-2 text-xl font-bold"><Settings2 className="h-5 w-5 text-blue-400" aria-hidden="true" />{t('nav.settings')}</h2>
           <div className="settings-search relative min-w-0">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/45" aria-hidden="true" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/60" aria-hidden="true" />
             <input ref={searchRef} type="search" value={query} onChange={event => setQuery(event.target.value)}
               onKeyDown={event => { if (event.key === 'Escape' && query) { event.preventDefault(); event.stopPropagation(); clearSearch(); } }}
               aria-label={t('settings.navigation.search')} placeholder={t('settings.navigation.search')}
@@ -591,16 +614,17 @@ export default function SettingsTab() {
         <div className="settings-category-select mt-3">
           <label htmlFor="settings-category" className="sr-only">{t('settings.navigation.category')}</label>
           <select id="settings-category" value={category} onChange={event => chooseCategory(event.target.value as SettingsCategoryId)} className="w-full rounded-lg border border-white/15 bg-surface-overlay px-3 py-2.5 text-sm">
-            {settingsCategories.map(id => <option key={id} value={id}>{t(`settings.navigation.categories.${id}.title`)}</option>)}
+            {categories.map(id => <option key={id} value={id} disabled={INACTIVE_CATEGORIES.has(id)}>{t(`settings.navigation.categories.${id}.title`)}</option>)}
           </select>
         </div>
       </header>
       <div className="settings-layout-grid min-h-0 flex-1">
         <nav className="settings-category-sidebar overflow-y-auto border-r border-white/10 bg-surface p-3" aria-label={t('settings.navigation.category')}>
-          <div className="space-y-1">{settingsCategories.map(id => {
+          <div className="space-y-1">{categories.map(id => {
             const Icon = CATEGORY_ICONS[id];
-            return <button key={id} type="button" aria-current={category === id ? 'page' : undefined} aria-controls={`settings-panel-${id}`} onClick={() => chooseCategory(id)}
-              className={cn('relative isolate flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left text-sm font-medium', category === id ? 'border-blue-400/25 text-blue-200' : 'border-transparent text-white/65 hover:bg-white/5 hover:text-white')}>
+            const inactive = INACTIVE_CATEGORIES.has(id);
+            return <button key={id} type="button" disabled={inactive} aria-current={category === id ? 'page' : undefined} aria-controls={`settings-panel-${id}`} onClick={() => chooseCategory(id)}
+              className={cn('relative isolate flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left text-sm font-medium', inactive && 'cursor-not-allowed opacity-40', category === id ? 'border-blue-400/25 text-blue-200' : 'border-transparent text-white/65 hover:bg-white/5 hover:text-white')}>
               {category === id && <m.span layoutId="settings-active-category" className="pointer-events-none absolute inset-0 -z-10 rounded-xl bg-blue-500/15" transition={{ duration: motionEnabled ? uiMotion.duration.fast : 0, ease: uiMotion.ease }} />}
               <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
               <span className="min-w-0 break-words flex-1">{t(`settings.navigation.categories.${id}.title`)}</span>
@@ -616,17 +640,19 @@ export default function SettingsTab() {
             {searchResults.map(item => <button key={item.id} type="button" onClick={() => openSearchResult(item)} className="flex w-full items-center gap-4 rounded-xl border border-white/10 bg-surface-raised p-4 text-left hover:border-blue-400/50 hover:bg-blue-500/5">
               <span className="min-w-0 flex-1"><span className="text-xs font-medium text-blue-300">{t(`settings.navigation.categories.${item.category}.title`)}</span>
                 <span className="mt-1 block font-semibold">{t(item.titleKey)}</span><span className="mt-1 block text-sm leading-relaxed text-white/60">{t(item.descriptionKey)}</span>
-              </span><ChevronRight className="h-4 w-4 shrink-0 text-white/40" aria-hidden="true" />
+              </span><ChevronRight className="h-4 w-4 shrink-0 text-white/55" aria-hidden="true" />
             </button>)}
             {!searchResults.length && <div className="rounded-xl border border-dashed border-white/15 p-6 text-center"><p className="text-sm text-white/65">{t('settings.navigation.noResults')}</p><button type="button" onClick={clearSearch} className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-500">{t('settings.navigation.clearSearch')}</button></div>}
           </div>
           <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{normalizedQuery ? t('settings.navigation.resultCount', { count: searchResults.length }) : ''}</p>
-          {settingsCategories.map(id => <section key={id} id={`settings-panel-${id}`} hidden={!!normalizedQuery || id !== category} aria-labelledby={`settings-title-${id}`} className="ui-fade-enter mx-auto max-w-4xl space-y-4">
+          {categories.map(id => <section key={id} id={`settings-panel-${id}`} hidden={!!normalizedQuery || id !== category} aria-labelledby={`settings-title-${id}`} className="ui-fade-enter mx-auto max-w-4xl space-y-4">
             <div><h3 id={`settings-title-${id}`} className="text-lg font-bold">{t(`settings.navigation.categories.${id}.title`)}</h3>
-              {id !== 'learning' && <p className="mt-1 text-sm leading-relaxed text-white/60">{t(`settings.navigation.categories.${id}.description`)}</p>}
+              {id !== 'learning' && id !== 'support' && <p className="mt-1 text-sm leading-relaxed text-white/60">{t(`settings.navigation.categories.${id}.description`)}</p>}
             </div>
             {categoryContent[id]}
             {id === 'general' && !practice && <DesktopSettings />}
+            {id === 'autosave' && !practice && <MediaOptimizeSettings />}
+            {id === 'autosave' && !practice && <StorageSettings />}
           </section>)}
         </div>
       </div>

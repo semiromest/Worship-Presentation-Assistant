@@ -45,8 +45,15 @@ const btnPrev = document.querySelector('.btn-prev');
 const btnNext = document.querySelector('.btn-next');
 
 /* ── WebSocket ───────────────────────────────────────────────────────── */
+// Erişim anahtarı normalde HttpOnly çerezle gider; çerez engellenirse URL'deki token yedek olarak iletilir.
+const accessToken = new URLSearchParams(location.search).get('token');
+function withAccess(url) {
+  if (!accessToken || !url.startsWith('/preview/')) return url;
+  return url + (url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(accessToken);
+}
+
 function connect() {
-  try { ws = new WebSocket('ws://' + location.host); }
+  try { ws = new WebSocket('ws://' + location.host + '/' + (accessToken ? '?token=' + encodeURIComponent(accessToken) : '')); }
   catch (e) { scheduleReconnect(); return; }
 
   ws.onopen = () => {
@@ -277,10 +284,10 @@ function setPreviewSource(img, url, finalError) {
   let attempts = 0;
   img.onerror = event => {
     if (url.startsWith('/preview/') && attempts++ < 2) {
-      setTimeout(() => { if (img.dataset.previewTicket === ticket && img.isConnected) img.src = url + '?retry=' + attempts; }, 1000);
+      setTimeout(() => { if (img.dataset.previewTicket === ticket && img.isConnected) img.src = withAccess(url + '?retry=' + attempts); }, 1000);
     } else if (finalError) finalError(event);
   };
-  img.src = url;
+  img.src = withAccess(url);
 }
 
 function updateThumbNode(i, url) {

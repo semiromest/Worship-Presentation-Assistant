@@ -3,77 +3,238 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#101516">
-  <title>Worship Presentation Assistant — Prepare with clarity. Present with confidence.</title>
-  <meta name="description" content="Free, open-source worship presentation software for Windows and macOS. Lyrics, scripture, media, multiple displays and phone control. Try the interactive browser demo.">
+  <meta name="theme-color" content="#0f0f11">
+  <title>Worship Presentation Assistant — Free worship presentation software</title>
+  <meta name="description" content="Free, open-source worship presentation software for Windows and macOS. Lyrics, scripture, media, multiple displays, phone remote and live captions in one calm workspace. Or present straight from your browser with the web app.">
   <meta property="og:title" content="Worship Presentation Assistant">
-  <meta property="og:description" content="Your service, thoughtfully presented. Free worship presentation software for Windows and macOS, with an interactive browser demo.">
+  <meta property="og:description" content="Run your worship service from one calm workspace. Free and open source for Windows and macOS.">
   <meta property="og:type" content="website">
+  <meta property="og:url" content="https://semiromest.github.io/Worship-Presentation-Assistant/">
+  <meta property="og:image" content="https://semiromest.github.io/Worship-Presentation-Assistant/assets/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="canonical" href="https://semiromest.github.io/Worship-Presentation-Assistant/">
-  <link rel="icon" href="assets/logo.png" type="image/png">
+  <link rel="icon" href="assets/logo-96.png" type="image/png">
+  <link rel="preload" href="assets/screens/slides.webp" as="image" type="image/webp">
   <link rel="stylesheet" href="assets/site.css">
-  <script type="module" src="assets/home.mjs"></script>
 </head>
 <body>
-  <a class="skip-link" href="#main" data-i18n="skip">Skip to content</a>
-  <header class="site-header wrap">
-    <a class="brand" href="./" aria-label="Worship Presentation Assistant home"><img src="assets/logo.png" alt="" width="29" height="39"><span>Worship<span class="brand-small">Presentation Assistant</span></span></a>
-    <nav aria-label="Main navigation" data-i18n-label="mainNavigation"><a href="#features" data-i18n="navFeatures">Features</a><a href="#download" data-i18n="navDownload">Download</a><a class="nav-demo" href="demo/" data-i18n="tryDemo">Try the demo <span aria-hidden="true">↗</span></a><button class="language" type="button" data-language aria-label="Switch to Turkish">TR</button></nav>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="./" aria-label="Worship Presentation Assistant home">
+        <img src="assets/logo-96.png" alt="" width="27" height="36">
+        <span class="brand-name">Worship<span>Presentation Assistant</span></span>
+      </a>
+      <nav aria-label="Main navigation">
+        <a class="nav-link" href="#features">Features</a>
+        <a class="nav-link" href="#download">Download</a>
+        <a class="button button-small button-ghost" href="app/">Open the web app</a>
+      </nav>
+    </div>
   </header>
+
   <main id="main">
-    <section class="hero wrap">
-      <div class="hero-copy">
-        <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span><span data-i18n="heroKicker">Made for the people behind the service</span></p>
-        <h1 data-i18n="heroTitle">Prepare with clarity.
-Present with confidence.</h1>
-        <p class="hero-description" data-i18n="heroDescription">One thoughtful workspace for your lyrics, scripture and media. Bring it all to the screen, and keep your attention on the moment.</p>
-        <div class="hero-actions"><a class="button primary" href="#download"><span data-i18n="downloadFree">Download for free</span><span aria-hidden="true">↓</span></a><a class="button secondary" href="demo/"><span data-i18n="tryBrowser">Try in your browser</span><span aria-hidden="true">↗</span></a></div>
-        <p class="hero-note" data-i18n="heroNote">Windows & macOS · Open source · No subscription</p>
-      </div>
-      <div class="hero-visual">
-        <div class="orbit orbit-one" aria-hidden="true"></div><div class="orbit orbit-two" aria-hidden="true"></div>
-        <div class="app-preview">
-          <div class="preview-chrome"><div class="window-dots" aria-hidden="true"><i></i><i></i><i></i></div><span data-i18n="sampleService">Sunday gathering</span><span class="preview-live"><i></i> LIVE</span></div>
-          <div class="preview-body"><div class="preview-rail" aria-hidden="true"><span class="rail-selected">▤</span><span>▧</span><span>♫</span><span>▣</span></div><div class="preview-content">
-            <div class="preview-stage theme-dawn" id="hero-stage"><span class="stage-overline" data-i18n="sampleWelcomeLabel">WELCOME</span><p id="hero-slide-text">A place to belong.
-A moment to be still.</p><span class="stage-rule" aria-hidden="true"></span></div>
-            <div class="preview-thumbs" aria-label="Preview slides" data-i18n-label="previewSlides"><button class="mini-slide theme-dawn selected" type="button" data-preview="0" aria-pressed="true"><span>01</span><b data-i18n="sampleWelcome">Welcome</b></button><button class="mini-slide theme-ocean" type="button" data-preview="1" aria-pressed="false"><span>02</span><b data-i18n="sampleHymn">Song</b></button><button class="mini-slide theme-night" type="button" data-preview="2" aria-pressed="false"><span>03</span><b data-i18n="sampleScripture">Scripture</b></button></div>
-          </div></div>
-          <div class="preview-bottom"><span data-i18n="previewCaption">A little preview of what’s possible</span><a href="demo/" data-i18n="openWorkspace">Open the demo →</a></div>
+    <section class="hero">
+      <div class="wrap hero-copy">
+        <p class="eyebrow">Free &amp; open source · Windows and macOS</p>
+        <h1>Run your worship service from one calm workspace.</h1>
+        <p class="lead">Lyrics, scripture, media and countdowns in one place — sent to every screen with confidence. Made for volunteer teams, free for every church.</p>
+        <div class="actions">
+          <a class="button button-primary" href="#download">Download for free</a>
+          <a class="button button-ghost" href="app/">Use it in your browser <span aria-hidden="true">↗</span></a>
         </div>
-        <div class="visual-caption"><span class="caption-index">01 / WPA</span><span data-i18n="visualCaption">A workspace that stays out of the way.</span></div>
+        <p class="fine-print">MIT licensed · No account · No subscription</p>
+      </div>
+      <div class="wrap hero-shot">
+        <figure class="screen screen-hero">
+          <img src="assets/screens/slides.webp" width="2400" height="1440" fetchpriority="high"
+            alt="The slides workspace: a grid of service slides, the live output preview with the next slide underneath, and appearance controls for the selected slide.">
+        </figure>
       </div>
     </section>
-    <div class="platform-strip wrap"><p data-i18n="stripTitle">From the first slide to the final song.</p><div><span data-i18n="stripLyrics">Lyrics & scripture</span><span data-i18n="stripMedia">Images & video</span><span data-i18n="stripScreens">Multiple displays</span><span data-i18n="stripLanguages">Five interface languages</span></div></div>
-    <section class="section wrap" id="features">
-      <div class="section-heading"><p class="eyebrow" data-i18n="featuresKicker">Everything has its place</p><h2 data-i18n="featuresTitle">Less switching.
-More presence.</h2><p data-i18n="featuresDescription">Prepare the details ahead of time. When the room is ready, your presentation is too.</p></div>
-      <div class="feature-grid">
-        <article class="feature-card"><span class="feature-number">01</span><h3 data-i18n="featureContentTitle">Words that belong together.</h3><p data-i18n="featureContentText">Bring Bible passages and song lyrics into your presentation. Import XML Bibles and hymn archives, and move through song parts at your own pace.</p><div class="feature-tags"><span>XML</span><span data-i18n="tagParts">Song parts</span></div></article>
-        <article class="feature-card"><span class="feature-number">02</span><h3 data-i18n="featureDesignTitle">Make room for your style.</h3><p data-i18n="featureDesignText">Arrange text and images in the visual editor. Add video, create gradient backgrounds and build media loops, all in the same workspace.</p><div class="feature-tags"><span data-i18n="tagCanvas">Visual editor</span><span data-i18n="tagMedia">Media loops</span></div></article>
-        <article class="feature-card"><span class="feature-number">03</span><h3 data-i18n="featureOutputTitle">One service. Every screen.</h3><p data-i18n="featureOutputText">Manage audience and stage displays independently. Cue the next slide, control a black screen, or change slides from your phone.</p><div class="feature-tags"><span data-i18n="tagOutputs">Multiple outputs</span><span data-i18n="tagRemote">Phone remote</span></div></article>
-        <article class="feature-card"><span class="feature-number">04</span><h3 data-i18n="featureCaptionsTitle">Help more people follow along.</h3><p data-i18n="featureCaptionsText">Show live captions and translated speech. The desktop app connects to a speech service with your own API key; an internet connection is required.</p><div class="feature-tags"><span data-i18n="tagCaptions">Live captions</span><span data-i18n="tagTranslation">Translation</span></div></article>
-        <article class="feature-card"><span class="feature-number">05</span><h3 data-i18n="featurePortableTitle">Keep the work you’ve already done.</h3><p data-i18n="featurePortableText">Import and export PowerPoint presentations. Save projects with their local media in a portable .gpres file, with automatic backups as you work.</p><div class="feature-tags"><span>PowerPoint</span><span>.gpres</span></div></article>
-        <article class="feature-card"><span class="feature-number">06</span><h3 data-i18n="featureOpenTitle">Built to be shared.</h3><p data-i18n="featureOpenText">Free to use, with an MIT-licensed codebase. The desktop interface is available in Turkish, English, German, Spanish and Korean.</p><div class="feature-tags"><span>MIT</span><span>TR · EN · DE · ES · KO</span></div></article>
+
+    <section class="highlights" aria-label="Highlights">
+      <ul class="wrap highlight-list">
+        <li><strong>Multiple displays</strong><span>Audience, stage and confidence screens</span></li>
+        <li><strong>Phone remote</strong><span>Scan a QR code, change slides</span></li>
+        <li><strong>Live captions</strong><span>Real-time transcription and translation</span></li>
+        <li><strong>Five languages</strong><span>English, Turkish, German, Spanish, Korean</span></li>
+      </ul>
+    </section>
+
+    <section class="section" id="features" aria-labelledby="features-title">
+      <div class="wrap">
+        <header class="section-head">
+          <p class="eyebrow">Features</p>
+          <h2 id="features-title">Everything a Sunday needs, nothing it doesn’t.</h2>
+          <p>Prepare during the week, then focus on the room. The tools you reach for live stay one click away.</p>
+        </header>
+
+        <article class="feature-row">
+          <div class="feature-text">
+            <span class="feature-label">Slides &amp; live control</span>
+            <h3>The live moment, on one screen.</h3>
+            <p>Build the running order as slides and keep the live output in view at all times. Go live, cue the next slide or black out the screen with a single click or key.</p>
+            <ul class="checks">
+              <li>Always-visible live preview, with an optional “next slide” card</li>
+              <li>Fade, slide, zoom, blur and flip transitions</li>
+              <li>Black screen (<kbd>B</kbd>) and a broadcast lock for the current slide</li>
+              <li>Preparation check for missing media, fonts and overflowing text</li>
+            </ul>
+          </div>
+          <figure class="screen"><img src="assets/screens/slides-detail.webp" width="2360" height="1480" loading="lazy" decoding="async"
+            alt="Slides workspace with the live preview, next slide card and slide appearance controls."></figure>
+        </article>
+
+        <article class="feature-row reverse">
+          <div class="feature-text">
+            <span class="feature-label">Scripture</span>
+            <h3>Find the passage in seconds.</h3>
+            <p>Import your own Zefania XML Bibles or browse an online Bible. Type a reference such as John 3:16, pick the verses and send them to the presentation as slides.</p>
+            <ul class="checks">
+              <li>Search by reference or by verse text</li>
+              <li>Select several verses at once</li>
+              <li>Optional church-logo watermark on scripture slides</li>
+            </ul>
+          </div>
+          <figure class="screen"><img src="assets/screens/bible-detail.webp" width="2360" height="1480" loading="lazy" decoding="async"
+            alt="Bible browser showing Psalm 23 with its verses ready to add to the presentation."></figure>
+        </article>
+
+        <article class="feature-row">
+          <div class="feature-text">
+            <span class="feature-label">Hymns</span>
+            <h3>Your song library, ready to sing.</h3>
+            <p>Import hymn lyric archives, let songs split into parts automatically, and add a whole song to the service with one click. Move through verses and choruses at the pace of the room.</p>
+            <ul class="checks">
+              <li>Search titles and lyrics</li>
+              <li>Parts mode for verses and choruses</li>
+              <li>Show the title and author when you need to</li>
+            </ul>
+          </div>
+          <figure class="screen"><img src="assets/screens/hymns-detail.webp" width="2360" height="1480" loading="lazy" decoding="async"
+            alt="Hymn library listing songs with search, parts mode and import options."></figure>
+        </article>
+
+        <article class="feature-row reverse">
+          <div class="feature-text">
+            <span class="feature-label">Slide editor</span>
+            <h3>Design without leaving the app.</h3>
+            <p>Place text and images on a canvas, manage layers, and create gradient backgrounds — including gentle animated styles — then apply them to the slides you choose.</p>
+            <ul class="checks">
+              <li>Move, resize and rotate elements with snapping</li>
+              <li>Saved gradients and slide templates</li>
+              <li>Undo and redo for every change</li>
+            </ul>
+          </div>
+          <figure class="screen"><img src="assets/screens/editor-detail.webp" width="2360" height="1480" loading="lazy" decoding="async"
+            alt="Slide editor with the slide rail, a large canvas and element, slide and layer panels."></figure>
+        </article>
       </div>
     </section>
-    <section class="demo-invitation wrap">
-      <div><p class="eyebrow" data-i18n="demoKicker">A small service. A real feel.</p><h2 data-i18n="demoTitle">Meet your next workspace.
-Before you install.</h2><p data-i18n="demoDescription">Edit a slide, add a song, change the atmosphere and cue it live. Our browser demo lets you explore the essentials with sample content and your own local media.</p><a class="button primary" href="demo/"><span data-i18n="launchDemo">Launch interactive demo</span><span aria-hidden="true">↗</span></a></div>
-      <div class="demo-steps"><div><span>01</span><p data-i18n="stepOne">Choose a slide. Make it yours.</p></div><div><span>02</span><p data-i18n="stepTwo">Bring words and visuals together.</p></div><div><span>03</span><p data-i18n="stepThree">Take a breath. Go live.</p></div><p class="quiet-note" data-i18n="demoPrivacy">No account. No uploads. Demo content stays in this browser tab.</p></div>
+
+    <section class="section section-tight" aria-labelledby="more-title">
+      <div class="wrap">
+        <header class="section-head">
+          <p class="eyebrow">And around it</p>
+          <h2 id="more-title">Built for the whole service.</h2>
+        </header>
+        <ul class="card-grid">
+          <li class="card"><h3>Every screen, its own role</h3><p>Set each display to follow live, stay manual or act as a stage and confidence monitor — each with its own blackout.</p></li>
+          <li class="card"><h3>Phone remote</h3><p>Scan a QR code to change slides, black out the screen and see live previews from any phone on the same network.</p></li>
+          <li class="card"><h3>Live captions &amp; translation</h3><p>Transcribe speech in real time and translate it into several languages. Uses your own Soniox API key and an internet connection.</p></li>
+          <li class="card"><h3>Share to phones</h3><p>Let people follow the live slide or the captions on their own phones — useful for guests and hard-of-hearing members.</p></li>
+          <li class="card"><h3>Media, loops &amp; countdowns</h3><p>Keep a library of images and videos, build looping announcement slides, add countdown timers or present a live window or camera.</p></li>
+          <li class="card"><h3>Music</h3><p>Add background music or music slides from a YouTube search, and download tracks for offline playback on this computer.</p></li>
+          <li class="card"><h3>PowerPoint &amp; portable projects</h3><p>Import and export PowerPoint. Save projects with their media in a single .gpres file, with automatic backups as you work.</p></li>
+          <li class="card"><h3>Calendar &amp; guided practice</h3><p>Plan services on a calendar, and learn the app step by step in a practice mode that never touches your real library.</p></li>
+        </ul>
+      </div>
     </section>
-    <section class="download-section wrap" id="download">
-      <p class="eyebrow" data-i18n="downloadKicker">Ready when you are</p><h2 data-i18n="downloadTitle">Bring it to your next service.</h2><p data-i18n="downloadDescription">Download the desktop app for the complete experience, including real display outputs, phone control and your saved presentation library.</p>
-      <div class="download-cards"><a href="https://github.com/semiromest/Worship-Presentation-Assistant/releases/latest" class="download-card"><span class="os-symbol" aria-hidden="true">⊞</span><div><strong>Windows</strong><span data-i18n="windowsInstaller">Latest release · Setup installer</span></div><span class="download-arrow" aria-hidden="true">↗</span></a><a href="https://github.com/semiromest/Worship-Presentation-Assistant/releases/latest" class="download-card"><span class="os-symbol mac-symbol" aria-hidden="true">⌘</span><div><strong>macOS</strong><span data-i18n="macInstaller">Latest release · Apple Silicon & Intel</span></div><span class="download-arrow" aria-hidden="true">↗</span></a></div>
-      <p class="download-note" data-i18n="downloadNote">Downloads open GitHub Releases. Choose the installer for your computer. No paid subscription is required; optional external services may have their own costs.</p>
+
+    <section class="app-band" aria-labelledby="app-title">
+      <div class="wrap app-inner">
+        <div>
+          <p class="eyebrow">Web app</p>
+          <h2 id="app-title">Present without installing.</h2>
+          <p>The web app is the same interface in your browser. Build slides, open and save the same .gpres projects as the desktop app, and send the live output to your second screen. Your media stays on your computer, and the app keeps working offline once loaded.</p>
+        </div>
+        <a class="button button-primary" href="app/">Open the web app <span aria-hidden="true">↗</span></a>
+      </div>
     </section>
-    <section class="faq wrap"><div><p class="eyebrow" data-i18n="faqKicker">A few things to know</p><h2 data-i18n="faqTitle">Before you begin.</h2></div><div class="faq-list">
-      <details><summary data-i18n="faqFreeQ">Is it really free?</summary><p data-i18n="faqFreeA">Yes. The app is free and open source under the MIT License. Optional cloud services, such as live speech transcription, use your own account and may have separate charges.</p></details>
-      <details><summary data-i18n="faqDemoQ">Is the demo the full desktop app?</summary><p data-i18n="faqDemoA">The demo is an interactive introduction to preparing and presenting slides. Desktop-only features such as real multi-screen outputs, phone control, XML/PowerPoint import and live transcription are available in the installed app.</p></details>
-      <details><summary data-i18n="faqOfflineQ">Can I present without internet?</summary><p data-i18n="faqOfflineA">The desktop app can present locally saved content and media offline. Online Bible sources, cloud sharing and live captions require the relevant network services. Prepare and check your resources before a service.</p></details>
-      <details><summary data-i18n="faqHelpQ">Where can I get help or contribute?</summary><p><span data-i18n="faqHelpA">The GitHub repository contains setup instructions, a support guide and contribution guidelines.</span> <a href="https://github.com/semiromest/Worship-Presentation-Assistant" data-i18n="visitRepo">Visit the repository ↗</a></p></details>
-    </div></section>
+
+    <section class="section" id="download" aria-labelledby="download-title">
+      <div class="wrap">
+        <header class="section-head center">
+          <p class="eyebrow">Download</p>
+          <h2 id="download-title">Bring it to your next service.</h2>
+          <p>The desktop app includes real display outputs, the phone remote, live captions and your saved library. It keeps itself up to date.</p>
+        </header>
+        <div class="download-grid">
+          <a class="download-card" href="https://github.com/semiromest/Worship-Presentation-Assistant/releases/latest">
+            <span class="os-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M3 5.5 10 4.5v7H3zm8-1.15L21 3v8.5H11zM3 12.5h7v7l-7-1zm8 0h10V21l-10-1.4z"/></svg>
+            </span>
+            <span class="download-text"><strong>Windows</strong><span>Windows 10 or later · 64-bit installer</span></span>
+            <span class="download-arrow" aria-hidden="true">↓</span>
+          </a>
+          <a class="download-card" href="https://github.com/semiromest/Worship-Presentation-Assistant/releases/latest">
+            <span class="os-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M16.4 12.6c0-2.5 2-3.6 2.1-3.7-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9-.8 0-2-.9-3.3-.8-1.7 0-3.3 1-4.1 2.5-1.8 3.1-.5 7.6 1.3 10.1.9 1.2 1.9 2.6 3.2 2.5 1.3 0 1.8-.8 3.3-.8 1.6 0 2 .8 3.3.8 1.4 0 2.3-1.2 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9-.1 0-2.9-1.1-2.9-4.1zM13.9 5.2c.7-.9 1.2-2 1-3.2-1 .1-2.2.7-3 1.5-.6.7-1.2 1.9-1 3.1 1.1.1 2.3-.6 3-1.4z"/></svg>
+            </span>
+            <span class="download-text"><strong>macOS</strong><span>Apple Silicon &amp; Intel · DMG</span></span>
+            <span class="download-arrow" aria-hidden="true">↓</span>
+          </a>
+        </div>
+        <p class="note">Downloads open the latest GitHub release. The installers are not code-signed yet, so Windows SmartScreen or macOS may ask you to confirm the first launch.</p>
+      </div>
+    </section>
+
+    <section class="section section-tight" aria-labelledby="faq-title">
+      <div class="wrap faq">
+        <header class="section-head">
+          <p class="eyebrow">FAQ</p>
+          <h2 id="faq-title">Good to know.</h2>
+        </header>
+        <div class="faq-list">
+          <details>
+            <summary>Is it really free?</summary>
+            <p>Yes. The app is free and open source under the MIT License. Optional external services, such as live speech transcription, use your own account and may have their own charges.</p>
+          </details>
+          <details>
+            <summary>Can I present from the browser?</summary>
+            <p>Yes, with the <a href="app/">web app</a>. It opens and saves the same .gpres files as the desktop app, keeps your media and saved presentations in the browser, and shows the output on your second screen. It also exports to PowerPoint, creates gradient backgrounds and keeps working offline once loaded. Chrome or Edge works best. PowerPoint import, the phone remote, music and live captions still need the desktop app.</p>
+          </details>
+          <details>
+            <summary>Can I present without internet?</summary>
+            <p>Yes. Saved presentations, imported Bibles and local media work offline. Online Bibles, YouTube music that isn’t downloaded, sharing outside your network and live captions need a connection.</p>
+          </details>
+          <details>
+            <summary>Which languages does the app support?</summary>
+            <p>The interface is available in English, Turkish, German, Spanish and Korean. You can switch at any time in Settings.</p>
+          </details>
+          <details>
+            <summary>Where can I get help or contribute?</summary>
+            <p>The <a href="https://github.com/semiromest/Worship-Presentation-Assistant">GitHub repository</a> has setup instructions, a support guide and contribution guidelines. Bug reports and ideas are welcome.</p>
+          </details>
+        </div>
+      </div>
+    </section>
   </main>
-  <footer class="site-footer wrap"><a class="footer-brand" href="./">Worship Presentation Assistant</a><span data-i18n="footerNote">Made for worship teams. Open to everyone.</span><div><a href="https://github.com/semiromest/Worship-Presentation-Assistant">GitHub ↗</a><a href="https://github.com/semiromest/Worship-Presentation-Assistant/blob/master/LICENSE">MIT</a><a href="https://github.com/semiromest/Worship-Presentation-Assistant/blob/master/SUPPORT.md" data-i18n="support">Support</a></div></footer>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <a class="brand brand-footer" href="./"><img src="assets/logo-96.png" alt="" width="21" height="28"><span>Worship Presentation Assistant</span></a>
+      <p>Made for worship teams. Open to everyone.</p>
+      <nav aria-label="Footer">
+        <a href="https://github.com/semiromest/Worship-Presentation-Assistant">GitHub</a>
+        <a href="https://github.com/semiromest/Worship-Presentation-Assistant/blob/master/SUPPORT.md">Support</a>
+        <a href="https://github.com/semiromest/Worship-Presentation-Assistant/blob/master/LICENSE">MIT License</a>
+      </nav>
+    </div>
+  </footer>
 </body>
 </html>

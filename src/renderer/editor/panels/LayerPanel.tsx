@@ -1,3 +1,4 @@
+import ControlTooltip from '../../components/ControlTooltip';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SlideItem } from '../../types';
@@ -70,7 +71,7 @@ export const LayerPanel = memo(function LayerPanel({
 
       <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
         {sorted.map((item, idx) => (
-          <div
+          <ControlTooltip key={item.id}><div
             key={item.id}
             onClick={() => onSelect(item.id)}
             draggable={!!onDragItemStart}
@@ -85,7 +86,7 @@ export const LayerPanel = memo(function LayerPanel({
             )}
           >
             {/* Visibility */}
-            <button
+            <ControlTooltip descriptionKey={item.visible === false ? 'common.editorShow' : 'common.editorHide'}><button
               type="button"
               onClick={e => {
                 e.stopPropagation();
@@ -100,14 +101,14 @@ export const LayerPanel = memo(function LayerPanel({
               ) : (
                 <Eye className="h-4 w-4" aria-hidden="true" />
               )}
-            </button>
+            </button></ControlTooltip>
 
             {/* Label */}
             <div className="min-w-0 flex-1">
               <div className="truncate text-xs text-white/85">
                 {getItemIcon(item)} {getItemLabel(item)}
               </div>
-              <div className="text-[10px] text-white/35">
+              <div className="text-[11px] text-white/55">
                 {item.locked ? t('common.editorLocked') : t('common.editorUnlocked')} · z:
                 {item.zIndex ?? 0}
               </div>
@@ -115,55 +116,55 @@ export const LayerPanel = memo(function LayerPanel({
 
             {/* Layer order */}
             <div className="flex items-center gap-1">
-              <button
+              <ControlTooltip descriptionKey={'common.editorBringForward'}><button
                 type="button"
                 onClick={e => {
                   e.stopPropagation();
                   onMove(item.id, 'up');
                 }}
                 disabled={idx === 0}
-                className="rounded-md p-1 text-white/45 hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                className="rounded-md p-1 text-white/60 hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
                 title={t('common.editorBringForward')}
                 aria-label={t('common.editorBringForward')}
               >
                 <ChevronUp className="h-4 w-4" aria-hidden="true" />
-              </button>
-              <button
+              </button></ControlTooltip>
+              <ControlTooltip descriptionKey={'common.editorSendBackward'}><button
                 type="button"
                 onClick={e => {
                   e.stopPropagation();
                   onMove(item.id, 'down');
                 }}
                 disabled={idx === sorted.length - 1}
-                className="rounded-md p-1 text-white/45 hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                className="rounded-md p-1 text-white/60 hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
                 title={t('common.editorSendBackward')}
                 aria-label={t('common.editorSendBackward')}
               >
                 <ChevronDown className="h-4 w-4" aria-hidden="true" />
-              </button>
+              </button></ControlTooltip>
             </div>
 
             {/* Actions */}
             <div className="flex items-center gap-1">
-              <button
+              <ControlTooltip descriptionKey={'common.editorDuplicate'}><button
                 type="button"
                 onClick={e => {
                   e.stopPropagation();
                   onDuplicate(item.id);
                 }}
-                className="rounded-md p-1 text-white/45 hover:bg-white/5 hover:text-white"
+                className="rounded-md p-1 text-white/60 hover:bg-white/5 hover:text-white"
                 title={t('common.editorDuplicate')}
                 aria-label={t('common.editorDuplicate')}
               >
                 <Copy className="h-4 w-4" aria-hidden="true" />
-              </button>
-              <button
+              </button></ControlTooltip>
+              <ControlTooltip descriptionKey={item.locked ? 'common.editorUnlock' : 'common.editorLock'}><button
                 type="button"
                 onClick={e => {
                   e.stopPropagation();
                   onToggleLock(item.id);
                 }}
-                className="rounded-md p-1 text-white/45 hover:bg-white/5 hover:text-white"
+                className="rounded-md p-1 text-white/60 hover:bg-white/5 hover:text-white"
                 title={item.locked ? t('common.editorUnlock') : t('common.editorLock')}
                 aria-label={item.locked ? t('common.editorUnlock') : t('common.editorLock')}
               >
@@ -172,8 +173,8 @@ export const LayerPanel = memo(function LayerPanel({
                 ) : (
                   <Unlock className="h-4 w-4" aria-hidden="true" />
                 )}
-              </button>
-              <button
+              </button></ControlTooltip>
+              <ControlTooltip descriptionKey={'common.editorDelete'}><button
                 type="button"
                 onClick={e => {
                   e.stopPropagation();
@@ -184,13 +185,13 @@ export const LayerPanel = memo(function LayerPanel({
                 aria-label={t('common.editorDelete')}
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
-              </button>
+              </button></ControlTooltip>
             </div>
-          </div>
+          </div></ControlTooltip>
         ))}
 
         {items.length === 0 && (
-          <div className="rounded-xl border border-dashed border-white/10 bg-black/15 px-3 py-6 text-center text-xs text-white/40">
+          <div className="rounded-xl border border-dashed border-white/10 bg-black/15 px-3 py-6 text-center text-xs text-white/55">
             {t('common.editorNoLayers')}
           </div>
         )}

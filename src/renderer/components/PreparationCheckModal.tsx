@@ -1,7 +1,8 @@
 import { playSfx } from '../sfx';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, AlertCircle, CheckCircle2, ClipboardCheck, RefreshCw, X } from 'lucide-react';
+import { AlertTriangle, AlertCircle, ClipboardCheck, RefreshCw, X } from 'lucide-react';
+import MotionIcon from './MotionIcon';
 import { useStore } from '../state/useStore';
 import type { ReadinessIssue } from '../../shared/readiness';
 import { usePreparationStore } from '../state/usePreparationStore';
@@ -224,9 +225,9 @@ export default function PreparationCheckModal() {
       {status === 'complete' &&
         (visible.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-8 text-center">
-            <CheckCircle2 className="w-12 h-12 text-emerald-400" aria-hidden="true" />
+            <MotionIcon name="check-circle" active size={48} className="text-emerald-400" />
             <p className="text-white/80 font-medium">{t('prepCheck.contentClear')}</p>
-            <p className="text-sm text-white/45">{t('prepCheck.allClearHint')}</p>
+            <p className="text-sm text-white/60">{t('prepCheck.allClearHint')}</p>
           </div>
         ) : (
           <>

@@ -1,4 +1,4 @@
-import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { guideCardClass } from './GuideCard';
 import { Joyride, EVENTS } from 'react-joyride';
@@ -9,6 +9,60 @@ import './PracticeSpotlight.css';
 const GuideContent = createContext<{ children: ReactNode; label: string }>({ children: null, label: '' });
 let highlightLease = 0;
 
+const FLIP_MS = 320;
+/** Where the guide card last sat on screen; the next card slides from there instead of popping in. */
+let lastCard: { rect: DOMRect; at: number } | null = null;
+const freshCard = () => (lastCard && performance.now() - lastCard.at < 1500 ? lastCard.rect : null);
+
+/**
+ * Joyride throws its tooltip away between steps (and our target is null while the next one is
+ * found), so a CSS transition on the floater never runs. Instead each new card measures where the
+ * previous one was and animates its own transform from there (FLIP).
+ */
+function useCardFlip(surface: RefObject<HTMLDivElement>, motion: { current: boolean }) {
+  useLayoutEffect(() => {
+    const node = surface.current;
+    if (!node) return;
+    const floater = node.closest<HTMLElement>('.react-joyride__floater');
+    // Joyride keeps the floater transparent until it has computed the final position.
+    const settled = () => !floater || floater.style.opacity === '1';
+    let frame = 0;
+    let flipped = false;
+    let animation: Animation | undefined;
+    const tick = () => {
+      frame = requestAnimationFrame(tick);
+      if (!node.isConnected || !settled()) return;
+      const rect = node.getBoundingClientRect();
+      if (!flipped) {
+        flipped = true;
+        const from = freshCard();
+        if (motion.current && from) {
+          const dx = from.left - rect.left;
+          const dy = from.top - rect.top;
+          if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+            animation = node.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'translate(0, 0)' }],
+              { duration: FLIP_MS, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+          }
+        }
+      }
+      lastCard = { rect, at: performance.now() };
+    };
+    tick();
+    return () => { cancelAnimationFrame(frame); animation?.cancel(); };
+  }, [surface, motion]);
+}
+
+function FallbackCard({ surface, motion, centered, label, children }: { surface: RefObject<HTMLDivElement>; motion: { current: boolean }; centered: boolean; label: string; children: ReactNode }) {
+  // Keep the card where it was while the next target is being found, then slide it there.
+  const [start] = useState(() => (centered ? null : freshCard()));
+  useCardFlip(surface, motion);
+  const style = start ? { left: Math.max(16, Math.min(start.left, innerWidth - 336)), top: Math.max(16, Math.min(start.top, innerHeight - 120)), right: 'auto', bottom: 'auto' } as const : undefined;
+  return <div className={centered ? 'fixed inset-0 z-[250] flex items-center justify-center bg-slate-950/80 p-4' : ''}>
+    <div ref={surface} style={style} data-guide-card role={centered ? 'dialog' : 'region'} aria-modal={centered || undefined} aria-label={label} className={`${centered ? 'w-[min(320px,calc(100vw-32px))] max-h-[calc(100vh-32px)] overflow-y-auto' : 'fixed bottom-4 right-4 z-[250] w-[min(320px,calc(100vw-32px))]'} ${guideCardClass}`}
+      onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>{children}</div>
+  </div>;
+}
+
 export default function PracticeSpotlight({ target, index, children, exit, fail, deleteAllowed, interactive = false, useInert = true, centered = false, interactionTargets }: {
   target: HTMLElement | null; index: number; children: ReactNode; exit: () => void; fail?: (index: number) => void; deleteAllowed?: () => boolean; interactive?: boolean; useInert?: boolean; centered?: boolean; interactionTargets?: HTMLElement[];
 }) {
@@ -16,6 +70,7 @@ export default function PracticeSpotlight({ target, index, children, exit, fail,
   const { t } = useTranslation();
   const surface = useRef<HTMLDivElement>(null);
   const motion = useUiMotionEnabled();
+  const motionRef = useRef(motion); motionRef.current = motion;
   const callbacks = useRef({ exit, fail, deleteAllowed }); callbacks.current = { exit, fail, deleteAllowed };
   useLayoutEffect(() => { portal.dataset.practicePortal = ''; document.body.appendChild(portal); return () => portal.remove(); }, [portal]);
   useLayoutEffect(() => {
@@ -39,7 +94,7 @@ export default function PracticeSpotlight({ target, index, children, exit, fail,
     return () => { observer.disconnect(); cleanup(); };
   }, [target, index, portal, useInert, interactive, interactionTargets]);
   // A single visible tooltip remains stable while Joyride moves its controlled spotlight.
-  const Tooltip = useMemo(() => function GuideTooltip() { const content = useContext(GuideContent); return <div ref={surface} data-guide-card role="region" aria-label={content.label}
+  const Tooltip = useMemo(() => function GuideTooltip() { const content = useContext(GuideContent); useCardFlip(surface, motionRef); return <div ref={surface} data-guide-card role="region" aria-label={content.label}
     className={`w-[min(320px,calc(100vw-32px))] max-h-[calc(100vh-32px)] overflow-y-auto ${guideCardClass}`}
     onClick={event => event.stopPropagation()} onKeyDown={event => { if (event.key !== 'Delete' || !callbacks.current.deleteAllowed?.()) event.stopPropagation(); }}>{content.children}</div>; }, []);
   const spotlightTarget = target?.matches('input[type="range"],input[type="number"]') ? target.parentElement ?? target : target;
@@ -80,8 +135,5 @@ export default function PracticeSpotlight({ target, index, children, exit, fail,
         if (innerHeight - reference.bottom - padding - gap >= h) return { x: clampX(x), y: reference.bottom + gap };
         return {};
       } }] }} />
-    : <div className={centered ? 'fixed inset-0 z-[250] flex items-center justify-center bg-slate-950/80 p-4' : ''}>
-      <div ref={surface} data-guide-card role={centered ? 'dialog' : 'region'} aria-modal={centered || undefined} aria-label={t('guide.title')} className={`${centered ? 'w-[min(320px,calc(100vw-32px))] max-h-[calc(100vh-32px)] overflow-y-auto' : 'fixed bottom-4 right-4 z-[250] w-[min(320px,calc(100vw-32px))]'} ${guideCardClass}`}
-        onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>{children}</div>
-    </div>}</GuideContent.Provider>, portal);
+    : <FallbackCard surface={surface} motion={motionRef} centered={centered} label={t('guide.title')}>{children}</FallbackCard>}</GuideContent.Provider>, portal);
 }

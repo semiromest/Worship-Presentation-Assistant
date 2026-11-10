@@ -109,7 +109,7 @@ export default function CheatsheetModal() {
         </Section>
       </div>
 
-      <p className="mt-4 pt-4 border-t border-white/10 text-xs text-white/45 text-center">
+      <p className="mt-4 pt-4 border-t border-white/10 text-xs text-white/60 text-center">
         {t('common.cheatsheet.hint')}
       </p>
     </Dialog>
@@ -137,10 +137,10 @@ function ShortcutRow({ keys, label }: { keys: string; label: string }) {
 function TabDescRow({ tab, name, desc }: { tab: string; name: string; desc: string }) {
   return (
     <div className="flex items-start gap-2 py-1">
-      <kbd className="kbd text-[10px] mt-0.5 shrink-0">{tab}</kbd>
+      <kbd className="kbd text-[11px] mt-0.5 shrink-0">{tab}</kbd>
       <div className="min-w-0">
         <span className="text-white/80 text-xs font-semibold">{name}</span>
-        <p className="text-white/45 text-[11px] leading-relaxed">{desc}</p>
+        <p className="text-white/60 text-[11px] leading-relaxed">{desc}</p>
       </div>
     </div>
   );

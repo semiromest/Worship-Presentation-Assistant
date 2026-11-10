@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { renameWithRetry } from './atomicFile';
 import { createWriteStream } from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -173,11 +174,11 @@ export class OfflineMusicCache {
 
       const file = `${id}-${token}.${extension}`;
       final = path.join(this.directory, file);
-      await fs.rename(partial, final);
+      await renameWithRetry(partial, final);
       const manifest: Manifest = { version: 1, extension, bytes, file };
       await fs.writeFile(manifestPart, JSON.stringify(manifest));
       if (cancelled()) throw new Error('cancelled');
-      await fs.rename(manifestPart, this.manifestPath(id));
+      await renameWithRetry(manifestPart, this.manifestPath(id));
       committed = true;
       return { state: 'ready' };
     } catch (error) {

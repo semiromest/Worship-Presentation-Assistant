@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { Menu } from '@base-ui/react/menu';
 import ControlTooltip from './ControlTooltip';
+import MotionIcon from './MotionIcon';
 import { playSfx } from '../sfx';
 import { HexColorPicker } from 'react-colorful';
 import { useTranslation } from 'react-i18next';
@@ -46,7 +48,28 @@ export default function SlideStyleEditor({
   const parts = selectedSlide.parts ?? [];
   const activePart = getActivePartIndex(selectedSlide);
   const partsMode = selectedSlide.partsMode ?? false;
+  const [splitAnimation, setSplitAnimation] = useState(0);
+  const [splitPoint, setSplitPoint] = useState<{ slideId: string; part: number; text: string; offset: number } | null>(null);
+  const displayContent = getSlideDisplayContent(selectedSlide);
+  const canSplit = partsMode && parts.length > 0 && splitPoint?.slideId === selectedSlide.id
+    && splitPoint.part === activePart && splitPoint.text === displayContent
+    && !!displayContent.slice(0, splitPoint.offset).trim() && !!displayContent.slice(splitPoint.offset).trim();
   const hasTextHighlight = !!selectedSlide.styles?.textHighlight && selectedSlide.styles.textHighlight !== 'transparent';
+
+  useEffect(() => {
+    setSplitPoint(null);
+  }, [selectedSlide.id, activePart]);
+
+  const splitActivePart = () => {
+    if (!canSplit || !splitPoint) return;
+    const before = displayContent.slice(0, splitPoint.offset).trimEnd();
+    const after = displayContent.slice(splitPoint.offset).trimStart();
+    const nextParts = [...parts.slice(0, activePart), before, after, ...parts.slice(activePart + 1)];
+    updateSlideProperty(selectedSlide.id, { parts: nextParts, activePart, content: before });
+    setSplitPoint(null);
+    setSplitAnimation(value => value + 1);
+    playSfx('success');
+  };
 
   const setActivePart = (index: number) => {
     const nextPart = getPartIndex(selectedSlide, index);
@@ -93,7 +116,7 @@ export default function SlideStyleEditor({
                   aria-pressed={idx === activePart}
                   onClick={() => { if ((selectedSlide.activePart ?? 0) !== idx) { setActivePart(idx); playSfx('forward'); } }}
                   className={cn(
-                    'w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-lg text-[10px] transition-colors',
+                    'w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] transition-colors',
                     idx === activePart
                       ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30'
                       : 'bg-black/20 text-white/50 border border-transparent hover:bg-white/5'
@@ -108,7 +131,7 @@ export default function SlideStyleEditor({
         </div>
       )}
 
-      <div className="space-y-2">
+      <div className="relative">
         <label htmlFor="slide-content-textarea" className="sr-only">
           {t('common.slideContentPlaceholder')}
         </label>
@@ -117,19 +140,37 @@ export default function SlideStyleEditor({
           value={getSlideDisplayContent(selectedSlide)}
           onKeyDown={handleKeyDown}
           onChange={(e) => updateSlideContent(e.target.value)}
+          onSelect={(e) => {
+            const input = e.currentTarget;
+            setSplitPoint(input.selectionStart === input.selectionEnd
+              ? { slideId: selectedSlide.id, part: activePart, text: input.value, offset: input.selectionStart }
+              : null);
+          }}
           placeholder={t('common.slideContentPlaceholder')}
-          className="w-full h-40 bg-black/40 border border-white/10 rounded-xl p-3 text-sm resize-none focus-visible:border-blue-500/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500/30 transition-colors placeholder:text-white/20"
+          className={cn('block w-full h-40 bg-black/40 border border-white/10 rounded-xl p-3 text-sm resize-none focus-visible:border-blue-500/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500/30 transition-colors placeholder:text-white/20', partsMode && parts.length > 0 && 'pr-12')}
         />
+        {partsMode && parts.length > 0 && (
+          <ControlTooltip descriptionKey={'common.splitPartHint'}><button
+            type="button"
+            onClick={splitActivePart}
+            disabled={!canSplit}
+            aria-label={t('common.splitPartHere')}
+            title={t('common.splitPartHint')}
+            className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded-md text-white/50 hover:bg-white/5 hover:text-white/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500/50 disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <MotionIcon name="scissors" active={splitAnimation > 0} eventKey={splitAnimation} />
+          </button></ControlTooltip>
+        )}
       </div>
 </section>
       <section className="design-edit-section design-appearance"><h3>{t('slidesWorkspace.appearance')}</h3>      {/* Style Grid */}
       <div className="design-typography-row grid grid-cols-2 gap-2">
         <div className="space-y-1.5">
-          <label htmlFor="slide-font-size" className="block text-[10px] text-white/50 uppercase font-bold tracking-tight">
+          <label htmlFor="slide-font-size" className="block text-[11px] text-white/50 font-bold">
             {t('common.fontSize')}
           </label>
           <div className="design-font-size" onKeyDown={event => { if (!event.ctrlKey && !event.metaKey && !event.altKey) event.stopPropagation(); }}>
-            <ControlTooltip><button
+            <ControlTooltip descriptionKey={'slidesWorkspace.decreaseFontSize'}><button
               type="button"
               aria-label={t('slidesWorkspace.decreaseFontSize')}
               disabled={(selectedSlide.styles?.fontSize ?? 48) <= 1}
@@ -143,7 +184,7 @@ export default function SlideStyleEditor({
               onChange={(e) => updateSlideStyles({ fontSize: parseInt(e.target.value) || 48 })}
               className="design-font-size-input"
             />
-            <ControlTooltip><button
+            <ControlTooltip descriptionKey={'slidesWorkspace.increaseFontSize'}><button
               type="button"
               aria-label={t('slidesWorkspace.increaseFontSize')}
               onClick={() => updateSlideStyles({ fontSize: (selectedSlide.styles?.fontSize ?? 48) + 1 })}
@@ -152,7 +193,7 @@ export default function SlideStyleEditor({
         </div>
         <div className="grid grid-cols-2 gap-2 min-w-0">
         <div className="space-y-1.5">
-          <span className="block text-[10px] text-white/50 uppercase font-bold tracking-tight">
+          <span className="block text-[11px] text-white/50 font-bold">
             {t('common.text')}
           </span>
           <div className="relative">
@@ -174,7 +215,7 @@ export default function SlideStyleEditor({
           </div>
         </div>
           <div className="space-y-1.5">
-          <span className="block text-[10px] text-white/50 uppercase font-bold tracking-tight">
+          <span className="block text-[11px] text-white/50 font-bold">
             {t('common.background')}
           </span>
           <div className="relative">
@@ -200,7 +241,7 @@ export default function SlideStyleEditor({
 
       {/* Text highlight */}
       <div className="space-y-1.5">
-        <span className="block text-[10px] text-white/50 uppercase font-bold tracking-tight">
+        <span className="block text-[11px] text-white/50 font-bold">
           {t('common.editorTextHighlight')}
         </span>
         <div className="flex items-center gap-2">
@@ -214,7 +255,7 @@ export default function SlideStyleEditor({
             aria-label={t('common.editorTextHighlight')}
           />
           </div>
-          <ControlTooltip><button
+          <ControlTooltip descriptionKey={'common.editorClear'}><button
             type="button"
             onClick={() => updateSlideStyles({ textHighlight: 'transparent' })}
             title={t('common.editorClear')}
@@ -228,7 +269,7 @@ export default function SlideStyleEditor({
 
       {/* Font Family */}
       <div className="space-y-1.5">
-        <label htmlFor="slide-font-family" className="block text-[10px] text-white/50 uppercase font-bold tracking-tight">
+        <label htmlFor="slide-font-family" className="block text-[11px] text-white/50 font-bold">
           {t('common.fontFamily')}
         </label>
         <Select.Root
@@ -242,7 +283,7 @@ export default function SlideStyleEditor({
           }}
         >
           <Select.Trigger id="slide-font-family" className="design-font-trigger" aria-label={t('common.fontFamily')}>
-            <Type className="w-4 h-4 shrink-0 text-white/45" aria-hidden="true" />
+            <Type className="w-4 h-4 shrink-0 text-white/60" aria-hidden="true" />
             <Select.Value className="min-w-0 flex-1 truncate text-left" style={{ fontFamily: selectedSlide.styles?.fontFamily }} />
             <Select.Icon><ChevronDown className="w-3.5 h-3.5 text-white/50" aria-hidden="true" /></Select.Icon>
           </Select.Trigger>
@@ -268,7 +309,7 @@ export default function SlideStyleEditor({
       <div className="design-alignment-row">
       {/* Horizontal Alignment */}
       <div className="design-alignment-group">
-        <span className="block text-[10px] text-white/45 uppercase font-bold tracking-tight mb-2">
+        <span className="block text-[11px] text-white/60 font-bold mb-2">
           {t('common.alignHorizontal')}
         </span>
         <div className="design-alignment-buttons">
@@ -279,7 +320,7 @@ export default function SlideStyleEditor({
               { icon: AlignRight, value: 'right' },
             ] as const
           ).map(({ icon: Icon, value }) => (
-            <ControlTooltip key={value}><button
+            <ControlTooltip key={value} descriptionKey={value === 'left' ? 'common.editorAlignLeft' : value === 'center' ? 'common.editorAlignCenterH' : 'common.editorAlignRight'}><button
               key={value}
               type="button"
               onClick={() => { if (selectedSlide.styles?.textAlign !== value) { updateSlideStyles({ textAlign: value }); playSfx('snap'); } }}
@@ -307,7 +348,7 @@ export default function SlideStyleEditor({
 
       {/* Vertical Alignment */}
       <div className="design-alignment-group">
-        <span className="block text-[10px] text-white/45 uppercase font-bold tracking-tight mb-2">
+        <span className="block text-[11px] text-white/60 font-bold mb-2">
           {t('common.alignVertical')}
         </span>
         <div className="design-alignment-buttons">
@@ -318,7 +359,7 @@ export default function SlideStyleEditor({
               { icon: AlignVerticalJustifyEnd, value: 'bottom' },
             ] as const
           ).map(({ icon: Icon, value }) => (
-            <ControlTooltip key={value}><button
+            <ControlTooltip key={value} descriptionKey={value === 'top' ? 'common.editorAlignTop' : value === 'center' ? 'common.editorAlignMiddle' : 'common.editorAlignBottom'}><button
               key={value}
               type="button"
               onClick={() => { if (selectedSlide.styles?.verticalAlign !== value) { updateSlideStyles({ verticalAlign: value }); playSfx('snap'); } }}
@@ -347,7 +388,7 @@ export default function SlideStyleEditor({
       </div>
       {/* Text Transform */}
       <div>
-        <span className="block text-[10px] text-white/45 uppercase font-bold tracking-tight mb-2">
+        <span className="block text-[11px] text-white/60 font-bold mb-2">
           {t('common.textTransform')}
         </span>
         <div className="grid grid-cols-3 gap-2">
@@ -358,7 +399,7 @@ export default function SlideStyleEditor({
               { label: 'aa', value: 'lowercase' },
             ] as const
           ).map(({ label, value }) => (
-            <ControlTooltip key={value}><button
+            <ControlTooltip key={value} descriptionKey={value === 'none' ? 'slidesWorkspace.textCaseOriginal' : value === 'uppercase' ? 'slidesWorkspace.textCaseUppercase' : 'slidesWorkspace.textCaseLowercase'}><button
               key={value}
               type="button"
               onClick={() => { if (selectedSlide.styles?.textTransform !== value) { updateSlideStyles({ textTransform: value }); playSfx('snap'); } }}
@@ -387,7 +428,7 @@ export default function SlideStyleEditor({
       <section className="design-edit-section design-background"><h3>{t('slidesWorkspace.background')}</h3>
       {/* Media Buttons */}
       <div className="flex flex-wrap gap-2">
-        <ControlTooltip><button
+        <ControlTooltip descriptionKey={'common.image'}><button
           onClick={updateSlideBackgroundImage}
           aria-label={t('common.image')}
           className={cn(
@@ -401,7 +442,7 @@ export default function SlideStyleEditor({
           {t('common.image')}
         </button></ControlTooltip>
         {(!selectedSlide.youtubeMusic || selectedSlide.musicSettings?.attachment) && selectedSlide.styles?.backgroundImage && (
-          <ControlTooltip><button
+          <ControlTooltip descriptionKey={'common.removeImage'}><button
             onClick={removeSlideBackgroundImage}
             className="p-2 rounded-lg bg-red-600/20 text-red-400 border border-red-500/20 hover:bg-red-600/30 transition-colors"
             title={t('common.removeImage')}
@@ -411,7 +452,7 @@ export default function SlideStyleEditor({
           </button></ControlTooltip>
         )}
 
-        <ControlTooltip><button
+        <ControlTooltip descriptionKey={'common.video'}><button
           onClick={updateSlideBackgroundVideo}
           aria-label={t('common.video')}
           className={cn(
@@ -425,7 +466,7 @@ export default function SlideStyleEditor({
           {t('common.video')}
         </button></ControlTooltip>
         {selectedSlide.styles?.backgroundVideo && (
-          <ControlTooltip><button
+          <ControlTooltip descriptionKey={'common.removeVideo'}><button
             onClick={removeSlideBackgroundVideo}
             className="p-2 rounded-lg bg-red-600/20 text-red-400 border border-red-500/20 hover:bg-red-600/30 transition-colors"
             title={t('common.removeVideo')}
@@ -440,7 +481,7 @@ export default function SlideStyleEditor({
       {/* Apply to All Dropdown */}
       <Menu.Root open={panels.styles} modal={false} onOpenChange={next => { if (next !== panels.styles) { setPanels(p => ({ ...p, styles: next })); playSfx(next ? 'open' : 'close'); } }}>
       <div className="relative apply-styles-dropdown">
-        <ControlTooltip suppress={panels.styles}><Menu.Trigger
+        <ControlTooltip suppress={panels.styles} descriptionKey={'common.applyToAll'}><Menu.Trigger
           aria-label={t('common.applyToAll')}
           className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-[11px] font-semibold text-white/70 hover:bg-white/10 transition-[background-color] active:scale-[0.97] group"
         >

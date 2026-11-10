@@ -1,0 +1,65 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web-app",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--config",
+        "web/vite.config.mts"
+      ],
+      "port": 4176
+    },
+    {
+      "name": "site-static",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--config",
+        "site/vite.config.mjs",
+        "--outDir",
+        ".",
+        "--port",
+        "4189",
+        "--strictPort"
+      ],
+      "port": 4189
+    },
+    {
+      "name": "web-app-static",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--config",
+        "web/vite.config.mts"
+      ],
+      "port": 4177
+    },
+    {
+      "name": "site-web-app",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--config",
+        "site/vite.config.mjs",
+        "--port",
+        "4188",
+        "--strictPort"
+      ],
+      "port": 4188
+    },
+    {
+      "name": "site",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--config",
+        "site/vite.config.mjs"
+      ],
+      "port": 4174
+    }
+  ]
+}

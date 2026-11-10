@@ -317,7 +317,7 @@ const [loading, setLoading] = useState(false);
           <button
             type="button"
             onClick={() => { setDrivePanelOpen(false); playSfx('close'); }}
-            className="flex items-center gap-1.5 px-2.5 h-7 rounded-lg text-xs text-white/40 hover:text-white/70 hover:bg-white/5 transition-[color,background-color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50"
+            className="flex items-center gap-1.5 px-2.5 h-7 rounded-lg text-xs text-white/55 hover:text-white/70 hover:bg-white/5 transition-[color,background-color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50"
             aria-label="Drive panelini kapat"
           >
             <X className="w-3.5 h-3.5" aria-hidden="true" />
@@ -341,7 +341,7 @@ const [loading, setLoading] = useState(false);
             </div>
             <div className="space-y-1">
               <p className="text-sm font-medium text-white/70">{t('drive.signIn')}</p>
-              <p className="text-xs text-white/35 max-w-[220px]">
+              <p className="text-xs text-white/55 max-w-[220px]">
                 Sunumlarınızı Google Drive ile senkronize edin
               </p>
             </div>
@@ -395,7 +395,7 @@ const [loading, setLoading] = useState(false);
                 </span>
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-white/70 truncate">{driveEmail}</p>
-                  <p className="text-[10px] text-white/35">{t('drive.connected')}</p>
+                  <p className="text-[11px] text-white/55">{t('drive.connected')}</p>
                 </div>
               </div>
               <button
@@ -515,7 +515,7 @@ const [loading, setLoading] = useState(false);
                     <button
                       type="button"
                       onClick={() => setSearchQuery('')}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-white/30 hover:text-white/70 hover:bg-white/5 transition-[color,background-color]"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-white/55 hover:text-white/70 hover:bg-white/5 transition-[color,background-color]"
                       aria-label="Aramayı temizle"
                     >
                       <X className="w-3 h-3" />
@@ -546,7 +546,7 @@ const [loading, setLoading] = useState(false);
                     >
                       <FileText className="w-5 h-5 text-white/15" />
                     </div>
-                    <p className="text-sm font-medium text-white/40 mb-1">
+                    <p className="text-sm font-medium text-white/55 mb-1">
                       {searchQuery ? 'Sonuç bulunamadı' : t('drive.noFiles')}
                     </p>
                     <p className="text-xs text-white/25 max-w-[200px]">
@@ -580,7 +580,7 @@ const [loading, setLoading] = useState(false);
                             <p className="text-sm font-medium text-white/80 truncate">
                               {file.name}
                             </p>
-                            <div className="flex items-center gap-2 text-[11px] text-white/30">
+                            <div className="flex items-center gap-2 text-[11px] text-white/55">
                               {file.size && (
                                 <span className="flex items-center gap-1">
                                   <FileUp className="w-2.5 h-2.5" aria-hidden="true" />

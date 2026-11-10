@@ -1,3 +1,4 @@
+import { loadPresetList, saveLibraryPreset } from '../presetLibrary';
 import { isSessionOnlyChange, writeLiveSession } from '../liveSession';
 import { useCallback, useEffect, useRef } from 'react';
 import { shallow } from 'zustand/shallow';
@@ -111,7 +112,7 @@ const performSave = () => {
     presentation.id || presentation.name
   );
 
-  return window.electronAPI?.savePreset?.({
+  return saveLibraryPreset({
     name,
     presentation: {
       ...presentation,
@@ -191,7 +192,7 @@ async function recoverFallback(): Promise<void> {
   if (!snapshot) return;
 
   try {
-    const list = await window.electronAPI?.loadPresets?.(
+    const list = await loadPresetList(
       state.liveSaveRetentionMs
     );
     if (!Array.isArray(list)) {
@@ -213,13 +214,12 @@ async function recoverFallback(): Promise<void> {
       return;
     }
 
-    const updated = await window.electronAPI?.savePreset?.({
+    const updated = await saveLibraryPreset({
       name,
       presentation: snapshot.presentation,
       retentionMs: state.liveSaveRetentionMs,
     });
     if (Array.isArray(updated)) {
-      useStore.getState().setPresets(updated);
       clearFallback();
     }
     // If the IPC call failed (updated === undefined) the snapshot is kept
@@ -278,9 +278,6 @@ export function useLiveSave(): null {
       const updated = await performSave();
 
       if (!Array.isArray(updated)) throw new Error('Autosave unavailable');
-      if (Array.isArray(updated)) {
-        useStore.getState().setPresets(updated);
-      }
 
       useStore.getState().setLiveSaveLastSaved(Date.now());
       useStore.getState().setLiveSaveStatus('idle');

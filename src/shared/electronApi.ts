@@ -6,6 +6,10 @@ type MediaKind = 'image' | 'video';
 
 /** The preload capability surface shared by the bridge and renderer. */
 export interface ElectronAPI {
+  getSupportAvailability: () => Promise<import('./support').SupportAvailability>;
+  openSupport: (platform: import('./support').SupportPlatform) => Promise<boolean>;
+  getOptimizationFlags: () => Promise<{ screenFrameCache: boolean }>;
+  warmOptionalService: (service: 'drive' | 'youtube') => Promise<void>;
   getScreenSources: () => Promise<{ id: string; name: string; thumbnail: string; display_id?: string }[]>;
   captureScreenSource: (sourceId: string) => Promise<string | null>;
   getMediaThumbnail: (source: string, maxEdge: number) => Promise<string | null>;
@@ -24,6 +28,23 @@ export interface ElectronAPI {
   listGradientLibrary: () => Promise<import('./gradientLibrary').GradientLibraryEntry[]>;
   saveGradientLibrary: (input: import('./gradientLibrary').SaveGradientLibraryInput) => Promise<import('./gradientLibrary').GradientLibraryEntry[]>;
   deleteGradientLibrary: (id: string) => Promise<import('./gradientLibrary').GradientLibraryEntry[]>;
+  /** `referenced`: stored media names the renderer's own state refers to (see src/renderer/mediaStorage.ts). */
+  mediaStorageReport?: (referenced: string[]) => Promise<import('./mediaStorage').MediaStorageReport>;
+  mediaStorageRemove?: (names: string[], referenced: string[]) => Promise<{ count: number; bytes: number }>;
+  mediaStorageSettings?: (patch: import('./mediaStorage').MediaStorageSettings) => Promise<void>;
+  /** Desktop only: one-click media optimizer (see src/renderer/mediaOptimize.ts). */
+  mediaOptimizeSizes?: (refs: string[]) => Promise<Record<string, number>>;
+  mediaOptimizeImage?: (ref: string) => Promise<import('./mediaOptimize').ImageOptimizeResult | null>;
+  mediaOptimizeVideoBegin?: () => Promise<string>;
+  mediaOptimizeVideoWrite?: (id: string, position: number, bytes: Uint8Array) => Promise<void>;
+  mediaOptimizeVideoFinish?: (id: string, ext: string) => Promise<{ ref: string; bytes: number } | null>;
+  mediaOptimizeVideoAbort?: (id: string) => Promise<void>;
+  /** Web only: asks the browser not to evict stored media. */
+  mediaStorageRequestPersistence?: () => Promise<boolean | null>;
+  /** Web only: downloads the Windows policy file that lets the output open fullscreen without a click. */
+  downloadFullscreenSetup?: () => Promise<boolean>;
+  /** Web only: new media was stored. */
+  onMediaStorageChanged?: (callback: () => void) => () => void;
   onPracticeWorkspaceChanged: (
     callback: (value: { sessionId: string; workspace: import('./practice').PracticeWorkspace }) => void
   ) => () => void;
@@ -67,6 +88,12 @@ export interface ElectronAPI {
   onDesktopCommand: (callback: (command: import('./desktop').DesktopCommand) => void) => () => void;
   onDesktopHistory: (callback: (command: 'undo' | 'redo') => void) => () => void;
   loadPresets: (retentionMs?: number) => Promise<any[]>;
+  listPresetEntries: (retentionMs?: number) => Promise<import('./presentation').Preset[]>;
+  getPresetEntry: (name: string) => Promise<import('./presentation').Preset | null>;
+  getPresetPreview: (name: string, version: string) => Promise<import('./presentation').Slide | null>;
+  savePresetEntry: (preset: { name: string; presentation: any; retentionMs?: number }) => Promise<import('./presetCatalog').PresetChange>;
+  deletePresetEntry: (name: string, retentionMs?: number) => Promise<import('./presetCatalog').PresetChange>;
+  renamePresetEntry: (oldName: string, newName: string, retentionMs?: number) => Promise<import('./presetCatalog').PresetChange>;
   savePreset: (preset: { name: string; presentation: any; retentionMs?: number }) => Promise<any[]>;
   deletePreset: (name: string, retentionMs?: number) => Promise<any[]>;
   renamePreset: (oldName: string, newName: string, retentionMs?: number) => Promise<any[]>;
@@ -103,7 +130,14 @@ export interface ElectronAPI {
   configurePreviewDeck: (deck: import('./remotePreview').PreviewDeck) => Promise<boolean>;
   publishPreviewAsset: (asset: import('./remotePreview').PreviewAssetResult) => Promise<boolean>;
   getPreviewAssetDiagnostics: () => Promise<{ entries: number; bytes: number; slots: number; waiting: number }>;
+  /** '' while the phone server is not running; reading never starts it. */
   getRemoteUrl: () => Promise<string>;
+  /** Starts the phone server if needed (Phone Control opened) and returns the remote URL. */
+  remoteStart?: () => Promise<string>;
+  /** New access key: every paired phone is disconnected. Returns the new remote URL. */
+  remoteResetPairing?: () => Promise<string>;
+  remoteGetSettings?: () => Promise<{ autoStart: boolean }>;
+  remoteSetAutoStart?: (enabled: boolean) => Promise<{ autoStart: boolean }>;
   publicTunnelStart: () => Promise<{ active: boolean; url: string; state: string; error?: string }>;
   publicTunnelStop: () => Promise<{ active: boolean; url: string; state: string; error?: string }>;
   publicTunnelStatus: () => Promise<{ active: boolean; url: string; state: string; error?: string }>;
@@ -141,7 +175,7 @@ export interface ElectronAPI {
     cancelLabel?: string;
   }) => Promise<boolean>;
   showAlertDialog: (options: { message: string; title?: string; detail?: string; okLabel?: string }) => Promise<void>;
-  notifyProjectorReady: (displayId?: string) => void;
+  notifyProjectorReady: (displayId?: string, receiverToken?: string) => void;
   onRemoteAction: (callback: (data: any) => void) => () => void;
   onProjectorUpdate: (callback: (data: any) => void) => () => void;
   onProjectorClosed: (callback: (data?: { displayId?: string }) => void) => () => void;

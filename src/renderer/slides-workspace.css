@@ -52,6 +52,22 @@
 .design-output>button:last-child{width:36px;padding:8px;background:transparent;border-color:transparent}
 @media(max-width:1500px){.design-toolbar{grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;padding:7px 12px}.design-doc{grid-column:1;grid-row:1}.design-output{grid-column:2;grid-row:1}.design-secondary{grid-column:1/-1;grid-row:2;justify-content:flex-end;flex-wrap:wrap;gap:4px 12px}.design-doc>div:first-child{flex-direction:row;align-items:center;flex-wrap:wrap}.design-doc>div:first-child>button{width:auto;max-width:260px}}
 @media(max-width:1100px){.design-toolbar{grid-template-columns:minmax(180px,1fr) minmax(0,auto)}.design-secondary{grid-column:2;grid-row:1;gap:4px 8px}.design-output{grid-column:1/-1;grid-row:2;justify-content:flex-end;border-left:0;padding-left:0;gap:6px}.design-output>.broadcast-controls button{max-width:140px}.design-output>.output-slide-status .output-slide-state{max-width:60px}}
+/* Laptop widths: instead of always wrapping the secondary tools onto a second row, keep one
+   row whenever the toolbar itself is wide enough and show those tools as icons only (each keeps
+   its aria-label and tooltip). Live/broadcast controls keep their text labels. Measured on the
+   toolbar's own width, so an open inspector panel is taken into account. */
+.design-toolbar-wrap{container:wpa-toolbar/inline-size}
+@container wpa-toolbar (min-width:1040px) and (max-width:1500px){
+  .design-toolbar{grid-template-columns:minmax(0,1fr) auto auto;gap:6px 10px}
+  .design-doc{grid-column:1;grid-row:1}
+  .design-secondary{grid-column:2;grid-row:1;flex-wrap:nowrap;justify-content:flex-end;gap:4px 8px}
+  .design-output{grid-column:3;grid-row:1;justify-content:flex-end;border-left:1px solid #ffffff18;padding-left:10px;gap:6px}
+  .design-connections,.design-utilities{flex-wrap:nowrap}
+  .design-utilities{padding-left:8px}
+  .design-connections button>span.truncate,.design-connections button>span:only-of-type:not(.sr-only):not([aria-hidden]),
+  .design-utilities button>span.truncate,.design-utilities button .design-action-label{display:none}
+  .design-connections>div>button,.design-connections>button,.design-utilities>button,.design-utilities>div>button{padding:7px 8px}
+}
 @media(max-width:640px){
   .design-toolbar{gap:4px 8px;padding:4px 8px}
   .design-doc>div:first-child{flex-wrap:wrap}
@@ -216,7 +232,7 @@
 .design-music-footer>div:first-child{margin-top:0}
 @media(max-width:520px){.design-music-header{padding:12px 12px 0}.design-music-body{padding:0 12px}.design-music-footer{padding:8px 12px 12px}.design-music-result{flex-wrap:wrap}.design-music-add{max-width:none;margin-left:auto}}
 
-.design-selection-tools [data-testid="gradient-quick-apply"]{width:auto;gap:6px;padding:0 8px;font-size:12px}
+.design-selection-tools .design-library-trigger{width:auto;gap:6px;padding:0 8px;font-size:12px}
 
 /* A short viewport must not collapse the inspector's scroll area. Keep the
    footer in the same scroll flow so it cannot cover the inspector controls. */

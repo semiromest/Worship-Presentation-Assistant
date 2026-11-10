@@ -1,3 +1,4 @@
+import ControlTooltip from '../../components/ControlTooltip';
 import { memo, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SlideItem, TextStyle } from '../../types';
@@ -53,7 +54,7 @@ export const TextStyleEditor = memo(function TextStyleEditor({
       {/* Font family & size */}
       <div className="grid grid-cols-2 gap-3">
         <label className="space-y-1">
-          <span className="block text-[10px] uppercase tracking-wide text-white/40">
+          <span className="block text-[11px] uppercase tracking-wide text-white/55">
             {t('common.editorFontFamily')}
           </span>
           <select
@@ -70,7 +71,7 @@ export const TextStyleEditor = memo(function TextStyleEditor({
         </label>
 
         <label className="space-y-1">
-          <span className="block text-[10px] uppercase tracking-wide text-white/40">
+          <span className="block text-[11px] uppercase tracking-wide text-white/55">
             {t('common.editorFontSize')}
           </span>
           <input
@@ -91,7 +92,7 @@ export const TextStyleEditor = memo(function TextStyleEditor({
       {/* Colors */}
       <div className="grid grid-cols-2 gap-3">
         <label className="space-y-1">
-          <span className="block text-[10px] uppercase tracking-wide text-white/40">
+          <span className="block text-[11px] uppercase tracking-wide text-white/55">
             {t('common.editorColor')}
            
           </span>
@@ -108,7 +109,7 @@ export const TextStyleEditor = memo(function TextStyleEditor({
               onChange={e => update({ textColor: e.target.value })}
               className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs outline-none transition focus:border-blue-500"
             />
-            <button
+            <ControlTooltip descriptionKey={'common.editorColorPalette'}><button
               type="button"
               onClick={() => setShowColorPalette(!showColorPalette)}
               className="h-8 w-8 shrink-0 rounded-lg border border-white/10 bg-black/20 flex items-center justify-center text-white/60 hover:bg-black/35"
@@ -116,7 +117,7 @@ export const TextStyleEditor = memo(function TextStyleEditor({
               aria-label={t('common.editorColorPalette')}
             >
               <span className="text-xs">🎨</span>
-            </button>
+            </button></ControlTooltip>
           </div>
           {showColorPalette && (
             <div className="mt-1 p-2 rounded-lg border border-white/10 bg-[#1e1e1e]">
@@ -129,7 +130,7 @@ export const TextStyleEditor = memo(function TextStyleEditor({
         </label>
 
         <label className="space-y-1">
-          <span className="block text-[10px] uppercase tracking-wide text-white/40">
+          <span className="block text-[11px] uppercase tracking-wide text-white/55">
             {t('common.editorBackground')}
           </span>
           <div className="flex items-center gap-2">
@@ -150,7 +151,7 @@ export const TextStyleEditor = memo(function TextStyleEditor({
             >
               {t('common.editorClear')}
             </button>
-            <button
+            <ControlTooltip descriptionKey={'common.editorColorPalette'}><button
               type="button"
               onClick={() => setShowBgPalette(!showBgPalette)}
               className="h-8 w-8 shrink-0 rounded-lg border border-white/10 bg-black/20 flex items-center justify-center text-white/60 hover:bg-black/35"
@@ -158,7 +159,7 @@ export const TextStyleEditor = memo(function TextStyleEditor({
               aria-label={t('common.editorColorPalette')}
             >
               <span className="text-xs">🎨</span>
-            </button>
+            </button></ControlTooltip>
           </div>
           {showBgPalette && (
             <div className="mt-1 p-2 rounded-lg border border-white/10 bg-[#1e1e1e]">
@@ -173,7 +174,7 @@ export const TextStyleEditor = memo(function TextStyleEditor({
 
       {/* Text highlight */}
       <label className="block space-y-1">
-        <span className="block text-[10px] uppercase tracking-wide text-white/40">
+        <span className="block text-[11px] uppercase tracking-wide text-white/55">
           {t('common.editorTextHighlight')}
         </span>
         <div className="flex items-center gap-2">
@@ -190,7 +191,7 @@ export const TextStyleEditor = memo(function TextStyleEditor({
             className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs outline-none transition focus:border-blue-500"
             aria-label={t('common.editorTextHighlight')}
           />
-          <button
+          <ControlTooltip descriptionKey={'common.editorColorPalette'}><button
             type="button"
             onClick={() => setShowHighlightPalette(!showHighlightPalette)}
             className="h-8 w-8 shrink-0 rounded-lg border border-white/10 bg-black/20 flex items-center justify-center text-white/60 hover:bg-black/35"
@@ -198,7 +199,7 @@ export const TextStyleEditor = memo(function TextStyleEditor({
             aria-label={t('common.editorColorPalette')}
           >
             <span className="text-xs">🎨</span>
-          </button>
+          </button></ControlTooltip>
           <button
             type="button"
             onClick={() => update({ textHighlight: 'transparent' })}
@@ -321,7 +322,7 @@ export const TextStyleEditor = memo(function TextStyleEditor({
 
       {/* Text Transform */}
       <div>
-        <span className="block text-[10px] uppercase tracking-wide text-white/40 mb-1">
+        <span className="block text-[11px] uppercase tracking-wide text-white/55 mb-1">
           {t('common.textTransform')}
         </span>
         <div className="grid grid-cols-3 gap-2">
@@ -352,7 +353,7 @@ export const TextStyleEditor = memo(function TextStyleEditor({
       {/* Line height & letter spacing */}
       <div className="grid grid-cols-2 gap-3">
         <label className="space-y-1">
-          <span className="block text-[10px] uppercase tracking-wide text-white/40">
+          <span className="block text-[11px] uppercase tracking-wide text-white/55">
             {t('common.editorLineHeight')}
           </span>
           <input
@@ -369,7 +370,7 @@ export const TextStyleEditor = memo(function TextStyleEditor({
           />
         </label>
         <label className="space-y-1">
-          <span className="block text-[10px] uppercase tracking-wide text-white/40">
+          <span className="block text-[11px] uppercase tracking-wide text-white/55">
             {t('common.editorLetterSpacing')}
           </span>
           <input
@@ -387,7 +388,7 @@ export const TextStyleEditor = memo(function TextStyleEditor({
 
       {/* Text shadow */}
       <div className="space-y-1">
-        <span className="block text-[10px] uppercase tracking-wide text-white/40">
+        <span className="block text-[11px] uppercase tracking-wide text-white/55">
           {t('common.editorShadow')}
         </span>
         <div className="grid grid-cols-4 gap-2">
@@ -454,7 +455,7 @@ export const TextStyleEditor = memo(function TextStyleEditor({
 
       {/* Text stroke */}
       <div className="space-y-1">
-        <span className="block text-[10px] uppercase tracking-wide text-white/40">
+        <span className="block text-[11px] uppercase tracking-wide text-white/55">
           {t('common.editorStroke')}
         </span>
         <div className="flex items-center gap-2">

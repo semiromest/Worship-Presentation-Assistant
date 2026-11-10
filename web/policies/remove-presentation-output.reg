@@ -1,0 +1,11 @@
+Windows Registry Editor Version 5.00
+
+; Removes the policies added by allow-presentation-output.reg (Chrome and Edge).
+; Restart the browser afterwards.
+
+[-HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Google\Chrome\AutomaticFullscreenAllowedForUrls]
+[-HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Google\Chrome\WindowManagementAllowedForUrls]
+[-HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Google\Chrome\PopupsAllowedForUrls]
+[-HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Edge\AutomaticFullscreenAllowedForUrls]
+[-HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Edge\WindowManagementAllowedForUrls]
+[-HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Edge\PopupsAllowedForUrls]

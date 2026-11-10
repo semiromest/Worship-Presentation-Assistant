@@ -158,7 +158,7 @@ export default function CountdownSlideEditor({
       >
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-blue-400" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-white/50">
+          <span className="text-[11px] font-bold text-white/50">
             {data.paused ? t('common.cdPaused') : t('common.cdRemaining')}
           </span>
         </div>
@@ -169,12 +169,12 @@ export default function CountdownSlideEditor({
 
       {/* Set duration */}
       <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-3">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+        <span className="text-[11px] font-bold text-white/55">
           {t('common.cdSetDuration')}
         </span>
         <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
           <div className="space-y-1">
-            <label className="text-[10px] text-white/35">{t('common.minutes')}</label>
+            <label className="text-[11px] text-white/55">{t('common.minutes')}</label>
             <input
               type="number"
               min={0}
@@ -185,7 +185,7 @@ export default function CountdownSlideEditor({
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] text-white/35">{t('common.seconds')}</label>
+            <label className="text-[11px] text-white/55">{t('common.seconds')}</label>
             <input
               type="number"
               min={0}
@@ -279,14 +279,14 @@ export default function CountdownSlideEditor({
 
       {/* Appearance */}
       <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-3">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 flex items-center gap-2">
+        <span className="text-[11px] font-bold text-white/55 flex items-center gap-2">
           <Timer className="w-3.5 h-3.5" />
           {t('common.cdAppearance')}
         </span>
 
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1">
-            <span className="text-[10px] text-white/35">{t('common.cdBgColor')}</span>
+            <span className="text-[11px] text-white/55">{t('common.cdBgColor')}</span>
             <button
               type="button"
               onClick={() =>
@@ -307,7 +307,7 @@ export default function CountdownSlideEditor({
             )}
           </div>
           <div className="space-y-1">
-            <span className="text-[10px] text-white/35">{t('common.cdDigitColor')}</span>
+            <span className="text-[11px] text-white/55">{t('common.cdDigitColor')}</span>
             <button
               type="button"
               onClick={() =>
@@ -338,7 +338,7 @@ export default function CountdownSlideEditor({
                   textColor: theme.textColor,
                 })
               }
-              className="px-2 py-1 rounded-lg text-[10px] font-medium border border-white/10 hover:border-blue-500/40 transition-all"
+              className="px-2 py-1 rounded-lg text-[11px] font-medium border border-white/10 hover:border-blue-500/40 transition-all"
               style={{
                 backgroundColor: theme.backgroundColor,
                 color: theme.textColor,

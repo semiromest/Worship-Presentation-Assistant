@@ -237,6 +237,8 @@ export interface Preset {
   name: string;
   presentation: Presentation;
   createdAt: number;
+  /** Library listing only. Resolve the full record before applying it. */
+  summary?: { version: string; slideCount: number; resolved?: boolean };
 }
 
 export interface DriveFile {

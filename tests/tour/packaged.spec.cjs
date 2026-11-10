@@ -258,7 +258,8 @@ test('guided learning: ten sections, real outcomes, Esc resume, crash and retain
   await page.getByTestId('guide-next').click(); await step('sidebar');
   await page.getByTestId('guide-next').click(); await step('nav-slides');
   await expect(page.getByTestId('guide-next')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Slides', exact: true }).click(); await step('add');
+  await page.getByRole('button', { name: 'Slides', exact: true }).click(); await step('slide-library-intro');
+  await page.getByTestId('guide-next').click(); await step('add');
   await expect.poll(() => page.locator('[data-guide-card]').evaluate(el => { const r = el.getBoundingClientRect(); return r.x >= 0 && r.y >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; })).toBe(true);
   await expect.poll(() => page.getByRole('button', { name: 'Add New Slide', exact: true }).evaluate(el => { const r = el.getBoundingClientRect(); return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); })).toBe(true);
   await expect.poll(() => page.locator('[data-guide-card]').evaluate(el => { let opacity = 1; for (let node = el; node; node = node.parentElement) opacity *= Number(getComputedStyle(node).opacity); return opacity; })).toBe(1);

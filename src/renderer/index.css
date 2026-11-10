@@ -2,6 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Control-panel UI fonts. Files are the OFL variable fonts already vendored and
+   integrity-checked in resources/fonts (scripts/vendor-fonts.cjs); Vite bundles
+   them into dist so the UI never depends on the network. Distinct family names
+   keep them separate from same-named slide fonts loaded by fontLoader.ts. */
+@font-face { font-family: 'WPA UI Atkinson'; font-style: normal; font-weight: 200 800; font-display: block;
+  src: url('../../resources/fonts/atkinsonhyperlegiblenext/AtkinsonHyperlegibleNext[wght].ttf') format('truetype'); }
+@font-face { font-family: 'WPA UI Atkinson'; font-style: italic; font-weight: 200 800; font-display: block;
+  src: url('../../resources/fonts/atkinsonhyperlegiblenext/AtkinsonHyperlegibleNext-Italic[wght].ttf') format('truetype'); }
+@font-face { font-family: 'WPA UI Inter'; font-style: normal; font-weight: 100 900; font-display: block;
+  src: url('../../resources/fonts/inter/Inter[opsz,wght].ttf') format('truetype'); }
+@font-face { font-family: 'WPA UI Figtree'; font-style: normal; font-weight: 100 900; font-display: block;
+  src: url('../../resources/fonts/figtree/Figtree[wght].ttf') format('truetype'); }
+@font-face { font-family: 'WPA UI Manrope'; font-style: normal; font-weight: 100 900; font-display: block;
+  src: url('../../resources/fonts/manrope/Manrope[wght].ttf') format('truetype'); }
+@font-face { font-family: 'WPA UI Work Sans'; font-style: normal; font-weight: 100 900; font-display: block;
+  src: url('../../resources/fonts/worksans/WorkSans[wght].ttf') format('truetype'); }
+
+:root[data-ui-font="figtree"] { --font-ui: 'WPA UI Figtree', var(--font-ui-fallback); }
+:root[data-ui-font="inter"] { --font-ui: 'WPA UI Inter', var(--font-ui-fallback); }
+:root[data-ui-font="manrope"] { --font-ui: 'WPA UI Manrope', var(--font-ui-fallback); }
+:root[data-ui-font="work-sans"] { --font-ui: 'WPA UI Work Sans', var(--font-ui-fallback); }
+:root[data-ui-font="system"] { --font-ui: var(--font-ui-fallback); }
+
+/* Slide render roots (previews, editor canvas, projector, readiness measurement):
+   text with fontFamily 'inherit' keeps the projector default. */
+.slide-surface { font-family: var(--font-slide); }
+
 /* Opt-in shared treatments for library/settings controls; broadcast and
    slide-specific controls keep their own emphasis and sizing. */
 @layer components {
@@ -101,8 +128,12 @@ html, body {
   --radius-lg: 14px;
   --radius-xl: 20px;
 
-  /* Typography */
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  /* Typography — control-panel UI font (switch with html[data-ui-font]).
+     --font-slide is the projector's inherited default and must not follow the UI font. */
+  --font-slide: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-ui-fallback: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-ui: 'WPA UI Atkinson', var(--font-ui-fallback);
+  font-family: var(--font-ui);
   line-height: 1.5;
   font-weight: 400;
   color-scheme: dark;

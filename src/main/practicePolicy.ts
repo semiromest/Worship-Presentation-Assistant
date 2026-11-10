@@ -5,6 +5,7 @@ import { isTourProfileSender } from './tourProfile';
 // Fail closed: new application IPC cannot acquire practice capabilities implicitly.
 const allowed = new Set(['tour:profile', 'practice:info', 'practice:progress', 'practice:guide', 'practice:close', 'practice:ready', 'practice:workspace:read', 'practice:workspace:start', 'practice:workspace:observe', 'practice:workspace:pause', 'practice:workspace:resume', 'import-bible-xml', 'select-media-file', 'select-media-files-all', 'media:getThumbnail',
   'show-confirm-dialog', 'show-alert-dialog', 'load-presets', 'save-preset', 'rename-preset', 'delete-preset', 'get-displays', 'get-projector-outputs',
+  'list-preset-entries', 'get-preset-entry', 'get-preset-preview', 'save-preset-entry', 'rename-preset-entry', 'delete-preset-entry',
   'get-projector-status', 'get-remote-url', 'updater:get-info', 'quit-app', 'cleanup-temp-dir']);
 let control: WebContents | null = null;
 export function setPracticeControl(value: WebContents): void { control = value; }

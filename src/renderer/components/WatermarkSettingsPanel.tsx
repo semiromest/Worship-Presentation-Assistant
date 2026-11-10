@@ -1,3 +1,4 @@
+import ControlTooltip from './ControlTooltip';
 import { playSfx } from '../sfx';
 import { useEffect, useRef, useState } from 'react';
 import { Collapsible } from '@base-ui/react/collapsible';
@@ -113,7 +114,7 @@ export function WatermarkSettingsPanel() {
           </span>
           <ChevronDown
             className={cn(
-              'ml-auto h-4 w-4 shrink-0 text-white/40 transition-transform duration-200',
+              'ml-auto h-4 w-4 shrink-0 text-white/55 transition-transform duration-200',
               expanded && 'rotate-180',
             )}
             aria-hidden="true"
@@ -144,15 +145,15 @@ export function WatermarkSettingsPanel() {
                 {hasLogo ? t('watermark.replaceLogo') : t('watermark.uploadLogo')}
               </button>
               {hasLogo && (
-                <button
+                <ControlTooltip descriptionKey={'watermark.removeLogo'}><button
                   type="button"
                   onClick={handleRemoveLogo}
-                  className="inline-flex shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 p-2 text-white/40 transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400"
+                  className="inline-flex shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 p-2 text-white/55 transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400"
                   title={t('watermark.removeLogo')}
                   aria-label={t('watermark.removeLogo')}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                </button></ControlTooltip>
               )}
               <input
                 ref={fileInputRef}

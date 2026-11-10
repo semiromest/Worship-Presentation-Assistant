@@ -70,6 +70,10 @@ export interface AppState {
   operatorNotesEnabled: boolean;
   setOperatorNotesEnabled: (enabled: boolean) => void;
 
+  // Optional "Next slide" preview + one-click advance under the live preview (off by default)
+  nextSlidePreviewEnabled: boolean;
+  setNextSlidePreviewEnabled: (enabled: boolean) => void;
+
   // Live Save: regularly write presentation changes to a local backup (power-outage safety)
   liveSaveEnabled: boolean;
   setLiveSaveEnabled: (enabled: boolean) => void;

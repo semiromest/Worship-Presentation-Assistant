@@ -1,3 +1,5 @@
+import ControlTooltip from './ControlTooltip';
+import { startupReady } from '../startupReady';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSlideOperations } from '../hooks/useSlideOperations';
@@ -26,7 +28,7 @@ export default function DesktopHost() {
     const offStatus = api.onDesktopStatus(value => useDesktopState.setState(value));
     const offOpen = api.onDesktopOpenRequests(value => useDesktopState.setState({ requests: value }));
     const offHistory = api.onDesktopHistory(command => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', metaKey: true, shiftKey: command === 'redo', bubbles: true, cancelable: true })));
-    void api.desktopReady().then(status => { if (alive) useDesktopState.setState(status); }).catch(console.error);
+    void api.desktopReady().then(status => { if (alive) { useDesktopState.setState(status); startupReady('desktop'); } }).catch(console.error);
     return () => { alive = false; offStatus(); offOpen(); offHistory(); };
   }, []);
   useEffect(() => {
@@ -55,7 +57,7 @@ export default function DesktopHost() {
     void accept(request.id, true);
   }, [requests, busy, hasOutputs, outputsOpen, session.dirty, accept]);
   return <div className="fixed bottom-1 left-20 z-40 flex max-w-[70vw] flex-wrap items-center gap-x-3 gap-y-1 rounded bg-surface-raised px-2 text-xs text-white/70">
-    {session.path && <span draggable={session.canDrag} onDragStart={event => { event.preventDefault(); if (session.canDrag && session.path) void window.electronAPI?.desktopDragOutput(session.path).catch(console.error); }} title={safePathLabel(session.path)}>{session.dirty ? '● ' : ''}{safePathLabel(session.path.split(/[\\/]/).pop() ?? '')}</span>}
+    {session.path && <ControlTooltip><span draggable={session.canDrag} onDragStart={event => { event.preventDefault(); if (session.canDrag && session.path) void window.electronAPI?.desktopDragOutput(session.path).catch(console.error); }} title={safePathLabel(session.path)}>{session.dirty ? '● ' : ''}{safePathLabel(session.path.split(/[\\/]/).pop() ?? '')}</span></ControlTooltip>}
     {outputs.length > 0 && <details data-saved-outputs className="relative" open={outputsOpen} onToggle={event => setOutputsOpen(event.currentTarget.open)}
       onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOutputsOpen(false); }}
       onKeyDown={event => {
@@ -65,12 +67,12 @@ export default function DesktopHost() {
       <summary className="cursor-pointer py-1">{t('desktop.savedOutputs')} ({outputs.length})</summary>
       {outputsOpen && <div role="dialog" aria-modal="false" aria-label={t('desktop.savedOutputs')} className="absolute bottom-full left-0 mb-2 min-w-64 max-w-md rounded-lg border border-white/15 bg-surface-raised p-2 shadow-xl">
         <p className="px-2 pb-2 text-white/50">{t('desktop.dragHint')}</p>
-        <div className="max-h-48 overflow-y-auto">{outputs.map(file => <button key={file.path} type="button" data-saved-output draggable className="block w-full truncate rounded px-2 py-2 text-left hover:bg-white/10" title={safePathLabel(file.path)}
-          onDragStart={event => { event.preventDefault(); void window.electronAPI?.desktopDragOutput(file.path).catch(console.error); }}>{file.label}</button>)}</div>
+        <div className="max-h-48 overflow-y-auto">{outputs.map(file => <ControlTooltip key={file.path}><button key={file.path} type="button" data-saved-output draggable className="block w-full truncate rounded px-2 py-2 text-left hover:bg-white/10" title={safePathLabel(file.path)}
+          onDragStart={event => { event.preventDefault(); void window.electronAPI?.desktopDragOutput(file.path).catch(console.error); }}>{file.label}</button></ControlTooltip>)}</div>
       </div>}
     </details>}
     {requests.map(request => <div key={request.id} data-desktop-open-request className="flex items-center gap-2 p-2" role="status">
-      <span className="min-w-0 truncate" title={request.label}>{t('desktop.openRequest')}: {request.label}</span>
+      <ControlTooltip><span className="min-w-0 truncate" title={request.label}>{t('desktop.openRequest')}: {request.label}</span></ControlTooltip>
       <button disabled={busy} className="rounded bg-blue-600 px-2 py-1" onClick={() => void accept(request.id)}>{t('desktop.open')}</button>
       <button disabled={busy} className="rounded border px-2 py-1" onClick={() => void window.electronAPI?.desktopRejectOpen(request.id)}>{t('desktop.reject')}</button>
     </div>)}

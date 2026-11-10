@@ -50,7 +50,7 @@ test('all curated palettes stay in budget, seeds/styles change the image', () =>
     assert.ok(result.bytes.length < 500 * 1024, palette);
     hashes.add(result.jpegHash);
   }
-  assert.equal(hashes.size, 8);
+  assert.equal(hashes.size, Object.keys(GRADIENT_PALETTES).length);
 });
 test('rejects unbounded recipes and preserves literal palette colors', () => {
   for (const patch of [
@@ -110,4 +110,29 @@ test('group scope, single undo, defaults and explicit overrides remain separate'
   const createdDefault = { ...slide('new-default'), styles: { ...slide('new-default').styles!, backgroundColor:'#000000', backgroundExplicit:false } };
   assert.equal(inheritGeneratedBackgrounds(updated.slides,[createdDefault])[0].styles?.backgroundImage,'local-resource://media/g.jpg');
   assert.equal(inheritGeneratedBackgrounds(updated.slides,[{...createdDefault,styles:{...createdDefault.styles,backgroundExplicit:true}}])[0].styles?.backgroundImage,undefined);
+});
+
+test('new live animations and the radial style validate; two-color styles stay still', () => {
+  for (const type of ['bokeh', 'rays', 'lava', 'pulse'] as const) {
+    const live = validateGradient({ ...recipe, motion: { enabled: true, speed: 40, amount: 60, type } });
+    assert.equal(live.motion?.type, type);
+  }
+  assert.throws(() => validateGradient({ ...recipe, motion: { enabled: true, speed: 40, amount: 60, type: 'confetti' as never } }));
+  const radial: GeneratedBackground = { ...recipe, style: 'radial', colors: ['#fff3c4', '#1b1030'], palette: 'custom', darkness: 0 };
+  assert.equal(validateGradient(radial).style, 'radial');
+  assert.throws(() => validateGradient({ ...radial, motion: { enabled: true, speed: 40, amount: 60 } }), /static/);
+  assert.throws(() => validateGradient({ ...radial, colors: [...GRADIENT_PALETTES.ocean] }));
+});
+
+test('radial renders a portable centre glow and every palette (including the new ones) stays valid', () => {
+  const radial: GeneratedBackground = { ...recipe, style: 'radial', colors: ['#ffe9a8', '#10162e'], palette: 'custom', darkness: 0 };
+  const pixels = renderGradient(radial);
+  const at = (x: number, y: number) => [0, 1, 2].map((c) => pixels[(y * 1920 + x) * 4 + c]);
+  assert.deepEqual(at(960, 540).map((v, i) => Math.abs(v - [255, 233, 168][i]) <= 2), [true, true, true], 'centre keeps the first color');
+  assert.deepEqual(at(0, 0).map((v, i) => Math.abs(v - [16, 22, 46][i]) <= 2), [true, true, true], 'corners reach the second color');
+  assert.equal(createHash('sha256').update(renderGradient(radial)).digest('hex'), createHash('sha256').update(pixels).digest('hex'));
+  for (const [key, colors] of Object.entries(GRADIENT_PALETTES)) {
+    assert.doesNotThrow(() => validateGradient({ ...recipe, palette: key, colors: [...colors] }), key);
+  }
+  assert.ok(Object.keys(GRADIENT_PALETTES).length >= 12);
 });

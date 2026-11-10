@@ -44,6 +44,8 @@ function findOverflowing(tasks: MeasureTask[]): MeasureTask[] {
 
   const host = document.createElement('div');
   host.setAttribute('aria-hidden', 'true');
+  // Measure with the projector's inherited default, not the control-panel UI font.
+  host.className = 'slide-surface';
   Object.assign(host.style, {
     position: 'fixed',
     left: '-100000px',

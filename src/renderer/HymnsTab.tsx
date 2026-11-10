@@ -1,3 +1,4 @@
+import ControlTooltip from './components/ControlTooltip';
 import type { Hymn } from './hymnImport';
 export type { Hymn } from './hymnImport';
 import { playSfx } from './sfx';
@@ -456,7 +457,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
         <div className="hymn-management">
           <h2><Music size={16} aria-hidden="true" />{t('common.hymnsTitle')} <span>{hymns.length.toLocaleString(i18n.language)}</span></h2>
           <div className="hymn-tools">
-            <button
+            <ControlTooltip descriptionKey={'hymnLibrary.newHymn'}><button
               onClick={() => { setIsAddingNew(!isAddingNew); playSfx(isAddingNew ? 'close' : 'open'); }}
               className="hymn-tool"
               aria-expanded={isAddingNew}
@@ -464,8 +465,8 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
             >
               <Plus className={cn('w-4 h-4 transition-transform', isAddingNew && 'rotate-45')} aria-hidden="true" />
               {t('hymnLibrary.newHymn')}
-            </button>
-            <button
+            </button></ControlTooltip>
+            <ControlTooltip descriptionKey={'common.hymnsImport'}><button
               onClick={() => handleBulkImport()}
               disabled={importProgress !== null}
               className="hymn-tool"
@@ -473,8 +474,8 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
             >
               <FolderUp className="w-4 h-4" aria-hidden="true" />
               {t('common.hymnsImport')}
-            </button>
-            <button
+            </button></ControlTooltip>
+            <ControlTooltip descriptionKey={'common.hymnsOnline'}><button
               onClick={() => { setShowOnlinePanel(!showOnlinePanel); playSfx(showOnlinePanel ? 'close' : 'open'); }}
               className="hymn-tool"
               aria-expanded={showOnlinePanel}
@@ -483,23 +484,23 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
             >
               <Cloud className="w-4 h-4" aria-hidden="true" />
               {t('common.hymnsOnline')}
-            </button>
-            <button
+            </button></ControlTooltip>
+            <ControlTooltip descriptionKey={'common.setImportTitle'}><button
               onClick={() => { setShowSetLinkDialog(true); playSfx('open'); }}
               className="hymn-tool"
               title={t('common.setImportTitle')}
             >
               <Link2 className="w-4 h-4" aria-hidden="true" />
               {t('common.setImportButton')}
-            </button>
-            <button
+            </button></ControlTooltip>
+            <ControlTooltip descriptionKey={'common.hymnsClearAll'}><button
               onClick={clearHymns}
               className="hymn-tool hymn-danger"
               title={t('common.hymnsClearAll')}
             >
               <Trash2 className="w-4 h-4" aria-hidden="true" />
               {t('common.hymnsClearButton')}
-            </button>
+            </button></ControlTooltip>
           </div>
         </div>
         {!isAddingNew && <div className="hymn-find">
@@ -513,7 +514,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
             <option value="original">{t('hymnLibrary.original')}</option><option value="title-asc">{t('hymnLibrary.ascending')}</option><option value="title-desc">{t('hymnLibrary.descending')}</option>
           </select></label>
           <div className="hymn-add-options">
-            <button
+            <ControlTooltip descriptionKey={partsModeEnabled ? 'common.hymnsPartsModeOn' : 'common.hymnsPartsModeOff'}><button
               type="button"
               onClick={() => {
                 playSfx(partsModeEnabled ? 'toggle-off' : 'toggle-on');
@@ -535,8 +536,8 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
             >
               <ListOrdered className="w-4 h-4" aria-hidden="true" />
               {t('common.hymnsPartsMode')}
-            </button>
-            <button
+            </button></ControlTooltip>
+            <ControlTooltip descriptionKey={showAuthorOnSlides ? 'common.hymnsAuthorOnSlidesOn' : 'common.hymnsAuthorOnSlidesOff'}><button
               type="button"
               onClick={() => {
                 playSfx(showAuthorOnSlides ? 'toggle-off' : 'toggle-on');
@@ -558,7 +559,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
             >
               <UserRound className="w-4 h-4" aria-hidden="true" />
               {t('common.hymnsAuthorOnSlides')}
-            </button>
+            </button></ControlTooltip>
           </div>
         </div>}
         <div aria-live="polite" role="status">
@@ -570,7 +571,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
               />
               <div className="flex items-center justify-between text-xs text-white/60">
                 <span>{t('common.hymnsImportProgress', { count: importProgress.current, total: importProgress.total })}</span>
-                <span className="font-mono text-white/35">
+                <span className="font-mono text-white/55">
                   {Math.round((importProgress.current / importProgress.total) * 100)}%
                 </span>
               </div>
@@ -671,7 +672,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
               ))}
             </div>
           ) : (
-            <div className="h-full flex items-center justify-center text-white/45 text-sm">
+            <div className="h-full flex items-center justify-center text-white/60 text-sm">
               <div className="text-center space-y-3"><p>{hymns.length ? t('hymnLibrary.noResults') : t('common.hymnsEmpty')}</p>{hymns.length > 0 && <button className="hymn-tool" onClick={() => { setSearchTerm(''); searchRef.current?.focus(); }}>{t('hymnLibrary.clearSearch')}</button>}</div>
             </div>
           )
@@ -706,7 +707,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
             <button
               onClick={() => { closeEditModal(); playSfx('close'); }}
               aria-label={t('common.hymnsCancel')}
-              className="text-white/45 hover:text-white/70 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none rounded"
+              className="text-white/60 hover:text-white/70 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none rounded"
             >
               <X className="w-4 h-4" aria-hidden="true" />
             </button>

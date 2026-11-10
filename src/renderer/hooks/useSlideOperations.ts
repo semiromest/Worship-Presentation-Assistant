@@ -1,3 +1,4 @@
+import { loadPresetList, resolveLibraryPreset } from '../presetLibrary';
 import { restoreLiveSession } from '../liveSession';
 import { moveSectionSlidesOneStep, dropSlidesOnSlide } from '../../shared/sectionModel';
 import { useShallow } from 'zustand/react/shallow';
@@ -19,7 +20,7 @@ import { findLockedSlideIndex } from '../slideLock';
 import { playSfx } from '../sfx';
 import { isYouTubeMusicResult, type YouTubeMusicResult } from '../../shared/youtubeMusic';
 import { musicGain } from '../musicCustomization';
-import { documentSession, documentSignature } from '../documentSession';
+import { documentSession, documentSignature, sameDocument } from '../documentSession';
 import { usePractice } from './usePractice';
 
 export const createSlide = (type: Slide['type'], overrides: Partial<Slide> = {}): Slide => ({
@@ -63,7 +64,6 @@ export function useSlideOperations() {
     setActiveTab,
     setPanels,
     setSelectedPresetName,
-    setPresets,
     setPresentationName,
     setSlideZoom,
   } = useStore(useShallow((s) => ({
@@ -77,7 +77,6 @@ export function useSlideOperations() {
     setActiveTab: s.setActiveTab,
     setPanels: s.setPanels,
     setSelectedPresetName: s.setSelectedPresetName,
-    setPresets: s.setPresets,
     setPresentationName: s.setPresentationName,
     setSlideZoom: s.setSlideZoom,
   })));
@@ -362,7 +361,7 @@ export function useSlideOperations() {
       cancelLabel: t('common.cancel'), openLabel: t('fileOpen.open'),
     });
     if (!result) return;
-    if (generation !== documentSession.current().generation || signature !== documentSignature(useStore.getState().presentation)) {
+    if (generation !== documentSession.current().generation || !sameDocument(signature, documentSignature(useStore.getState().presentation))) {
       await alertDialog(t('desktop.documentChanged')); return;
     }
     if (!(await guardDocumentReplacement())) return;
@@ -428,7 +427,7 @@ export function useSlideOperations() {
         }))
       : [createSlide('text', { content: t('common.newSlideContent') })];
 
-    if (generation !== documentSession.current().generation || signature !== documentSignature(useStore.getState().presentation)) {
+    if (generation !== documentSession.current().generation || !sameDocument(signature, documentSignature(useStore.getState().presentation))) {
       await alertDialog(t('desktop.documentChanged'));
       return;
     }
@@ -470,7 +469,7 @@ export function useSlideOperations() {
     if (!result?.success || !result.slides) throw new Error(result?.error || t('common.importFailedGeneric'));
     const slides = convertPptxToSlides(result);
     if (!slides.length) throw new Error(t('fileOpen.noImportedSlides'));
-    const unchanged = () => generation === documentSession.current().generation && signature === documentSignature(useStore.getState().presentation);
+    const unchanged = () => generation === documentSession.current().generation && sameDocument(signature, documentSignature(useStore.getState().presentation));
     if (!unchanged()) { await alertDialog(t('desktop.documentChanged')); return null; }
     if (mode === 'new') {
       const current = useStore.getState();
@@ -491,6 +490,15 @@ export function useSlideOperations() {
 
   const applyPreset = useCallback(async (preset: Preset) => {
     if (!(await guardDocumentReplacement())) return;
+    const origin = documentSignature(useStore.getState().presentation), generation = documentSession.current().generation;
+    try { preset = await resolveLibraryPreset(preset); }
+    catch { await alertDialog(t('library.operationFailed')); return; }
+    if (generation !== documentSession.current().generation || !sameDocument(origin, documentSignature(useStore.getState().presentation))) {
+      await alertDialog(t('desktop.documentChanged')); return;
+    }
+    const currentPresets = useStore.getState().presets;
+    useStore.getState().setPresets(currentPresets.map(item => item.name === preset.name ? preset
+      : item.summary?.resolved ? { ...item, presentation: { id: item.presentation.id, name: item.presentation.name, slides: [] }, summary: { ...item.summary, resolved: false } } : item));
     const presentationWithId = {
       ...(isLiveSavePreset(preset.name) ? restoreLiveSession(preset.presentation, preset.createdAt) : preset.presentation),
       id: preset.presentation.id || crypto.randomUUID(),
@@ -515,13 +523,12 @@ export function useSlideOperations() {
     setActiveTab('slides');
     documentSession.opened(null);
     playSfx('open');
-  }, [dispatchUndo, setPresentationName, setSelectedSlideId, setSlideZoom, setLiveSlideId, setSelectedPresetName, setActiveTab, guardDocumentReplacement]);
+  }, [dispatchUndo, setPresentationName, setSelectedSlideId, setSlideZoom, setLiveSlideId, setSelectedPresetName, setActiveTab, guardDocumentReplacement, t]);
 
   const openSavedPresentationByName = useCallback(async (presentationName: string) => {
     const { presets } = useStore.getState();
-    const loaded = await window.electronAPI?.loadPresets?.(getLiveSaveRetention());
+    const loaded = await loadPresetList(getLiveSaveRetention());
     const list = Array.isArray(loaded) ? loaded : presets;
-    if (Array.isArray(loaded)) setPresets(loaded);
 
     const preset = findPresetByRef(presentationName, list);
     if (!preset) {
@@ -531,7 +538,7 @@ export function useSlideOperations() {
     }
 
     await applyPreset(preset);
-  }, [applyPreset, t, setPresets]);
+  }, [applyPreset, t]);
 
   const createNewPresentation = useCallback(async () => {
     const { isProjectorWindowOpen } = useStore.getState();

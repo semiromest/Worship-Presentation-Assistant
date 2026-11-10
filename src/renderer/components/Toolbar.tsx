@@ -1,4 +1,5 @@
 import ControlTooltip from './ControlTooltip';
+import MotionIcon from './MotionIcon';
 import { playSfx } from '../sfx';
 import { usePractice } from '../hooks/usePractice';
 import { registerTourAnchor } from './Tour/tourController';
@@ -8,18 +9,12 @@ import { useTranslation } from 'react-i18next';
 import {
   Undo2,
   Redo2,
-  ChevronUp,
-  ChevronDown,
-  Copy,
-  Trash2,
   Monitor,
   Play,
   Smartphone,
   Tv,
   PanelRightClose,
   PanelRightOpen,
-  Captions,
-  Save,
   AlertCircle,
   ClipboardCheck,
 } from 'lucide-react';
@@ -33,9 +28,6 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 
 interface ToolbarProps {
   addYouTubeMusicSlide: (track: import('../../shared/youtubeMusic').YouTubeMusicResult) => void;
-  moveSelectedSlides: (direction: -1 | 1) => void;
-  deleteSelectedSlides: () => void;
-  duplicateSelectedSlides: () => void;
   openLive: () => Promise<void>;
   closeLive: () => Promise<void>;
   openOutput: (displayId: string) => Promise<void>;
@@ -43,9 +35,6 @@ interface ToolbarProps {
 }
 
 export default function Toolbar({
-  moveSelectedSlides,
-  deleteSelectedSlides,
-  duplicateSelectedSlides,
   openLive,
   closeLive,
   openOutput,
@@ -60,7 +49,6 @@ export default function Toolbar({
   const canUndo = useStore(s => s.undoState.past.length > 0);
   const canRedo = useStore(s => s.undoState.future.length > 0);
   const dispatchUndo = useStore((s) => s.dispatchUndo);
-  const selectedCount = useStore(s => s.selectedSlideIds.size);
   const isProjectorWindowOpen = useStore((s) => s.isProjectorWindowOpen);
   const setPresentationName = useStore((s) => s.setPresentationName);
   const isRightPanelOpen = useStore((s) => s.isRightPanelOpen);
@@ -76,6 +64,7 @@ export default function Toolbar({
   const setIsPrepCheckOpen = useStore((s) => s.setIsPrepCheckOpen);
   // Running session state drives the button color/pulse so operators always
   // know captions are live — even when the console is collapsed.
+  const micActive = useSttStore(s => s.micActive && s.status === 'connected');
   const sttLive = useSttStore((s) => s.micActive || s.status !== 'idle');
 
   // Tick "X min ago" every minute to stay accurate.
@@ -148,7 +137,7 @@ export default function Toolbar({
             className="font-semibold text-blue-400 bg-transparent border-b border-blue-400/50 outline-none max-w-[300px]"
           />
         ) : (
-          <ControlTooltip><button
+          <ControlTooltip descriptionKey={'common.clickToRename'}><button
             onClick={startEditing}
             className="group flex items-center gap-1.5 font-semibold text-blue-400 truncate max-w-[300px] hover:text-blue-300 transition-colors text-left cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none rounded px-2 py-0.5 -ml-2 hover:bg-white/5 active:scale-[0.98]"
             title={t('common.clickToRename')}
@@ -173,26 +162,26 @@ export default function Toolbar({
         {savedAgoLabel && (
           <span
             className={cn(
-              'hidden sm:inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0',
+              'hidden sm:inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded border shrink-0',
               liveSaveStatus === 'error'
                 ? 'text-red-400 border-red-500/30 bg-red-500/10'
                 : liveSaveStatus === 'saving'
                   ? 'text-amber-300 border-amber-500/30 bg-amber-500/10'
-                  : 'text-white/35 border-white/10',
+                  : 'text-white/55 border-white/10',
             )}
             aria-live="polite"
           >
             {liveSaveStatus === 'error' ? (
               <AlertCircle className="w-3 h-3 shrink-0" aria-hidden="true" />
             ) : (
-              <Save className="w-3 h-3 shrink-0" aria-hidden="true" />
+              <MotionIcon name={liveSaveStatus === 'saving' ? 'sync' : 'check-circle'} active={liveSaveStatus === 'saving' || !!liveSaveLastSaved} loop={liveSaveStatus === 'saving'} eventKey={liveSaveLastSaved} />
             )}
             {savedAgoLabel}
           </span>
         )}
         <OutputStatus />
         </div>
-      </div>{activeTab !== 'slides' && <div className="design-undo">        <ControlTooltip shortcut="Ctrl+Z"><button
+      </div>{activeTab !== 'slides' && <div className="design-undo">        <ControlTooltip shortcut="Ctrl+Z" description={t('controlHints.undo')}><button
           onClick={() => dispatchUndo({ type: 'UNDO' })}
           disabled={!canUndo}
           title={t('common.undo')}
@@ -201,7 +190,7 @@ export default function Toolbar({
         >
           <Undo2 className="w-4 h-4" aria-hidden="true" />
         </button></ControlTooltip>
-        <ControlTooltip shortcut="Ctrl+Y"><button
+        <ControlTooltip shortcut="Ctrl+Y" description={t('controlHints.redo')}><button
           onClick={() => dispatchUndo({ type: 'REDO' })}
           disabled={!canRedo}
           title={t('common.redo')}
@@ -211,51 +200,10 @@ export default function Toolbar({
           <Redo2 className="w-4 h-4" aria-hidden="true" />
         </button></ControlTooltip>
 
-</div>}<div className="design-multi">        {activeTab !== 'slides' && selectedCount > 1 && (
-          <>
-            <div className="w-px h-6 bg-white/10 mx-1" aria-hidden="true" />
-            <span className="text-xs text-white/55 font-medium" aria-live="polite">
-              {selectedCount} {t('common.selected')}
-            </span>
-            <ControlTooltip><button
-              onClick={() => moveSelectedSlides(-1)}
-              title={t('common.moveSelectedUp')}
-              aria-label={t('common.moveSelectedUp')}
-              className="p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]"
-            >
-              <ChevronUp className="w-4 h-4" aria-hidden="true" />
-            </button></ControlTooltip>
-            <ControlTooltip><button
-              onClick={() => moveSelectedSlides(1)}
-              title={t('common.moveSelectedDown')}
-              aria-label={t('common.moveSelectedDown')}
-              className="p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]"
-            >
-              <ChevronDown className="w-4 h-4" aria-hidden="true" />
-            </button></ControlTooltip>
-            <ControlTooltip><button
-              onClick={duplicateSelectedSlides}
-              title={`${t('common.duplicateSelected')} (Ctrl+D)`}
-              aria-label={t('common.duplicateSelected')}
-              className="p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]"
-            >
-              <Copy className="w-4 h-4" aria-hidden="true" />
-            </button></ControlTooltip>
-            <ControlTooltip><button
-              onClick={deleteSelectedSlides}
-              title={`${t('common.deleteSelected')} (Del)`}
-              aria-label={t('common.deleteSelected')}
-              className="p-2.5 rounded-md bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-400 transition-colors focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:outline-none active:scale-[0.92]"
-            >
-              <Trash2 className="w-4 h-4" aria-hidden="true" />
-            </button></ControlTooltip>
-          </>
-        )}
-
-</div></div>
+</div>}</div>
     <div className="design-secondary"><div className="design-connections">{!practice && <><DisplayOutputsPopover label={activeTab === 'slides' ? t('slidesWorkspace.displays') : undefined} openOutput={openOutput} closeOutput={closeOutput} />        {/* Phone viewers (live-slide broadcast) */}
         <div className="relative shrink-0">
-          <ControlTooltip><button
+          <ControlTooltip descriptionKey={'common.liveShareButton'}><button
             onClick={() => { setIsLiveShareOpen(true); playSfx('open'); }}
             aria-label={t('common.liveShareButton')}
             aria-haspopup="dialog"
@@ -276,7 +224,7 @@ export default function Toolbar({
 
         {/* Remote Panel */}
         <div className="relative shrink-0">
-          <ControlTooltip><button
+          <ControlTooltip descriptionKey={'common.remoteControl'}><button
             onClick={() => { setIsRemoteOpen(true); playSfx('open'); }}
             aria-label={t('common.remoteControl')}
             aria-haspopup="dialog"
@@ -289,7 +237,7 @@ export default function Toolbar({
 
 </>}{practice && <button disabled data-guide-anchor="phone-controls">{t('common.remoteControl')}</button>}</div>
     <div className="design-utilities">{!practice && <>        {/* Live Captions console (labeled; reflects the running session) */}
-        <ControlTooltip><button
+        <ControlTooltip descriptionKey={'common.sttPanelTitle'}><button
           type="button"
           onClick={() => setIsSttPanelOpen(!isSttPanelOpen)}
           aria-pressed={isSttPanelOpen}
@@ -304,7 +252,7 @@ export default function Toolbar({
                 : 'bg-white/5 hover:bg-white/10 border-white/10 text-white/60 hover:text-white'
           )}
         >
-          <Captions className="w-4 h-4 shrink-0" aria-hidden="true" />
+          <MotionIcon name="mic" active={micActive} loop />
           <span className="hidden lg:inline truncate">{t('common.sttToolbarButton')}</span>
           {sttLive && (
             <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse shrink-0" aria-hidden="true" />
@@ -319,12 +267,12 @@ export default function Toolbar({
           data-preparation-status={readinessStatus}
           className="relative p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]"
         >
-          <span className="design-action-label">{t('slidesWorkspace.readiness')}</span><ClipboardCheck className={readinessStatus === 'checking' ? 'w-4 h-4 animate-pulse' : 'w-4 h-4'} aria-hidden="true" />
+          <span className="design-action-label">{t('slidesWorkspace.readiness')}</span>{readinessStatus === 'checking' ? <MotionIcon name="loader" active loop /> : readinessStatus === 'complete' && readinessIssueCount === 0 ? <MotionIcon name="check-circle" active /> : <ClipboardCheck className="w-4 h-4" aria-hidden="true" />}
           <span id="preparation-toolbar-status" className="sr-only">{readinessLabel}{readinessIssueCount > 0 ? ': ' + t('prepCheck.summary', { count: readinessIssueCount }) : ''}</span>
-          {readinessStatus !== 'complete' && <span aria-hidden="true" className="absolute -top-1 -right-1 h-4 min-w-4 rounded-full bg-amber-500 text-black text-[10px]">{readinessStatus === 'failed' ? '!' : '…'}</span>}
+          {readinessStatus !== 'complete' && <span aria-hidden="true" className="absolute -top-1 -right-1 h-4 min-w-4 rounded-full bg-amber-500 text-black text-[11px]">{readinessStatus === 'failed' ? '!' : '…'}</span>}
           {readinessIssueCount > 0 && (
             <span
-              className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-[10px] font-bold text-black flex items-center justify-center tabular-nums"
+              className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-[11px] font-bold text-black flex items-center justify-center tabular-nums"
               aria-hidden="true"
             >
               {readinessIssueCount}
@@ -337,7 +285,7 @@ export default function Toolbar({
 </div></div>
     <div className="design-output">
       {activeTab === 'slides' && <><SlideSelectionStatus navigation={false} /><BroadcastControls /></>}
-        {!practice && <ControlTooltip><button
+        {!practice && <ControlTooltip description={t(isProjectorWindowOpen ? 'controlHints.stopLive' : 'controlHints.startLive')}><button
           onClick={startLive}
           aria-label={isProjectorWindowOpen ? t('common.stopBroadcast') : t('common.startBroadcast')}
           className={cn(
@@ -349,18 +297,18 @@ export default function Toolbar({
         >
           {isProjectorWindowOpen ? (
             <>
-              <Monitor className="w-4 h-4 shrink-0" aria-hidden="true" />
-              <span className="truncate">{t('common.stopBroadcast').toUpperCase()}</span>
+              <MotionIcon name="broadcast" active={isProjectorWindowOpen} />
+              <span className="truncate">{t('common.stopBroadcast')}</span>
             </>
           ) : (
             <>
               <Play className="w-4 h-4 shrink-0 fill-current" aria-hidden="true" />
-              <span className="truncate">{t('common.startBroadcast').toUpperCase()}</span>
+              <span className="truncate">{t('common.startBroadcast')}</span>
             </>
           )}
         </button></ControlTooltip>}
 
-        <ControlTooltip><button
+        <ControlTooltip description={t('controlHints.inspector')}><button
           onClick={() => { setIsRightPanelOpen(!isRightPanelOpen); playSfx(isRightPanelOpen ? 'close' : 'open'); }}
           title={isRightPanelOpen ? t('common.panelClose') : t('common.panelOpen')}
           aria-label={isRightPanelOpen ? t('common.panelClose') : t('common.panelOpen')}

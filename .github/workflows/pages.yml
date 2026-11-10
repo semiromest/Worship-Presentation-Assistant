@@ -1,10 +1,17 @@
-name: Publish website and browser demo
+name: Publish website and web app
 
 on:
   push:
     branches: [master]
     paths:
       - 'site/**'
+      - 'web/**'
+      - 'src/renderer/**'
+      - 'src/shared/**'
+      - 'resources/fonts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'patches/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -24,16 +31,41 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Check out website source
+      - name: Check out source
         uses: actions/checkout@v4
         with:
           lfs: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # The web app needs only the renderer toolchain; skip the Electron binary download.
+      - name: Install dependencies
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+      - name: Typecheck web app
+        run: npx tsc -p web/tsconfig.json
+
+      # Writes site/app/. Set the repository variable GOOGLE_DRIVE_CLIENT_ID (a public Web OAuth
+      # client ID, see web/README.md) to enable Google Drive; without it Drive shows a notice.
+      - name: Build web app
+        run: npx vite build --config web/vite.config.mts
+        env:
+          VITE_GOOGLE_DRIVE_CLIENT_ID: ${{ vars.GOOGLE_DRIVE_CLIENT_ID }}
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
+
       - name: Upload static website
         uses: actions/upload-pages-artifact@v4
         with:
           path: site
-      - name: Deploy website and demo
+
+      - name: Deploy website and web app
         id: deployment
         uses: actions/deploy-pages@v4

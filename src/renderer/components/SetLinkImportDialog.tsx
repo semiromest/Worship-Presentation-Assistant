@@ -160,7 +160,7 @@ export default function SetLinkImportDialog({
         <button
           onClick={handleClose}
           aria-label={t('common.close')}
-          className="text-white/45 hover:text-white/70 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none rounded"
+          className="text-white/60 hover:text-white/70 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none rounded"
         >
           <X className="w-4 h-4" aria-hidden="true" />
         </button>
@@ -259,7 +259,7 @@ export default function SetLinkImportDialog({
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold truncate">{song.title}</div>
-                    <div className="text-xs text-white/40 truncate">{song.lyrics.split('\n')[0]}</div>
+                    <div className="text-xs text-white/55 truncate">{song.lyrics.split('\n')[0]}</div>
                   </div>
                 </div>
               ))}

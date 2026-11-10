@@ -1,3 +1,4 @@
+import ControlTooltip from './ControlTooltip';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Smartphone, Radio, WifiOff, X, Plus } from 'lucide-react';
@@ -63,7 +64,7 @@ export default function SharePanel({
           <Smartphone className="w-4 h-4 text-emerald-300 shrink-0" aria-hidden="true" />
           <div className="min-w-0">
             <p className="text-xs font-semibold truncate">{t('common.sttShareTitle')}</p>
-            <p className="text-[10px] text-white/45 truncate">{t('common.sttShareDesc')}</p>
+            <p className="text-[11px] text-white/60 truncate">{t('common.sttShareDesc')}</p>
           </div>
         </div>
         <button
@@ -112,7 +113,7 @@ export default function SharePanel({
                 className="w-20 h-20 rounded-lg bg-white p-1 shrink-0"
               />
             ) : (
-              <div className="w-20 h-20 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-[10px] text-white/40 shrink-0">
+              <div className="w-20 h-20 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-[11px] text-white/55 shrink-0">
                 {t('common.remoteLoading')}
               </div>
             )}
@@ -127,12 +128,12 @@ export default function SharePanel({
                 <Radio className="w-3.5 h-3.5" aria-hidden="true" />
                 {t('common.sttShareConnected', { count: shareClientCount })}
               </p>
-              <p className="text-[10px] text-white/40">{t('common.sttShareHint')}</p>
+              <p className="text-[11px] text-white/55">{t('common.sttShareHint')}</p>
             </div>
           </div>
 
           <div className="flex gap-2">
-            <button
+            <ControlTooltip descriptionKey={'common.screenShareAddSlide'}><button
               type="button"
               onClick={handleAddQrSlide}
               disabled={!shareQr}
@@ -141,7 +142,7 @@ export default function SharePanel({
               className="shrink-0 p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 hover:text-white/90 transition-colors disabled:opacity-40"
             >
               <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-            </button>
+            </button></ControlTooltip>
             <button
               type="button"
               onClick={onStopShare}

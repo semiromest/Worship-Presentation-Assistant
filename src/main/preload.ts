@@ -87,6 +87,19 @@ const api = {
   saveGradientLibrary: (input: SaveGradientLibraryInput) => ipcRenderer.invoke('gradient-library:save', input),
   deleteGradientLibrary: (id: string) => ipcRenderer.invoke('gradient-library:remove', id),
 
+  // ── Media storage ──
+  mediaStorageReport: (referenced: string[]) => ipcRenderer.invoke('media-storage:report', referenced),
+  mediaStorageRemove: (names: string[], referenced: string[]) => ipcRenderer.invoke('media-storage:remove', names, referenced),
+  mediaStorageSettings: (patch: unknown) => ipcRenderer.invoke('media-storage:settings', patch),
+
+  // ── Media optimizer ──
+  mediaOptimizeSizes: (refs: string[]) => ipcRenderer.invoke('media-optimize:sizes', refs),
+  mediaOptimizeImage: (ref: string) => ipcRenderer.invoke('media-optimize:image', ref),
+  mediaOptimizeVideoBegin: () => ipcRenderer.invoke('media-optimize:video-begin'),
+  mediaOptimizeVideoWrite: (id: string, position: number, bytes: Uint8Array) => ipcRenderer.invoke('media-optimize:video-write', id, position, bytes),
+  mediaOptimizeVideoFinish: (id: string, ext: string) => ipcRenderer.invoke('media-optimize:video-finish', id, ext),
+  mediaOptimizeVideoAbort: (id: string) => ipcRenderer.invoke('media-optimize:video-abort', id),
+
   // ── Practice / tour ──
   onPracticeWorkspaceChanged: subscribe('practice:workspace-changed'),
   controlPracticeGuide: (id: string, step: string, action: string, input: unknown, label: string, destination?: string) =>
@@ -127,6 +140,14 @@ const api = {
   onDesktopCommand: subscribe<import('../shared/desktop').DesktopCommand>('desktop:command'),
   onDesktopHistory: subscribe<'undo' | 'redo'>('desktop:history'),
   loadPresets: (retentionMs?: number) => ipcRenderer.invoke('load-presets', retentionMs),
+  getSupportAvailability: () => ipcRenderer.invoke('support:availability'),
+  openSupport: (platform: import('../shared/support').SupportPlatform) => ipcRenderer.invoke('support:open', platform),
+  listPresetEntries: (retentionMs?: number) => ipcRenderer.invoke('list-preset-entries', retentionMs),
+  getPresetEntry: (name: string) => ipcRenderer.invoke('get-preset-entry', name),
+  getPresetPreview: (name: string, version: string) => ipcRenderer.invoke('get-preset-preview', name, version),
+  savePresetEntry: (preset: { name: string; presentation: any; retentionMs?: number }) => ipcRenderer.invoke('save-preset-entry', preset),
+  deletePresetEntry: (name: string, retentionMs?: number) => ipcRenderer.invoke('delete-preset-entry', name, retentionMs),
+  renamePresetEntry: (oldName: string, name: string, retentionMs?: number) => ipcRenderer.invoke('rename-preset-entry', oldName, name, retentionMs),
   savePreset: (preset: { name: string; presentation: any; retentionMs?: number }) => ipcRenderer.invoke('save-preset', preset),
   deletePreset: (name: string, retentionMs?: number) => ipcRenderer.invoke('delete-preset', name, retentionMs),
   renamePreset: (oldName: string, newName: string, retentionMs?: number) =>
@@ -140,7 +161,7 @@ const api = {
   closeProjector: (displayId: string) => ipcRenderer.invoke('close-projector', displayId),
   updateProjector: (data: any) => ipcRenderer.invoke('update-projector', data),
   getProjectorStatus: () => ipcRenderer.invoke('get-projector-status'),
-  notifyProjectorReady: (displayId?: string) => ipcRenderer.send('projector-ready', displayId),
+  notifyProjectorReady: (displayId?: string, receiverToken?: string) => ipcRenderer.send('projector-ready', displayId, receiverToken),
 
   // ── Media / import / export ──
   checkMediaResources: (urls: string[]) => ipcRenderer.invoke('check-media-resources', urls),
@@ -183,6 +204,10 @@ const api = {
   publishPreviewAsset: (asset: import('../shared/remotePreview').PreviewAssetResult) => ipcRenderer.invoke('preview:publish', asset),
   getPreviewAssetDiagnostics: () => ipcRenderer.invoke('preview:diagnostics'),
   getRemoteUrl: () => ipcRenderer.invoke('get-remote-url'),
+  remoteStart: () => ipcRenderer.invoke('remote:start'),
+  remoteResetPairing: () => ipcRenderer.invoke('remote:reset-pairing'),
+  remoteGetSettings: () => ipcRenderer.invoke('remote:get-settings'),
+  remoteSetAutoStart: (enabled: boolean) => ipcRenderer.invoke('remote:set-auto-start', enabled),
   publicTunnelStart: () => ipcRenderer.invoke('public-tunnel:start'),
   publicTunnelStop: () => ipcRenderer.invoke('public-tunnel:stop'),
   publicTunnelStatus: () => ipcRenderer.invoke('public-tunnel:status'),
@@ -260,6 +285,8 @@ const api = {
   onShareNetworkChanged: subscribe<{ url: string }>('share:network-changed'),
 
   // ── Live-screen phone broadcast ──
+  getOptimizationFlags: () => ipcRenderer.invoke('optimization:flags'),
+  warmOptionalService: (service: 'drive' | 'youtube') => ipcRenderer.invoke('optimization:warm', service),
   screenShareStart: () => ipcRenderer.invoke('screen-share:start'),
   screenShareStop: () => ipcRenderer.invoke('screen-share:stop'),
   screenShareFrame: (frame: string) => ipcRenderer.send('screen-share:frame', frame),

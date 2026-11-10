@@ -1,3 +1,4 @@
+import ControlTooltip from './ControlTooltip';
 import { useUiMotionEnabled } from '../hooks/useUiMotionEnabled';
 import { uiMotion } from '../uiMotion';
 import * as m from 'motion/react-m';
@@ -36,7 +37,7 @@ export function PositionPicker({ value, onChange, disabled, labelFor, ariaLabel,
         const active = value === opt.value;
         const label = labelFor?.(opt.value) ?? t(opt.labelKey);
         return (
-          <button
+          <ControlTooltip key={opt.value} description={t('tooltipText.setPosition', { position: label })}><button
             key={opt.value}
             type="button"
             disabled={disabled}
@@ -54,7 +55,7 @@ export function PositionPicker({ value, onChange, disabled, labelFor, ariaLabel,
           >
             {active && <m.span layoutId={`position-${indicatorId}`} className="pointer-events-none absolute inset-0 -z-10 rounded-lg bg-blue-600/20" transition={{ duration: motionEnabled ? uiMotion.duration.fast : 0, ease: uiMotion.ease }} />}
             {opt.label}
-          </button>
+          </button></ControlTooltip>
         );
       })}
     </div>

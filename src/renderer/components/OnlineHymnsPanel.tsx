@@ -1,3 +1,4 @@
+import ControlTooltip from './ControlTooltip';
 import { playSfx } from '../sfx';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -328,14 +329,14 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
       <div className="flex flex-col flex-1 min-h-0">
       <div className="p-4 border-b border-white/10 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 id="online-hymns-dialog-title" className="text-xs font-bold uppercase tracking-widest text-white/40 flex items-center gap-2">
+          <h3 id="online-hymns-dialog-title" className="text-xs font-bold uppercase tracking-widest text-white/55 flex items-center gap-2">
             <Cloud className="w-3.5 h-3.5" />
             {t('common.onlineHymnsTitle')}
           </h3>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-white/45">{total} ilahi</span>
+            <span className="text-xs text-white/60">{total} ilahi</span>
             {onClose && (
-              <button
+              <ControlTooltip descriptionKey={'common.onlineHymnsBack'}><button
                 type="button"
                 onClick={() => { onClose?.(); playSfx('close'); }}
                 className="p-1.5 rounded-md text-white/50 hover:text-white hover:bg-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
@@ -343,13 +344,13 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
                 title={t('common.onlineHymnsBack')}
               >
                 <X className="w-4 h-4" aria-hidden="true" />
-              </button>
+              </button></ControlTooltip>
             )}
           </div>
         </div>
 
         <div className="relative">
-          <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/45 pointer-events-none z-10" />
+          <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/60 pointer-events-none z-10" />
           <label htmlFor="language-select" className="sr-only">
             {t('common.selectLanguage') || 'Select Language'}
           </label>
@@ -366,7 +367,7 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
               </option>
             ))}
           </select>
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-white/45">
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-white/60">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
@@ -374,7 +375,7 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
         </div>
 
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/45" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/60" />
           <label htmlFor="search-hymns" className="sr-only">
             {t('common.onlineHymnsSearch')}
           </label>
@@ -398,25 +399,25 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
 
       {loading ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6">
-          <Loader2 className="w-6 h-6 text-white/45 animate-spin" />
+          <Loader2 className="w-6 h-6 text-white/60 animate-spin" />
           {total > 0 ? (
             <div className="w-full max-w-xs space-y-1.5">
               <ProgressBar
                 value={(loadingProgress / total) * 100}
                 ariaLabel={t('common.onlineHymnsLoading', { count: loadingProgress, total })}
               />
-              <div className="text-center text-xs text-white/45">
+              <div className="text-center text-xs text-white/60">
                 {t('common.onlineHymnsLoading', { count: loadingProgress, total })}
               </div>
             </div>
           ) : (
-            <div className="text-xs text-white/45">
+            <div className="text-xs text-white/60">
               {t('common.onlineHymnsLoading', { count: loadingProgress, total: '?' })}
             </div>
           )}
         </div>
       ) : filteredSongs.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-white/45 text-sm">
+        <div className="flex-1 flex items-center justify-center text-white/60 text-sm">
           {debouncedSearch ? t('common.noResults') : t('common.hymnsEmpty')}
         </div>
       ) : (
@@ -460,7 +461,7 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-semibold truncate">{song.title}</div>
                   {song.songkey && (
-                    <div className="text-xs text-white/45">Key: {song.songkey}</div>
+                    <div className="text-xs text-white/60">Key: {song.songkey}</div>
                   )}
                 </div>
               </div>
@@ -471,8 +472,8 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
                   value={total > 0 ? (loadingProgress / total) * 100 : 0}
                   ariaLabel={t('common.onlineHymnsLoading', { count: loadingProgress, total })}
                 />
-                <div className="flex items-center justify-center gap-2 text-xs text-white/45">
-                  <Loader2 className="w-3.5 h-3.5 text-white/45 animate-spin" />
+                <div className="flex items-center justify-center gap-2 text-xs text-white/60">
+                  <Loader2 className="w-3.5 h-3.5 text-white/60 animate-spin" />
                   <span>{t('common.onlineHymnsLoading', { count: loadingProgress, total })}</span>
                 </div>
               </div>
@@ -491,7 +492,7 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
                   <span>
                     {t('common.onlineHymnsImportAllProgress', { count: importAllProgress.current, total: importAllProgress.total })}
                   </span>
-                  <span className="text-white/35 font-mono">
+                  <span className="text-white/55 font-mono">
                     {Math.round((importAllProgress.current / importAllProgress.total) * 100)}%
                   </span>
                 </div>

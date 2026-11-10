@@ -3,7 +3,7 @@ import { markTourReady } from './useTourStore';
 import { finishTour, isHelpActive } from '../components/Tour/tourController';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import QRCode from 'qrcode';
+import { applyRemoteUrl } from '../remoteUrl';
 import { useStore } from './useStore';
 import { useShallow } from 'zustand/shallow';
 import { useSttStore } from './useSttStore';
@@ -49,9 +49,6 @@ export function useRemoteControl() {
     setMediaVolume,
     setIsMediaMuted,
     dispatchUndo,
-    setRemoteUrl,
-    setRemoteQr,
-    setRemoteDebug,
     setDisplays,
     setOutputOpen,
     setProjectorOutputStatus,
@@ -68,9 +65,6 @@ export function useRemoteControl() {
       setMediaVolume: s.setMediaVolume,
       setIsMediaMuted: s.setIsMediaMuted,
       dispatchUndo: s.dispatchUndo,
-      setRemoteUrl: s.setRemoteUrl,
-      setRemoteQr: s.setRemoteQr,
-      setRemoteDebug: s.setRemoteDebug,
       setDisplays: s.setDisplays,
       setOutputOpen: s.setOutputOpen,
       setProjectorOutputStatus: s.setProjectorOutputStatus,
@@ -171,23 +165,13 @@ export function useRemoteControl() {
     // Note: presets are hydrated once by App.tsx — do NOT reload them here
     // (was a duplicate loadPresets IPC call on every mount).
 
-    // Remote URL al
-    const fetchRemoteUrl = async () => {
-      if (practice) return;
-      const url = await window.electronAPI?.getRemoteUrl?.();
-      const info = await window.electronAPI?.getRemoteDebug?.();
-      if (info?.remoteServerUrl) setRemoteDebug(info);
-
-      if (typeof url === 'string' && url) {
-        setRemoteUrl(url);
-        QRCode.toDataURL(url)
-          .then(setRemoteQr)
-          .catch(() => setRemoteQr(null));
-      } else {
-        setTimeout(fetchRemoteUrl, 400);
-      }
-    };
-    fetchRemoteUrl();
+    // Phone remote URL: '' until Phone Control (or a phone share) starts the server. The main
+    // process announces the URL when it starts and whenever the network or the pairing changes.
+    let removeRemoteUrlListener: (() => void) | undefined;
+    if (!practice && !IS_PROJECTOR_MODE) {
+      void window.electronAPI?.getRemoteUrl?.().then(applyRemoteUrl).catch(() => {});
+      removeRemoteUrlListener = window.electronAPI?.onRemoteUrlChanged?.((data) => applyRemoteUrl(data?.url));
+    }
 
     // Remote action listener
     const handleRemoteAction = async (data: any) => {
@@ -458,6 +442,7 @@ export function useRemoteControl() {
 
 return () => {
   if (typeof removeListener === 'function') removeListener();
+  removeRemoteUrlListener?.();
   removeDesktopCommand?.();
   if (typeof removeProjectorUpdate === 'function') removeProjectorUpdate();
   if (typeof removeProjectorClosed === 'function') removeProjectorClosed();
