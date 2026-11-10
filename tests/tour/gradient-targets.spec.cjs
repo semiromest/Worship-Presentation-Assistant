@@ -362,7 +362,7 @@ test('compact gradient panel adapts to content width and preserves colors, motio
     await d.getByRole('button', { name: 'Düz geçiş', exact: true }).click();
     await expect(d.locator('input[type=color]')).toHaveCount(2);
     await expect(d.getByRole('slider', { name: /Koyuluk/ })).toHaveValue('0');
-    await d.getByRole('button', { name: 'Akışkan', exact: true }).click();
+    await d.getByRole('group', { name: 'Durağan', exact: true }).getByRole('button', { name: 'Akışkan', exact: true }).click();
     await expect(d.locator('input[type=color]')).toHaveCount(4);
     await aurora.click();
     for (const lang of ['tr', 'en', 'de', 'es', 'ko']) {

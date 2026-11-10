@@ -56,7 +56,16 @@ async function main(){
   await page.getByTestId('slide-music-remove').click();await expect(page.getByTestId('slide-music-add')).toBeVisible();await expect(audio).not.toHaveAttribute('src');
   await page.keyboard.press('Control+z');await expect(page.getByTestId('slide-music-autoplay')).toBeChecked();expect(await plays()).toBe(3);
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(800,600));await page.getByTestId('slide-music-attachment').scrollIntoViewIfNeeded();await page.getByTestId('slide-music-attachment').screenshot({path:testInfo.outputPath('slide-audio-800.png')});
-  const bounds=await page.getByTestId('slide-music-attachment').evaluate(el=>({width:el.clientWidth,scroll:el.scrollWidth}));expect(bounds.scroll).toBeLessThanOrEqual(bounds.width+1);
+  const bounds=await page.getByTestId('slide-music-attachment').evaluate(el=>{
+    const root=el.getBoundingClientRect();
+    const overflowing=[...el.querySelectorAll('*')].map(node=>{const rect=node.getBoundingClientRect();return{
+      tag:node.tagName,className:typeof node.className==='string'?node.className:node.getAttribute('class'),
+      left:rect.left-root.left,right:rect.right-root.right,width:rect.width,text:node.textContent?.trim().slice(0,40),
+    };}).filter(item=>item.right>0.1);
+    return{width:el.clientWidth,scroll:el.scrollWidth,overflowing};
+  });
+  if(bounds.scroll>bounds.width+1)console.log('Slide music attachment overflow:',JSON.stringify(bounds));
+  expect(bounds.scroll).toBeLessThanOrEqual(bounds.width+1);
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1366,768));
   await page.evaluate(()=>{const s=window.__attachStore.getState();s.dispatchUndo({type:'SET',payload:{...s.presentation,slides:s.presentation.slides.map(x=>({...x,youtubeMusic:undefined,musicSettings:undefined}))}});s.setLiveIndex(0);});
   await app.evaluate(()=>global.__holdPreview=true);await page.getByTestId('background-music-toggle').click();

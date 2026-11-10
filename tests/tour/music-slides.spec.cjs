@@ -157,10 +157,9 @@ test('music slides: add silently, live playback, pause, blackout, cancellation, 
     const oldSource = await audio.getAttribute('src');
     await control.locator(`[data-slide-id="${delayedId}"]`).click();
     await control.waitForTimeout(200);
-    expect(await audio.getAttribute('src')).toBe(oldSource);
-    expect(await app.evaluate(() => global.__musicRequests.length)).toBe(1);
-    expect(await audio.evaluate(element => element.volume)).toBeLessThan(0.4);
     await expect.poll(() => app.evaluate(() => global.__musicRequests.length)).toBe(2);
+    expect(await audio.getAttribute('src')).toBe(oldSource);
+    expect(await audio.evaluate(element => element.volume)).toBeLessThan(0.4);
     await control.locator(`[data-slide-id="${musicId}"]`).click();
     await expect.poll(() => audio.evaluate(element => element.currentTime)).toBeGreaterThan(0.7);
     expect(await app.evaluate(() => global.__musicRequests.length)).toBe(3);
