@@ -15,7 +15,12 @@ test('slides workspace keeps live controls fixed and selection tools stable acro
       ]}});s.selectSlides({activeId:'one',ids:new Set(['one']),anchorIndex:0});
     });
     for(const language of ['tr','de'])for(const [width,height]of [[1920,1080],[1366,768],[1024,768],[800,600]]){
-      await page.evaluate(language=>window.__tourTest.language(language),language);
+      // A background window can drop the in-flight language promise ("garbage collected"); retry until the language is applied.
+      await expect(async()=>{
+        await page.bringToFront();
+        await page.evaluate(language=>{window.__tourTest.language(language);},language);
+        await expect.poll(()=>page.evaluate(()=>document.documentElement.lang),{timeout:3000}).toBe(language);
+      }).toPass({timeout:20000});
       await app.evaluate(({BrowserWindow},{width,height})=>{const w=BrowserWindow.getAllWindows()[0];w.unmaximize();w.setContentSize(width,height);},{width,height});
       await expect.poll(()=>page.evaluate(()=>innerWidth)).toBe(width);
       await page.bringToFront();
