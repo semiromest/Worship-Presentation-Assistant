@@ -70,11 +70,12 @@ test('inline gradient preview, persistent library and exact-selection quick appl
     await seed(page);
     const before = await slides(page);
     await page.getByTestId('gradient-quick-apply').click();
-    await expect(page.getByText('Henüz kayıtlı gradient yok.', { exact: false })).toBeVisible();
+    await expect(page.getByText('＋ ile görsel/video ekleyin veya seçili slaytın arka planını kaydedin.', { exact: false })).toBeVisible();
     await page.getByRole('button', { name: 'Editörde gradient oluştur', exact: true }).click();
     const e = editor(page),
       designer = e.getByTestId('gradient-designer');
     await expect(designer).toBeVisible();
+    await designer.locator('details.gradient-more > summary').click();
     await designer.getByRole('button', { name: 'Yeniden üret', exact: true }).click();
     const apply = designer.getByRole('button', { name: 'Taslağa uygula · 1 slayt', exact: true });
     await expect(apply).toBeEnabled({ timeout: 40000 });
@@ -98,7 +99,8 @@ test('inline gradient preview, persistent library and exact-selection quick appl
       await page.screenshot({ path: info.outputPath('gradient-editor-' + w + '.png'), animations: 'disabled' });
     }
     await resize(app, 1366, 768);
-    await designer.getByLabel('Canlı hareket', { exact: true }).check();
+    await designer.getByRole('button', { name: 'Aurora', exact: true }).click();
+    await expect(apply).toBeEnabled({ timeout: 40000 });
     await designer.getByRole('button', { name: 'Kütüphaneye kaydet', exact: true }).click();
     await designer.getByLabel('Gradient adı', { exact: true }).fill('Deneme okyanus');
     await designer.getByRole('button', { name: 'Tasarımı kaydet', exact: true }).click();
@@ -240,6 +242,7 @@ test('late gradient results and generation/save failures cannot mutate a present
     const e = editor(page),
       d = e.getByTestId('gradient-designer'),
       apply = d.getByRole('button', { name: 'Taslağa uygula · 1 slayt', exact: true });
+    await d.locator('details.gradient-more > summary').click();
     const count = () => app.evaluate(() => global.gradientRequests.length);
     const finish = (index) =>
       app.evaluate((_, index) => {
@@ -318,10 +321,10 @@ test('compact gradient panel adapts to content width and preserves colors, motio
     const e = editor(page),
       d = e.getByTestId('gradient-designer'),
       before = await slides(page);
-    const motion = d.getByLabel('Canlı hareket', { exact: true });
+    const aurora = d.getByRole('button', { name: 'Aurora', exact: true });
     await expect(d.getByLabel('Animasyon', { exact: true })).toHaveCount(0);
-    await motion.check();
-    await d.getByLabel('Animasyon', { exact: true }).selectOption('aurora');
+    await aurora.click();
+    await d.locator('details.gradient-more > summary').click();
     const speed = d.getByRole('slider', { name: /Hareket hızı/ }),
       amount = d.getByRole('slider', { name: /Hareket miktarı/ });
     await speed.focus();
@@ -331,10 +334,9 @@ test('compact gradient panel adapts to content width and preserves colors, motio
     await page.keyboard.press('End');
     await page.keyboard.press('ArrowLeft');
     const values = [await speed.inputValue(), await amount.inputValue()];
-    await motion.uncheck();
-    await expect(d.getByLabel('Animasyon', { exact: true })).toHaveCount(0);
-    await motion.check();
-    await expect(d.getByLabel('Animasyon', { exact: true })).toHaveValue('aurora');
+    await d.getByRole('button', { name: 'Dalgalar', exact: true }).click();
+    await aurora.click();
+    await expect(aurora).toHaveAttribute('aria-pressed', 'true');
     await expect(speed).toHaveValue(values[0]);
     await expect(amount).toHaveValue(values[1]);
     await d
@@ -345,26 +347,24 @@ test('compact gradient panel adapts to content width and preserves colors, motio
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
       });
-    await expect(d.locator('.gradient-palette[aria-pressed=true]')).toHaveCount(0);
+    await expect(d.locator('.gradient-palette-chip[aria-pressed=true]')).toHaveCount(0);
     await expect(d.getByText('Özel renkler', { exact: true })).toBeVisible();
-    await d.getByLabel('Stil', { exact: true }).selectOption('soft');
+    await d.getByRole('button', { name: 'Yumuşak', exact: true }).click();
     await expect(d.locator('input[type=color]').first()).toHaveValue('#123456');
-    await expect(motion).toBeChecked();
+    await aurora.click();
     await expect(speed).toHaveValue(values[0]);
     await expect(amount).toHaveValue(values[1]);
-    await d.getByLabel('Stil', { exact: true }).selectOption('flow');
+    await d.getByRole('button', { name: 'Akışkan', exact: true }).click();
     await expect(d.locator('input[type=color]').first()).toHaveValue('#123456');
     await d.getByRole('button', { name: 'Okyanus', exact: true }).click();
     await expect(d.getByRole('button', { name: 'Okyanus', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(d.locator('input[type=color]').first()).toHaveValue('#071b38');
-    await d.getByLabel('Stil', { exact: true }).selectOption('linear');
+    await d.getByRole('button', { name: 'Düz geçiş', exact: true }).click();
     await expect(d.locator('input[type=color]')).toHaveCount(2);
-    await expect(d.getByRole('checkbox')).toHaveCount(0);
     await expect(d.getByRole('slider', { name: /Koyuluk/ })).toHaveValue('0');
-    await d.getByLabel('Stil', { exact: true }).selectOption('flow');
+    await d.getByRole('button', { name: 'Akışkan', exact: true }).click();
     await expect(d.locator('input[type=color]')).toHaveCount(4);
-    await expect(motion).not.toBeChecked();
-    await motion.check();
+    await aurora.click();
     for (const lang of ['tr', 'en', 'de', 'es', 'ko']) {
       await page.evaluate((lang) => window.__tourTest.language(lang), lang);
       for (const width of [220, 250, 255, 256, 270, 287, 288, 300]) {
@@ -444,7 +444,7 @@ test('compact gradient panel adapts to content width and preserves colors, motio
         await expect.poll(() => page.evaluate(() => innerWidth)).toBeCloseTo(width / zoom, 0);
         if ((await e.locator('#editor-inspector').getAttribute('aria-hidden')) === 'true')
           await e.getByRole('button', { name: 'Editör panelleri', exact: true }).click();
-        await d.getByLabel('Stil', { exact: true }).scrollIntoViewIfNeeded();
+        await d.locator('.gradient-looks').nth(1).scrollIntoViewIfNeeded();
         await capture('compact-gradient-colors-' + width + '-' + zoom + '.png');
         await apply.scrollIntoViewIfNeeded();
         await within(apply);
@@ -472,7 +472,7 @@ test('compact gradient panel adapts to content width and preserves colors, motio
     await page.keyboard.press('Shift+Tab');
     await expect(clear).toBeFocused();
     await clear.click();
-    await d.getByLabel('Stil', { exact: true }).focus();
+    await d.getByRole('button', { name: 'Yumuşak', exact: true }).focus();
     await page.keyboard.press('Escape');
     await expect(e.locator('#editor-inspector')).toHaveAttribute('aria-hidden', 'true');
   } finally {

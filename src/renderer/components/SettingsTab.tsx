@@ -45,23 +45,20 @@ const HYMN_POSITION_KEYS: Record<Position, string> = {
 };
 
 
-/** Categories that stay listed but cannot be opened yet. */
-const INACTIVE_CATEGORIES: ReadonlySet<SettingsCategoryId> = new Set<SettingsCategoryId>(['support']);
-
 export default function SettingsTab() {
 
   const { t, i18n } = useTranslation();
   const practice = usePractice();
   const categories = settingsCategories.filter(id => !practice || id !== 'support');
   const motionEnabled = useUiMotionEnabled();
-  const [category, setCategory] = useState<SettingsCategoryId>(() => INACTIVE_CATEGORIES.has(lastSettingsCategory) ? 'general' : lastSettingsCategory);
+  const [category, setCategory] = useState<SettingsCategoryId>(() => practice && lastSettingsCategory === 'support' ? 'general' : lastSettingsCategory);
   const [query, setQuery] = useState('');
   const [focusItem, setFocusItem] = useState<SettingsItemId | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const normalizedQuery = normalizeSettingsSearch(query);
   const searchResults = settingsItems.filter(item => {
-    if ((practice && item.id === 'support') || INACTIVE_CATEGORIES.has(item.category)) return false;
+    if (practice && item.id === 'support') return false;
     if (item.id === 'phone-server' && (practice || !window.electronAPI?.remoteSetAutoStart)) return false;
     const copy = [item.id === 'sound' ? `${t('settings.muteSfxDuringLive')} ${t('settings.muteSfxDuringLiveDesc')}` : '', t(item.titleKey), t(item.descriptionKey), t(`settings.navigation.categories.${item.category}.title`), t(`settings.navigation.keywords.${item.id}`)];
     const haystack = normalizeSettingsSearch(copy.join(' '));
@@ -69,7 +66,7 @@ export default function SettingsTab() {
   });
 
   const chooseCategory = (next: SettingsCategoryId) => {
-    if (INACTIVE_CATEGORIES.has(next)) return;
+    if (practice && next === 'support') return;
     if (next !== category || query) playSfx('swipe');
     lastSettingsCategory = next;
     setCategory(next);
@@ -614,7 +611,7 @@ export default function SettingsTab() {
         <div className="settings-category-select mt-3">
           <label htmlFor="settings-category" className="sr-only">{t('settings.navigation.category')}</label>
           <select id="settings-category" value={category} onChange={event => chooseCategory(event.target.value as SettingsCategoryId)} className="w-full rounded-lg border border-white/15 bg-surface-overlay px-3 py-2.5 text-sm">
-            {categories.map(id => <option key={id} value={id} disabled={INACTIVE_CATEGORIES.has(id)}>{t(`settings.navigation.categories.${id}.title`)}</option>)}
+            {categories.map(id => <option key={id} value={id}>{t(`settings.navigation.categories.${id}.title`)}</option>)}
           </select>
         </div>
       </header>
@@ -622,7 +619,7 @@ export default function SettingsTab() {
         <nav className="settings-category-sidebar overflow-y-auto border-r border-white/10 bg-surface p-3" aria-label={t('settings.navigation.category')}>
           <div className="space-y-1">{categories.map(id => {
             const Icon = CATEGORY_ICONS[id];
-            const inactive = INACTIVE_CATEGORIES.has(id);
+            const inactive = practice && id === 'support';
             return <button key={id} type="button" disabled={inactive} aria-current={category === id ? 'page' : undefined} aria-controls={`settings-panel-${id}`} onClick={() => chooseCategory(id)}
               className={cn('relative isolate flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left text-sm font-medium', inactive && 'cursor-not-allowed opacity-40', category === id ? 'border-blue-400/25 text-blue-200' : 'border-transparent text-white/65 hover:bg-white/5 hover:text-white')}>
               {category === id && <m.span layoutId="settings-active-category" className="pointer-events-none absolute inset-0 -z-10 rounded-xl bg-blue-500/15" transition={{ duration: motionEnabled ? uiMotion.duration.fast : 0, ease: uiMotion.ease }} />}

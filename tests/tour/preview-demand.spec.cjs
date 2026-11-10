@@ -10,7 +10,7 @@ test('1000 slides encode only requested phone images, preserve unchanged revisio
   await expect.poll(()=>page.evaluate(()=>window.electronAPI.getPreviewAssetDiagnostics().then(x=>x.slots))).toBe(1000);
   expect(await page.evaluate(()=>window.__previewDiagnostics().generated)).toBe(0);
   expect(await page.evaluate(()=>window.electronAPI.getPreviewAssetDiagnostics().then(x=>x.bytes))).toBe(0);
-  const advertised=await page.evaluate(()=>window.electronAPI.getRemoteUrl());const base='http://127.0.0.1:'+new URL(advertised).port;remoteToken=new URL(advertised).searchParams.get('token');expect(remoteToken).toBeTruthy();
+  const advertised=await page.evaluate(()=>window.electronAPI.remoteStart());const base='http://127.0.0.1:'+new URL(advertised).port;remoteToken=new URL(advertised).searchParams.get('token');expect(remoteToken).toBeTruthy();
   const one=await connect(base);sockets.push(one.socket);
   const urls=one.welcome.allPreviews;expect(urls).toHaveLength(1000);expect(urls.every(x=>x.startsWith('/preview/'))).toBe(true);
   const response=await authFetch(base+urls[0]);expect(response.status).toBe(200);const image=Buffer.from(await response.arrayBuffer());expect((await sharp(image).metadata()).width).toBe(320);

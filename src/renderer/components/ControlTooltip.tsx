@@ -1,8 +1,15 @@
-import { cloneElement, useEffect, useId, useRef, useState, type HTMLAttributes, type ReactElement } from 'react';
+import { Children, cloneElement, isValidElement, useEffect, useId, useRef, useState, type HTMLAttributes, type ReactElement, type ReactNode } from 'react';
 import { Tooltip } from '@base-ui/react/tooltip';
 import { useTranslation } from 'react-i18next';
 
 export const TOOLTIP_HOVER_DELAY = 2000;
+
+function hasTextContent(node: ReactNode): boolean {
+  return Children.toArray(node).some(child => {
+    if (typeof child === 'string' || typeof child === 'number') return String(child).trim().length > 0;
+    return isValidElement<{ children?: ReactNode }>(child) && hasTextContent(child.props.children);
+  });
+}
 
 /** Keeps the actual button and its layout; explanations are also available on focus. */
 export default function ControlTooltip({ children, description, descriptionKey, shortcut, side = 'bottom', suppress = false }: {
@@ -59,7 +66,7 @@ export default function ControlTooltip({ children, description, descriptionKey, 
   }, [open, label, suppress]);
   const button = cloneElement(children, {
     title: undefined,
-    ...(!children.props['aria-label'] && !children.props['aria-labelledby'] && children.props.title
+    ...(!children.props['aria-label'] && !children.props['aria-labelledby'] && children.props.title && !hasTextContent(children.props.children)
       ? { 'aria-label': children.props.title } : {}),
   });
   if (!label) return button;

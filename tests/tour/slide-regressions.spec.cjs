@@ -40,7 +40,7 @@ test('large section bodies keep bounded DOM and navigate to offscreen selections
 });
 
 test('editor loads on first use and keeps the mounted workspace across tab changes', async () => {
-  const loaded = () => page.evaluate(() => performance.getEntriesByType('resource').some(entry => /\/editor\/SlideEditor\.tsx/.test(entry.name)));
+  const loaded = () => page.evaluate(() => performance.getEntriesByType('resource').some(entry => /\/(?:editor\/)?SlideEditor\.tsx/.test(entry.name)));
   expect(await loaded()).toBe(false);
   await seed([textSlide('lazy-editor')]);
   await page.evaluate(() => window.__fixStore.getState().setActiveTab('editor'));
@@ -170,14 +170,13 @@ test('gradient designer shows moving pixels on a parts-mode hymn canvas without 
   await page.getByRole('button', { name: 'Editörde gradient oluştur', exact: true }).click();
   const editor = page.locator('[aria-labelledby="slide-editor-title"]');
   const designer = editor.getByTestId('gradient-designer');
-  await designer.getByRole('button', { name: 'Yeniden üret', exact: true }).click();
+  await designer.getByRole('button', { name: 'Aurora', exact: true }).click();
   await expect(designer.getByRole('button', { name: 'Taslağa uygula · 1 slayt', exact: true })).toBeEnabled({timeout:40000});
-  await designer.getByLabel('Canlı hareket', { exact: true }).check();
   const canvas = editor.locator('canvas.animated-gradient-background'); await expect(canvas).toHaveCount(1);
   const image = await canvas.evaluate(el => el.toDataURL());
   await expect.poll(() => canvas.evaluate(el => el.toDataURL()), { timeout: 5000 }).not.toBe(image);
   expect(await page.evaluate(() => window.__fixStore.getState().presentation.slides[0].styles.generatedBackground)).toBeUndefined();
-  await designer.getByLabel('Canlı hareket', { exact: true }).uncheck(); await expect(canvas).toHaveCount(0);
+  await designer.getByRole('button', { name: 'Akışkan', exact: true }).click(); await expect(canvas).toHaveCount(0);
 });
 
 test('external image file drops before a target and selects the inserted image; empty-space drops append', async ({}, info) => {

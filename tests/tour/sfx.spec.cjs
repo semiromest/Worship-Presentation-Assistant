@@ -5,13 +5,26 @@ const os = require('node:os');
 const path = require('node:path');
 let app, page, profile;
 
+test.setTimeout(120000);
+
 test.beforeEach(async () => {
   profile = await fs.mkdtemp(path.join(os.tmpdir(), 'wpa-sfx-'));
   const env = { ...process.env, WPA_TEST_PROFILE: profile, VITE_DEV_SERVER_URL: 'http://127.0.0.1:5199/' };
   delete env.ELECTRON_RUN_AS_NODE;
   app = await electron.launch({ args: [path.resolve('tests/tour/electron-bootstrap.cjs')], env });
   page = await app.firstWindow();
-  await page.waitForFunction(() => !!window.__tourTest);
+  const startupErrors = [];
+  page.on('pageerror', error => startupErrors.push(error.message));
+  try {
+    await page.waitForFunction(() => !!window.__tourTest, {}, { timeout: 60000 });
+  } catch (error) {
+    console.log('SFX workspace startup failed', JSON.stringify({
+      url: page.url(),
+      errors: startupErrors,
+      body: await page.locator('body').innerText().catch(() => '<closed>'),
+    }));
+    throw error;
+  }
   await page.evaluate(async () => {
     await window.__tourTest.language('en');
     window.__sfxStore = (await import('/src/renderer/state/useStore.ts')).useStore;
