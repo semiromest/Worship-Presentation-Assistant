@@ -971,6 +971,18 @@
     "editorZoomIn": "Vergrößern",
     "editorZoomOut": "Verkleinern",
     "editorZoomReset": "Zurücksetzen",
+    "editorTextAlign": "Textausrichtung",
+    "editorVerticalAlign": "Vertikale Ausrichtung",
+    "editorTextEffects": "Effekte",
+    "editorImageAdjust": "Anpassungen",
+    "editorSlideBackground": "Hintergrund",
+    "editorSlideTextDefaults": "Text-Standardwerte",
+    "editorSelectionToolbar": "Auswahlwerkzeuge",
+    "editorEditText": "Text bearbeiten (Enter)",
+    "editorFontSmaller": "Text verkleinern",
+    "editorFontLarger": "Text vergrößern",
+    "editorCanvasEmptyShort": "Diese Folie ist leer",
+    "editorGeometry": "Position & Größe",
     "editorTemplates": "Vorlagen",
     "editorTemplateTitle": "Folienvorlagen",
     "editorColorPalette": "Farbpaletten",
@@ -1270,8 +1282,19 @@
     "preview": "Vorschau",
     "ready": "Bereit",
     "running": "Läuft",
-    "previewHint": "Diese Vorschau ändert den Präsentationstimer nicht. Zur Folie hinzufügen startet einen neuen Timer mit der eingestellten Dauer.",
-    "durationLocked": "Setzen Sie den Vorschautimer zurück, um die Dauer zu ändern."
+    "previewHint": "Dieser Probetimer wirkt sich nicht auf die Präsentation aus.",
+    "durationLocked": "Setzen Sie den Vorschautimer zurück, um die Dauer zu ändern.",
+    "minusMinute": "1 Minute weniger",
+    "plusMinute": "1 Minute mehr",
+    "presets": "Schnelle Dauern",
+    "minutesShort": "{{value}} Min.",
+    "secondsShort": "{{value}} Sek.",
+    "customTheme": "Eigene Farben",
+    "whenAdded": "Beim Hinzufügen",
+    "startNow": "Sofort starten",
+    "startPaused": "Pausiert warten",
+    "startNowHint": "Der Timer läuft los, sobald die Folie hinzugefügt wird.",
+    "startPausedHint": "Die Folie wartet mit voller Dauer. Drücken Sie bei der Folie auf Fortsetzen, wenn Sie bereit sind."
   },
   "loop": {
     "noItems": "Keine Loop-Elemente"
@@ -1291,6 +1314,16 @@
     "removeMusic": "Musik entfernen",
     "seek": "Audio vor-/zurückspulen",
     "volume": "Lautstärke"
+  },
+  "canva": {
+    "permission": "Verbinde Canva, um deine Präsentationen zu suchen und zu importieren.",
+    "search": "Canva-Präsentationen suchen"
+  },
+  "googleSlides": {
+    "permission": "Google benötigt Lesezugriff auf Drive, damit die App Ihre Google-Präsentationen anzeigen und importieren kann.",
+    "search": "Google-Präsentationen suchen",
+    "add": "Folien hinzufügen",
+    "more": "Mehr laden"
   },
   "drive": {
     "signIn": "Mit Google anmelden",

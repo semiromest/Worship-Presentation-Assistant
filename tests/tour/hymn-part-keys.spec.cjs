@@ -44,3 +44,99 @@ async function main(){
   console.log('PASS: part arrows, both boundaries, list and button focus, focus follows part, Alt+Up reorder, Ctrl+Z, locked output unchanged, card Up/Down change parts immediately, Left/Right navigate slides, non-hymn and parts-off no-op, native textarea keys, part undo');
 }
 test("vertical arrows change hymn parts and horizontal arrows change slides", async ({}, info) => { testInfo=info;try { await main(); } finally { if(app){await app.evaluate(({app})=>setTimeout(()=>app.exit(0),0)).catch(()=>{});await app.close().catch(()=>{});} } });
+
+test('phone remote follows hymn parts in instant live mode', async ({}, info) => {
+  const { expect } = require('@playwright/test');
+  const WebSocket = require('ws');
+  const { launchWorkspace, closeWorkspace } = require('./workspace-test-utils.cjs');
+  const { app, page } = await launchWorkspace(info, 30000);
+  let socket;
+  try {
+    await page.evaluate(async () => {
+      const { useStore } = await import('/src/renderer/state/useStore.ts');
+      window.remotePartsStore = useStore;
+      const state = useStore.getState();
+      state.setActiveTab('slides');
+      state.setLiveSaveEnabled(false);
+      state.setIsRightPanelOpen(true);
+      state.setNextSlidePreviewEnabled(true);
+      state.setAutoGoLive(true);
+      state.dispatchUndo({ type: 'RESET', payload: { id: 'remote-parts', name: 'Remote parts', slides: [
+        { id: 'intro', type: 'text', content: 'Intro' },
+        { id: 'hymn', type: 'text', content: 'Third stanza', partsMode: true, activePart: 2, parts: ['First stanza', 'Second stanza', 'Third stanza'] },
+        { id: 'verse', type: 'text', content: 'Verse slide' },
+      ] } });
+    });
+    await page.evaluate(async () => {
+      const [display] = await window.electronAPI.getDisplays();
+      const { presentation } = window.remotePartsStore.getState();
+      await window.electronAPI.openProjector(String(display.id), { fullPresentation: presentation, liveIndex: 0 });
+    });
+    await expect.poll(() => app.windows().some(window => window.url().includes('mode=projector'))).toBe(true);
+    const output = app.windows().find(window => window.url().includes('mode=projector'));
+    await expect.poll(() => page.evaluate(() => window.remotePartsStore.getState().projectorReady)).toBe(true);
+    await output.evaluate(async () => {
+      const { useStore } = await import('/src/renderer/state/useStore.ts');
+      window.firstProjectedHymnPart = null;
+      useStore.subscribe(state => {
+        if (state.liveSlideId === 'hymn' && window.firstProjectedHymnPart === null) {
+          window.firstProjectedHymnPart = state.presentation.slides[state.liveIndex].activePart;
+        }
+      });
+    });
+    const url = new URL(await page.evaluate(() => window.electronAPI.remoteStart()));
+    url.protocol = 'ws:';
+    url.hostname = '127.0.0.1';
+    url.pathname = '/';
+    socket = new WebSocket(url.href);
+    let status;
+    socket.on('message', raw => {
+      const message = JSON.parse(raw.toString());
+      if (message.type === 'welcome') status = message.data.status;
+      if (message.type === 'status') status = message.data;
+    });
+    await new Promise((resolve, reject) => { socket.once('open', resolve); socket.once('error', reject); });
+    const command = (action, value) => socket.send(JSON.stringify({ type: 'command', action, value }));
+    const expectCue = (currentIndex, activePart) => expect.poll(() => status).toMatchObject({ currentIndex, activePart });
+
+    await expectCue(0, null);
+    command('next');
+    await expectCue(1, 0);
+    await expect(output.locator('body')).toContainText('First stanza');
+    expect(await output.evaluate(() => window.firstProjectedHymnPart)).toBe(0);
+    await expect(page.getByTestId('next-slide-preview')).toContainText('Second stanza');
+    command('next');
+    await expectCue(1, 1);
+    await expect(page.locator('.design-live-preview')).toContainText('Second stanza');
+    await expect(output.locator('body')).toContainText('Second stanza');
+    command('next');
+    command('next');
+    await expectCue(2, null);
+    command('prev');
+    await expectCue(1, 2);
+    command('prev');
+    command('prev');
+    await expectCue(1, 0);
+    command('prev');
+    await expectCue(0, null);
+
+    command('goto', 1);
+    await expectCue(1, 0);
+    await page.evaluate(() => window.remotePartsStore.getState().toggleSlideLock('hymn'));
+    command('next');
+    command('goto', 2);
+    await expect.poll(() => page.evaluate(() => window.remotePartsStore.getState().selectedSlideId)).toBe('verse');
+    await expectCue(1, 0);
+
+    await page.evaluate(() => {
+      const state = window.remotePartsStore.getState();
+      state.toggleSlideLock('hymn');
+      state.setAutoGoLive(false);
+    });
+    command('next');
+    await expectCue(2, null);
+  } finally {
+    socket?.close();
+    await closeWorkspace(app);
+  }
+});

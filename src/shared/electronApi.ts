@@ -116,6 +116,19 @@ export interface ElectronAPI {
   importHymnArchive: (dirPath?: string) => Promise<any>;
   selectPptxFile: () => Promise<string | null>;
   importPptx: (filePath: string) => Promise<any>;
+  googleSlidesStatus: () => Promise<DriveStatus>;
+  googleSlidesConnect: () => Promise<DriveStatus>;
+  googleSlidesCancel: () => Promise<void>;
+  googleSlidesSignOut: () => Promise<void>;
+  googleSlidesList: (query: string, pageToken?: string) => Promise<{ files: { id: string; name: string }[]; nextPageToken?: string }>;
+  googleSlidesImport: (id: string) => Promise<any>;
+  canvaAvailable: () => Promise<boolean>;
+  canvaStatus: () => Promise<DriveStatus>;
+  canvaConnect: () => Promise<DriveStatus>;
+  canvaCancel: () => Promise<void>;
+  canvaSignOut: () => Promise<void>;
+  canvaList: ElectronAPI['googleSlidesList'];
+  canvaImport: ElectronAPI['googleSlidesImport'];
   exportPptx: (content: string) => Promise<{
     success: boolean;
     filePath?: string;

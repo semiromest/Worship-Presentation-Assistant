@@ -391,11 +391,11 @@ export function GradientDesigner({
 
   return (
     <section
-      className="gradient-designer space-y-3 rounded-xl border border-white/10 p-3"
+      className="gradient-designer space-y-3 border-t border-white/[0.06] px-3 pb-3 pt-2.5"
       aria-label={t('gradientLibrary.title')}
       data-testid="gradient-designer"
     >
-      <h3 className="text-sm font-semibold">{t('gradientLibrary.title')}</h3>
+      <h3 className="text-[11px] font-semibold text-white/70">{t('gradientLibrary.title')}</h3>
       <div role="tablist" aria-label={t('gradientLibrary.title')} className="flex rounded-lg bg-black/20 p-1">
         {TABS.map((value) => (
           <button

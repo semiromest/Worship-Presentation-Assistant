@@ -8,6 +8,7 @@ export interface SlideSelectionUpdate {
   ids?: Set<string>;
   anchorIndex?: number | null;
   liveTargetId?: string;
+  livePartIndex?: number;
 }
 
 export interface AppState {

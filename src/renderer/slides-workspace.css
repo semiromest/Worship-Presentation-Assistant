@@ -234,20 +234,16 @@
 
 .design-selection-tools .design-library-trigger{width:auto;gap:6px;padding:0 8px;font-size:12px}
 
-/* A short viewport must not collapse the inspector's scroll area. Keep the
-   footer in the same scroll flow so it cannot cover the inspector controls. */
+/* A short viewport must not collapse the inspector's scroll area. */
 @media(max-height:600px){
   .editor-workspace .editor-workspace-layout{overflow-y:auto;overscroll-behavior:contain}
   .editor-workspace .editor-workspace-body{min-height:12rem;flex-shrink:0}
-  .editor-workspace .editor-workspace-header{min-height:44px;padding:4px 8px;gap:4px 8px}
-  .editor-workspace .editor-workspace-header h2{font-size:14px;line-height:20px}
-  .editor-workspace .editor-workspace-tools{gap:4px}
-  .editor-workspace .editor-workspace-tools>button,.editor-workspace .editor-workspace-tools>div>button{min-height:32px;padding:6px;font-size:12px}
-  .editor-workspace .editor-workspace-tools svg{flex-shrink:0}
-  .editor-workspace .editor-workspace-footer{position:static;min-height:44px;padding:4px 8px;gap:4px 8px}
-  .editor-workspace .editor-workspace-footer>div{gap:4px}
-  .editor-workspace .editor-workspace-footer button{min-height:32px;padding:6px 8px;font-size:12px}
 }
+
+/* The floating selection toolbar steps aside while an element is dragged,
+   resized or rotated, and fades in when the gesture ends. */
+.editor-selection-toolbar{transition:opacity var(--ui-motion-fast,120ms) ease}
+.editor-canvas-stage:has([data-editor-pointer-active="true"]) .editor-selection-toolbar{opacity:0;pointer-events:none}
 
 .design-slide-columns{flex:none}
 .design-slide-columns-value{display:flex;align-items:center;justify-content:center;gap:6px;min-width:46px;padding-inline:4px;color:#ffffffb3;font-size:12px;font-variant-numeric:tabular-nums}

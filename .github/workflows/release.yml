@@ -61,6 +61,9 @@ jobs:
 
       - name: Build Vite
         run: npx vite build
+        env:
+          WPA_CANVA_CLIENT_ID: ${{ vars.CANVA_CLIENT_ID }}
+          WPA_CANVA_BROKER_URL: ${{ vars.CANVA_BROKER_URL }}
 
       - name: Package Electron artifacts
         run: npx electron-builder --publish never

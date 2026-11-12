@@ -4,6 +4,7 @@ import { ChevronRight, Lock } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { findLockedSlideIndex } from '../slideLock';
 import { SlidePreviewAny } from './SlidePreview';
+import { getDisplayStep, getSlideDisplayContent } from '../../shared/slideContent';
 
 const THUMB_WIDTH = 112;
 
@@ -23,21 +24,25 @@ function NextSlidePreview() {
   const { t } = useTranslation();
   const slides = useStore(s => s.presentation.slides);
   const liveIndex = useStore(s => s.liveIndex);
-  const nextIndex = liveIndex + 1;
-  const next = slides[nextIndex];
+  const autoGoLive = useStore(s => s.autoGoLive);
+  const step = autoGoLive ? getDisplayStep(slides, liveIndex, 1) : { index: liveIndex + 1, partIndex: undefined };
+  const target = step && slides[step.index];
+  const next = target && step?.partIndex !== undefined ? { ...target, activePart: step.partIndex } : target;
   const locked = findLockedSlideIndex(slides) >= 0;
-  const excerpt = next?.type === 'text' ? slideExcerpt(next.content) : '';
+  const excerpt = next?.type === 'text' ? slideExcerpt(getSlideDisplayContent(next)) : '';
 
   const goNext = () => {
     const state = useStore.getState();
     const current = state.presentation.slides;
     if (findLockedSlideIndex(current) >= 0) return;
-    const target = current[state.liveIndex + 1];
+    const step = state.autoGoLive ? getDisplayStep(current, state.liveIndex, 1) : { index: state.liveIndex + 1, partIndex: undefined };
+    if (!step) return;
+    const target = current[step.index];
     if (!target) return;
-    state.selectSlides({ activeId: target.id, liveTargetId: target.id });
+    state.selectSlides({ activeId: target.id, liveTargetId: target.id, livePartIndex: step.partIndex });
   };
 
-  if (!next) {
+  if (!next || !step) {
     return (
       <div className="next-slide-preview px-3 py-2 border-b border-white/10" data-testid="next-slide-preview">
         <p role="status" className="text-xs text-white/60">{t('common.nextSlideEnd')}</p>
@@ -62,7 +67,7 @@ function NextSlidePreview() {
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5 text-xs font-semibold text-white/75">
             {t('common.upcomingSlide')}
-            <span className="font-mono font-normal text-white/60">{nextIndex + 1} / {slides.length}</span>
+            <span className="font-mono font-normal text-white/60">{step.index + 1} / {slides.length}</span>
           </span>
           {excerpt && <span className="mt-0.5 block truncate text-sm text-white/90">{excerpt}</span>}
         </span>

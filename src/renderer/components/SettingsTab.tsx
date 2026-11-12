@@ -15,6 +15,7 @@ import { PracticePanel } from './PracticePanel';
 import { registerTourAnchor } from './Tour/tourController';
 import { useMemo, useState, useEffect, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { supportedUiLanguages } from '../i18n';
 import { Globe, Zap, Settings2, Save, Trash2, DatabaseBackup, Volume2, Mic, KeyRound, Languages, Check, Loader2, Music, Palette, Sparkles, Search, X, ChevronRight, BookOpen, Monitor, RefreshCw, Keyboard, Heart } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { useUpdaterStore } from '../state/useUpdaterStore';
@@ -29,7 +30,6 @@ import SettingSwitch from './SettingSwitch';
 import { settingsCategories, settingsItems, normalizeSettingsSearch, type SettingsCategoryId, type SettingsItemId } from './settingsNavigation';
 import './SettingsTab.css';
 import DesktopSettings from './DesktopSettings';
-import SupportDevelopment from './SupportDevelopment';
 
 // Navigation is session-only; it never changes a saved presentation or user setting.
 let lastSettingsCategory: SettingsCategoryId = 'general';
@@ -51,14 +51,14 @@ export default function SettingsTab() {
   const practice = usePractice();
   const categories = settingsCategories.filter(id => !practice || id !== 'support');
   const motionEnabled = useUiMotionEnabled();
-  const [category, setCategory] = useState<SettingsCategoryId>(() => practice && lastSettingsCategory === 'support' ? 'general' : lastSettingsCategory);
+  const [category, setCategory] = useState<SettingsCategoryId>(lastSettingsCategory);
   const [query, setQuery] = useState('');
   const [focusItem, setFocusItem] = useState<SettingsItemId | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const normalizedQuery = normalizeSettingsSearch(query);
   const searchResults = settingsItems.filter(item => {
-    if (practice && item.id === 'support') return false;
+    if (item.id === 'support') return false;
     if (item.id === 'phone-server' && (practice || !window.electronAPI?.remoteSetAutoStart)) return false;
     const copy = [item.id === 'sound' ? `${t('settings.muteSfxDuringLive')} ${t('settings.muteSfxDuringLiveDesc')}` : '', t(item.titleKey), t(item.descriptionKey), t(`settings.navigation.categories.${item.category}.title`), t(`settings.navigation.keywords.${item.id}`)];
     const haystack = normalizeSettingsSearch(copy.join(' '));
@@ -66,7 +66,7 @@ export default function SettingsTab() {
   });
 
   const chooseCategory = (next: SettingsCategoryId) => {
-    if (practice && next === 'support') return;
+    if (next === 'support') return;
     if (next !== category || query) playSfx('swipe');
     lastSettingsCategory = next;
     setCategory(next);
@@ -182,7 +182,6 @@ export default function SettingsTab() {
   const changeSpokenLanguage = (code: string) => sttSetSpokenLanguage(code);
   const changeTargetLanguage = (code: string) => sttSetTargetLanguage(code);
 
-  const languages = Object.keys(i18n.options.resources ?? {});
   const liveSavePresets = useMemo(
     () => [...presets].filter((preset) => isLiveSavePreset(preset.name)).sort((a, b) => b.createdAt - a.createdAt),
     [presets]
@@ -198,7 +197,7 @@ export default function SettingsTab() {
     }
   };
 
-  const categoryContent: Record<SettingsCategoryId, ReactNode> = {
+  const categoryContent: Record<Exclude<SettingsCategoryId, 'support'>, ReactNode> = {
     general: <>
         <section id="settings-item-language" tabIndex={-1} className="settings-simple-card settings-row rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.language')}>
           <div className="flex items-center gap-2">
@@ -214,7 +213,7 @@ export default function SettingsTab() {
             aria-label={t('settings.language')}
             className="w-full sm:w-auto bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/40 transition-colors"
           >
-            {languages.map((lng) => (
+            {supportedUiLanguages.map((lng) => (
               <option key={lng} value={lng} className="bg-surface-overlay">
                 {t(`language.${lng}`)}
               </option>
@@ -591,7 +590,6 @@ export default function SettingsTab() {
         <section id="settings-item-learn" tabIndex={-1} ref={element => registerTourAnchor('help', element)} className="rounded-xl border border-white/10 bg-surface-raised p-4 space-y-3">
           <PracticePanel />
         </section></>,
-    support: practice ? null : <SupportDevelopment />,
   };
 
   return (
@@ -611,7 +609,7 @@ export default function SettingsTab() {
         <div className="settings-category-select mt-3">
           <label htmlFor="settings-category" className="sr-only">{t('settings.navigation.category')}</label>
           <select id="settings-category" value={category} onChange={event => chooseCategory(event.target.value as SettingsCategoryId)} className="w-full rounded-lg border border-white/15 bg-surface-overlay px-3 py-2.5 text-sm">
-            {categories.map(id => <option key={id} value={id}>{t(`settings.navigation.categories.${id}.title`)}</option>)}
+            {categories.map(id => <option key={id} value={id} disabled={id === 'support'}>{t(`settings.navigation.categories.${id}.title`)}</option>)}
           </select>
         </div>
       </header>
@@ -619,9 +617,9 @@ export default function SettingsTab() {
         <nav className="settings-category-sidebar overflow-y-auto border-r border-white/10 bg-surface p-3" aria-label={t('settings.navigation.category')}>
           <div className="space-y-1">{categories.map(id => {
             const Icon = CATEGORY_ICONS[id];
-            const inactive = practice && id === 'support';
-            return <button key={id} type="button" disabled={inactive} aria-current={category === id ? 'page' : undefined} aria-controls={`settings-panel-${id}`} onClick={() => chooseCategory(id)}
-              className={cn('relative isolate flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left text-sm font-medium', inactive && 'cursor-not-allowed opacity-40', category === id ? 'border-blue-400/25 text-blue-200' : 'border-transparent text-white/65 hover:bg-white/5 hover:text-white')}>
+            const inactive = id === 'support';
+            return <button key={id} type="button" disabled={inactive} aria-current={category === id ? 'page' : undefined} aria-controls={inactive ? undefined : `settings-panel-${id}`} onClick={() => chooseCategory(id)}
+              className={cn('relative isolate flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left text-sm font-medium', inactive && 'cursor-not-allowed opacity-40', category === id ? 'border-blue-400/25 text-blue-200' : 'border-transparent text-white/65 enabled:hover:bg-white/5 enabled:hover:text-white')}>
               {category === id && <m.span layoutId="settings-active-category" className="pointer-events-none absolute inset-0 -z-10 rounded-xl bg-blue-500/15" transition={{ duration: motionEnabled ? uiMotion.duration.fast : 0, ease: uiMotion.ease }} />}
               <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
               <span className="min-w-0 break-words flex-1">{t(`settings.navigation.categories.${id}.title`)}</span>
@@ -642,9 +640,9 @@ export default function SettingsTab() {
             {!searchResults.length && <div className="rounded-xl border border-dashed border-white/15 p-6 text-center"><p className="text-sm text-white/65">{t('settings.navigation.noResults')}</p><button type="button" onClick={clearSearch} className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-500">{t('settings.navigation.clearSearch')}</button></div>}
           </div>
           <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{normalizedQuery ? t('settings.navigation.resultCount', { count: searchResults.length }) : ''}</p>
-          {categories.map(id => <section key={id} id={`settings-panel-${id}`} hidden={!!normalizedQuery || id !== category} aria-labelledby={`settings-title-${id}`} className="ui-fade-enter mx-auto max-w-4xl space-y-4">
+          {categories.filter(id => id !== 'support').map(id => <section key={id} id={`settings-panel-${id}`} hidden={!!normalizedQuery || id !== category} aria-labelledby={`settings-title-${id}`} className="ui-fade-enter mx-auto max-w-4xl space-y-4">
             <div><h3 id={`settings-title-${id}`} className="text-lg font-bold">{t(`settings.navigation.categories.${id}.title`)}</h3>
-              {id !== 'learning' && id !== 'support' && <p className="mt-1 text-sm leading-relaxed text-white/60">{t(`settings.navigation.categories.${id}.description`)}</p>}
+              {id !== 'learning' && <p className="mt-1 text-sm leading-relaxed text-white/60">{t(`settings.navigation.categories.${id}.description`)}</p>}
             </div>
             {categoryContent[id]}
             {id === 'general' && !practice && <DesktopSettings />}

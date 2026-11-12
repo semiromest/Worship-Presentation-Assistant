@@ -10,6 +10,7 @@ import { computePatch, isPatchEmpty, type ProjectorPatch } from '../state/undoRe
 import type { Presentation, TransitionType } from '../types';
 import { chooseDefaultOutputDisplay, effectiveOutputSlideIndex, type DisplayMode } from '../../shared/displays';
 import { findLockedSlideIndex } from '../slideLock';
+import { slideTransitionKey } from '../../shared/slideContent';
 
 const TRANSITION_MAP: Record<TransitionType, string> = {
   none: 'none',
@@ -30,6 +31,7 @@ export function useProjectorSync() {
     presentation,
     liveSlideId,
     liveIndex,
+    autoGoLive,
     instantTransition,
     isBlackout,
     isProjectorWindowOpen,
@@ -43,6 +45,7 @@ export function useProjectorSync() {
       presentation: s.presentation,
       liveSlideId: s.liveSlideId,
       liveIndex: s.liveIndex,
+      autoGoLive: s.autoGoLive,
       instantTransition: s.instantTransition,
       isBlackout: s.isBlackout,
       isProjectorWindowOpen: s.isProjectorWindowOpen,
@@ -57,7 +60,12 @@ export function useProjectorSync() {
   const transitionType = presentation.transition?.type ?? DEFAULT__TRANSITION.type;
   const transitionDuration = presentation.transition?.duration ?? DEFAULT__TRANSITION.duration;
 
-  const throttledPresentation = useThrottle(presentation, 300);
+  const liveSlide = presentation.slides[liveIndex];
+  const livePartCue = autoGoLive && liveSlide?.partsMode ? slideTransitionKey(liveSlide) : undefined;
+  const snapshot = useMemo(() => ({ presentation, livePartCue }), [presentation, livePartCue]);
+  const throttledSnapshot = useThrottle(snapshot, 300);
+  // Send a new live part with its navigation update, even while edits are throttled.
+  const outputPresentation = livePartCue === throttledSnapshot.livePartCue ? throttledSnapshot.presentation : presentation;
 
   const hasOpenOutputs = useMemo(
     () => isProjectorWindowOpen || Object.values(outputAssignments).some((assignment) => assignment.isOpen),
@@ -148,11 +156,11 @@ export function useProjectorSync() {
     };
 
     const base = lastSentPresentationRef.current;
-    if (base === null || base === throttledPresentation) {
-      if (base !== throttledPresentation) {
+    if (base === null || base === outputPresentation) {
+      if (base !== outputPresentation) {
         // First send after (re)open: full snapshot establishes the base.
-        lastSentPresentationRef.current = throttledPresentation;
-        window.electronAPI?.updateProjector?.({ ...nav, fullPresentation: throttledPresentation });
+        lastSentPresentationRef.current = outputPresentation;
+        window.electronAPI?.updateProjector?.({ ...nav, fullPresentation: outputPresentation });
       } else {
         // Presentation unchanged — navigation/blackout/volume only.
         window.electronAPI?.updateProjector?.(nav);
@@ -163,8 +171,8 @@ export function useProjectorSync() {
     // Delta: send only what changed since the base. prevSlide/prevOrder are
     // stripped (the projector never undoes); the order list is sent only when
     // it actually changed (add/remove/reorder).
-    const patch = computePatch(base, throttledPresentation);
-    lastSentPresentationRef.current = throttledPresentation;
+    const patch = computePatch(base, outputPresentation);
+    lastSentPresentationRef.current = outputPresentation;
     if (isPatchEmpty(patch)) {
       window.electronAPI?.updateProjector?.(nav);
       return;
@@ -185,7 +193,7 @@ export function useProjectorSync() {
 
     window.electronAPI?.updateProjector?.({ ...nav, patch: transport });
   }, [
-    throttledPresentation,
+    outputPresentation,
     presentation.slides,
     liveSlideId,
     liveIndex,

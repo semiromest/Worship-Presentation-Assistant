@@ -1,31 +1,36 @@
-const {test,expect}=require('@playwright/test');
-const {launchWorkspace,closeWorkspace}=require('./workspace-test-utils.cjs');
-test('support choices handle unpublished pages, keyboard dismissal and external provider requests',async({},info)=>{
- let app;
- try{
-  const fixture=await launchWorkspace(info,30000);app=fixture.app;const page=fixture.page;
-  const errors=[];page.on('pageerror',error=>errors.push(error.message));
-  expect(await page.evaluate(()=>window.electronAPI.openSupport('https://example.com'))).toBe(false);
-  await app.evaluate(({ipcMain})=>{
-   global.supportReady=false;global.supportRequests=[];
-   ipcMain.removeHandler('support:availability');ipcMain.handle('support:availability',()=>({kreosus:global.supportReady,github:global.supportReady}));
-   ipcMain.removeHandler('support:open');ipcMain.handle('support:open',(_,platform)=>{global.supportRequests.push(platform);return true;});
-  });
-  await page.evaluate(async()=>{await window.__tourTest.language('tr');const {useStore}=await import('/src/renderer/state/useStore.ts');useStore.getState().setActiveTab('settings');});
-  await page.locator('#settings-category').selectOption('support',{force:true});
-  const trigger=page.getByTestId('support-development');await trigger.scrollIntoViewIfNeeded();await trigger.click();
-  const github=page.getByTestId('support-github'),kreosus=page.getByTestId('support-kreosus');
-  await expect(github).toBeDisabled();await expect(kreosus).toBeDisabled();
-  await expect(page.getByRole('status').filter({hasText:'Destek sayfaları hazırlanıyor'})).toBeVisible();
-  for(const lang of ['tr','en','de','es','ko']){
-   await page.evaluate(lang=>window.__tourTest.language(lang),lang);
-   await expect(page.locator('[data-testid="support-github"]').locator('..').locator('..')).not.toContainText('support.');
+const { test, expect } = require('@playwright/test');
+const { launchWorkspace, closeWorkspace } = require('./workspace-test-utils.cjs');
+const { settings } = require('../../src/renderer/locales/en/translation.json');
+
+test('support stays disabled in both settings layouts and is excluded from search', async ({}, info) => {
+  const { app, page } = await launchWorkspace(info, 30000);
+  try {
+    expect(await page.evaluate(() => window.electronAPI.openSupport('https://example.com'))).toBe(false);
+    await page.locator('[data-guide-anchor="nav-settings"]').click();
+    const title = settings.navigation.categories.support.title;
+    const sidebar = page.locator('.settings-category-sidebar');
+    const select = page.locator('#settings-category');
+
+    await app.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0];
+      window.unmaximize();
+      window.setContentSize(1366, 768);
+    });
+    const button = sidebar.getByRole('button', { name: title, exact: true });
+    await expect(button).toBeVisible();
+    await expect(button).toBeDisabled();
+
+    await app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0].setContentSize(800, 600);
+    });
+    await expect(select).toBeVisible();
+    await expect(select.locator('option[value="support"]')).toBeDisabled();
+    await expect(select).toHaveValue('general');
+
+    await page.getByRole('searchbox', { name: settings.navigation.search }).fill(title);
+    await expect(page.getByText(settings.navigation.noResults)).toBeVisible();
+    await expect(page.getByTestId('support-development')).toHaveCount(0);
+  } finally {
+    await closeWorkspace(app);
   }
-  await page.keyboard.press('Escape');await expect(github).toHaveCount(0);await expect(trigger).toBeFocused();
-  await app.evaluate(()=>global.supportReady=true);
-  await trigger.click();await expect(github).toBeEnabled();await github.click();await expect(github).toHaveCount(0);
-  await trigger.click();await expect(kreosus).toBeEnabled();await kreosus.click();await expect(kreosus).toHaveCount(0);
-  expect(await app.evaluate(()=>global.supportRequests)).toEqual(['github','kreosus']);
-  expect(app.windows()).toHaveLength(1);expect(errors).toEqual([]);
- }finally{await closeWorkspace(app);}
 });

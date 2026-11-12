@@ -25,6 +25,10 @@ export default defineConfig(({ command }) => ({
       main: {
         entry: 'src/main/main.ts',
         vite: {
+          define: {
+            __WPA_CANVA_CLIENT_ID__: JSON.stringify(process.env.WPA_CANVA_CLIENT_ID ?? ''),
+            __WPA_CANVA_BROKER_URL__: JSON.stringify(process.env.WPA_CANVA_BROKER_URL ?? ''),
+          },
           plugins: [{
             name: 'youtube-token-browser',
             async buildStart() {

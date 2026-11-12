@@ -1,21 +1,39 @@
 import { saveLibraryPreset } from '../presetLibrary';
 import ControlTooltip from '../components/ControlTooltip';
 import {
+AlignCenter,
+AlignLeft,
+AlignRight,
+Bold,
+Boxes,
+BringToFront,
+ChevronLeft,
 ChevronRight,
 Copy,
+Crop,
+Grid3x3,
 Group,
 Image,
+ImagePlus,
+Italic,
 Layers,
-Layers2,
 LayoutTemplate,
+Link2,
+Link2Off,
 Lock,
-Move,
+Magnet,
+Minus,
+MousePointer2,
 Paintbrush,
-Palette,
 PanelRightOpen,
+PencilLine,
+Plus,
+RectangleHorizontal,
 Redo2,
-RotateCw,
+RotateCcw,
 Save,
+Scan,
+SendToBack,
 Trash2,
 Type,
 Undo2,
@@ -42,7 +60,7 @@ import { usePractice } from '../hooks/usePractice';
 import { useUiMotionEnabled } from '../hooks/useUiMotionEnabled';
 import { playSfx } from '../sfx';
 import { useStore } from '../state/useStore';
-import type { Presentation,Slide,SlideItem } from '../types';
+import type { Presentation,Slide,SlideItem,TextStyle } from '../types';
 import { uiMotion } from '../uiMotion';
 import { cn } from '../utils';
 import { newVideoOverlay } from '../videoOverlays';
@@ -50,7 +68,7 @@ import { AlignmentTools } from './AlignmentTools';
 import { sizeFromCenter,type ItemBounds } from './canvasGeometry';
 import { CanvasStage } from './CanvasStage';
 import { findEditorConflicts } from './editorConflicts';
-import { ClipboardChip,PanelShell,ScopeSelector } from './EditorControls';
+import { ClipboardChip,NumberField,ScopeSelector,Section,ToolButton,ToolDivider } from './EditorControls';
 import EditorPasteMenu,{ type PasteMenuContext } from './EditorPasteMenu';
 import { registerEditorGuard } from './editorSessionGuard';
 import EditorSlideRail,{ RAIL_COLLAPSED_WIDTH,RAIL_WIDTH } from './EditorSlideRail';
@@ -141,7 +159,10 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
   };
   const items = session.activeItems;
 
-  const [tab, setTab] = useState<InspectorTab>('item');
+  // Nothing is selected when the editor opens, so it starts on the slide settings.
+  const [tab, setTab] = useState<InspectorTab>('slide');
+  /** Text item currently being edited in place on the canvas. */
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [cropTarget, setCropTarget] = useState<{ slideId: string; itemId: string } | null>(null);
   const [lockedRatioKeys, setLockedRatioKeys] = useState<Set<string>>(new Set());
@@ -245,6 +266,21 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
   useEffect(() => {
     if (practice && active && primarySelected?.id.startsWith('practice-editor-')) { setInspectorOpen(true); setTab('item'); }
   }, [practice, active, primarySelected?.id]);
+
+  // The inspector follows the selection: something selected → its properties,
+  // nothing selected → the slide. The layers tab is left alone while in use.
+  const hasItemSelection = selectedIds.size > 0;
+  const hadItemSelection = useRef(hasItemSelection);
+  useEffect(() => {
+    if (hadItemSelection.current === hasItemSelection) return;
+    hadItemSelection.current = hasItemSelection;
+    if (gradientOnly) return;
+    setTab((current) => (current === 'layers' ? current : hasItemSelection ? 'item' : 'slide'));
+  }, [hasItemSelection, gradientOnly]);
+  useEffect(() => {
+    if (editingItemId && (!selectedIds.has(editingItemId) || !items.some((item) => item.id === editingItemId && !item.locked)))
+      setEditingItemId(null);
+  }, [editingItemId, selectedIds, items]);
 
   const imageSize = useImageSize(primarySelected?.type === 'image' ? primarySelected.mediaUrl : undefined);
   const ratioKey = primarySelected ? `${session.activeId}:${primarySelected.id}` : '';
@@ -411,6 +447,38 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
   );
 
   const handleSelectMany = useCallback((ids: Set<string>) => session.setItemSelection(ids), [session]);
+
+  /** Text edits from the inspector or the canvas; the focus gesture keeps them to one undo entry. */
+  const changeText = useCallback(
+    (itemId: string, content: string) => {
+      if (effectiveScope === 'selected' && multiSlide) {
+        // Bulk scope mirrors the text onto the counterparts.
+        session.applyItemUpdate(itemId, { content }, selectedSlideIds, 'selected', { history: false });
+        return;
+      }
+      session.updateItems(
+        (prev) => prev.map((item) => (item.id === itemId ? { ...item, content } : item)),
+        { history: false }
+      );
+    },
+    [effectiveScope, multiSlide, selectedSlideIds, session]
+  );
+
+  const chooseImageFor = useCallback(
+    async (itemId: string) => {
+      const slideId = session.activeId;
+      finishInteraction();
+      const file = await window.electronAPI?.selectMediaFile?.('image');
+      if (!file || sessionRef.current.activeId !== slideId) return;
+      sessionRef.current.applyItemUpdate(
+        itemId,
+        (target) => (target.locked ? {} : replaceImage(target, 'file://' + file.replace(/\\/g, '/'))),
+        selectedSlideIds,
+        effectiveScope
+      );
+    },
+    [effectiveScope, finishInteraction, selectedSlideIds, session.activeId]
+  );
 
   const addItem = useCallback(
     (type: 'text' | 'image') => {
@@ -829,15 +897,228 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
   const snapEnabled = activeDraft?.snapEnabled ?? false;
 
   const inspectorTabs: Array<{ id: InspectorTab; label: string; icon: ComponentType<{ className?: string }> }> = [
-    ...(!gradientOnly ? [{ id: 'item' as const, label: t('common.editorTabItem'), icon: Move }] : []),
-    { id: 'slide', label: t('common.editorTabSlide'), icon: Palette },
+    ...(!gradientOnly ? [{ id: 'item' as const, label: t('common.editorTabItem'), icon: MousePointer2 }] : []),
+    { id: 'slide', label: t('common.editorTabSlide'), icon: RectangleHorizontal },
     ...(!gradientOnly ? [{ id: 'layers' as const, label: t('common.editorTabLayers'), icon: Layers }] : []),
   ];
+
+  const selectedTextStyles = primarySelected?.type === 'text' ? (primarySelected.textStyles ?? DEFAULT_TEXT_STYLE) : null;
+  const patchSelectedText = (patch: Partial<TextStyle>) => {
+    if (!primarySelected || !selectedTextStyles) return;
+    finishInteraction();
+    updateItemStyle(primarySelected.id, { textStyles: { ...selectedTextStyles, ...patch } });
+  };
+  const hasGroupSelected = selectedItems.some((item) => item.type === 'group');
+  const itemTypeIcon = primarySelected?.type === 'image' ? Image : primarySelected?.type === 'group' ? Boxes : Type;
+  const itemLabel = !primarySelected
+    ? ''
+    : selectedIds.size > 1
+      ? t('common.editorItemsSelected', { count: selectedIds.size })
+      : primarySelected.type === 'text'
+        ? primarySelected.content?.split('\n')[0]?.trim() || t('common.editorText')
+        : primarySelected.type === 'group'
+          ? t('common.editorGroup')
+          : t('common.editorImage');
+
+  const toolbarShell =
+    'flex items-center gap-0.5 rounded-lg border border-white/10 bg-surface-overlay/95 p-1 text-white shadow-[0_12px_32px_-12px_rgba(0,0,0,0.9)] backdrop-blur';
+
+  // Floating toolbar next to the selection: the few things people reach for most.
+  const selectionToolbar =
+    editable && primarySelected ? (
+      <div
+        role="toolbar"
+        aria-label={t('common.editorSelectionToolbar')}
+        className={toolbarShell}
+        // Keep focus (and an open inline text edit) where it is.
+        onPointerDown={(event) => {
+          if (!(event.target as Element).closest('input')) event.preventDefault();
+        }}
+      >
+        {primarySelected.locked ? (
+          <ToolButton label={t('common.editorUnlock')} icon={Unlock} onClick={() => toggleItemLock(primarySelected.id)}>
+            <span className="pr-1">{t('common.editorUnlock')}</span>
+          </ToolButton>
+        ) : selectedIds.size > 1 ? (
+          <>
+            <ToolButton label={t('common.editorGroup')} icon={Group} onClick={handleGroup} />
+            {hasGroupSelected && <ToolButton label={t('common.editorUngroup')} icon={Ungroup} onClick={handleUngroup} />}
+            <ToolDivider />
+            <ToolButton label={t('common.editorDuplicate')} icon={Copy} onClick={duplicateSelected} />
+            <ToolButton label={t('common.editorDelete')} icon={Trash2} tone="danger" onClick={deleteSelected} />
+          </>
+        ) : (
+          <>
+            {selectedTextStyles && (
+              <>
+                <ToolButton
+                  label={t('common.editorEditText')}
+                  icon={PencilLine}
+                  active={editingItemId === primarySelected.id}
+                  onClick={() => setEditingItemId(primarySelected.id)}
+                />
+                <ToolDivider />
+                <ToolButton
+                  label={t('common.editorFontSmaller')}
+                  onClick={() => patchSelectedText({ fontSize: clamp((selectedTextStyles.fontSize ?? 32) - 4, 8, 240) })}
+                >
+                  <Minus className="h-3.5 w-3.5" aria-hidden="true" />
+                </ToolButton>
+                <span className="min-w-[2rem] text-center text-xs tabular-nums text-white/80" title={t('common.editorFontSize')}>
+                  {selectedTextStyles.fontSize ?? 32}
+                </span>
+                <ToolButton
+                  label={t('common.editorFontLarger')}
+                  onClick={() => patchSelectedText({ fontSize: clamp((selectedTextStyles.fontSize ?? 32) + 4, 8, 240) })}
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                </ToolButton>
+                <ToolDivider />
+                <ToolButton
+                  label={t('common.editorBold')}
+                  icon={Bold}
+                  active={selectedTextStyles.fontWeight === 'bold'}
+                  onClick={() => patchSelectedText({ fontWeight: selectedTextStyles.fontWeight === 'bold' ? 'normal' : 'bold' })}
+                />
+                <ToolButton
+                  label={t('common.editorItalic')}
+                  icon={Italic}
+                  active={selectedTextStyles.fontStyle === 'italic'}
+                  onClick={() => patchSelectedText({ fontStyle: selectedTextStyles.fontStyle === 'italic' ? 'normal' : 'italic' })}
+                />
+                <ToolButton
+                  label={t('common.editorTextAlign')}
+                  icon={selectedTextStyles.textAlign === 'left' ? AlignLeft : selectedTextStyles.textAlign === 'right' ? AlignRight : AlignCenter}
+                  onClick={() =>
+                    patchSelectedText({
+                      textAlign: selectedTextStyles.textAlign === 'left' ? 'center' : selectedTextStyles.textAlign === 'right' ? 'left' : 'right',
+                    })
+                  }
+                />
+                <label className="relative grid h-7 w-7 cursor-pointer place-items-center rounded-md hover:bg-white/[0.07]" title={t('common.editorColor')}>
+                  <span className="sr-only">{t('common.editorColor')}</span>
+                  <span
+                    aria-hidden="true"
+                    className="h-4 w-4 rounded-full border border-white/30"
+                    style={{ backgroundColor: selectedTextStyles.textColor || '#ffffff' }}
+                  />
+                  <input
+                    type="color"
+                    value={/^#[0-9a-f]{6}$/i.test(selectedTextStyles.textColor || '') ? selectedTextStyles.textColor : '#ffffff'}
+                    onChange={(event) => patchSelectedText({ textColor: event.target.value })}
+                    className="absolute inset-0 cursor-pointer opacity-0"
+                  />
+                </label>
+              </>
+            )}
+            {primarySelected.type === 'image' && (
+              <>
+                <ToolButton
+                  label={t(primarySelected.mediaUrl ? 'common.editorReplaceImage' : 'common.editorSelectImage')}
+                  icon={ImagePlus}
+                  onClick={() => void chooseImageFor(primarySelected.id)}
+                />
+                <ToolButton
+                  label={t('common.editorVisualCrop')}
+                  icon={Crop}
+                  disabled={selectedItems.length !== 1 || !primarySelected.mediaUrl}
+                  onClick={() => {
+                    finishInteraction();
+                    setCropTarget({ slideId: session.activeId, itemId: primarySelected.id });
+                  }}
+                />
+              </>
+            )}
+            <ToolDivider />
+            <ToolButton label={t('common.editorDuplicate')} icon={Copy} onClick={duplicateSelected} />
+            <ToolButton label={t('common.editorDelete')} icon={Trash2} tone="danger" onClick={() => deleteItemById(primarySelected.id)} />
+          </>
+        )}
+      </div>
+    ) : null;
+
+  const viewControls = editable ? (
+    <>
+      <ToolButton
+        label={t('common.editorGridShow')}
+        icon={Grid3x3}
+        active={gridEnabled}
+        pressed={gridEnabled}
+        className="h-6 min-w-6"
+        onClick={() => session.setGridField('gridEnabled', !gridEnabled, selectedSlideIds, effectiveScope)}
+      />
+      {gridEnabled && (
+        <label className="flex h-6 items-center gap-1 rounded-md px-1 text-[11px] text-white/55" title={t('common.editorGridSize')}>
+          <span className="sr-only">{t('common.editorGridSize')}</span>
+          <input
+            type="number"
+            min={2}
+            max={25}
+            value={gridSize}
+            onChange={(event) => {
+              const value = parseInt(event.target.value);
+              if (!Number.isNaN(value)) session.setGridField('gridSize', clamp(value, 2, 25), selectedSlideIds, effectiveScope);
+            }}
+            className="h-5 w-9 rounded bg-black/30 px-1 text-center text-[11px] tabular-nums text-white/85 outline-none focus:ring-1 focus:ring-blue-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+          />
+          <input
+            type="color"
+            aria-label={t('common.editorGridColor')}
+            value={/^#[0-9a-f]{6}$/i.test(gridColor) ? gridColor : '#ffffff'}
+            onChange={(event) => session.setGridField('gridColor', event.target.value, selectedSlideIds, effectiveScope)}
+            className="h-4 w-4 cursor-pointer rounded border-0 bg-transparent p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-sm [&::-webkit-color-swatch]:border-white/20"
+          />
+        </label>
+      )}
+      <ToolButton
+        label={t('common.editorSnapEnable')}
+        icon={Magnet}
+        active={snapEnabled}
+        pressed={snapEnabled}
+        className="h-6 min-w-6"
+        onClick={() => session.setGridField('snapEnabled', !snapEnabled, selectedSlideIds, effectiveScope)}
+      />
+      <ToolButton
+        label={t('common.editorSafeArea')}
+        icon={Scan}
+        active={safeAreaEnabled}
+        pressed={safeAreaEnabled}
+        className="h-6 min-w-6"
+        onClick={() => setSafeAreaEnabled(!safeAreaEnabled)}
+      />
+    </>
+  ) : null;
+
+  const emptyCanvas = (
+    <div className="pointer-events-auto flex flex-col items-center gap-3 text-center">
+      <p className="text-sm text-white/55">{t('common.editorCanvasEmptyShort')}</p>
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {[
+          { key: 'text', label: t('common.editorText'), icon: Type, run: () => addItem('text') },
+          { key: 'image', label: t('common.editorImage'), icon: Image, run: () => addItem('image') },
+          { key: 'template', label: t('common.editorTemplates'), icon: LayoutTemplate, run: () => setShowTemplates(true) },
+        ].map(({ key, label, icon: Icon, run }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={run}
+            className="inline-flex h-8 items-center gap-2 rounded-md border border-white/10 bg-black/40 px-3 text-xs text-white/80 backdrop-blur transition hover:border-white/20 hover:bg-black/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const headerButton =
+    'inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs text-white/70 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:pointer-events-none disabled:opacity-30';
 
   if (!activeSlide || !activeDraft) return (
     <section className="flex h-full flex-col items-center justify-center gap-4" aria-label={t('nav.editor')}>
       <p className="text-white/60">{t('common.editorEmpty')}</p>
-      <button type="button" onClick={onClose} className="rounded-lg bg-blue-600 px-4 py-2">{t('nav.slides')}</button>
+      <button type="button" onClick={onClose} className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-500">{t('nav.slides')}</button>
     </section>
   );
 
@@ -857,81 +1138,74 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
           event.stopPropagation();
         }}
       >
-        {/* Header */}
-        <header className="editor-workspace-header flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-surface-raised px-3 py-2">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="min-w-0">
-              <h2 id="slide-editor-title" className="truncate text-lg font-semibold text-blue-400">
+        {/* Header: one thin bar — back · title/status · insert · history · save */}
+        <header className="editor-workspace-header flex h-11 shrink-0 items-center gap-2 border-b border-white/[0.06] bg-surface px-2">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            <ControlTooltip descriptionKey={'nav.slides'}>
+              <button type="button" onClick={onClose} aria-label={t('nav.slides')} title={t('nav.slides')} className={cn(headerButton, 'px-1.5')}>
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </ControlTooltip>
+            <div className="flex min-w-0 items-baseline gap-2">
+              <h2 id="slide-editor-title" className="truncate text-sm font-semibold text-white/90">
                 {t('common.editorTitle')}
-                {session.isDirty && <span className="ml-2 text-xs text-amber-400">{t('common.editorPendingDraft')}</span>}
+                {session.isDirty && <span className="sr-only"> · {t('common.editorPendingDraft')}</span>}
               </h2>
-              <div className="flex items-center gap-2 text-xs text-white/60">
-                <span>{t('common.editorSlideCounter', { number: activeIndex + 1, count: deck.slides.length })}</span>
-                {session.touchedCount > 0 && (
-                  <span className="text-amber-200/80">
-                    · {t('common.editorUnsavedSlideCount', { count: session.touchedCount })}
+              <span className="shrink-0 text-xs tabular-nums text-white/45">
+                {t('common.editorSlideCounter', { number: activeIndex + 1, count: deck.slides.length })}
+              </span>
+              {session.isDirty && (
+                <span
+                  className="inline-flex shrink-0 items-center gap-1.5 text-[11px] text-amber-200/80"
+                  title={session.touchedCount > 0 ? t('common.editorUnsavedSlideCount', { count: session.touchedCount }) : t('common.editorPendingDraft')}
+                >
+                  <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                  <span className="hidden md:inline">
+                    {session.touchedCount > 0 ? t('common.editorUnsavedSlideCount', { count: session.touchedCount }) : t('common.editorPendingDraft')}
                   </span>
-                )}
-                {selectedIds.size > 0 && <span>· {t('common.editorItemsSelected', { count: selectedIds.size })}</span>}
-              </div>
+                </span>
+              )}
             </div>
           </div>
 
-          <div className="editor-workspace-tools flex flex-wrap items-center gap-2">
-            <button
-              ref={inspectorToggleRef}
-              type="button"
-              className="rounded-xl p-2 text-white/70 lg:hidden focus-visible:ring-2 focus-visible:ring-blue-500"
-              aria-label={t('common.editorInspector')}
-              aria-expanded={inspectorOpen}
-              aria-controls="editor-inspector"
-              onClick={() => { setInspectorOpen(!inspectorOpen); playSfx(inspectorOpen ? 'close' : 'open'); }}
-            >
-              <PanelRightOpen className="h-5 w-5" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              disabled={!editable && !videoEditable}
-              onClick={() => videoEditable ? addVideoText() : addItem('text')}
-              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            >
-              <Type className="h-4 w-4" aria-hidden="true" />
-              {t('common.editorText')}
-            </button>
-
-            <button
-              type="button"
-              disabled={!editable}
-              onClick={() => addItem('image')}
-              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            >
-              <Image className="h-4 w-4" aria-hidden="true" />
-              {t('common.editorImage')}
-            </button>
-
-            <div className="relative" data-editor-popover>
+          <div className="editor-workspace-tools flex shrink-0 items-center gap-0.5">
+            <ControlTooltip descriptionKey={'common.editorText'}>
               <button
                 type="button"
-                onClick={() => {
-                  setShowTemplates(!showTemplates);
-                }}
-                disabled={!editable}
-                aria-expanded={showTemplates}
-                className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                disabled={!editable && !videoEditable}
+                onClick={() => videoEditable ? addVideoText() : addItem('text')}
+                aria-label={t('common.editorText')}
+                className={headerButton}
               >
-                <LayoutTemplate className="h-4 w-4" aria-hidden="true" />
-                {t('common.editorTemplates')}
+                <Type className="h-4 w-4" aria-hidden="true" />
+                <span className="hidden xl:inline">{t('common.editorText')}</span>
               </button>
+            </ControlTooltip>
+            <ControlTooltip descriptionKey={'common.editorImage'}>
+              <button type="button" disabled={!editable} onClick={() => addItem('image')} aria-label={t('common.editorImage')} className={headerButton}>
+                <Image className="h-4 w-4" aria-hidden="true" />
+                <span className="hidden xl:inline">{t('common.editorImage')}</span>
+              </button>
+            </ControlTooltip>
+            <div className="relative" data-editor-popover>
+              <ControlTooltip descriptionKey={'common.editorTemplates'} suppress={showTemplates}>
+                <button
+                  type="button"
+                  onClick={() => setShowTemplates(!showTemplates)}
+                  disabled={!editable}
+                  aria-expanded={showTemplates}
+                  aria-label={t('common.editorTemplates')}
+                  className={cn(headerButton, showTemplates && 'bg-white/[0.08] text-white')}
+                >
+                  <LayoutTemplate className="h-4 w-4" aria-hidden="true" />
+                  <span className="hidden xl:inline">{t('common.editorTemplates')}</span>
+                </button>
+              </ControlTooltip>
               {showTemplates && (
-                <div className="absolute right-0 top-full z-50 mt-2 max-h-[70vh] w-72 max-w-[calc(100vw-24px)] overflow-y-auto rounded-2xl border border-white/10 bg-[#1a1a1a] p-3 shadow-2xl">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-xs font-semibold text-white/80">{t('common.editorTemplateTitle')}</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowTemplates(false)}
-                      className="text-white/55 hover:text-white"
-                      aria-label={t('common.close')}
-                    >
+                <div className="absolute left-1/2 top-full z-50 mt-1.5 max-h-[70vh] w-72 max-w-[calc(100vw-24px)] -translate-x-1/2 overflow-y-auto rounded-lg border border-white/10 bg-surface-overlay p-2 shadow-2xl">
+                  <div className="mb-1.5 flex items-center justify-between px-1">
+                    <span className="text-[11px] font-semibold text-white/70">{t('common.editorTemplateTitle')}</span>
+                    <button type="button" onClick={() => setShowTemplates(false)} className="rounded p-1 text-white/55 hover:bg-white/10 hover:text-white" aria-label={t('common.close')}>
                       <X className="h-3 w-3" aria-hidden="true" />
                     </button>
                   </div>
@@ -940,42 +1214,55 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
               )}
             </div>
 
+            <ToolDivider />
 
-            <ControlTooltip descriptionKey={'common.undo'}><button
-              type="button"
-              onClick={() => {
-                finishInteraction();
-                session.undo();
-              }}
+            <ToolButton
+              label={t('common.undo')}
+              descriptionKey="common.undo"
+              icon={Undo2}
               disabled={!session.canUndo}
-              title={t('common.undo')}
-              aria-label={t('common.undo')}
-              className="rounded-xl p-2 text-white/60 transition hover:bg-white/5 hover:text-white disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            >
-              <Undo2 className="h-5 w-5" aria-hidden="true" />
-            </button></ControlTooltip>
-
-            <ControlTooltip descriptionKey={'common.redo'}><button
-              type="button"
-              onClick={() => {
-                finishInteraction();
-                session.redo();
-              }}
+              className="h-8 min-w-8"
+              onClick={() => { finishInteraction(); session.undo(); }}
+            />
+            <ToolButton
+              label={t('common.redo')}
+              descriptionKey="common.redo"
+              icon={Redo2}
               disabled={!session.canRedo}
-              title={t('common.redo')}
-              aria-label={t('common.redo')}
-              className="rounded-xl p-2 text-white/60 transition hover:bg-white/5 hover:text-white disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            >
-              <Redo2 className="h-5 w-5" aria-hidden="true" />
-            </button></ControlTooltip>
+              className="h-8 min-w-8"
+              onClick={() => { finishInteraction(); session.redo(); }}
+            />
+          </div>
 
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
+            <button
+              ref={inspectorToggleRef}
+              type="button"
+              className={cn(headerButton, 'px-1.5 lg:hidden', inspectorOpen && 'bg-white/[0.08] text-white')}
+              aria-label={t('common.editorInspector')}
+              aria-expanded={inspectorOpen}
+              aria-controls="editor-inspector"
+              onClick={() => { setInspectorOpen(!inspectorOpen); playSfx(inspectorOpen ? 'close' : 'open'); }}
+            >
+              <PanelRightOpen className="h-4 w-4" aria-hidden="true" />
+            </button>
             <button
               type="button"
-              onClick={onClose}
-              aria-label={t('nav.slides')}
-              className="rounded-xl p-2 text-white/60 transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              onClick={handleClose}
+              disabled={!session.isDirty}
+              className={cn(headerButton, 'px-2.5')}
             >
-              <X className="h-5 w-5" aria-hidden="true" />
+              {t('common.editorDiscard')}
+            </button>
+            <button
+              type="button"
+              data-guide-anchor="editor-save"
+              onClick={() => void handleSave()}
+              disabled={confirming || !session.isDirty || !videoRangeValid}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-blue-600 px-3 text-xs font-medium text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:bg-white/[0.06] disabled:text-white/35"
+            >
+              <Save className="h-3.5 w-3.5" aria-hidden="true" />
+              {t('common.save')}
             </button>
           </div>
         </header>
@@ -1023,18 +1310,19 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
           )}
 
           {/* Canvas */}
+          <div className="relative flex min-w-0 flex-1">
           {videoEditable ? <VideoEditor key={activeSlide.id + ':' + activeSlide.mediaUrl} slide={activeSlide} playback={activeDraft.videoPlayback} active={active} onChange={session.updateVideoPlayback} onValidityChange={setVideoRangeValid}
             overlays={activeDraft.videoOverlays ?? []} selectedOverlayId={[...selectedIds][0]}
             onSelectOverlay={id => session.setItemSelection(new Set(id ? [id] : []))} onAddOverlay={addVideoText}
-            onOverlaysChange={session.updateVideoOverlays} onGestureStart={beginGesture} onGestureEnd={endGesture} /> : !editable ? <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-4 overflow-auto p-4">
-            <div className="aspect-video w-full max-w-5xl overflow-hidden rounded-xl border border-white/15 bg-black">
+            onOverlaysChange={session.updateVideoOverlays} onGestureStart={beginGesture} onGestureEnd={endGesture} /> : !editable ? <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 overflow-auto p-6">
+            <div className="aspect-video w-full max-w-4xl overflow-hidden rounded-lg bg-black shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
               {gradientOnly
                 ? <LivePreview slide={{ ...activeSlide, styles: canvasStyles as Slide['styles'] }} isActive={active} muted />
                 : <SlidePreviewAny slide={activeSlide} cardWidth={800} enabled={active} />}
             </div>
-            <p className="text-sm font-semibold text-white/90">{t(gradientOnly ? 'gradientLibrary.backgroundOnly' : 'common.editorRailReadOnly')}</p>
-            <p className="max-w-xl text-center text-sm text-white/60">{t(gradientOnly ? 'gradientLibrary.backgroundOnlyHint' : 'common.editorReadOnlyExplanation')}</p>
-            <button type="button" onClick={() => onOpenInSlides?.(activeSlide.id)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white">{t('common.editorOpenInSlides')}</button>
+            <p className="pt-2 text-sm font-medium text-white/85">{t(gradientOnly ? 'gradientLibrary.backgroundOnly' : 'common.editorRailReadOnly')}</p>
+            <p className="max-w-lg text-center text-xs leading-relaxed text-white/55">{t(gradientOnly ? 'gradientLibrary.backgroundOnlyHint' : 'common.editorReadOnlyExplanation')}</p>
+            <button type="button" onClick={() => onOpenInSlides?.(activeSlide.id)} className="mt-1 inline-flex h-8 items-center rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs text-white/85 transition hover:bg-white/[0.08]">{t('common.editorOpenInSlides')}</button>
           </div> : <CanvasStage
             slideStyles={canvasStyles}
             items={items}
@@ -1057,9 +1345,43 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
               event.preventDefault();
               setPasteMenu({ x: event.clientX, y: event.clientY });
             }}
-          />
+            editingId={editingItemId}
+            onRequestEdit={(id) => { session.setItemSelection(new Set([id])); setEditingItemId(id); }}
+            onTextChange={changeText}
+            onEditStart={beginGesture}
+            onEditEnd={() => { endGesture(); setEditingItemId(null); }}
+            selectionToolbar={selectionToolbar}
+            viewControls={viewControls}
+            emptyState={emptyCanvas}
+          />}
 
-          }
+          {/* Transient status + clipboard, bottom-left over the canvas */}
+          {(noticeText || (clipboard && editable)) && (
+            <div className="pointer-events-none absolute bottom-3 left-3 z-50 flex max-w-[calc(100%-18rem)] flex-col items-start gap-1.5">
+              {noticeText && (
+                <span
+                  role="status"
+                  className={cn(
+                    'pointer-events-auto rounded-full border px-3 py-1 text-xs shadow-lg backdrop-blur',
+                    notice?.tone === 'warn'
+                      ? 'border-amber-400/30 bg-amber-950/80 text-amber-100'
+                      : 'border-white/10 bg-surface-overlay/95 text-white/85'
+                  )}
+                >
+                  {noticeText}
+                </span>
+              )}
+              {clipboard && editable && (
+                <ClipboardChip
+                  clipboard={clipboard}
+                  targetCount={otherSelectedCount}
+                  onApply={handleApplyToOtherSelected}
+                  onClear={() => setClipboard(null)}
+                />
+              )}
+            </div>
+          )}
+          </div>
 
           {/* Inspector */}
           {inspectorOpen && (
@@ -1082,13 +1404,13 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
               }
             }}
             className={cn(
-              'absolute inset-y-0 right-0 z-40 flex w-80 max-w-[calc(100%_-_40px)] shrink-0 flex-col overflow-hidden border-l border-white/10 bg-[#181818] lg:static lg:max-w-none lg:translate-x-0 transition-[transform,opacity] duration-[var(--ui-motion-standard,180ms)] ease-[var(--ui-motion-ease)]',
+              'absolute inset-y-0 right-0 z-40 flex w-72 max-w-[calc(100%_-_40px)] shrink-0 flex-col overflow-hidden border-l border-white/[0.06] bg-surface lg:static lg:max-w-none lg:translate-x-0 transition-[transform,opacity] duration-[var(--ui-motion-standard,180ms)] ease-[var(--ui-motion-ease)]',
               inspectorVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'
             )}
           >
-            <div className="flex shrink-0 items-center border-b border-white/10">
+            <div className="flex h-11 shrink-0 items-center gap-1 border-b border-white/[0.06] px-2">
             <div
-              className="flex min-w-0 flex-1 items-center gap-1 p-2"
+              className="flex h-8 min-w-0 flex-1 items-center gap-0.5 rounded-md bg-black/25 p-0.5"
               role="tablist"
               aria-label={t('common.editorInspector')}
             >
@@ -1121,12 +1443,12 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                   aria-selected={tab === id}
                   onClick={() => { if (id !== tab) { setTab(id); playSfx('swipe'); } }}
                   className={cn(
-                    'relative isolate flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[11px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
-                    tab === id ? 'text-blue-100' : 'text-white/55 hover:bg-white/5 hover:text-white/80'
+                    'relative isolate flex h-7 min-w-0 flex-1 items-center justify-center gap-1.5 rounded px-2 text-[11px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+                    tab === id ? 'text-white' : 'text-white/50 hover:text-white/80'
                   )}
                 >
-                  {tab === id && <m.span layoutId="editor-inspector-tab" className="pointer-events-none absolute inset-0 -z-10 rounded-lg bg-blue-600/25" transition={{ duration: motionEnabled ? uiMotion.duration.fast : 0, ease: uiMotion.ease }} />}
-                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                  {tab === id && <m.span layoutId="editor-inspector-tab" className="pointer-events-none absolute inset-0 -z-10 rounded bg-white/[0.1]" transition={{ duration: motionEnabled ? uiMotion.duration.fast : 0, ease: uiMotion.ease }} />}
+                  <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   <span className="truncate">{label}</span>
                 </button>
               ))}
@@ -1134,7 +1456,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
             <button
               type="button"
               onClick={closeInspector}
-              className="mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/70 lg:hidden focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white/60 hover:bg-white/[0.07] hover:text-white lg:hidden focus-visible:ring-2 focus-visible:ring-blue-500"
               aria-label={t('common.editorCloseInspector')}
             >
               <X className="h-4 w-4" aria-hidden="true" />
@@ -1142,7 +1464,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
             </div>
 
             <div
-              className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3"
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6"
               ref={inspectorContentRef}
               id="editor-inspector-panel"
               role="tabpanel"
@@ -1151,34 +1473,13 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
             >
               {tab === 'slide' && (
                 <>
-                  {gradientOnly ? <ScopeSelector scope={scope} selectedCount={gradientSelection.length} slideCount={slideOrder.length} onChange={setScope} /> : <>
                   <ScopeSelector
                     scope={scope}
-                    selectedCount={new Set([...selectedSlideIds, ...gradientSelection]).size}
+                    selectedCount={gradientOnly ? gradientSelection.length : new Set([...selectedSlideIds, ...gradientSelection]).size}
                     slideCount={slideOrder.length}
                     onChange={setScope}
                   />
-                  <label className="flex items-center gap-2 rounded-xl border border-white/10 p-3 text-xs text-white/70">
-                    <input
-                      type="checkbox"
-                      checked={safeAreaEnabled}
-                      onChange={(event) => setSafeAreaEnabled(event.target.checked)}
-                    />
-                    {t('common.editorSafeArea')}
-                  </label>
-                  <SlideSettingsPanel
-                    styles={activeDraft.styles}
-                    onChange={updateSlideStyles}
-                    gridEnabled={gridEnabled}
-                    gridSize={gridSize}
-                    gridColor={gridColor}
-                    snapEnabled={snapEnabled}
-                    onGridToggle={(value) => session.setGridField('gridEnabled', value, selectedSlideIds, effectiveScope)}
-                    onGridSizeChange={(value) => session.setGridField('gridSize', value, selectedSlideIds, effectiveScope)}
-                    onGridColorChange={(value) => session.setGridField('gridColor', value, selectedSlideIds, effectiveScope)}
-                    onSnapToggle={(value) => session.setGridField('snapEnabled', value, selectedSlideIds, effectiveScope)}
-                  />
-                  </>}
+                  {!gradientOnly && <SlideSettingsPanel styles={activeDraft.styles} onChange={updateSlideStyles} />}
                   {(activeSlide.type === 'text' || activeSlide.type === 'image') && <GradientDesigner key={activeSlide.id} slideId={activeSlide.id} initial={activeDraft.styles.generatedBackground as import('../../shared/generatedBackground').GeneratedBackground | undefined}
                     legacy={activeDraft.styles.backgroundGradient as import('../../shared/presentation').GradientStyle | undefined}
                     canClear={!!(activeDraft.styles.backgroundGradient || activeDraft.styles.generatedBackground)}
@@ -1208,333 +1509,165 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                     selectedCount={selectedSlideIds.length}
                     slideCount={slideOrder.length}
                     onChange={setScope}
-                  />
+                  >
+                    {primarySelected && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={handleApplySelectionToOtherSlides}
+                          title={t('common.editorTransferHint', { count: selectedSlideIds.length })}
+                          className="h-7 min-w-0 flex-1 truncate rounded-md bg-blue-600 px-2 text-[11px] font-medium text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+                        >
+                          {t('common.editorApplyToSelected', { count: otherSelectedCount })}
+                        </button>
+                        <ToolButton label={t('common.editorApplySameType')} icon={Paintbrush} onClick={handleApplySameTypeStyle} />
+                      </div>
+                    )}
+                  </ScopeSelector>
 
                   {primarySelected ? (
                     <>
-                      <PanelShell title={t('common.editorSelectedItem')} icon={Palette}>
-                        <div className="grid grid-cols-2 gap-3">
-                          {(
-                            [
-                              { key: 'x', label: 'X %' },
-                              { key: 'y', label: 'Y %' },
-                            ] as const
-                          ).map(({ key, label }) => (
-                            <label key={key} className="space-y-1">
-                              <span className="text-[11px] uppercase tracking-wide text-white/55">{label}</span>
-                              <input
-                                type="number"
-                                value={Math.round(primarySelected[key])}
-                                onChange={(event) => {
-                                  const value = parseInt(event.target.value);
-                                  if (Number.isNaN(value)) return;
-                                  const max = key === 'x' ? 100 - primarySelected.width : 100 - primarySelected.height;
-                                  updateItem(primarySelected.id, { [key]: clamp(value, 0, max) });
-                                }}
-                                className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none transition focus:border-blue-500"
-                              />
-                            </label>
-                          ))}
-
-                          <label className="space-y-1">
-                            <span className="text-[11px] uppercase tracking-wide text-white/55">
-                              {t('common.editorWidth')}
-                            </span>
-                            <input
-                              type="number"
-                              min={4}
-                              max={100}
-                              value={Math.round(primarySelected.width)}
-                              onChange={(event) => {
-                                const value = parseInt(event.target.value);
-                                if (!Number.isNaN(value)) {
-                                  updateItem(primarySelected.id, (target) =>
-                                    target.locked
-                                      ? {}
-                                      : target.type === 'image'
-                                        ? sizeFromCenter(target, 'width', value, ratioLocked)
-                                        : { width: clamp(value, 4, 100) }
-                                  );
-                                }
-                              }}
-                              className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none transition focus:border-blue-500"
-                            />
-                          </label>
-
-                          <label className="space-y-1">
-                            <span className="text-[11px] uppercase tracking-wide text-white/55">
-                              {t('common.editorHeight')}
-                            </span>
-                            <input
-                              type="number"
-                              min={4}
-                              max={100}
-                              value={Math.round(primarySelected.height)}
-                              onChange={(event) => {
-                                const value = parseInt(event.target.value);
-                                if (!Number.isNaN(value)) {
-                                  updateItem(primarySelected.id, (target) =>
-                                    target.locked
-                                      ? {}
-                                      : target.type === 'image'
-                                        ? sizeFromCenter(target, 'height', value, ratioLocked)
-                                        : { height: clamp(value, 4, 100) }
-                                  );
-                                }
-                              }}
-                              className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none transition focus:border-blue-500"
-                            />
-                          </label>
-
-                          <label className="col-span-2 space-y-1">
-                            <span className="text-[11px] uppercase tracking-wide text-white/55">
-                              {t('common.editorRotation')}
-                            </span>
-                            <input
-                              type="number"
-                              data-guide-anchor="editor-rotate"
-                              aria-label={t('common.editorRotation')}
-                              value={primarySelected.rotation || 0}
-                              onChange={(event) => {
-                                const value = parseInt(event.target.value || '0', 10);
-                                if (!Number.isNaN(value)) updateItem(primarySelected.id, { rotation: value });
-                              }}
-                              className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none transition focus:border-blue-500"
-                            />
-                          </label>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2 pt-1">
-                          <label className="space-y-1">
-                            <span className="text-[11px] uppercase tracking-wide text-white/55">
-                              {t('common.editorBorder')}
-                            </span>
-                            <input
-                              type="number"
-                              min={0}
-                              max={20}
-                              value={primarySelected.borderWidth || 0}
-                              onChange={(event) => {
-                                const value = parseInt(event.target.value);
-                                if (!Number.isNaN(value)) {
-                                  updateItem(primarySelected.id, { borderWidth: clamp(value, 0, 20) });
-                                }
-                              }}
-                              className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none transition focus:border-blue-500"
-                            />
-                          </label>
-                          <label className="space-y-1">
-                            <span className="text-[11px] uppercase tracking-wide text-white/55">
-                              {t('common.editorBorderColor')}
-                            </span>
-                            <input
-                              type="color"
-                              value={primarySelected.borderColor || '#ffffff'}
-                              onChange={(event) => updateItem(primarySelected.id, { borderColor: event.target.value })}
-                              className="h-8 w-full cursor-pointer rounded-lg border border-white/10 bg-transparent"
-                            />
-                          </label>
-                          <label className="space-y-1">
-                            <span className="text-[11px] uppercase tracking-wide text-white/55">
-                              {t('common.editorCornerRadius')}
-                            </span>
-                            <input
-                              type="number"
-                              min={0}
-                              max={50}
-                              value={primarySelected.borderRadius || 0}
-                              onChange={(event) => {
-                                const value = parseInt(event.target.value);
-                                if (!Number.isNaN(value)) {
-                                  updateItem(primarySelected.id, { borderRadius: clamp(value, 0, 50) });
-                                }
-                              }}
-                              className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none transition focus:border-blue-500"
-                            />
-                          </label>
-                        </div>
-
-                        <div className="flex gap-2 pt-2">
-                          <button
-                            type="button"
-                            disabled={!canMoveUp}
-                            onClick={() => moveItem(primarySelected.id, 'up')}
-                            className="flex-1 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/70 transition hover:bg-black/30 disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            {t('common.editorBringForward')}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={!canMoveDown}
-                            onClick={() => moveItem(primarySelected.id, 'down')}
-                            className="flex-1 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/70 transition hover:bg-black/30 disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            {t('common.editorSendBackward')}
-                          </button>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => toggleItemLock(primarySelected.id)}
-                          className={cn(
-                            'inline-flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm transition',
-                            primarySelected.locked
-                              ? 'border-yellow-500/20 bg-yellow-500/10 text-yellow-300'
-                              : 'border-white/10 bg-black/20 text-white/70 hover:bg-black/30'
+                      {/* Selection header: what is selected + its actions */}
+                      <div className="flex h-10 items-center gap-2 border-b border-white/[0.06] pl-3 pr-1.5">
+                        {(() => { const Icon = itemTypeIcon; return <Icon className="h-3.5 w-3.5 shrink-0 text-white/45" aria-hidden="true" />; })()}
+                        <span className="min-w-0 flex-1 truncate text-xs font-medium text-white/85" title={itemLabel}>{itemLabel}</span>
+                        <div className="flex shrink-0 items-center">
+                          {selectedIds.size > 1 ? (
+                            <>
+                              <ToolButton label={t('common.editorGroup')} icon={Group} onClick={handleGroup} />
+                              <ToolButton label={t('common.editorUngroup')} icon={Ungroup} disabled={!hasGroupSelected} onClick={handleUngroup} />
+                            </>
+                          ) : (
+                            <>
+                              <ToolButton label={t('common.editorBringForward')} descriptionKey="common.editorBringForward" icon={BringToFront} disabled={!canMoveUp} onClick={() => moveItem(primarySelected.id, 'up')} />
+                              <ToolButton label={t('common.editorSendBackward')} descriptionKey="common.editorSendBackward" icon={SendToBack} disabled={!canMoveDown} onClick={() => moveItem(primarySelected.id, 'down')} />
+                            </>
                           )}
-                        >
-                          {primarySelected.locked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-                          {primarySelected.locked ? t('common.editorUnlock') : t('common.editorLock')}
-                        </button>
-                      </PanelShell>
+                          <ToolButton
+                            label={primarySelected.locked ? t('common.editorUnlock') : t('common.editorLock')}
+                            icon={primarySelected.locked ? Lock : Unlock}
+                            active={!!primarySelected.locked}
+                            pressed={!!primarySelected.locked}
+                            onClick={() => toggleItemLock(primarySelected.id)}
+                          />
+                          <ToolButton label={t('common.editorDuplicate')} icon={Copy} onClick={duplicateSelected} />
+                          <ToolButton
+                            label={t('common.editorDelete')}
+                            icon={Trash2}
+                            tone="danger"
+                            onClick={() => (selectedIds.size > 1 ? deleteSelected() : deleteItemById(primarySelected.id))}
+                          />
+                        </div>
+                      </div>
 
-                      {/* Cross-slide transfer, exactly where the element is edited. */}
-                      {multiSlide && (
-                        <PanelShell title={t('common.editorTransfer')} icon={Layers2}>
-                          <div className="space-y-2">
-                            <p className="text-xs text-white/55">
-                              {t('common.editorTransferHint', { count: selectedSlideIds.length })}
-                            </p>
-                            <button
-                              type="button"
-                              onClick={handleApplySelectionToOtherSlides}
-                              className="w-full rounded-xl bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                            >
-                              {t('common.editorApplyToSelected', { count: otherSelectedCount })}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleApplySameTypeStyle}
-                              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/70 transition hover:bg-black/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                            >
-                              <Paintbrush className="h-4 w-4" aria-hidden="true" />
-                              {t('common.editorApplySameType')}
-                            </button>
-                          </div>
-                        </PanelShell>
-                      )}
-
-                      {primarySelected.type === 'image' && (
-                        <PanelShell title={t('common.editorImageGeometry')} icon={Image}>
-                          <label className="flex items-center gap-2 text-xs">
-                            <input
-                              type="checkbox"
+                      <Section
+                        id="geometry"
+                        title={t('common.editorGeometry')}
+                        actions={primarySelected.type === 'image' ? (
+                          <>
+                            <ToolButton
+                              label={t('common.editorLockRatio')}
+                              icon={ratioLocked ? Link2 : Link2Off}
+                              active={ratioLocked}
+                              pressed={ratioLocked}
                               disabled={primarySelected.locked}
-                              checked={ratioLocked}
-                              onChange={(event) => {
-                                const checked = event.target.checked;
-                                setLockedRatioKeys((prev) => {
-                                  const next = new Set(prev);
-                                  if (checked) next.add(ratioKey);
-                                  else next.delete(ratioKey);
-                                  return next;
-                                });
-                              }}
+                              onClick={() => setLockedRatioKeys((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(ratioKey)) next.delete(ratioKey); else next.add(ratioKey);
+                                return next;
+                              })}
                             />
-                            {t('common.editorLockRatio')}
-                          </label>
-                          <button
-                            className="w-full rounded-lg border border-white/10 p-2 text-xs disabled:opacity-40"
-                            disabled={primarySelected.locked || !imageSize.width}
-                            onClick={() => {
-                              finishInteraction();
-                              session.updateItems((prev) =>
-                                prev.map((item) =>
-                                  item.id === primarySelected.id
-                                    ? { ...item, ...restoreImageRatio(item, imageSize.width / imageSize.height) }
-                                    : item
-                                )
-                              );
-                            }}
-                          >
-                            {t('common.editorRestoreImageRatio')}
-                          </button>
-                        </PanelShell>
-                      )}
-                      <PanelShell title={t('common.editorSelectedItemProperties')} icon={Palette}>
-                        {primarySelected.type === 'text' ? (
-                          <label className="block space-y-1">
-                            <span className="block text-[11px] uppercase tracking-wide text-white/55">
-                              {t('common.editorContent')}
-                            </span>
-                            <textarea
-                              value={primarySelected.content || ''}
-                              onFocus={beginGesture}
-                              onBlur={endGesture}
-                              onChange={(event) => {
-                                const content = event.target.value;
-                                if (effectiveScope === 'selected' && multiSlide) {
-                                  // Bulk scope mirrors the text onto the counter-parts;
-                                  // the focus gesture keeps it to one undo entry.
-                                  session.applyItemUpdate(
-                                    primarySelected.id,
-                                    { content },
-                                    selectedSlideIds,
-                                    'selected',
-                                    { history: false }
-                                  );
-                                  return;
-                                }
-                                session.updateItems(
-                                  (prev) =>
-                                    prev.map((item) => (item.id === primarySelected.id ? { ...item, content } : item)),
-                                  { history: false }
-                                );
-                              }}
-                              rows={10}
-                              className="max-h-[50vh] min-h-[14rem] w-full resize-y rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm leading-relaxed outline-none transition focus:border-blue-500"
-                            />
-                            {effectiveScope === 'selected' && multiSlide && (
-                              <span className="block text-[11px] text-amber-200/80">
-                                {t('common.editorScopeTextBulk', { count: selectedSlideIds.length })}
-                              </span>
-                            )}
-                          </label>
-                        ) : (
-                          <div className="space-y-3">
-                            <button
-                              type="button"
-                              disabled={primarySelected.locked}
-                              onClick={async () => {
-                                const slideId = session.activeId,
-                                  itemId = primarySelected.id;
-                                finishInteraction();
-                                const file = await window.electronAPI?.selectMediaFile?.('image');
-                                if (!file || sessionRef.current.activeId !== slideId) return;
-                                sessionRef.current.applyItemUpdate(
-                                  itemId,
-                                  (target) =>
-                                    target.locked ? {} : replaceImage(target, 'file://' + file.replace(/\\/g, '/')),
-                                  selectedSlideIds,
-                                  effectiveScope
-                                );
-                              }}
-                              className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-blue-500"
-                            >
-                              {t(primarySelected.mediaUrl ? 'common.editorReplaceImage' : 'common.editorSelectImage')}
-                            </button>
-
-                            <button
-                              type="button"
-                              disabled={primarySelected.locked}
+                            <ToolButton
+                              label={t('common.editorRestoreImageRatio')}
+                              icon={RotateCcw}
+                              disabled={primarySelected.locked || !imageSize.width}
                               onClick={() => {
                                 finishInteraction();
-                                updateItem(primarySelected.id, (target) =>
-                                  target.locked ? {} : replaceImage(target, undefined)
+                                session.updateItems((prev) =>
+                                  prev.map((item) =>
+                                    item.id === primarySelected.id
+                                      ? { ...item, ...restoreImageRatio(item, imageSize.width / imageSize.height) }
+                                      : item
+                                  )
                                 );
                               }}
-                              className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/70 transition hover:bg-black/30"
-                            >
-                              {t('common.removeImage')}
-                            </button>
-                          </div>
-                        )}
-                      </PanelShell>
+                            />
+                          </>
+                        ) : undefined}
+                      >
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {(['x', 'y'] as const).map((key) => (
+                            <NumberField
+                              key={key}
+                              label={key.toUpperCase() + ' %'}
+                              prefix={key.toUpperCase()}
+                              value={Math.round(primarySelected[key])}
+                              onChange={(raw) => {
+                                const value = parseInt(raw);
+                                if (Number.isNaN(value)) return;
+                                const max = key === 'x' ? 100 - primarySelected.width : 100 - primarySelected.height;
+                                updateItem(primarySelected.id, { [key]: clamp(value, 0, max) });
+                              }}
+                            />
+                          ))}
+                          <NumberField
+                            label={t('common.editorRotation')}
+                            prefix="↻"
+                            suffix="°"
+                            anchor="editor-rotate"
+                            value={primarySelected.rotation || 0}
+                            onChange={(raw) => {
+                              const value = parseInt(raw || '0', 10);
+                              if (!Number.isNaN(value)) updateItem(primarySelected.id, { rotation: value });
+                            }}
+                          />
+                          {(['width', 'height'] as const).map((key) => (
+                            <NumberField
+                              key={key}
+                              label={t(key === 'width' ? 'common.editorWidth' : 'common.editorHeight')}
+                              prefix={key === 'width' ? 'W' : 'H'}
+                              min={4}
+                              max={100}
+                              value={Math.round(primarySelected[key])}
+                              onChange={(raw) => {
+                                const value = parseInt(raw);
+                                if (Number.isNaN(value)) return;
+                                updateItem(primarySelected.id, (target) =>
+                                  target.locked
+                                    ? {}
+                                    : target.type === 'image'
+                                      ? sizeFromCenter(target, key, value, ratioLocked)
+                                      : { [key]: clamp(value, 4, 100) }
+                                );
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </Section>
 
                       {primarySelected.type === 'text' && (
                         <TextStyleEditor
                           item={primarySelected}
                           onChange={(styles) => updateItemStyle(primarySelected.id, { textStyles: styles })}
+                          content={
+                            <label className="block space-y-1">
+                              <span className="sr-only">{t('common.editorContent')}</span>
+                              <textarea
+                                value={primarySelected.content || ''}
+                                onFocus={beginGesture}
+                                onBlur={endGesture}
+                                onChange={(event) => changeText(primarySelected.id, event.target.value)}
+                                rows={3}
+                                placeholder={t('common.editorContent')}
+                                className="block max-h-[40vh] min-h-[4.5rem] w-full resize-y rounded-md border border-white/[0.08] bg-black/25 px-2 py-1.5 text-xs leading-relaxed text-white/90 outline-none transition hover:border-white/15 focus:border-blue-500/70"
+                              />
+                              {effectiveScope === 'selected' && multiSlide && (
+                                <span className="block text-[11px] text-amber-200/80">
+                                  {t('common.editorScopeTextBulk', { count: selectedSlideIds.length })}
+                                </span>
+                              )}
+                            </label>
+                          }
                         />
                       )}
 
@@ -1551,58 +1684,79 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                             finishInteraction();
                             updateItemStyle(primarySelected.id, { imageStyles: styles });
                           }}
+                          source={
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                disabled={primarySelected.locked}
+                                onClick={() => void chooseImageFor(primarySelected.id)}
+                                className="inline-flex h-7 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md border border-white/[0.08] bg-white/[0.04] px-2 text-xs text-white/85 transition hover:bg-white/[0.08] disabled:opacity-40"
+                              >
+                                <ImagePlus className="h-3.5 w-3.5" aria-hidden="true" />
+                                <span className="truncate">{t(primarySelected.mediaUrl ? 'common.editorReplaceImage' : 'common.editorSelectImage')}</span>
+                              </button>
+                              {primarySelected.mediaUrl && (
+                                <ToolButton
+                                  label={t('common.removeImage')}
+                                  icon={X}
+                                  disabled={primarySelected.locked}
+                                  onClick={() => {
+                                    finishInteraction();
+                                    updateItem(primarySelected.id, (target) => (target.locked ? {} : replaceImage(target, undefined)));
+                                  }}
+                                />
+                              )}
+                            </div>
+                          }
                         />
                       )}
 
-                      <PanelShell title={t('common.editorItemOperations')} icon={RotateCw}>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => deleteItemById(primarySelected.id)}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300 transition hover:bg-red-500/15"
-                          >
-                            <Trash2 className="h-4 w-4" aria-hidden="true" /> {t('common.editorDelete')}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={duplicateSelected}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/70 transition hover:bg-black/30"
-                          >
-                            <Copy className="h-4 w-4" aria-hidden="true" /> {t('common.editorDuplicate')}
-                          </button>
+                      <Section id="border" title={t('common.editorBorder')} defaultOpen={false}>
+                        <div className="grid grid-cols-[1fr_28px_1fr] items-center gap-1.5">
+                          <NumberField
+                            label={t('common.editorBorder')}
+                            prefix="px"
+                            min={0}
+                            max={20}
+                            value={primarySelected.borderWidth || 0}
+                            onChange={(raw) => {
+                              const value = parseInt(raw);
+                              if (!Number.isNaN(value)) updateItem(primarySelected.id, { borderWidth: clamp(value, 0, 20) });
+                            }}
+                          />
+                          <input
+                            type="color"
+                            aria-label={t('common.editorBorderColor')}
+                            title={t('common.editorBorderColor')}
+                            value={primarySelected.borderColor || '#ffffff'}
+                            onChange={(event) => updateItem(primarySelected.id, { borderColor: event.target.value })}
+                            className="h-7 w-7 cursor-pointer rounded-md border border-white/[0.08] bg-black/25 p-1 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-sm [&::-webkit-color-swatch]:border-0"
+                          />
+                          <NumberField
+                            label={t('common.editorCornerRadius')}
+                            prefix="◜"
+                            min={0}
+                            max={50}
+                            value={primarySelected.borderRadius || 0}
+                            onChange={(raw) => {
+                              const value = parseInt(raw);
+                              if (!Number.isNaN(value)) updateItem(primarySelected.id, { borderRadius: clamp(value, 0, 50) });
+                            }}
+                          />
                         </div>
-                      </PanelShell>
+                      </Section>
+
+                      <AlignmentTools selectedItems={selectedItems} items={items} onUpdateItems={updateItemsBatch} />
                     </>
                   ) : (
-                    <PanelShell title={t('common.editorNoSelection')} icon={Palette}>
-                      <div className="text-sm text-white/55">{t('common.editorNoSelectionHint')}</div>
-                    </PanelShell>
-                  )}
-
-                  {selectedItems.length > 0 && (
-                    <AlignmentTools selectedItems={selectedItems} items={items} onUpdateItems={updateItemsBatch} />
-                  )}
-
-                  {selectedIds.size > 1 && (
-                    <PanelShell title={t('common.editorMultiSelection')} icon={Copy}>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={handleGroup}
-                          className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/70 transition hover:bg-black/30"
-                        >
-                          <Group className="h-4 w-4" aria-hidden="true" /> {t('common.editorGroup')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleUngroup}
-                          className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/70 transition hover:bg-black/30"
-                        >
-                          <Ungroup className="h-4 w-4" aria-hidden="true" /> {t('common.editorUngroup')}
-                        </button>
-                      </div>
-                    </PanelShell>
+                    <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+                      <MousePointer2 className="h-5 w-5 text-white/25" aria-hidden="true" />
+                      <p className="text-xs font-medium text-white/70">{t('common.editorNoSelection')}</p>
+                      <p className="text-[11px] leading-relaxed text-white/45">{t('common.editorNoSelectionHint')}</p>
+                      <p className="pt-2 text-[11px] leading-relaxed text-white/35">
+                        {t('common.editorMultiSelect')} · {t('common.editorRailHint')}
+                      </p>
+                    </div>
                   )}
                 </>
               )}
@@ -1614,83 +1768,6 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
           {t('common.editorSlideCounter', { number: activeIndex + 1, count: deck.slides.length })}.{' '}
           {t('common.editorSelectedSlidesStatus', { count: selectedSlideIds.length })}
         </span>
-        {/* Footer */}
-        <footer className="editor-workspace-footer flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-t border-white/10 bg-[#1e1e1e] px-4 py-2">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
-            <span className="hidden shrink-0 items-center gap-2 text-xs text-white/55 xl:flex">
-              <span>{t('common.editorRailHint')}</span>
-              <span>·</span>
-              <span>{t('common.editorMultiSelect')}</span>
-            </span>
-            {noticeText && (
-              <span
-                role="status"
-                className={cn(
-                  'rounded-lg px-2 py-1 text-xs',
-                  notice?.tone === 'warn'
-                    ? 'border border-amber-400/30 bg-amber-500/10 text-amber-100'
-                    : 'border border-blue-400/25 bg-blue-500/10 text-blue-100'
-                )}
-              >
-                {noticeText}
-              </span>
-            )}
-            {clipboard && (
-              <ClipboardChip
-                clipboard={clipboard}
-                targetCount={otherSelectedCount}
-                onApply={handleApplyToOtherSelected}
-                onClear={() => setClipboard(null)}
-              />
-            )}
-          </div>
-
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-black/20 px-1 py-1">
-              <ControlTooltip descriptionKey={'common.editorPreviousSlide'}><button
-                type="button"
-                onClick={() => navigate(-1)}
-                disabled={session.order.indexOf(session.activeId) <= 0}
-                aria-label={t('common.editorPreviousSlide')}
-                title={t('common.editorPreviousSlide')}
-                className="rounded-lg p-1.5 text-white/60 transition hover:bg-white/10 hover:text-white disabled:opacity-25 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              >
-                <ChevronRight className="h-4 w-4 rotate-180" aria-hidden="true" />
-              </button></ControlTooltip>
-              <span className="px-1 text-xs tabular-nums text-white/60">
-                {activeIndex + 1} / {deck.slides.length}
-              </span>
-              <ControlTooltip descriptionKey={'common.editorNextSlide'}><button
-                type="button"
-                onClick={() => navigate(1)}
-                disabled={session.order.length === 0 || session.order.indexOf(session.activeId) >= session.order.length - 1}
-                aria-label={t('common.editorNextSlide')}
-                title={t('common.editorNextSlide')}
-                className="rounded-lg p-1.5 text-white/60 transition hover:bg-white/10 hover:text-white disabled:opacity-25 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              >
-                <ChevronRight className="h-4 w-4" aria-hidden="true" />
-              </button></ControlTooltip>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleClose}
-              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80 transition hover:bg-white/10"
-            >
-              {t('common.editorDiscard')}
-            </button>
-            <button
-              type="button"
-              data-guide-anchor="editor-save"
-              onClick={() => void handleSave()}
-              disabled={confirming || !session.isDirty || !videoRangeValid}
-              className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-500 disabled:opacity-40 disabled:hover:bg-green-600"
-            >
-              <Save className="h-4 w-4" aria-hidden="true" />
-              {t('common.save')}
-            </button>
-          </div>
-        </footer>
 
         {active && cropItem && (
           <ImageCropDialog

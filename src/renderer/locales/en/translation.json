@@ -977,6 +977,18 @@
     "editorZoomIn": "Zoom In",
     "editorZoomOut": "Zoom Out",
     "editorZoomReset": "Reset",
+    "editorTextAlign": "Text alignment",
+    "editorVerticalAlign": "Vertical alignment",
+    "editorTextEffects": "Effects",
+    "editorImageAdjust": "Adjustments",
+    "editorSlideBackground": "Background",
+    "editorSlideTextDefaults": "Text defaults",
+    "editorSelectionToolbar": "Selection tools",
+    "editorEditText": "Edit text (Enter)",
+    "editorFontSmaller": "Smaller text",
+    "editorFontLarger": "Larger text",
+    "editorCanvasEmptyShort": "This slide is empty",
+    "editorGeometry": "Position & size",
     "editorTemplates": "Templates",
     "editorTemplateTitle": "Slide Templates",
     "editorColorPalette": "Color Palettes",
@@ -1270,8 +1282,19 @@
     "preview": "Preview",
     "ready": "Ready",
     "running": "Running",
-    "previewHint": "This preview does not change the presentation timer. Add to Slide starts a new timer with the configured duration.",
-    "durationLocked": "Reset the preview timer to change the duration."
+    "previewHint": "This practice timer does not affect the presentation.",
+    "durationLocked": "Reset the preview timer to change the duration.",
+    "minusMinute": "1 minute less",
+    "plusMinute": "1 minute more",
+    "presets": "Quick durations",
+    "minutesShort": "{{value}} min",
+    "secondsShort": "{{value}} sec",
+    "customTheme": "Custom colors",
+    "whenAdded": "When added",
+    "startNow": "Start right away",
+    "startPaused": "Wait paused",
+    "startNowHint": "The timer starts counting as soon as the slide is added.",
+    "startPausedHint": "The slide waits at full length. Press Resume on the slide when you are ready."
   },
   "loop": {
     "noItems": "No loop items"
@@ -1291,6 +1314,16 @@
     "removeMusic": "Remove Music",
     "seek": "Audio Seek",
     "volume": "Audio Volume"
+  },
+  "canva": {
+    "permission": "Connect Canva to browse and import your presentations.",
+    "search": "Search Canva presentations"
+  },
+  "googleSlides": {
+    "permission": "Google asks for read access to Drive so the app can list and import your Google Slides presentations.",
+    "search": "Search Google Slides",
+    "add": "Add slides",
+    "more": "Load more"
   },
   "drive": {
     "signIn": "Sign in with Google",

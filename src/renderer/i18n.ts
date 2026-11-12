@@ -14,6 +14,8 @@ const lazyLocales: Record<string, () => Promise<{ default: ResourceKey }>> = {
   ko: () => import("./locales/ko/translation.json"),
 };
 
+export const supportedUiLanguages = ['en', ...Object.keys(lazyLocales)];
+
 const lazyLocaleBackend: BackendModule = {
   type: "backend",
   init() {},

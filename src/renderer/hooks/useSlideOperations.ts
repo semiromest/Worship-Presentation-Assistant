@@ -9,7 +9,7 @@ import type { Slide, Preset, TransitionType, LoopItem } from '../types';
 import { backgroundPatch, inheritGeneratedBackgrounds } from '../gradientBackground';
 import { DEFAULT_STYLES, DEFAULT__TRANSITION } from '../constants';
 import { makeSlideId, toFileUrl, convertPptxToSlides, type PptxImportResult } from '../utils';
-import type { PptxImportMode } from '../../shared/fileOpen';
+import type { PptxImportMode, PptxImportSource } from '../../shared/fileOpen';
 import { guardEditorReplacement } from '../editor/editorSessionGuard';
 import { confirmDialog, alertDialog } from '../dialogs';
 import { findPresetByRef } from '../presetUtils';
@@ -377,6 +377,7 @@ export function useSlideOperations() {
           id: typeof s.id === 'string' ? s.id : `${i + 1}`,
           type: ['image', 'video', 'text', 'screen', 'countdown', 'loop', 'captions'].includes(s.type) ? s.type : 'text',
           content: typeof s.content === 'string' ? s.content : '',
+          scripture: s.scripture === true ? true : undefined,
           youtubeMusic: isYouTubeMusicResult(s.youtubeMusic)
             ? { id: s.youtubeMusic.id, title: s.youtubeMusic.title, duration: s.youtubeMusic.duration }
             : undefined,
@@ -461,11 +462,14 @@ export function useSlideOperations() {
     playSfx('open');
   }, [t, dispatchUndo, setSelectedSlideId, setSlideZoom, setActiveTab, setSelectedPresetName, guardDocumentReplacement]);
 
-  const importPptxPresentation = useCallback(async (filePath: string, mode: PptxImportMode): Promise<PptxImportResult | null> => {
+  const importPptxPresentation = useCallback(async (source: PptxImportSource, mode: PptxImportMode): Promise<PptxImportResult | null> => {
     if (mode === 'new' ? !(await guardDocumentReplacement()) : !(await guardEditorReplacement())) return null;
     const generation = documentSession.current().generation;
     const signature = documentSignature(useStore.getState().presentation);
-    const result: PptxImportResult = await window.electronAPI.importPptx(filePath);
+    const result: PptxImportResult = typeof source === 'string'
+      ? await window.electronAPI.importPptx(source)
+      : 'canvaId' in source ? await window.electronAPI.canvaImport(source.canvaId)
+        : await window.electronAPI.googleSlidesImport(source.googleSlidesId);
     if (!result?.success || !result.slides) throw new Error(result?.error || t('common.importFailedGeneric'));
     const slides = convertPptxToSlides(result);
     if (!slides.length) throw new Error(t('fileOpen.noImportedSlides'));
@@ -476,7 +480,8 @@ export function useSlideOperations() {
       if ((current.isProjectorWindowOpen || Object.values(current.outputAssignments).some(output => output.isOpen)) &&
           !(await confirmDialog(t('fileOpen.liveReplaceWarning'), { title: t('fileOpen.liveReplaceTitle'), confirmLabel: t('fileOpen.newPresentation') }))) return null;
       if (!unchanged()) { await alertDialog(t('desktop.documentChanged')); return null; }
-      dispatchUndo({ type: 'RESET', payload: { id: crypto.randomUUID(), name: filePath.split(/[\\/]/).pop()?.replace(/\.ppt[mx]$/i, '') || t('common.newPresentation'), slides, transition: { ...DEFAULT__TRANSITION } } });
+      const name = typeof source === 'string' ? source.split(/[\\/]/).pop()?.replace(/\.ppt[mx]$/i, '') : source.name;
+      dispatchUndo({ type: 'RESET', payload: { id: crypto.randomUUID(), name: name || t('common.newPresentation'), slides, transition: { ...DEFAULT__TRANSITION } } });
       setSelectedPresetName(null);
       documentSession.unsaved();
     } else {
@@ -593,6 +598,7 @@ export function useSlideOperations() {
       const newSlides: Slide[] = content.map((chunk, idx) =>
         createSlide('text', {
           content: chunk,
+          scripture: true,
           group: {
             id: groupId,
             title: options?.groupTitle ?? 'İncil',
@@ -611,6 +617,7 @@ export function useSlideOperations() {
     } else {
       const newSlide = createSlide('text', {
         content,
+        scripture: true,
         styles: {
           ...DEFAULT_STYLES,
           fontSize: 70,
@@ -782,13 +789,16 @@ export function useSlideOperations() {
     }
   }, [appendSlides]);
 
-  const handleAddCountdownToPresentation = useCallback((minutes: number, seconds: number, styles?: Partial<Slide['styles']>) => {
+  const handleAddCountdownToPresentation = useCallback((minutes: number, seconds: number, styles?: Partial<Slide['styles']>, options?: { paused?: boolean }) => {
+    const totalSeconds = minutes * 60 + seconds;
     const newSlide = createSlide('countdown', {
       content: JSON.stringify({
         minutes,
         seconds,
         startTime: Date.now(),
-        totalSeconds: minutes * 60 + seconds,
+        totalSeconds,
+        // A paused countdown waits at full length until the operator resumes it.
+        ...(options?.paused ? { paused: true, pausedRemaining: totalSeconds } : {}),
       }),
       styles: {
         ...DEFAULT_STYLES,

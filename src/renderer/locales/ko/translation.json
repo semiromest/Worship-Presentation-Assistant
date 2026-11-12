@@ -969,6 +969,18 @@
     "editorZoomIn": "확대",
     "editorZoomOut": "축소",
     "editorZoomReset": "확대/축소 초기화",
+    "editorTextAlign": "텍스트 정렬",
+    "editorVerticalAlign": "세로 정렬",
+    "editorTextEffects": "효과",
+    "editorImageAdjust": "조정",
+    "editorSlideBackground": "배경",
+    "editorSlideTextDefaults": "텍스트 기본값",
+    "editorSelectionToolbar": "선택 도구",
+    "editorEditText": "텍스트 편집 (Enter)",
+    "editorFontSmaller": "글자 작게",
+    "editorFontLarger": "글자 크게",
+    "editorCanvasEmptyShort": "빈 슬라이드입니다",
+    "editorGeometry": "위치 및 크기",
     "editorTemplates": "템플릿",
     "editorTemplateTitle": "슬라이드 템플릿",
     "editorColorPalette": "색상 팔레트",
@@ -1268,8 +1280,19 @@
     "preview": "미리보기",
     "ready": "준비",
     "running": "실행 중",
-    "previewHint": "이 미리보기는 프레젠테이션 타이머를 변경하지 않습니다. 슬라이드에 추가하면 설정한 시간으로 새 타이머가 시작됩니다.",
-    "durationLocked": "시간을 변경하려면 미리보기 타이머를 초기화하세요."
+    "previewHint": "이 연습 타이머는 프레젠테이션에 영향을 주지 않습니다.",
+    "durationLocked": "시간을 변경하려면 미리보기 타이머를 초기화하세요.",
+    "minusMinute": "1분 줄이기",
+    "plusMinute": "1분 늘리기",
+    "presets": "빠른 시간 선택",
+    "minutesShort": "{{value}}분",
+    "secondsShort": "{{value}}초",
+    "customTheme": "사용자 지정 색상",
+    "whenAdded": "추가할 때",
+    "startNow": "바로 시작",
+    "startPaused": "일시정지로 대기",
+    "startNowHint": "슬라이드를 추가하는 즉시 타이머가 시작됩니다.",
+    "startPausedHint": "슬라이드가 전체 시간으로 대기합니다. 준비되면 슬라이드에서 계속을 누르세요."
   },
   "loop": {
     "noItems": "반복 항목 없음"
@@ -1289,6 +1312,16 @@
     "removeMusic": "음악 삭제",
     "seek": "재생 위치 이동",
     "volume": "오디오 볼륨"
+  },
+  "canva": {
+    "permission": "프레젠테이션을 검색하고 가져오려면 Canva에 연결하세요.",
+    "search": "Canva 프레젠테이션 검색"
+  },
+  "googleSlides": {
+    "permission": "Google Slides 프레젠테이션을 표시하고 가져오려면 Google Drive 읽기 권한이 필요합니다.",
+    "search": "Google Slides 검색",
+    "add": "슬라이드 추가",
+    "more": "더 불러오기"
   },
   "drive": {
     "signIn": "Google로 로그인",

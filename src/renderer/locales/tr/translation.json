@@ -977,6 +977,18 @@
     "editorZoomIn": "Yakınlaştır",
     "editorZoomOut": "Uzaklaştır",
     "editorZoomReset": "Sıfırla",
+    "editorTextAlign": "Metin hizalama",
+    "editorVerticalAlign": "Dikey hizalama",
+    "editorTextEffects": "Efektler",
+    "editorImageAdjust": "Ayarlamalar",
+    "editorSlideBackground": "Arka plan",
+    "editorSlideTextDefaults": "Metin varsayılanları",
+    "editorSelectionToolbar": "Seçim araçları",
+    "editorEditText": "Metni düzenle (Enter)",
+    "editorFontSmaller": "Yazıyı küçült",
+    "editorFontLarger": "Yazıyı büyüt",
+    "editorCanvasEmptyShort": "Bu slayt boş",
+    "editorGeometry": "Konum ve boyut",
     "editorTemplates": "Şablonlar",
     "editorTemplateTitle": "Slayt Şablonları",
     "editorColorPalette": "Renk Paletleri",
@@ -1268,8 +1280,19 @@
     "preview": "Önizleme",
     "ready": "Hazır",
     "running": "Çalışıyor",
-    "previewHint": "Bu deneme sunumdaki sayacı değiştirmez. Slayta Ekle, ayarlanan süreyle yeni bir sayaç başlatır.",
-    "durationLocked": "Süreyi değiştirmek için deneme sayacını sıfırlayın."
+    "previewHint": "Bu deneme sayacı sunumu etkilemez.",
+    "durationLocked": "Süreyi değiştirmek için deneme sayacını sıfırlayın.",
+    "minusMinute": "1 dakika azalt",
+    "plusMinute": "1 dakika artır",
+    "presets": "Hızlı süreler",
+    "minutesShort": "{{value}} dk",
+    "secondsShort": "{{value}} sn",
+    "customTheme": "Özel renkler",
+    "whenAdded": "Eklendiğinde",
+    "startNow": "Hemen başlasın",
+    "startPaused": "Duraklatılmış beklesin",
+    "startNowHint": "Sayaç, slayt eklendiği anda saymaya başlar.",
+    "startPausedHint": "Slayt tam sürede bekler. Hazır olduğunda slaytta Devam Et'e bas."
   },
   "loop": {
     "noItems": "Loop öğesi yok"
@@ -1289,6 +1312,16 @@
     "removeMusic": "Müziği Kaldır",
     "seek": "Ses İlerletme",
     "volume": "Ses Seviyesi"
+  },
+  "canva": {
+    "permission": "Sunumlarını listelemek ve içe aktarmak için Canva’ya bağlan.",
+    "search": "Canva sunumlarında ara"
+  },
+  "googleSlides": {
+    "permission": "Google Slides sunumlarınızı listelemek ve aktarmak için Google, Drive dosyalarınıza okuma izni ister.",
+    "search": "Google Slides sunumlarında ara",
+    "add": "Slaytları ekle",
+    "more": "Daha fazla yükle"
   },
   "drive": {
     "signIn": "Google ile Giriş Yap",
