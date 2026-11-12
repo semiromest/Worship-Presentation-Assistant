@@ -140,6 +140,8 @@ export interface Slide {
   id: string;
   type: 'text' | 'image' | 'video' | 'countdown' | 'screen' | 'loop' | 'captions';
   content: string;
+  /** Text slide created from the Bible browser or a quick verse. */
+  scripture?: true;
   /** Durable YouTube reference; transient stream URLs are never saved in slides. */
   youtubeMusic?: import('./youtubeMusic').YouTubeMusicResult;
   musicSettings?: { volume?: number; autoPlay?: boolean; attachment?: boolean };

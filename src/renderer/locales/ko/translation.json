@@ -1313,6 +1313,16 @@
     "seek": "재생 위치 이동",
     "volume": "오디오 볼륨"
   },
+  "canva": {
+    "permission": "프레젠테이션을 검색하고 가져오려면 Canva에 연결하세요.",
+    "search": "Canva 프레젠테이션 검색"
+  },
+  "googleSlides": {
+    "permission": "Google Slides 프레젠테이션을 표시하고 가져오려면 Google Drive 읽기 권한이 필요합니다.",
+    "search": "Google Slides 검색",
+    "add": "슬라이드 추가",
+    "more": "더 불러오기"
+  },
   "drive": {
     "signIn": "Google로 로그인",
     "signOut": "로그아웃",

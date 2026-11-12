@@ -698,7 +698,17 @@ export function isHymnSlide(slide: Slide): boolean {
 }
 
 export function isScriptureSlide(slide: Slide): boolean {
-  return !!slide.group;
+  if (slide.type !== 'text' || slide.group?.kind === 'hymn') return false;
+  if (slide.scripture || (slide.group && !slide.partsMode)) return true;
+
+  // Older single-slide readings had no metadata. Match the reference header
+  // and numbered first verse produced by createScriptureSlides.
+  const text = slide.partsMode ? slide.parts?.[0] ?? slide.content : slide.content;
+  const [header, firstVerse] = text.split(/\r?\n\r?\n/, 2);
+  if (!firstVerse || /[\r\n]/.test(header)) return false;
+  const reference = header.match(/[ \t]\d+:(\d+)(?:[–-]\d+)?(?:, \d+(?:[–-]\d+)?)*$/);
+  const verse = firstVerse.match(/^(\d+)(?:[–-]\d+)?\.[ \t]+\S/);
+  return !!reference && reference[1] === verse?.[1] && /\p{L}/u.test(header.slice(0, reference.index));
 }
 
 export function isTargetSlide(slide: Slide | undefined): boolean {
@@ -713,10 +723,8 @@ export function shouldRenderWatermark(
   if (!config.enabled) return false;
   if (!config.logoDataUrl) return false;
 
-  const appliesToHymn = config.applyToHymns && isHymnSlide(slide);
-  const appliesToScripture = config.applyToScriptures && isScriptureSlide(slide);
-
-  return appliesToHymn || appliesToScripture;
+  if (isScriptureSlide(slide)) return config.applyToScriptures;
+  return config.applyToHymns && isHymnSlide(slide);
 }
 
 function getWatermarkCanvasPosition(

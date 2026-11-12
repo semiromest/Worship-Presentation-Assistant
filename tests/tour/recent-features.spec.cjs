@@ -94,6 +94,157 @@ test('appearance preview mounts only in its category; watermark upload and ARIA 
   await page.screenshot({ path: test.info().outputPath('appearance-and-logo.png') });
 });
 
+test('the scripture watermark setting applies to new and previously saved single-verse slides', async () => {
+  const { watermark } = require('../../src/renderer/locales/en/translation.json');
+  const verseText = 'A single verse for the watermark check.';
+  const logo = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="blue"/></svg>');
+  await page.waitForSelector('[data-app-shell]');
+  await page.evaluate(async ({ verseText, logo }) => {
+    const { bibleRepository } = await import('/src/renderer/bibleRepository.ts');
+    bibleRepository.remember({ name: 'Test Bible', format: 'zefania', books: [
+      { name: 'John', number: '43', chapters: [{ number: '1', verses: [{ number: '1', text: verseText }] }] },
+    ] }, { type: 'local', id: 'test-bible', format: 'zefania' });
+    const { useWatermarkStore } = await import('/src/renderer/state/useWatermarkStore.ts');
+    useWatermarkStore.getState().setWatermarkConfig({ logoDataUrl: logo, enabled: true, applyToScriptures: false });
+    window.__recentStore.getState().setActiveTab('bible');
+  }, { verseText, logo });
+
+  await page.getByRole('button', { name: 'John', exact: true }).click();
+  await page.locator('[data-guide-anchor="bible-chapter"]').click();
+  await page.getByRole('button', { name: new RegExp(verseText) }).click();
+  await page.locator('[data-guide-anchor="bible-add"]').click();
+  const card = page.locator('[data-slide-id]').filter({ hasText: verseText });
+  await expect(card).toBeVisible();
+  const image = card.locator(`img[src="${logo}"]`);
+  await expect(image).toHaveCount(0);
+  expect(await page.evaluate(verseText => window.__recentStore.getState().presentation.slides.find(slide => slide.content.includes(verseText))?.scripture, verseText)).toBe(true);
+
+  await page.evaluate(() => window.__recentStore.getState().setActiveTab('settings'));
+  await page.locator('.settings-search input').fill(watermark.title);
+  await page.getByRole('button').filter({ hasText: watermark.title }).click();
+  await page.getByRole('checkbox', { name: watermark.applyToScriptures, exact: true }).check();
+  await page.evaluate(() => window.__recentStore.getState().setActiveTab('slides'));
+  await expect(image).toBeVisible();
+  await expect.poll(() => image.evaluate(img => img.naturalWidth)).toBeGreaterThan(0);
+  await page.evaluate(slideId => {
+    const state = window.__recentStore.getState();
+    state.setIsRightPanelOpen(true);
+    state.selectSlides({ activeId: slideId, liveTargetId: slideId });
+  }, await card.getAttribute('data-slide-id'));
+  await expect(page.locator(`.design-live-preview img[src="${logo}"]`)).toBeVisible();
+
+  await page.evaluate(verseText => {
+    const state = window.__recentStore.getState();
+    const slides = state.presentation.slides.map(slide => slide.content.includes(verseText)
+      ? { ...slide, id: 'legacy-verse', scripture: undefined }
+      : slide);
+    state.dispatchUndo({ type: 'SET', payload: { ...state.presentation, slides } });
+  }, verseText);
+  await expect(page.locator(`[data-slide-id="legacy-verse"] img[src="${logo}"]`)).toBeVisible();
+});
+
+test('Google Slides cancels and signs out independently of Drive, then imports a presentation', async () => {
+  await app.evaluate(({ ipcMain }) => {
+    for (const channel of ['google-slides-status', 'google-slides-connect', 'google-slides-list', 'google-slides-import',
+      'google-slides-sign-out', 'google-slides-cancel', 'drive-sign-out', 'drive-sign-in-cancel']) {
+      ipcMain.removeHandler(channel);
+    }
+    let signedIn = false;
+    let finishCancelledAttempt;
+    let firstAttempt = true;
+    const status = () => ({ signedIn, email: signedIn ? 'presenter@example.com' : null });
+    ipcMain.handle('google-slides-status', status);
+    ipcMain.handle('google-slides-connect', () => {
+      if (firstAttempt) {
+        firstAttempt = false;
+        return new Promise(resolve => { finishCancelledAttempt = resolve; });
+      }
+      signedIn = true;
+      return status();
+    });
+    ipcMain.handle('google-slides-cancel', () => finishCancelledAttempt(status()));
+    ipcMain.handle('google-slides-sign-out', () => { signedIn = false; });
+    ipcMain.handle('drive-sign-in-cancel', () => { throw new Error('Slides must not cancel Drive'); });
+    ipcMain.handle('drive-sign-out', () => { throw new Error('Slides must not sign out of Drive'); });
+    ipcMain.handle('google-slides-list', (_event, query) => ({
+      files: [{ id: 'welcome', name: 'Welcome deck' }, { id: 'service', name: 'Service deck' }]
+        .filter(file => file.name.toLowerCase().includes(query.toLowerCase())),
+    }));
+    ipcMain.handle('google-slides-import', (_event, id) => {
+      if (id !== 'service') throw new Error('Wrong Google presentation');
+      return { success: true, slides: [{ slideNumber: 1, width: 1920, height: 1080, format: 'png',
+        imageData: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=' }] };
+    });
+  });
+  await page.waitForSelector('[data-app-shell]');
+  const before = await page.evaluate(() => {
+    const state = window.__recentStore.getState();
+    state.setActiveTab('presentations');
+    state.setDriveSignedIn(true, 'backup@example.com');
+    state.setDriveFiles([{ id: 'backup', name: 'Backup.gpres', modifiedTime: '' }]);
+    state.setDriveFilesLoaded(true);
+    return state.presentation.slides.map(slide => slide.id);
+  });
+  await page.getByRole('button', { name: 'Google Slides', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Google Slides' });
+  const { common, drive, googleSlides } = require('../../src/renderer/locales/en/translation.json');
+  const signIn = dialog.getByRole('button', { name: drive.signIn, exact: true });
+  await signIn.click();
+  await dialog.getByRole('button', { name: common.cancel, exact: true }).click();
+  await expect(signIn).toBeEnabled();
+  await expect(dialog.getByRole('alert')).toHaveCount(0);
+  await signIn.click();
+  await expect(dialog.getByText('presenter@example.com')).toBeVisible();
+  await dialog.getByRole('button', { name: drive.signOut, exact: true }).click();
+  await expect(signIn).toBeEnabled();
+  await expect(dialog.getByText('presenter@example.com')).toHaveCount(0);
+  expect(await page.evaluate(() => {
+    const { driveSignedIn, driveEmail, driveFiles, driveFilesLoaded } = window.__recentStore.getState();
+    return { driveSignedIn, driveEmail, files: driveFiles.map(file => file.id), driveFilesLoaded };
+  })).toEqual({ driveSignedIn: true, driveEmail: 'backup@example.com', files: ['backup'], driveFilesLoaded: true });
+  await signIn.click();
+  await expect(dialog.getByText('Welcome deck')).toBeVisible();
+  await dialog.getByRole('searchbox').fill('service');
+  await expect(dialog.getByText('Welcome deck')).toHaveCount(0);
+  await dialog.getByRole('button', { name: googleSlides.add, exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  const after = await page.evaluate(() => window.__recentStore.getState().presentation.slides.map(slide => slide.id));
+  expect(after).toHaveLength(before.length + 1);
+  expect(after.slice(0, -1)).toEqual(before);
+});
+
+test('Canva library searches and appends slides through the PowerPoint import flow', async () => {
+  await app.evaluate(({ ipcMain }) => {
+    for (const channel of ['canva-available', 'canva-status', 'canva-connect', 'canva-list', 'canva-import']) {
+      ipcMain.removeHandler(channel);
+    }
+    ipcMain.handle('canva-available', () => true);
+    ipcMain.handle('canva-status', () => ({ signedIn: false, email: null }));
+    ipcMain.handle('canva-connect', () => ({ signedIn: true, email: null }));
+    ipcMain.handle('canva-list', (_event, query) => ({ files: query === 'Sunday' ? [{ id: 'DAExample', name: 'Sunday slides' }] : [] }));
+    ipcMain.handle('canva-import', (_event, id) => {
+      if (id !== 'DAExample') throw new Error('Unexpected Canva design');
+      return { success: true, slides: [{ slideNumber: 1, width: 1920, height: 1080, format: 'png',
+        imageData: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=' }] };
+    });
+  });
+  await page.waitForSelector('[data-app-shell]');
+  const before = await page.evaluate(() => {
+    const state = window.__recentStore.getState();
+    state.setActiveTab('presentations');
+    return state.presentation.slides.length;
+  });
+  await page.getByRole('button', { name: 'Canva', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Canva' });
+  const { drive, googleSlides } = require('../../src/renderer/locales/en/translation.json');
+  await dialog.getByRole('button', { name: drive.signIn, exact: true }).click();
+  await dialog.getByRole('searchbox').fill('Sunday');
+  await expect(dialog.getByText('Sunday slides')).toBeVisible();
+  await dialog.getByRole('button', { name: googleSlides.add, exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(await page.evaluate(() => window.__recentStore.getState().presentation.slides.length)).toBe(before + 1);
+});
+
 test('YouTube appends results, preserves them on errors, expires cursors and ignores old responses', async () => {
   await app.evaluate(({ ipcMain }) => {
     globalThis.__moreCalls = 0;

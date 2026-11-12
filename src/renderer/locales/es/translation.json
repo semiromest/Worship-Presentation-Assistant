@@ -1315,6 +1315,16 @@
     "seek": "Buscar en el audio",
     "volume": "Volumen"
   },
+  "canva": {
+    "permission": "Conecta Canva para buscar e importar tus presentaciones.",
+    "search": "Buscar presentaciones de Canva"
+  },
+  "googleSlides": {
+    "permission": "Google solicita acceso de lectura a Drive para que la aplicación pueda mostrar e importar tus presentaciones de Google.",
+    "search": "Buscar en Presentaciones de Google",
+    "add": "Añadir diapositivas",
+    "more": "Cargar más"
+  },
   "drive": {
     "signIn": "Iniciar sesión con Google",
     "signOut": "Cerrar sesión",

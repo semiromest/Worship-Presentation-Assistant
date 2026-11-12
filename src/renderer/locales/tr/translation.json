@@ -1313,6 +1313,16 @@
     "seek": "Ses İlerletme",
     "volume": "Ses Seviyesi"
   },
+  "canva": {
+    "permission": "Sunumlarını listelemek ve içe aktarmak için Canva’ya bağlan.",
+    "search": "Canva sunumlarında ara"
+  },
+  "googleSlides": {
+    "permission": "Google Slides sunumlarınızı listelemek ve aktarmak için Google, Drive dosyalarınıza okuma izni ister.",
+    "search": "Google Slides sunumlarında ara",
+    "add": "Slaytları ekle",
+    "more": "Daha fazla yükle"
+  },
   "drive": {
     "signIn": "Google ile Giriş Yap",
     "signOut": "Çıkış Yap",

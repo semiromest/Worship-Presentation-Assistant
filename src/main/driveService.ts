@@ -10,10 +10,13 @@ import { DRIVE_CREDENTIALS } from './driveCredentials';
 import { serviceRequest } from './serviceHealth';
 import { streamPresentationDownload } from './presentationDownload';
 
-const TOKEN_FILE = path.join(app.getPath('userData'), 'drive-token.enc');
 const APP_FOLDER_NAME = 'Worship Presentation Assistant';
 const SIGN_IN_TIMEOUT_MS = 120_000;
 const CALLBACK_PATH = '/oauth2callback';
+const DRIVE_READ_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
+const GOOGLE_SLIDES_MIME = 'application/vnd.google-apps.presentation';
+const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+const GOOGLE_EXPORT_LIMIT = 10 * 1024 ** 2;
 const SUCCESS_PAGE =
   '<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;background:#1a1a2e;color:#fff"><div style="text-align:center"><h2>✅ Giriş başarılı!</h2><p>Uygulamaya dönebilirsiniz.</p></div></body></html>';
 
@@ -41,9 +44,9 @@ function isInvalidGrant(error: unknown): boolean {
   return e?.response?.data?.error === 'invalid_grant' || /invalid_grant/.test(e?.message ?? '');
 }
 
-function readToken(): Credentials | null {
+function readToken(tokenFile: string): Credentials | null {
   try {
-    const encrypted = fsSync.readFileSync(TOKEN_FILE);
+    const encrypted = fsSync.readFileSync(tokenFile);
     let json: string;
     if (safeStorage.isEncryptionAvailable()) {
       try {
@@ -63,30 +66,34 @@ function readToken(): Credentials | null {
 }
 
 /** Atomik yazma: yarım kalan yazma mevcut token dosyasını bozamaz. Dosya küçük ve seyrek yazıldığı için senkron bırakıldı. */
-function writeToken(token: Credentials): void {
+function writeToken(tokenFile: string, token: Credentials): void {
   const raw = JSON.stringify(token);
   const data = safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(raw) : Buffer.from(raw, 'utf-8');
-  const temp = `${TOKEN_FILE}.${process.pid}.tmp`;
+  const temp = `${tokenFile}.${process.pid}.tmp`;
   try {
     fsSync.writeFileSync(temp, data, { mode: 0o600 });
-    fsSync.renameSync(temp, TOKEN_FILE);
+    fsSync.renameSync(temp, tokenFile);
   } catch (error) {
     try { fsSync.unlinkSync(temp); } catch { /* temp file cleanup */ }
     throw error;
   }
 }
 
-function deleteToken(): void {
-  try { fsSync.unlinkSync(TOKEN_FILE); } catch { /* ignore */ }
+function deleteToken(tokenFile: string): void {
+  try { fsSync.unlinkSync(tokenFile); } catch { /* ignore */ }
 }
 
 class GoogleDriveService {
+  constructor(private readonly tokenFile: string, private readonly slidesOnly = false) {}
+
   private oAuth2Client: OAuth2Client | null = null;
   private drive: Drive | null = null;
   private folderPromise: Promise<string> | null = null;
   /** undefined: henüz öğrenilmedi (ağ hatası dahil, yeniden denenir). null: Google e-posta döndürmedi. */
   private email: string | null | undefined;
   private signInPromise: Promise<DriveStatus> | null = null;
+  private signInGeneration = 0;
+  private slidesAccess = false;
   // Live OAuth attempt, kept so the user can cancel it (closing the Google tab,
   // picking no account) instead of leaving the panel spinning forever.
   private pendingSignIn: {
@@ -98,6 +105,7 @@ class GoogleDriveService {
   /** Aktif istemciyi değiştirir ve ona bağlı tüm önbellekleri sıfırlar. */
   private setClient(client: OAuth2Client | null): void {
     this.oAuth2Client = client;
+    this.slidesAccess = client?.credentials.scope?.split(' ').includes(DRIVE_READ_SCOPE) ?? false;
     this.drive = null;
     this.folderPromise = null;
     this.email = undefined;
@@ -109,14 +117,14 @@ class GoogleDriveService {
     client.on('tokens', (fresh) => {
       if (this.oAuth2Client !== client) return;
       saved = { ...saved, ...fresh };
-      try { writeToken(saved); } catch { /* oturum bellekte çalışmaya devam eder */ }
+      try { writeToken(this.tokenFile, saved); } catch { /* oturum bellekte çalışmaya devam eder */ }
     });
     this.setClient(client);
   }
 
   private getClient(): OAuth2Client | null {
     if (this.oAuth2Client) return this.oAuth2Client;
-    const token = readToken();
+    const token = readToken(this.tokenFile);
     if (!token) return null;
     const client = new auth.OAuth2(DRIVE_CREDENTIALS.clientId, DRIVE_CREDENTIALS.clientSecret);
     client.setCredentials(token);
@@ -145,6 +153,10 @@ class GoogleDriveService {
     return { signedIn: true, email: this.email ?? null };
   }
 
+  canListSlides(): boolean {
+    return !!this.getClient() && this.slidesAccess;
+  }
+
   /** Eşzamanlı çağrılar aynı akışı paylaşır; ikinci tıklama ikinci bir sunucu ve tarayıcı sekmesi açmaz. */
   signIn(): Promise<DriveStatus> {
     this.signInPromise ??= this.performSignIn().finally(() => { this.signInPromise = null; });
@@ -152,13 +164,21 @@ class GoogleDriveService {
   }
 
   private async performSignIn(): Promise<DriveStatus> {
+    const generation = this.signInGeneration;
     const { code, client, codeVerifier } = await this.startOAuthFlow();
     const { tokens } = await client.getToken({ code, codeVerifier });
+    if (generation !== this.signInGeneration) throw new Error('cancelled');
+    const scopes = tokens.scope?.split(' ') ?? [];
+    if (this.slidesOnly && !scopes.includes(DRIVE_READ_SCOPE)) {
+      throw new Error('Google Slides access was not granted');
+    }
     client.setCredentials(tokens);
-    writeToken(tokens);
+    const email = await this.fetchUserEmail(client).catch(() => undefined);
+    if (generation !== this.signInGeneration) throw new Error('cancelled');
+    writeToken(this.tokenFile, tokens);
     this.adopt(client, tokens);
-    this.email = await this.fetchUserEmail(client).catch(() => undefined);
-    return { signedIn: true, email: this.email ?? null };
+    this.email = email;
+    return { signedIn: true, email: email ?? null };
   }
 
   isSigningIn(): boolean {
@@ -205,7 +225,7 @@ class GoogleDriveService {
       this.pendingSignIn = { server, timer, reject: (error) => finish(error) };
       server.on('error', (error) => finish(error));
 
-      server.listen(DRIVE_CREDENTIALS.redirectPort || 0, '127.0.0.1', async () => {
+      server.listen(this.slidesOnly ? 0 : DRIVE_CREDENTIALS.redirectPort || 0, '127.0.0.1', async () => {
         try {
           const address = server.address();
           const port = typeof address === 'object' && address ? address.port : 0;
@@ -219,7 +239,7 @@ class GoogleDriveService {
           codeVerifier = pkce.codeVerifier;
           const authUrl = oauth.generateAuthUrl({
             access_type: 'offline',
-            scope: DRIVE_CREDENTIALS.scopes,
+            scope: this.slidesOnly ? [DRIVE_READ_SCOPE] : DRIVE_CREDENTIALS.scopes,
             prompt: 'consent',
             state,
             code_challenge: pkce.codeChallenge,
@@ -251,16 +271,21 @@ class GoogleDriveService {
   // Aborts an in-flight sign-in; signIn() rejects and the UI returns to its
   // signed-out state. Safe to call when nothing is pending.
   cancelSignIn(): void {
+    this.signInGeneration++;
     this.pendingSignIn?.reject(new Error('cancelled'));
   }
 
   private async fetchUserEmail(client: OAuth2Client): Promise<string | null> {
+    if (this.slidesOnly) {
+      const { data } = await googleDrive({ version: 'v3', auth: client }).about.get({ fields: 'user(emailAddress)' });
+      return data.user?.emailAddress ?? null;
+    }
     const res = await client.request<{ email?: string }>({ url: 'https://www.googleapis.com/oauth2/v2/userinfo' });
     return res.data.email ?? null;
   }
 
   signOut(): void {
-    deleteToken();
+    deleteToken(this.tokenFile);
     this.setClient(null);
   }
 
@@ -326,6 +351,29 @@ class GoogleDriveService {
     });
   }
 
+  async listSlides(query: string, pageToken?: string) {
+    const drive = this.getDrive();
+    const result = await serviceRequest('drive', () => drive.files.list({
+      q: `mimeType='${GOOGLE_SLIDES_MIME}' and trashed=false${query ? ` and name contains '${escapeQuery(query)}'` : ''}`,
+      fields: 'nextPageToken, files(id, name)',
+      orderBy: 'modifiedTime desc',
+      pageSize: 50,
+      pageToken,
+      includeItemsFromAllDrives: true,
+      supportsAllDrives: true,
+    }));
+    const files = (result.data.files ?? []).flatMap(file => file.id && file.name ? [{ id: file.id, name: file.name }] : []);
+    return { files, nextPageToken: result.data.nextPageToken ?? undefined };
+  }
+
+  async exportSlides(fileId: string, target: string): Promise<void> {
+    await serviceRequest('drive', async () => {
+      const { data } = await this.getDrive().files.export({ fileId, mimeType: PPTX_MIME }, { responseType: 'stream' });
+      try { await streamPresentationDownload(data, target, { archive: GOOGLE_EXPORT_LIMIT, json: GOOGLE_EXPORT_LIMIT }); }
+      finally { data.destroy(); }
+    });
+  }
+
   /** Aynı adlı dosya varsa günceller, yoksa oluşturur. `makeBody` yalnızca gerçekten yüklenirken akış üretir. */
   private upsertFile(name: string, mimeType: string, makeBody: () => string | Readable): Promise<string> {
     return this.inAppFolder(async (drive, folderId) => {
@@ -376,4 +424,5 @@ class GoogleDriveService {
   }
 }
 
-export const driveService = new GoogleDriveService();
+export const driveService = new GoogleDriveService(path.join(app.getPath('userData'), 'drive-token.enc'));
+export const googleSlidesService = new GoogleDriveService(path.join(app.getPath('userData'), 'google-slides-token.enc'), true);

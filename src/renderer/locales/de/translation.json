@@ -1315,6 +1315,16 @@
     "seek": "Audio vor-/zurückspulen",
     "volume": "Lautstärke"
   },
+  "canva": {
+    "permission": "Verbinde Canva, um deine Präsentationen zu suchen und zu importieren.",
+    "search": "Canva-Präsentationen suchen"
+  },
+  "googleSlides": {
+    "permission": "Google benötigt Lesezugriff auf Drive, damit die App Ihre Google-Präsentationen anzeigen und importieren kann.",
+    "search": "Google-Präsentationen suchen",
+    "add": "Folien hinzufügen",
+    "more": "Mehr laden"
+  },
   "drive": {
     "signIn": "Mit Google anmelden",
     "signOut": "Abmelden",

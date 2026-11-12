@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy | Worship Presentation Assistant</title>
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <main class="wrap section">
+    <div class="section-head">
+      <a href="./">Worship Presentation Assistant</a>
+      <h1>Privacy Policy</h1>
+      <p>This policy explains how Worship Presentation Assistant handles Google account data when you connect Google Drive or use Google Slides import. These connections are optional.</p>
+    </div>
+
+    <section class="section-head" aria-labelledby="access">
+      <h2 id="access">Google data we access</h2>
+      <p>Google Drive backup uses the <code>drive.file</code> permission. Presenter accesses its Drive folder and backup metadata such as names, file IDs, modified dates, and sizes. It uploads, downloads, or deletes project backups in response to your actions. A backup can include presentation text, media, and project settings.</p>
+      <p>Google Slides import on desktop uses the <code>drive.readonly</code> permission. This permission allows broader read access to Drive. Presenter filters its listing to Google Slides presentations, reads their names and file IDs, and downloads a PowerPoint export of the presentation you choose. It converts the export locally into image slides in your open project.</p>
+      <p>Presenter receives Google OAuth tokens to authorize these requests. It may display the email address returned by Google to identify the connected account.</p>
+    </section>
+
+    <section class="section-head" aria-labelledby="storage">
+      <h2 id="storage">Storage and sharing</h2>
+      <p>Presenter communicates with Google over HTTPS. The desktop app stores separate OAuth credentials for each connection in the local app profile and uses the operating system’s credential encryption when available. The web app holds its Drive access token in browser session storage, subject to Google’s expiration time and the lifetime of the browser session.</p>
+      <p>Google processes authorization, file requests, and any backups you choose to store in your Drive account. Presenter’s Google integrations do not route your credentials or file contents through a developer-operated server. If you save, export, or share a project containing imported slides, the destination you select can receive a copy of that content.</p>
+      <p>We do not sell Google user data, use it for advertising, or use it to train generalized AI or machine learning models. Our use and transfer of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including its Limited Use requirements.</p>
+    </section>
+
+    <section class="section-head" aria-labelledby="controls">
+      <h2 id="controls">Retention and deletion</h2>
+      <p>Desktop credentials are kept in the local profile to reconnect until you sign out. Use Sign out in Google Drive or Google Slides to remove that connection’s saved session. You can revoke Google’s authorization from <a href="https://myaccount.google.com/connections">your Google Account connections</a>.</p>
+      <p>Presenter attempts to delete the temporary PowerPoint file when each import finishes, including failed imports. Converted slide images can remain in your local media library, saved projects, or backups until removed. Remove imported slides from your projects and delete copies you saved or exported. To remove a Google Drive backup, use the Drive panel or Google Drive. Signing out removes session credentials while saved copies remain subject to your file and backup controls.</p>
+      <p>For privacy questions, use the project’s <a href="https://github.com/semiromest/Worship-Presentation-Assistant/blob/master/SUPPORT.md">support information</a>.</p>
+    </section>
+  </main>
+</body>
+</html>

@@ -10,7 +10,7 @@ import { useSttStore } from './useSttStore';
 import { IS_PROJECTOR_MODE, PROJECTOR_DISPLAY_ID } from '../constants';
 import { chooseDefaultOutputDisplay, effectiveOutputSlideIndex } from '../../shared/displays';
 import { findLockedSlideIndex } from '../slideLock';
-import { getActivePartIndex, getNextPartIndex, getPartIndex, getPreviousPartIndex, getSlideDisplayContent } from '../../shared/slideContent';
+import { getActivePartIndex, getDisplayStep, getNextPartIndex, getPartIndex, getPreviousPartIndex, getSlideDisplayContent } from '../../shared/slideContent';
 import { createSlide } from '../hooks/useSlideOperations';
 import { DEFAULT_STYLES } from '../constants';
 import { makeSlideId } from '../utils';
@@ -187,19 +187,17 @@ export function useRemoteControl() {
       const projOpen = state.isProjectorWindowOpen;
 
       switch (data.action) {
-        case REMOTE_ACTIONS.next: {
-          // Broadcast lock: the live output stays pinned; phones only re-select.
-          if (findLockedSlideIndex(slides) >= 0) break;
-          const baseIdx = projOpen ? state.liveIndex : Math.max(currentIdx, 0);
-          const nextIdx = Math.min(baseIdx + 1, lastIndex);
-          state.selectSlides({ activeId: slides[nextIdx].id, liveTargetId: slides[nextIdx].id });
-          break;
-        }
+        case REMOTE_ACTIONS.next:
         case REMOTE_ACTIONS.prev: {
           if (findLockedSlideIndex(slides) >= 0) break;
           const baseIdx = projOpen ? state.liveIndex : Math.max(currentIdx, 0);
-          const prevIdx = Math.max(baseIdx - 1, 0);
-          state.selectSlides({ activeId: slides[prevIdx].id, liveTargetId: slides[prevIdx].id });
+          const direction = data.action === REMOTE_ACTIONS.next ? 1 : -1;
+          const step = state.autoGoLive
+            ? getDisplayStep(slides, baseIdx, direction)
+            : { index: Math.max(0, Math.min(baseIdx + direction, lastIndex)), partIndex: undefined };
+          if (!step) break;
+          const id = slides[step.index].id;
+          state.selectSlides({ activeId: id, liveTargetId: id, livePartIndex: step.partIndex });
           break;
         }
         case REMOTE_ACTIONS.blackout:
@@ -292,6 +290,7 @@ export function useRemoteControl() {
           const newSlides: Slide[] = chunks.map((chunk, idx) =>
             createSlide('text', {
               content: chunk,
+              scripture: true,
               group: {
                 id: groupId,
                 title: outcome.result.groupTitle,

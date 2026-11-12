@@ -45,6 +45,7 @@ import {
 } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import { canvaService } from './canvaService';
 import { createReadStream, type Stats } from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -53,6 +54,7 @@ import { Readable } from 'node:stream';
 import { WebSocketServer, WebSocket as WsSocket, type RawData } from 'ws';
 import { REMOTE_HTML_NEW } from './remote-html';
 const driveService = new LazyService(async () => (await import('./driveService')).driveService, service => service.cancelSignIn());
+const googleSlidesService = new LazyService(async () => (await import('./driveService')).googleSlidesService, service => service.cancelSignIn());
 import { initUpdater } from './updater';
 import {
   startPublicTunnel,
@@ -1698,6 +1700,7 @@ app.on('activate', () => {
 app.on('will-quit', () => {
   desktop.dispose();
   driveService.dispose();
+  googleSlidesService.dispose();
   youtubeMusicService.dispose();
   for (const timer of [captureTimer, displayTimer]) if (timer) clearTimeout(timer);
   for (const timer of [heartbeatTimer, networkTimer]) if (timer) clearInterval(timer);
@@ -2741,8 +2744,7 @@ ipcMain.handle('select-pptx-file', async () => {
   return filePaths?.[0] ?? null;
 });
 
-ipcMain.handle('import-pptx', async (event, filePath: string) => {
-  requireControl(event);
+async function importPowerPoint(event: Electron.IpcMainInvokeEvent, filePath: string) {
   const task = 'pptx-import-' + randomUUID();
   desktop.progress(task, 2);
   let successful = false;
@@ -2753,6 +2755,11 @@ ipcMain.handle('import-pptx', async (event, filePath: string) => {
     event.sender.send('pptx-import-progress', { current, total });
   }); successful = true; return result; }
   finally { desktop.progress(task, null, successful); }
+}
+
+ipcMain.handle('import-pptx', (event, filePath: string) => {
+  requireControl(event);
+  return importPowerPoint(event, filePath);
 });
 
 ipcMain.handle('export-pptx', async (event, content: string) => {
@@ -2858,6 +2865,84 @@ ipcMain.handle('capture-screen-source', async (_, sourceId: unknown) => {
 });
 
 // IPC: Google Drive
+
+ipcMain.handle('google-slides-status', async event => {
+  requireControl(event);
+  const service = await googleSlidesService.get();
+  return service.canListSlides() ? service.getStatus() : { signedIn: false, email: null };
+});
+
+ipcMain.handle('google-slides-connect', async event => {
+  requireControl(event);
+  const service = await googleSlidesService.get();
+  try { return await service.signIn(); }
+  catch (error) {
+    if (error instanceof Error && error.message === 'cancelled') return { signedIn: false, email: null };
+    throw error;
+  }
+});
+
+ipcMain.handle('google-slides-cancel', event => {
+  requireControl(event);
+  googleSlidesService.dispose();
+});
+
+ipcMain.handle('google-slides-sign-out', async event => {
+  requireControl(event);
+  const service = await googleSlidesService.get();
+  service.cancelSignIn();
+  service.signOut();
+});
+
+ipcMain.handle('google-slides-list', async (event, query: unknown, pageToken: unknown) => {
+  requireControl(event);
+  if (typeof query !== 'string' || query.length > 200 ||
+      (pageToken !== undefined && (typeof pageToken !== 'string' || pageToken.length > 4096))) throw new Error('Invalid search');
+  const service = await googleSlidesService.get();
+  if (!service.canListSlides()) throw new Error('Google Slides access is required');
+  return service.listSlides(query.trim(), pageToken);
+});
+
+ipcMain.handle('google-slides-import', async (event, fileId: unknown) => {
+  requireControl(event);
+  if (typeof fileId !== 'string' || !/^[\w-]{1,200}$/.test(fileId)) throw new Error('Invalid presentation');
+  const service = await googleSlidesService.get();
+  if (!service.canListSlides()) throw new Error('Google Slides access is required');
+  const directory = await fs.mkdtemp(path.join(app.getPath('temp'), 'wpa-google-slides-'));
+  const target = path.join(directory, 'slides.pptx');
+  try {
+    await service.exportSlides(fileId, target);
+    return await importPowerPoint(event, target);
+  } finally {
+    await fs.unlink(target).catch(() => {});
+    await fs.rmdir(directory).catch(() => {});
+  }
+});
+
+ipcMain.handle('canva-available', event => { requireControl(event); return canvaService.available(); });
+ipcMain.handle('canva-status', event => { requireControl(event); return canvaService.status(); });
+ipcMain.handle('canva-connect', event => { requireControl(event); return canvaService.connect(); });
+ipcMain.handle('canva-cancel', event => { requireControl(event); canvaService.cancel(); });
+ipcMain.handle('canva-sign-out', event => { requireControl(event); canvaService.signOut(); });
+ipcMain.handle('canva-list', (event, query: unknown, cursor: unknown) => {
+  requireControl(event);
+  if (typeof query !== 'string' || query.length > 200 ||
+      (cursor !== undefined && (typeof cursor !== 'string' || cursor.length > 4096))) throw new Error('Invalid Canva search');
+  return canvaService.list(query.trim(), cursor);
+});
+ipcMain.handle('canva-import', async (event, id: unknown) => {
+  requireControl(event);
+  if (typeof id !== 'string' || !/^[\w-]{1,200}$/.test(id)) throw new Error('Invalid Canva presentation');
+  const directory = await fs.mkdtemp(path.join(app.getPath('temp'), 'wpa-canva-'));
+  const target = path.join(directory, 'slides.pptx');
+  try {
+    await canvaService.export(id, target);
+    return await importPowerPoint(event, target);
+  } finally {
+    await fs.unlink(target).catch(() => {});
+    await fs.rmdir(directory).catch(() => {});
+  }
+});
 
 ipcMain.handle('drive-sign-in', async () => {
   try {

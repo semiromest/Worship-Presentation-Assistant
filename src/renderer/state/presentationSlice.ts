@@ -1,5 +1,6 @@
 import { shallow } from 'zustand/shallow';
 import { normalizeSections } from '../../shared/sectionModel';
+import { getPartIndex, getSlideDisplayContent } from '../../shared/slideContent';
 import { Presentation } from '../types';
 import { applyProjectorPatch, UndoAction, undoReducer, UndoState } from './undoReducer';
 // UndoAction is used in setPresentationName to keep rename in undo history
@@ -154,13 +155,28 @@ export function createPresentationSlice(
         const next = typeof ids === 'function' ? ids(state.selectedSlideIds) : ids;
         return sameSelection(state.selectedSlideIds, next) ? state : { selectedSlideIds: new Set(next) };
       }),
-    selectSlides: ({ activeId, ids, anchorIndex, liveTargetId }) =>
+    selectSlides: ({ activeId, ids, anchorIndex, liveTargetId, livePartIndex }) =>
       set((state) => {
         const live =
           liveTargetId === undefined
             ? undefined
             : resolveLiveSlidePosition(liveTargetId, state.liveIndex, state.presentation.slides);
+        let undoState = state.undoState;
+        if (live && live.slideId === liveTargetId && livePartIndex !== undefined) {
+          const target = state.presentation.slides[live.index];
+          if (target?.partsMode && target.parts?.length) {
+            const activePart = getPartIndex(target, livePartIndex);
+            const updated = { ...target, activePart };
+            updated.content = getSlideDisplayContent(updated);
+            if (activePart !== target.activePart || updated.content !== target.content) {
+              const slides = state.presentation.slides.slice();
+              slides[live.index] = updated;
+              undoState = undoReducer(undoState, { type: 'SET', payload: { ...state.presentation, slides } });
+            }
+          }
+        }
         return {
+          ...(undoState !== state.undoState ? { undoState, presentation: undoState.present } : {}),
           ...(activeId === undefined ? {} : { selectedSlideId: activeId }),
           ...(ids === undefined || sameSelection(state.selectedSlideIds, ids)
             ? {}

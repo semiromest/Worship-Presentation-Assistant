@@ -1315,6 +1315,16 @@
     "seek": "Audio Seek",
     "volume": "Audio Volume"
   },
+  "canva": {
+    "permission": "Connect Canva to browse and import your presentations.",
+    "search": "Search Canva presentations"
+  },
+  "googleSlides": {
+    "permission": "Google asks for read access to Drive so the app can list and import your Google Slides presentations.",
+    "search": "Search Google Slides",
+    "add": "Add slides",
+    "more": "Load more"
+  },
   "drive": {
     "signIn": "Sign in with Google",
     "signOut": "Sign out",

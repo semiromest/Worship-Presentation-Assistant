@@ -31,7 +31,7 @@ import {
 import { AnimatedPreview } from './AnimatedPreview';
 import { cn } from './utils';
 import { type PptxImportResult } from './utils';
-import type { PptxImportMode } from '../shared/fileOpen';
+import type { PptxImportMode, PptxImportSource } from '../shared/fileOpen';
 import { choiceDialog } from './choiceDialogState';
 import type { Presentation, Preset, Slide } from './types';
 import type { PlayingSFX } from 'uisfx';
@@ -40,6 +40,8 @@ import { confirmDialog } from './dialogs';
 import { useStore } from './state/useStore';
 import { isLiveSavePreset, getLiveSaveRetention } from './hooks/useLiveSave';
 import DrivePanel from './components/DrivePanel';
+import CloudPresentationDialog from './components/CloudPresentationDialog';
+import { usePractice } from './hooks/usePractice';
 import Dialog from './components/Dialog';
 import { presentationContentKey } from './presentationLibrary';
 
@@ -109,7 +111,7 @@ export interface PresentationsTabProps {
   onSelectedPresetNameChange: (name: string | null) => void;
   onOpenFile?: () => void | Promise<void>;
   onSaveFile?: () => void;
-  onImportPptx?: (filePath: string, mode: PptxImportMode) => Promise<PptxImportResult | null>;
+  onImportPptx?: (source: PptxImportSource, mode: PptxImportMode) => Promise<PptxImportResult | null>;
   onImportWarnings?: (warnings: string[]) => void;
   onImportingChange?: (importing: boolean) => void;
   onNewPresentation?: () => void;
@@ -336,6 +338,15 @@ export default function PresentationsTab({
   const { t, i18n } = useTranslation();
   const setPresentationName = useStore((s) => s.setPresentationName);
   const setDrivePanelOpen = useStore((s) => s.setDrivePanelOpen);
+  const [googleSlidesOpen, setGoogleSlidesOpen] = useState(false);
+  const practice = usePractice();
+  const googleSlidesButtonRef = useRef<HTMLButtonElement>(null);
+  const canvaButtonRef = useRef<HTMLButtonElement>(null);
+  const [canvaAvailable, setCanvaAvailable] = useState(false);
+  const [canvaOpen, setCanvaOpen] = useState(false);
+  useEffect(() => {
+    if (!practice) void window.electronAPI?.canvaAvailable?.().then(setCanvaAvailable).catch(() => {});
+  }, [practice]);
   const drivePanelOpen = useStore((s) => s.drivePanelOpen);
   const driveButtonRef = useRef<HTMLButtonElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -601,7 +612,7 @@ export default function PresentationsTab({
     }
   }, [presentation, t]);
 
-  const handleImportPptx = useCallback(async () => {
+  const handleImportPptx = useCallback(async (cloud?: Exclude<PptxImportSource, string>) => {
     try {
       setImportError(null);
       setImportWarnings([]);
@@ -613,29 +624,29 @@ export default function PresentationsTab({
 
       importStartTimeRef.current = performance.now();
 
-      const filePath = await window.electronAPI?.selectPptxFile?.();
-      if (!filePath) {
+      const source = cloud ?? await window.electronAPI?.selectPptxFile?.();
+      if (!source) {
         stopSfx(importLoopRef.current);
         importLoopRef.current = null;
         setIsImporting(false);
-        return;
+        return false;
       }
 
-      const mode = await choiceDialog({
+      const mode = typeof source !== 'string' ? 'append' : await choiceDialog({
         title: t('fileOpen.pptxTitle'), message: t('fileOpen.pptxMessage'),
-        detail: `${filePath.split(/[\\/]/).pop()}\n\n${t('fileOpen.pptxOptionsDetail')}`,
+        detail: `${source.split(/[\\/]/).pop()}\n\n${t('fileOpen.pptxOptionsDetail')}`,
         choices: [
           { value: 'cancel', label: t('common.cancel') },
           { value: 'new', label: t('fileOpen.newPresentation') },
           { value: 'append', label: t('fileOpen.append'), tone: 'primary' },
         ],
       });
-      if (mode !== 'new' && mode !== 'append' || !onImportPptx) { setIsImporting(false); return; }
+      if (mode !== 'new' && mode !== 'append' || !onImportPptx) { setIsImporting(false); return false; }
       onImportingChange?.(true);
       importLoopRef.current = playSfx('processing');
       importStartTimeRef.current = performance.now();
-      const result = await onImportPptx(filePath, mode);
-      if (!result) { stopSfx(importLoopRef.current); importLoopRef.current = null; setIsImporting(false); setImportProgress({ current: 0, total: 0 }); return; }
+      const result = await onImportPptx(source, mode);
+      if (!result) { stopSfx(importLoopRef.current); importLoopRef.current = null; setIsImporting(false); setImportProgress({ current: 0, total: 0 }); return false; }
 
       if (!result.success || !result.slides) {
         throw new Error(result.error || t('common.importFailedGeneric'));
@@ -654,6 +665,7 @@ export default function PresentationsTab({
       setIsImporting(false);
       setImportProgress({ current: 0, total: 0 });
       playSfx('complete');
+      return true;
     } catch (error) {
       console.error('PPTX import error:', error);
       stopSfx(importLoopRef.current);
@@ -667,6 +679,8 @@ export default function PresentationsTab({
         setImportDuration(Math.round(duration));
       }
       playSfx('error');
+      if (cloud) throw new Error(t('common.importFailedGeneric'));
+      return false;
     } finally {
       onImportingChange?.(false);
     }
@@ -702,6 +716,14 @@ export default function PresentationsTab({
             <button ref={driveButtonRef} type="button" onClick={() => { setDrivePanelOpen(true); playSfx('open'); }} aria-haspopup="dialog" aria-expanded={drivePanelOpen} className="presentation-action">
               <Cloud aria-hidden="true" />Google Drive
             </button>
+            {!practice && onImportPptx && typeof window.electronAPI?.googleSlidesStatus === 'function' && <button ref={googleSlidesButtonRef} type="button" onClick={() => setGoogleSlidesOpen(true)}
+              disabled={isImporting || isExporting} aria-haspopup="dialog" className="presentation-action">
+              <Cloud aria-hidden="true" />Google Slides
+            </button>}
+            {!practice && onImportPptx && canvaAvailable && <button ref={canvaButtonRef} type="button" onClick={() => setCanvaOpen(true)}
+              disabled={isImporting || isExporting} aria-haspopup="dialog" className="presentation-action">
+              <Cloud aria-hidden="true" />Canva
+            </button>}
           </div>
           <Menu.Root>
             <Menu.Trigger className="presentation-action">
@@ -1058,6 +1080,10 @@ export default function PresentationsTab({
         </div>
       </div>
       <DrivePanel returnFocus={driveButtonRef} />
+      {googleSlidesOpen && <CloudPresentationDialog provider="googleSlides" onClose={() => setGoogleSlidesOpen(false)} returnFocus={googleSlidesButtonRef}
+        onImport={file => handleImportPptx({ googleSlidesId: file.id, name: file.name })} />}
+      {canvaOpen && <CloudPresentationDialog provider="canva" onClose={() => setCanvaOpen(false)} returnFocus={canvaButtonRef}
+        onImport={file => handleImportPptx({ canvaId: file.id, name: file.name })} />}
     </div>
   );
 }

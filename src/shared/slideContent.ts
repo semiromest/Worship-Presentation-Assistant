@@ -42,6 +42,21 @@ export function getPreviousPartIndex(slide: PartsSlide): number | null {
   return Math.max(getActivePartIndex(slide) - 1, 0);
 }
 
+export function getDisplayStep(slides: readonly PartsSlide[], index: number, direction: -1 | 1) {
+  const current = slides[index];
+  if (!current) return undefined;
+  const partIndex = direction === 1 ? getNextPartIndex(current) : getPreviousPartIndex(current);
+  if (partIndex !== null && partIndex !== getActivePartIndex(current)) return { index, partIndex };
+
+  const nextIndex = index + direction;
+  const next = slides[nextIndex];
+  if (!next) return undefined;
+  return {
+    index: nextIndex,
+    partIndex: next.partsMode && next.parts?.length ? (direction === 1 ? 0 : next.parts.length - 1) : undefined,
+  };
+}
+
 /** Editing the visible text in parts mode must update its persistent source. */
 export function withSlideContent<T extends PartsSlide>(slide: T, content: string): T {
   if (!slide.partsMode || !slide.parts?.length) return { ...slide, content };

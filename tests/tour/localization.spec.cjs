@@ -1,6 +1,26 @@
 const { test, expect } = require('@playwright/test');
 const { launchWorkspace, closeWorkspace } = require('./workspace-test-utils.cjs');
 
+test('settings offers all five interface languages on a fresh profile', async ({}, info) => {
+  const { app, page } = await launchWorkspace(info, 30000);
+  try {
+    await page.locator('[data-guide-anchor="nav-settings"]').click();
+    const select = page.locator('#settings-item-language select');
+    const languages = ['en', 'tr', 'es', 'de', 'ko'];
+    await expect(select).toHaveValue('en');
+    await expect(select.locator('option')).toHaveCount(languages.length);
+
+    for (const language of [...languages.slice(1), 'en']) {
+      const strings = require(`../../src/renderer/locales/${language}/translation.json`);
+      await select.selectOption(language);
+      await expect(select).toHaveValue(language);
+      await expect(select).toHaveAccessibleName(strings.settings.language);
+      await expect(page.locator('html')).toHaveAttribute('lang', language);
+      await expect(select.locator('option')).toHaveCount(languages.length);
+    }
+  } finally { await closeWorkspace(app); }
+});
+
 test('five languages localize section creation, the inspector and native-process replacement choices', async ({}, info) => {
   const { app, page } = await launchWorkspace(info, 30000);
   try {
