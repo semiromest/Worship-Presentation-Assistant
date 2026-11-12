@@ -1280,8 +1280,19 @@
     "preview": "Önizleme",
     "ready": "Hazır",
     "running": "Çalışıyor",
-    "previewHint": "Bu deneme sunumdaki sayacı değiştirmez. Slayta Ekle, ayarlanan süreyle yeni bir sayaç başlatır.",
-    "durationLocked": "Süreyi değiştirmek için deneme sayacını sıfırlayın."
+    "previewHint": "Bu deneme sayacı sunumu etkilemez.",
+    "durationLocked": "Süreyi değiştirmek için deneme sayacını sıfırlayın.",
+    "minusMinute": "1 dakika azalt",
+    "plusMinute": "1 dakika artır",
+    "presets": "Hızlı süreler",
+    "minutesShort": "{{value}} dk",
+    "secondsShort": "{{value}} sn",
+    "customTheme": "Özel renkler",
+    "whenAdded": "Eklendiğinde",
+    "startNow": "Hemen başlasın",
+    "startPaused": "Duraklatılmış beklesin",
+    "startNowHint": "Sayaç, slayt eklendiği anda saymaya başlar.",
+    "startPausedHint": "Slayt tam sürede bekler. Hazır olduğunda slaytta Devam Et'e bas."
   },
   "loop": {
     "noItems": "Loop öğesi yok"

@@ -1,16 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { HexColorPicker } from 'react-colorful';
-import {
-  Timer,
-  RotateCcw,
-  Play,
-  Pause,
-  Plus,
-  Minus,
-  Clock,
-} from 'lucide-react';
-import CountdownRenderer from './CountdownRenderer';
+import { Check, Pause, Play, RotateCcw } from 'lucide-react';
 import { cn } from './utils';
 import type { Slide } from './types';
 import {
@@ -28,22 +18,20 @@ export interface CountdownSlideEditorProps {
   onUpdateStyles: (styles: Partial<NonNullable<Slide['styles']>>) => void;
 }
 
-export default function CountdownSlideEditor({
-  slide,
-  onPatch,
-  onUpdateStyles,
-}: CountdownSlideEditorProps) {
+const card = 'space-y-2.5 rounded-xl border border-white/[0.08] bg-white/[0.02] p-3';
+const cardTitle = 'text-[11px] font-semibold text-white/65';
+const chip =
+  'h-7 rounded-md bg-white/[0.04] px-2 text-[11px] font-medium tabular-nums text-white/70 transition hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:pointer-events-none disabled:opacity-35';
+const numberInput =
+  'h-8 w-full rounded-md border border-white/[0.08] bg-black/25 px-2 text-center font-mono text-sm tabular-nums text-white/90 outline-none transition hover:border-white/15 focus:border-blue-500/70';
+
+export default function CountdownSlideEditor({ slide, onPatch, onUpdateStyles }: CountdownSlideEditorProps) {
   const { t } = useTranslation();
   const data = useMemo(() => parseCountdownContent(slide.content), [slide.content]);
 
   const [editMinutes, setEditMinutes] = useState(String(data.minutes));
-  const [editSeconds, setEditSeconds] = useState(
-    String(data.seconds).padStart(2, '0')
-  );
+  const [editSeconds, setEditSeconds] = useState(String(data.seconds).padStart(2, '0'));
   const [tick, setTick] = useState(0);
-  const [activeColorPicker, setActiveColorPicker] = useState<'bg' | 'text' | null>(
-    null
-  );
 
   useEffect(() => {
     setEditMinutes(String(data.minutes));
@@ -52,7 +40,7 @@ export default function CountdownSlideEditor({
 
   useEffect(() => {
     if (data.paused) return;
-    const id = setInterval(() => setTick(t => t + 1), 1000);
+    const id = setInterval(() => setTick((value) => value + 1), 1000);
     return () => clearInterval(id);
   }, [data.paused, data.startTime, data.totalSeconds]);
 
@@ -76,25 +64,16 @@ export default function CountdownSlideEditor({
   }, [editMinutes, editSeconds, onPatch]);
 
   const resetCounter = useCallback(() => {
-    onPatch(d => ({
-      ...d,
-      startTime: Date.now(),
-      paused: false,
-      pausedRemaining: undefined,
-    }));
+    onPatch((d) => ({ ...d, startTime: Date.now(), paused: false, pausedRemaining: undefined }));
   }, [onPatch]);
 
   const pauseCounter = useCallback(() => {
     const left = getCountdownRemaining(data);
-    onPatch(d => ({
-      ...d,
-      paused: true,
-      pausedRemaining: left,
-    }));
+    onPatch((d) => ({ ...d, paused: true, pausedRemaining: left }));
   }, [data, onPatch]);
 
   const resumeCounter = useCallback(() => {
-    onPatch(d => {
+    onPatch((d) => {
       const left = d.pausedRemaining ?? d.totalSeconds;
       return {
         ...d,
@@ -110,7 +89,7 @@ export default function CountdownSlideEditor({
 
   const adjustTime = useCallback(
     (deltaSeconds: number) => {
-      onPatch(d => {
+      onPatch((d) => {
         const base = d.paused ? (d.pausedRemaining ?? 0) : getCountdownRemaining(d);
         const next = Math.max(0, Math.min(99 * 60 + 59, base + deltaSeconds));
         return {
@@ -141,211 +120,161 @@ export default function CountdownSlideEditor({
   );
 
   const isFinished = remaining <= 0 && !data.paused;
+  const progress = data.totalSeconds > 0 ? Math.min(1, remaining / data.totalSeconds) : 0;
+  const bg = slide.styles?.backgroundColor ?? '#000000';
+  const fg = slide.styles?.textColor ?? '#ffffff';
+  const activeTheme = COUNTDOWN_THEMES.find(
+    (theme) => theme.backgroundColor.toLowerCase() === bg.toLowerCase() && theme.textColor.toLowerCase() === fg.toLowerCase()
+  )?.id;
+  const statusLabel = data.paused ? t('common.cdPaused') : isFinished ? t('common.countdownFinished') : t('countdown.running');
 
   return (
-    <div className="space-y-4">
-
-      {/* Remaining time */}
-      <div
-        className={cn(
-          'rounded-xl border p-3 flex items-center justify-between',
-          data.paused
-            ? 'border-amber-500/30 bg-amber-500/10'
-            : isFinished
-              ? 'border-white/10 bg-white/5'
-              : 'border-blue-500/30 bg-blue-500/10'
-        )}
-      >
-        <div className="flex items-center gap-2">
-          <Clock className="w-4 h-4 text-blue-400" />
-          <span className="text-[11px] font-bold text-white/50">
-            {data.paused ? t('common.cdPaused') : t('common.cdRemaining')}
+    <div className="space-y-3">
+      {/* Live state + primary controls */}
+      <div className={card}>
+        <div className="flex items-center justify-between gap-2">
+          <span className={cardTitle}>{t('common.cdRemaining')}</span>
+          <span
+            className={cn(
+              'rounded-full px-2 py-0.5 text-[11px]',
+              data.paused ? 'bg-amber-500/15 text-amber-100' : isFinished ? 'bg-white/[0.06] text-white/65' : 'bg-emerald-500/15 text-emerald-200'
+            )}
+          >
+            {statusLabel}
           </span>
         </div>
-        <span className="text-2xl font-mono font-bold tabular-nums text-white">
-          {formatCountdownTime(remaining)}
-        </span>
-      </div>
-
-      {/* Set duration */}
-      <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-3">
-        <span className="text-[11px] font-bold text-white/55">
-          {t('common.cdSetDuration')}
-        </span>
-        <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
-          <div className="space-y-1">
-            <label className="text-[11px] text-white/55">{t('common.minutes')}</label>
-            <input
-              type="number"
-              min={0}
-              max={99}
-              value={editMinutes}
-              onChange={e => setEditMinutes(e.target.value)}
-              className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-2 text-sm outline-none focus:border-blue-500/50 tabular-nums"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-[11px] text-white/55">{t('common.seconds')}</label>
-            <input
-              type="number"
-              min={0}
-              max={59}
-              value={editSeconds}
-              onChange={e => setEditSeconds(e.target.value)}
-              className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-2 text-sm outline-none focus:border-blue-500/50 tabular-nums"
-            />
-          </div>
+        <div className="text-center font-mono text-4xl font-bold tabular-nums text-white">{formatCountdownTime(remaining)}</div>
+        <div aria-hidden="true" className="h-1 overflow-hidden rounded-full bg-white/[0.06]">
+          <div
+            className={cn('h-full rounded-full transition-[width] duration-1000 ease-linear', data.paused ? 'bg-amber-400/70' : 'bg-blue-400/80')}
+            style={{ width: `${progress * 100}%` }}
+          />
+        </div>
+        <div className="grid grid-cols-[1fr_auto] gap-1.5">
+          {data.paused ? (
+            <button
+              type="button"
+              onClick={resumeCounter}
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-blue-600 text-xs font-medium text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+            >
+              <Play className="h-3.5 w-3.5" aria-hidden="true" />
+              {t('common.cdResume')}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={pauseCounter}
+              disabled={remaining <= 0}
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-white/[0.08] text-xs font-medium text-white/90 transition hover:bg-white/[0.12] disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              <Pause className="h-3.5 w-3.5" aria-hidden="true" />
+              {t('common.cdPause')}
+            </button>
+          )}
           <button
             type="button"
-            onClick={applyDuration}
-            className="h-[38px] px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs font-semibold transition-colors"
+            onClick={resetCounter}
+            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-3 text-xs font-medium text-white/70 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+            {t('common.cdReset')}
+          </button>
+        </div>
+        <div className="grid grid-cols-3 gap-1">
+          <button type="button" onClick={() => adjustTime(-30)} className={chip}>
+            −{t('countdown.secondsShort', { value: 30 })}
+          </button>
+          <button type="button" onClick={() => adjustTime(30)} className={chip}>
+            +{t('countdown.secondsShort', { value: 30 })}
+          </button>
+          <button type="button" onClick={() => adjustTime(60)} className={chip}>
+            +{t('countdown.minutesShort', { value: 1 })}
+          </button>
+        </div>
+      </div>
+
+      {/* Duration */}
+      <div className={card}>
+        <span className={cardTitle}>{t('common.cdSetDuration')}</span>
+        <form
+          className="grid grid-cols-[1fr_auto_1fr_auto] items-center gap-1.5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            applyDuration();
+          }}
+        >
+          <label className="min-w-0">
+            <span className="sr-only">{t('common.minutes')}</span>
+            <input type="number" min={0} max={99} value={editMinutes} onChange={(event) => setEditMinutes(event.target.value)} className={numberInput} />
+          </label>
+          <span aria-hidden="true" className="font-mono text-white/35">:</span>
+          <label className="min-w-0">
+            <span className="sr-only">{t('common.seconds')}</span>
+            <input type="number" min={0} max={59} value={editSeconds} onChange={(event) => setEditSeconds(event.target.value)} className={numberInput} />
+          </label>
+          <button
+            type="submit"
+            className="h-8 rounded-md bg-white/[0.08] px-3 text-xs font-medium text-white/90 transition hover:bg-white/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             {t('common.cdApply')}
           </button>
-        </div>
-
-        <div className="flex flex-wrap gap-1.5">
-          {COUNTDOWN_QUICK_PRESETS.map(p => (
-            <button
-              key={p.label}
-              type="button"
-              onClick={() => setPreset(p.minutes, p.seconds)}
-              className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-[11px] font-medium text-white/70 hover:bg-blue-600/20 hover:border-blue-500/30 hover:text-blue-300 transition-all"
-            >
-              {p.label}
+        </form>
+        <div className="flex flex-wrap gap-1">
+          {COUNTDOWN_QUICK_PRESETS.map((preset) => (
+            <button key={preset.label} type="button" onClick={() => setPreset(preset.minutes, preset.seconds)} className={chip}>
+              {t('countdown.minutesShort', { value: preset.minutes })}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Kontroller */}
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={resetCounter}
-          className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-xs font-semibold transition-all"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          {t('common.cdReset')}
-        </button>
-        {data.paused ? (
-          <button
-            type="button"
-            onClick={resumeCounter}
-            className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-600/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-600/30 text-xs font-semibold transition-all"
-          >
-            <Play className="w-3.5 h-3.5" />
-            {t('common.cdResume')}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={pauseCounter}
-            disabled={remaining <= 0}
-            className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-600/20 border border-amber-500/30 text-amber-300 hover:bg-amber-600/30 disabled:opacity-40 text-xs font-semibold transition-all"
-          >
-            <Pause className="w-3.5 h-3.5" />
-            {t('common.cdPause')}
-          </button>
-        )}
-      </div>
-
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => adjustTime(-30)}
-          className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg bg-white/5 border border-white/10 text-[11px] font-medium hover:bg-white/10 transition-all"
-        >
-          <Minus className="w-3 h-3" />
-          30 sn
-        </button>
-        <button
-          type="button"
-          onClick={() => adjustTime(30)}
-          className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg bg-white/5 border border-white/10 text-[11px] font-medium hover:bg-white/10 transition-all"
-        >
-          <Plus className="w-3 h-3" />
-          30 sn
-        </button>
-        <button
-          type="button"
-          onClick={() => adjustTime(60)}
-          className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg bg-white/5 border border-white/10 text-[11px] font-medium hover:bg-white/10 transition-all"
-        >
-          <Plus className="w-3 h-3" />
-          1 dk
-        </button>
-      </div>
-
       {/* Appearance */}
-      <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-3">
-        <span className="text-[11px] font-bold text-white/55 flex items-center gap-2">
-          <Timer className="w-3.5 h-3.5" />
-          {t('common.cdAppearance')}
-        </span>
-
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1">
-            <span className="text-[11px] text-white/55">{t('common.cdBgColor')}</span>
-            <button
-              type="button"
-              onClick={() =>
-                setActiveColorPicker(activeColorPicker === 'bg' ? null : 'bg')
-              }
-              className="w-full h-8 rounded-lg border border-white/10"
-              style={{
-                backgroundColor: slide.styles?.backgroundColor ?? '#000000',
-              }}
-            />
-            {activeColorPicker === 'bg' && (
-              <div className="mt-2 color-picker-container">
-                <HexColorPicker
-                  color={slide.styles?.backgroundColor ?? '#000000'}
-                  onChange={c => onUpdateStyles({ backgroundColor: c })}
-                />
-              </div>
-            )}
-          </div>
-          <div className="space-y-1">
-            <span className="text-[11px] text-white/55">{t('common.cdDigitColor')}</span>
-            <button
-              type="button"
-              onClick={() =>
-                setActiveColorPicker(activeColorPicker === 'text' ? null : 'text')
-              }
-              className="w-full h-8 rounded-lg border border-white/10"
-              style={{ backgroundColor: slide.styles?.textColor ?? '#ffffff' }}
-            />
-            {activeColorPicker === 'text' && (
-              <div className="mt-2 color-picker-container">
-                <HexColorPicker
-                  color={slide.styles?.textColor ?? '#ffffff'}
-                  onChange={c => onUpdateStyles({ textColor: c })}
-                />
-              </div>
-            )}
-          </div>
+      <div className={card}>
+        <span className={cardTitle}>{t('common.cdAppearance')}</span>
+        <div className="grid grid-cols-4 gap-1.5">
+          {COUNTDOWN_THEMES.map((theme) => {
+            const active = activeTheme === theme.id;
+            return (
+              <button
+                key={theme.id}
+                type="button"
+                aria-pressed={active}
+                aria-label={t(`common.${theme.name}`)}
+                title={t(`common.${theme.name}`)}
+                onClick={() => onUpdateStyles({ backgroundColor: theme.backgroundColor, textColor: theme.textColor })}
+                className={cn(
+                  'relative grid aspect-video place-items-center rounded-md font-mono text-[10px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+                  active ? 'ring-2 ring-blue-400 ring-offset-1 ring-offset-surface' : 'ring-1 ring-white/10 hover:ring-white/30'
+                )}
+                style={{ backgroundColor: theme.backgroundColor, color: theme.textColor }}
+              >
+                05:00
+                {active && (
+                  <span className="absolute right-0.5 top-0.5 grid h-3 w-3 place-items-center rounded-full bg-blue-500 text-white">
+                    <Check className="h-2 w-2" aria-hidden="true" />
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
-
-        <div className="flex flex-wrap gap-1.5">
-          {COUNTDOWN_THEMES.map(theme => (
-            <button
-              key={theme.id}
-              type="button"
-              onClick={() =>
-                onUpdateStyles({
-                  backgroundColor: theme.backgroundColor,
-                  textColor: theme.textColor,
-                })
-              }
-              className="px-2 py-1 rounded-lg text-[11px] font-medium border border-white/10 hover:border-blue-500/40 transition-all"
-              style={{
-                backgroundColor: theme.backgroundColor,
-                color: theme.textColor,
-              }}
+        <div className="grid grid-cols-2 gap-1.5">
+          {([
+            { key: 'backgroundColor', label: t('common.cdBgColor'), value: bg },
+            { key: 'textColor', label: t('common.cdDigitColor'), value: fg },
+          ] as const).map(({ key, label, value }) => (
+            <label
+              key={key}
+              className="flex h-8 min-w-0 cursor-pointer items-center gap-2 rounded-md border border-white/[0.08] bg-black/25 px-1.5 text-[11px] text-white/65 transition hover:border-white/15"
             >
-              {t(`common.${theme.name}`)}
-            </button>
+              <input
+                type="color"
+                value={/^#[0-9a-f]{6}$/i.test(value) ? value : key === 'textColor' ? '#ffffff' : '#000000'}
+                onChange={(event) => onUpdateStyles({ [key]: event.target.value })}
+                className="h-5 w-5 shrink-0 cursor-pointer rounded border-0 bg-transparent p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded [&::-webkit-color-swatch]:border [&::-webkit-color-swatch]:border-white/20"
+              />
+              <span className="truncate">{label}</span>
+            </label>
           ))}
         </div>
       </div>

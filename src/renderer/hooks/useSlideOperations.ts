@@ -782,13 +782,16 @@ export function useSlideOperations() {
     }
   }, [appendSlides]);
 
-  const handleAddCountdownToPresentation = useCallback((minutes: number, seconds: number, styles?: Partial<Slide['styles']>) => {
+  const handleAddCountdownToPresentation = useCallback((minutes: number, seconds: number, styles?: Partial<Slide['styles']>, options?: { paused?: boolean }) => {
+    const totalSeconds = minutes * 60 + seconds;
     const newSlide = createSlide('countdown', {
       content: JSON.stringify({
         minutes,
         seconds,
         startTime: Date.now(),
-        totalSeconds: minutes * 60 + seconds,
+        totalSeconds,
+        // A paused countdown waits at full length until the operator resumes it.
+        ...(options?.paused ? { paused: true, pausedRemaining: totalSeconds } : {}),
       }),
       styles: {
         ...DEFAULT_STYLES,

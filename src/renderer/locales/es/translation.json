@@ -1282,8 +1282,19 @@
     "preview": "Vista previa",
     "ready": "Listo",
     "running": "En marcha",
-    "previewHint": "Esta prueba no cambia el temporizador de la presentación. Añadir a diapositiva inicia uno nuevo con la duración configurada.",
-    "durationLocked": "Restablece el temporizador de prueba para cambiar la duración."
+    "previewHint": "Este temporizador de prueba no afecta a la presentación.",
+    "durationLocked": "Restablece el temporizador de prueba para cambiar la duración.",
+    "minusMinute": "1 minuto menos",
+    "plusMinute": "1 minuto más",
+    "presets": "Duraciones rápidas",
+    "minutesShort": "{{value}} min",
+    "secondsShort": "{{value}} s",
+    "customTheme": "Colores personalizados",
+    "whenAdded": "Al añadir",
+    "startNow": "Empezar ya",
+    "startPaused": "Esperar en pausa",
+    "startNowHint": "El temporizador empieza en cuanto se añade la diapositiva.",
+    "startPausedHint": "La diapositiva espera con la duración completa. Pulsa Reanudar en la diapositiva cuando estés listo."
   },
   "loop": {
     "noItems": "No hay elementos en el bucle"

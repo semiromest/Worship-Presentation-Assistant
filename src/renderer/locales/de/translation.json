@@ -1282,8 +1282,19 @@
     "preview": "Vorschau",
     "ready": "Bereit",
     "running": "Läuft",
-    "previewHint": "Diese Vorschau ändert den Präsentationstimer nicht. Zur Folie hinzufügen startet einen neuen Timer mit der eingestellten Dauer.",
-    "durationLocked": "Setzen Sie den Vorschautimer zurück, um die Dauer zu ändern."
+    "previewHint": "Dieser Probetimer wirkt sich nicht auf die Präsentation aus.",
+    "durationLocked": "Setzen Sie den Vorschautimer zurück, um die Dauer zu ändern.",
+    "minusMinute": "1 Minute weniger",
+    "plusMinute": "1 Minute mehr",
+    "presets": "Schnelle Dauern",
+    "minutesShort": "{{value}} Min.",
+    "secondsShort": "{{value}} Sek.",
+    "customTheme": "Eigene Farben",
+    "whenAdded": "Beim Hinzufügen",
+    "startNow": "Sofort starten",
+    "startPaused": "Pausiert warten",
+    "startNowHint": "Der Timer läuft los, sobald die Folie hinzugefügt wird.",
+    "startPausedHint": "Die Folie wartet mit voller Dauer. Drücken Sie bei der Folie auf Fortsetzen, wenn Sie bereit sind."
   },
   "loop": {
     "noItems": "Keine Loop-Elemente"

@@ -1282,8 +1282,19 @@
     "preview": "Preview",
     "ready": "Ready",
     "running": "Running",
-    "previewHint": "This preview does not change the presentation timer. Add to Slide starts a new timer with the configured duration.",
-    "durationLocked": "Reset the preview timer to change the duration."
+    "previewHint": "This practice timer does not affect the presentation.",
+    "durationLocked": "Reset the preview timer to change the duration.",
+    "minusMinute": "1 minute less",
+    "plusMinute": "1 minute more",
+    "presets": "Quick durations",
+    "minutesShort": "{{value}} min",
+    "secondsShort": "{{value}} sec",
+    "customTheme": "Custom colors",
+    "whenAdded": "When added",
+    "startNow": "Start right away",
+    "startPaused": "Wait paused",
+    "startNowHint": "The timer starts counting as soon as the slide is added.",
+    "startPausedHint": "The slide waits at full length. Press Resume on the slide when you are ready."
   },
   "loop": {
     "noItems": "No loop items"
