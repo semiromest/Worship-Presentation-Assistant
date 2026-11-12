@@ -120,11 +120,18 @@ test('item editor: typography, line spacing, shadow, draft isolation and save su
   await editor.locator('#editor-inspector-panel').getByText(/Release text/).click();
   await editor.locator('#editor-tab-item').click();
   await editor.locator('#editor-inspector-panel textarea').fill('Editor saved text');
+  const inspector = editor.locator('#editor-inspector-panel');
+  // Effects (shadow, stroke) start collapsed in the compact inspector.
+  const openEffects = async () => {
+    const toggle = inspector.getByRole('button', { name: en.common.editorTextEffects, exact: true });
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+  };
   for (const [key, value] of [['editorFontSize', '76'], ['editorLineHeight', '1.8'], ['editorLetterSpacing', '3']]) {
-    await editor.getByLabel(en.common[key], { exact: true }).fill(value);
+    await inspector.getByLabel(en.common[key], { exact: true }).fill(value);
   }
-  for (const key of ['editorBold', 'editorItalic', 'editorUnderline']) await editor.getByRole('button', { name: en.common[key], exact: true }).click();
-  await editor.getByPlaceholder(en.common.editorShadowBlur, { exact: true }).fill('8');
+  for (const key of ['editorBold', 'editorItalic', 'editorUnderline']) await inspector.getByRole('button', { name: en.common[key], exact: true }).click();
+  await openEffects();
+  await inspector.getByPlaceholder(en.common.editorShadowBlur, { exact: true }).fill('8');
   expect((await current()).items).toBeUndefined();
   expect((await current()).content).toBe('Release text');
   await editor.locator('[data-guide-anchor="editor-save"]').click();
@@ -139,9 +146,10 @@ test('item editor: typography, line spacing, shadow, draft isolation and save su
   await editor.locator('#editor-tab-item').click();
   await expect(editor.locator('#editor-inspector-panel textarea')).toHaveValue('Editor saved text');
   for (const [key, value] of [['editorFontSize', '76'], ['editorLineHeight', '1.8'], ['editorLetterSpacing', '3']]) {
-    await expect(editor.getByLabel(en.common[key], { exact: true })).toHaveValue(value);
+    await expect(inspector.getByLabel(en.common[key], { exact: true })).toHaveValue(value);
   }
-  await expect(editor.getByPlaceholder(en.common.editorShadowBlur, { exact: true })).toHaveValue('8');
+  await openEffects();
+  await expect(inspector.getByPlaceholder(en.common.editorShadowBlur, { exact: true })).toHaveValue('8');
   expect(await current()).toEqual(saved);
 });
 

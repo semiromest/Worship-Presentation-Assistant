@@ -1,283 +1,99 @@
-import ControlTooltip from '../../components/ControlTooltip';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Palette } from 'lucide-react';
-import { cn } from '../../utils';
+import { ImagePlus, X } from 'lucide-react';
 import { clamp } from '../editorUtils';
-import { ColorPalette } from '../ColorPalette';
+import { ColorField, NumberField, Section, SelectField, SliderField, ToolButton } from '../EditorControls';
+import { fieldLabelClass } from '../editorStyles';
 
 interface SlideSettingsPanelProps {
   styles: Record<string, unknown>;
   onChange: (updates: Record<string, unknown>) => void;
-  gridEnabled?: boolean;
-  gridSize?: number;
-  gridColor?: string;
-  snapEnabled?: boolean;
-  onGridToggle?: (enabled: boolean) => void;
-  onGridSizeChange?: (size: number) => void;
-  onGridColorChange?: (color: string) => void;
-  onSnapToggle?: (enabled: boolean) => void;
 }
 
-export const SlideSettingsPanel = memo(function SlideSettingsPanel({
-  styles,
-  onChange,
-  gridEnabled,
-  gridSize,
-  gridColor,
-  snapEnabled,
-  onGridToggle,
-  onGridSizeChange,
-  onGridColorChange,
-  onSnapToggle,
-}: SlideSettingsPanelProps) {
+/** Background + text defaults. Grid, snap and safe area are view toggles on the canvas. */
+export const SlideSettingsPanel = memo(function SlideSettingsPanel({ styles, onChange }: SlideSettingsPanelProps) {
   const { t } = useTranslation();
-  const [showBgPalette, setShowBgPalette] = useState(false);
-  const [showTextPalette, setShowTextPalette] = useState(false);
-
-  const getStr = (key: string, fallback = '') =>
-    (styles[key] as string) || fallback;
-  const getNum = (key: string, fallback = 0) =>
-    (styles[key] as number) ?? fallback;
+  const getStr = (key: string, fallback = '') => (styles[key] as string) || fallback;
+  const getNum = (key: string, fallback = 0) => (styles[key] as number) ?? fallback;
+  const bgImage = getStr('backgroundImage');
+  const bgImageName = bgImage ? decodeURIComponent(bgImage.split(/[\\/]/).pop() || '') : '';
 
   return (
-    <div className="space-y-3 rounded-2xl border border-white/10 bg-[#1a1a1a] p-4 shadow-sm">
-      <div className="flex items-center gap-2 text-sm font-semibold text-white/80">
-        <Palette className="h-4 w-4" />
-        <span>{t('common.editorSlideSettings')}</span>
-      </div>
-
-      {/* Background color */}
-      <label className="block space-y-1">
-        <span className="block text-[11px] uppercase tracking-wide text-white/55">
-          {t('common.editorBgColor')}
-        </span>
-        <div className="flex items-center gap-2">
-          <input
-            type="color"
-            value={getStr('backgroundColor', '#000000')}
-            onChange={e => onChange({ backgroundColor: e.target.value })}
-            className="h-8 w-8 shrink-0 cursor-pointer rounded-lg border border-white/10 bg-transparent"
-          />
-          <input
-            type="text"
-            value={getStr('backgroundColor')}
-            onChange={e => onChange({ backgroundColor: e.target.value })}
-            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none transition focus:border-blue-500"
-          />
-          <ControlTooltip descriptionKey={'common.editorColorPalette'}><button
-            type="button"
-            onClick={() => setShowBgPalette(!showBgPalette)}
-            className="h-8 w-8 shrink-0 rounded-lg border border-white/10 bg-black/20 flex items-center justify-center text-white/60 hover:bg-black/35"
-            title={t('common.editorColorPalette')}
-            aria-label={t('common.editorColorPalette')}
-          >
-            <span className="text-xs">🎨</span>
-          </button></ControlTooltip>
-        </div>
-        {showBgPalette && (
-          <div className="mt-1 p-2 rounded-lg border border-white/10 bg-[#1e1e1e]">
-            <ColorPalette
-              onSelect={color => { onChange({ backgroundColor: color }); setShowBgPalette(false); }}
-              currentColor={getStr('backgroundColor', '#000000')}
-            />
+    <>
+      <Section id="slide-background" title={t('common.editorSlideBackground')}>
+        <ColorField
+          label={t('common.editorBgColor')}
+          value={getStr('backgroundColor')}
+          fallback="#000000"
+          onChange={(color) => onChange({ backgroundColor: color })}
+        />
+        <div className="space-y-1">
+          <span className={fieldLabelClass}>{t('common.editorBgImage')}</span>
+          <div className="flex h-7 items-center gap-1">
+            <button
+              type="button"
+              onClick={async () => {
+                const file = await window.electronAPI?.selectMediaFile?.('image');
+                if (!file) return;
+                onChange({ backgroundImage: `file://${file.replace(/\\/g, '/')}` });
+              }}
+              className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded-md border border-white/[0.08] bg-black/25 px-2 text-left text-xs text-white/75 transition hover:border-white/15 hover:text-white"
+            >
+              <ImagePlus className="h-3.5 w-3.5 shrink-0 text-white/50" aria-hidden="true" />
+              <span className="truncate">{bgImageName || t('common.editorSelectImage')}</span>
+            </button>
+            {bgImage && (
+              <ToolButton label={t('common.editorClear')} icon={X} onClick={() => onChange({ backgroundImage: undefined })} />
+            )}
           </div>
-        )}
-      </label>
-
-      {/* Text color */}
-      <label className="block space-y-1">
-        <span className="block text-[11px] uppercase tracking-wide text-white/55">
-          {t('common.editorTextColor')}
-        </span>
-        <div className="flex items-center gap-2">
-          <input
-            type="color"
-            value={getStr('textColor', '#ffffff')}
-            onChange={e => onChange({ textColor: e.target.value })}
-            className="h-8 w-8 shrink-0 cursor-pointer rounded-lg border border-white/10 bg-transparent"
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          <SelectField
+            label={t('common.editorSlideFit')}
+            value={getStr('objectFit', 'contain')}
+            onChange={(value) => onChange({ objectFit: value })}
+            options={[
+              { value: 'contain', label: t('common.editorFitContain') },
+              { value: 'cover', label: t('common.editorFitCover') },
+              { value: 'fill', label: t('common.editorFitFill') },
+            ]}
           />
-          <input
-            type="text"
+          <SliderField
+            label={t('common.editorBgBlur')}
+            min={0}
+            max={20}
+            step={0.5}
+            value={getNum('backgroundBlur', 0)}
+            format={(value) => `${value.toFixed(1)}px`}
+            onChange={(value) => onChange({ backgroundBlur: value })}
+          />
+        </div>
+      </Section>
+
+      <Section id="slide-text" title={t('common.editorSlideTextDefaults')} defaultOpen={false}>
+        <div className="grid grid-cols-[1fr_84px] items-end gap-1.5">
+          <ColorField
+            label={t('common.editorTextColor')}
             value={getStr('textColor')}
-            onChange={e => onChange({ textColor: e.target.value })}
-            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none transition focus:border-blue-500"
+            fallback="#ffffff"
+            onChange={(color) => onChange({ textColor: color })}
           />
-          <ControlTooltip descriptionKey={'common.editorColorPalette'}><button
-            type="button"
-            onClick={() => setShowTextPalette(!showTextPalette)}
-            className="h-8 w-8 shrink-0 rounded-lg border border-white/10 bg-black/20 flex items-center justify-center text-white/60 hover:bg-black/35"
-            title={t('common.editorColorPalette')}
-            aria-label={t('common.editorColorPalette')}
-          >
-            <span className="text-xs">🎨</span>
-          </button></ControlTooltip>
-        </div>
-        {showTextPalette && (
-          <div className="mt-1 p-2 rounded-lg border border-white/10 bg-[#1e1e1e]">
-            <ColorPalette
-              onSelect={color => { onChange({ textColor: color }); setShowTextPalette(false); }}
-              currentColor={getStr('textColor', '#ffffff')}
+          <div className="space-y-1">
+            <span className={fieldLabelClass}>{t('common.editorDefaultFontSize')}</span>
+            <NumberField
+              label={t('common.editorDefaultFontSize')}
+              prefix="pt"
+              min={8}
+              max={240}
+              value={getNum('fontSize', 48)}
+              onChange={(raw) => {
+                const value = parseInt(raw);
+                if (!Number.isNaN(value)) onChange({ fontSize: clamp(value, 8, 240) });
+              }}
             />
           </div>
-        )}
-      </label>
-
-      {/* Default font size */}
-      <label className="block space-y-1">
-        <span className="block text-[11px] uppercase tracking-wide text-white/55">
-          {t('common.editorDefaultFontSize')}
-        </span>
-        <input
-          type="number"
-          min={8}
-          max={240}
-          value={getNum('fontSize', 48)}
-          onChange={e => {
-            const v = parseInt(e.target.value);
-            if (!Number.isNaN(v)) onChange({ fontSize: clamp(v, 8, 240) });
-          }}
-          className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none transition focus:border-blue-500"
-        />
-      </label>
-
-      {/* Object fit */}
-      <label className="block space-y-1">
-        <span className="block text-[11px] uppercase tracking-wide text-white/55">
-          {t('common.editorSlideFit')}
-        </span>
-        <select
-          value={getStr('objectFit', 'contain')}
-          onChange={e => onChange({ objectFit: e.target.value })}
-          className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none transition focus:border-blue-500"
-        >
-          <option value="contain">{t('common.editorFitContain')}</option>
-          <option value="cover">{t('common.editorFitCover')}</option>
-          <option value="fill">{t('common.editorFitFill')}</option>
-        </select>
-      </label>
-
-      {/* Background image */}
-      <div className="space-y-2">
-        <div className="text-[11px] uppercase tracking-wide text-white/55">
-          {t('common.editorBgImage')}
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={async () => {
-              const file = await window.electronAPI?.selectMediaFile?.('image');
-              if (!file) return;
-              onChange({ backgroundImage: `file://${file.replace(/\\/g, '/')}` });
-            }}
-            className="flex-1 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/80 transition hover:bg-black/30"
-          >
-            {t('common.editorSelectImage')}
-          </button>
-          <button
-            type="button"
-            onClick={() => onChange({ backgroundImage: undefined })}
-            className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/60 transition hover:bg-black/30"
-          >
-            {t('common.editorClear')}
-          </button>
-        </div>
-      </div>
-
-      {/* Background blur */}
-      <label className="block space-y-1">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] uppercase tracking-wide text-white/55">
-            {t('common.editorBgBlur')}
-          </span>
-          <span className="text-[11px] text-white/50">
-            {getNum('backgroundBlur', 0).toFixed(1)}px
-          </span>
-        </div>
-        <input
-          type="range"
-          min={0}
-          max={20}
-          step={0.5}
-          value={getNum('backgroundBlur', 0)}
-          onChange={e => onChange({ backgroundBlur: parseFloat(e.target.value) })}
-          className="w-full accent-blue-500"
-        />
-      </label>
-
-      {/* Grid & Snap settings */}
-      {onGridToggle && (
-        <div className="space-y-2 pt-1">
-          <div className="text-[11px] uppercase tracking-wide text-white/55">
-            {t('common.editorGridAndSnap')}
-          </div>
-
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={!!gridEnabled}
-              onChange={e => onGridToggle(e.target.checked)}
-              className="rounded border-white/20 accent-blue-500"
-            />
-            <span className="text-xs text-white/70">{t('common.editorGridShow')}</span>
-          </label>
-
-          {gridEnabled && (
-            <>
-              <label className="block space-y-1">
-                <span className="text-[11px] text-white/55">{t('common.editorGridSize')}</span>
-                <input
-                  type="number"
-                  min={2}
-                  max={25}
-                  value={gridSize ?? 10}
-                  onChange={e => {
-                    const v = parseInt(e.target.value);
-                    if (!Number.isNaN(v)) onGridSizeChange?.(clamp(v, 2, 25));
-                  }}
-                  className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none transition focus:border-blue-500"
-                />
-              </label>
-              {onGridColorChange && (
-                <label className="block space-y-1">
-                  <span className="text-[11px] text-white/55">{t('common.editorGridColor')}</span>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={gridColor || 'rgba(255,255,255,0.06)'}
-                      onChange={e => onGridColorChange(e.target.value)}
-                      className="h-8 w-8 shrink-0 cursor-pointer rounded-lg border border-white/10 bg-transparent"
-                    />
-                    <input
-                      type="text"
-                      value={gridColor || ''}
-                      onChange={e => onGridColorChange(e.target.value)}
-                      placeholder="rgba(255,255,255,0.06)"
-                      className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none transition focus:border-blue-500"
-                    />
-                  </div>
-                </label>
-              )}
-            </>
-          )}
-
-          {onSnapToggle && (
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={!!snapEnabled}
-                onChange={e => onSnapToggle(e.target.checked)}
-                className="rounded border-white/20 accent-blue-500"
-              />
-              <span className="text-xs text-white/70">{t('common.editorSnapEnable')}</span>
-            </label>
-          )}
-        </div>
-      )}
-
-      <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/60">
-        {t('common.editorSettingsHint')}
-      </div>
-    </div>
+      </Section>
+    </>
   );
 });

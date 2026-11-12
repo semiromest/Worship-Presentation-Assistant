@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, type RefObject } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SlideItem } from '../types';
 import { cn } from '../utils';
@@ -27,6 +27,12 @@ interface CanvasItemProps {
   snapEnabled?: boolean;
   gridSize?: number;
   lockRatio?: boolean;
+  /** Inline text editing (text items only). */
+  editing?: boolean;
+  onRequestEdit?: (id: string) => void;
+  onTextChange?: (id: string, content: string) => void;
+  onEditStart?: () => void;
+  onEditEnd?: (id: string) => void;
 }
 
 function stylesTextHighlight(value?: string): React.CSSProperties['backgroundColor'] {
@@ -46,6 +52,11 @@ export const CanvasItem = memo(function CanvasItem({
   snapEnabled,
   gridSize,
   lockRatio,
+  editing = false,
+  onRequestEdit,
+  onTextChange,
+  onEditStart,
+  onEditEnd,
 }: CanvasItemProps) {
   const { t } = useTranslation();
   const selfRef = useRef<HTMLDivElement>(null);
@@ -116,7 +127,7 @@ export const CanvasItem = memo(function CanvasItem({
   );
 
   const startGesture = (kind: Gesture['kind']) => (event: React.PointerEvent<HTMLDivElement>) => {
-    if (item.locked || event.altKey || event.button !== 0 || !canvasRef.current) return;
+    if (editing || item.locked || event.altKey || event.button !== 0 || !canvasRef.current) return;
     event.stopPropagation();
     event.preventDefault();
     finishKeyboard();
@@ -138,7 +149,13 @@ export const CanvasItem = memo(function CanvasItem({
   const startRotate = startGesture('rotate');
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
-    if (!keyboardEnabled || event.defaultPrevented) return;
+    if (!keyboardEnabled || event.defaultPrevented || editing) return;
+    if (event.key === 'Enter' && isSelected && item.type === 'text' && !item.locked && onRequestEdit) {
+      event.preventDefault();
+      event.stopPropagation();
+      onRequestEdit(item.id);
+      return;
+    }
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       event.stopPropagation();
@@ -312,16 +329,44 @@ export const CanvasItem = memo(function CanvasItem({
     );
   }
 
+  const textStyleObject: React.CSSProperties = {
+    color: textStyles.textColor,
+    textTransform: textStyles.textTransform ?? 'none',
+    fontSize: `${Math.max(4, textStyles.fontSize || 32)}px`,
+    fontFamily: textStyles.fontFamily,
+    fontWeight: textStyles.fontWeight,
+    fontStyle: textStyles.fontStyle,
+    letterSpacing: textStyles.letterSpacing ? `${textStyles.letterSpacing}px` : undefined,
+    lineHeight: textStyles.lineHeight || 1.25,
+    backgroundColor: stylesTextHighlight(textStyles.textHighlight) ?? textStyles.backgroundColor,
+    textDecoration: textStyles.textDecoration || undefined,
+    textShadow: textStyles.textShadow
+      ? `${textStyles.textShadow.color || '#000'} ${textStyles.textShadow.offsetX || 0}px ${textStyles.textShadow.offsetY || 0}px ${textStyles.textShadow.blur || 0}px`
+      : undefined,
+    WebkitTextStroke: textStyles.textStroke
+      ? `${textStyles.textStroke.width}px ${textStyles.textStroke.color}`
+      : undefined,
+    whiteSpace: 'pre-wrap',
+    width: '100%',
+    maxHeight: '100%',
+    overflow: 'hidden',
+  };
+
   return (
     <div
       ref={selfRef}
-      tabIndex={0}
-      role="button"
+      data-editor-item-id={item.id}
+      data-editing={editing || undefined}
+      tabIndex={editing ? -1 : 0}
+      role={editing ? undefined : 'button'}
       onPointerDown={startDrag}
+      onDoubleClick={() => {
+        if (!item.locked && onRequestEdit) onRequestEdit(item.id);
+      }}
       onKeyDown={handleKeyDown}
       onBlur={finishKeyboard}
-      aria-label={item.content || t('common.editorImage')}
-      className={sharedClassName}
+      aria-label={editing ? undefined : item.content || t('common.editorImage')}
+      className={cn(sharedClassName, editing && 'cursor-text ring-2 ring-blue-400')}
       style={{
         ...sharedStyle,
         display: 'flex',
@@ -331,33 +376,78 @@ export const CanvasItem = memo(function CanvasItem({
         padding: '8px',
       }}
     >
-      <span
-        style={{
-          color: textStyles.textColor,
-          textTransform: textStyles.textTransform ?? 'none',
-          fontSize: `${Math.max(4, textStyles.fontSize || 32)}px`,
-          fontFamily: textStyles.fontFamily,
-          fontWeight: textStyles.fontWeight,
-          fontStyle: textStyles.fontStyle,
-          letterSpacing: textStyles.letterSpacing ? `${textStyles.letterSpacing}px` : undefined,
-          lineHeight: textStyles.lineHeight || 1.25,
-          backgroundColor: stylesTextHighlight(textStyles.textHighlight) ?? textStyles.backgroundColor,
-          textDecoration: textStyles.textDecoration || undefined,
-          textShadow: textStyles.textShadow
-            ? `${textStyles.textShadow.color || '#000'} ${textStyles.textShadow.offsetX || 0}px ${textStyles.textShadow.offsetY || 0}px ${textStyles.textShadow.blur || 0}px`
-            : undefined,
-          WebkitTextStroke: textStyles.textStroke
-            ? `${textStyles.textStroke.width}px ${textStyles.textStroke.color}`
-            : undefined,
-          whiteSpace: 'pre-wrap',
-          width: '100%',
-          maxHeight: '100%',
-          overflow: 'hidden',
-        }}
-      >
-        {item.content}
-      </span>
-      {renderResizeHandles()}
+      {editing ? (
+        <InlineTextEditor
+          value={item.content ?? ''}
+          style={{ ...textStyleObject, overflow: 'auto' }}
+          onChange={(content) => onTextChange?.(item.id, content)}
+          onStart={onEditStart}
+          onEnd={() => onEditEnd?.(item.id)}
+          // Escape / Ctrl+Enter hand focus straight back to the element, so the
+          // very next shortcut (undo, arrows, delete) already applies to it.
+          onExit={() => selfRef.current?.focus({ preventScroll: true })}
+        />
+      ) : (
+        <span style={textStyleObject}>{item.content}</span>
+      )}
+      {!editing && renderResizeHandles()}
     </div>
   );
 });
+
+/** Auto-sizing textarea that sits exactly where the text renders. */
+function InlineTextEditor({
+  value,
+  style,
+  onChange,
+  onStart,
+  onEnd,
+  onExit,
+}: {
+  value: string;
+  style: React.CSSProperties;
+  onChange: (value: string) => void;
+  onStart?: () => void;
+  onEnd: () => void;
+  onExit: () => void;
+}) {
+  const { t } = useTranslation();
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    el.select();
+  }, []);
+  return (
+    <textarea
+      ref={ref}
+      aria-label={t('common.editorContent')}
+      data-editor-inline-text
+      value={value}
+      rows={1}
+      spellCheck={false}
+      onFocus={onStart}
+      onBlur={onEnd}
+      onChange={(event) => onChange(event.target.value)}
+      onPointerDown={(event) => event.stopPropagation()}
+      onDoubleClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => {
+        // Typing must never reach the editor's item/slide shortcuts.
+        event.stopPropagation();
+        if (event.key === 'Escape' || (event.key === 'Enter' && (event.ctrlKey || event.metaKey))) {
+          event.preventDefault();
+          onExit();
+        }
+      }}
+      className="block resize-none select-text border-0 bg-transparent p-0 outline-none [caret-color:#60a5fa]"
+      style={{ ...style, textAlign: 'inherit' }}
+    />
+  );
+}

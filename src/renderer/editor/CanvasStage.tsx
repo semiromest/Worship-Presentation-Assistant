@@ -47,6 +47,18 @@ interface CanvasStageProps {
    * suspends item moving/resizing for the duration of the gesture.
    */
   onItemDragStart?: (event: React.DragEvent, itemIds: string[]) => void;
+  /** Inline text editing, owned by the editor so toolbars can start it. */
+  editingId?: string | null;
+  onRequestEdit?: (id: string) => void;
+  onTextChange?: (id: string, content: string) => void;
+  onEditStart?: () => void;
+  onEditEnd?: (id: string) => void;
+  /** Floating toolbar shown next to the current selection. */
+  selectionToolbar?: ReactNode;
+  /** View toggles (grid, snap, safe area) placed in the zoom pill. */
+  viewControls?: ReactNode;
+  /** Shown over an empty slide instead of the plain hint. */
+  emptyState?: ReactNode;
 }
 
 export function CanvasStage({
@@ -68,6 +80,14 @@ export function CanvasStage({
   safeAreaEnabled,
   onContextMenu,
   onItemDragStart,
+  editingId,
+  onRequestEdit,
+  onTextChange,
+  onEditStart,
+  onEditEnd,
+  selectionToolbar,
+  viewControls,
+  emptyState,
 }: CanvasStageProps) {
   const { t } = useTranslation();
   const outerRef = useRef<HTMLDivElement | null>(null);
@@ -119,6 +139,50 @@ export function CanvasStage({
   }, []);
 
   const scale = (containerWidth / SLIDE_REFERENCE_WIDTH) * zoom;
+
+  // Selection bounds in surface pixels, for the floating toolbar.
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const [toolbarSize, setToolbarSize] = useState({ width: 0, height: 0 });
+  const selectionBounds = useMemo(() => {
+    const picked = items.filter((item) => selectedIds.has(item.id) && item.visible !== false);
+    if (!picked.length) return null;
+    const left = Math.min(...picked.map((item) => item.x));
+    const top = Math.min(...picked.map((item) => item.y));
+    const right = Math.max(...picked.map((item) => item.x + item.width));
+    const bottom = Math.max(...picked.map((item) => item.y + item.height));
+    const toX = (value: number) => panX + (value / 100) * SLIDE_REFERENCE_WIDTH * scale;
+    const toY = (value: number) => panY + (value / 100) * SLIDE_REFERENCE_HEIGHT * scale;
+    return { left: toX(left), top: toY(top), right: toX(right), bottom: toY(bottom) };
+  }, [items, selectedIds, panX, panY, scale]);
+  const toolbarVisible = !!selectionToolbar && !!selectionBounds;
+  useLayoutEffect(() => {
+    const el = toolbarRef.current;
+    if (!toolbarVisible || !el) return;
+    const measure = () =>
+      setToolbarSize((previous) =>
+        previous.width === el.offsetWidth && previous.height === el.offsetHeight
+          ? previous
+          : { width: el.offsetWidth, height: el.offsetHeight }
+      );
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [toolbarVisible]);
+  const surfaceHeight = (containerWidth * 9) / 16;
+  const toolbarPosition = (() => {
+    if (!selectionBounds) return null;
+    const gap = 10;
+    // Prefer below the selection (the rotation handle lives above it); flip when there is no room.
+    const below = selectionBounds.bottom + gap;
+    const above = selectionBounds.top - gap - 32 * scale - toolbarSize.height;
+    let top = below + toolbarSize.height <= surfaceHeight + 24 ? below : above;
+    top = Math.max(-toolbarSize.height - 4, Math.min(top, surfaceHeight + 4));
+    const center = (selectionBounds.left + selectionBounds.right) / 2;
+    const half = toolbarSize.width / 2;
+    const left = Math.max(half + 4, Math.min(center, containerWidth - half - 4));
+    return { top, left };
+  })();
 
   // Zoom with Ctrl+Wheel
   useEffect(() => {
@@ -260,12 +324,9 @@ export function CanvasStage({
   // The onDrag/onResize/onRotate callbacks are typed to match CanvasItem's expectations
 
   return (
-    <div className="isolate flex min-w-0 flex-1 items-center justify-center bg-[#0a0a0a] p-3 lg:p-6 overflow-hidden">
-      <div
-        ref={outerRef}
-        className="slide-surface relative w-full max-w-5xl select-none touch-none overflow-clip rounded-2xl border border-white/10 bg-black shadow-2xl"
-        style={{ aspectRatio: '16 / 9', width: containerWidth, maxWidth: '100%' }}
-      >
+    <div className="editor-canvas-stage relative isolate flex min-w-0 flex-1 items-center justify-center overflow-hidden bg-surface-base px-4 pb-14 pt-4 lg:px-8 lg:pt-6">
+      <div ref={outerRef} className="relative" style={{ width: containerWidth, maxWidth: '100%', aspectRatio: '16 / 9' }}>
+      <div className="slide-surface relative h-full w-full select-none touch-none overflow-clip rounded-lg bg-black shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_20px_50px_-20px_rgba(0,0,0,0.8)]">
         <div
           ref={canvasRef}
           onPointerDown={handlePointerDown}
@@ -359,14 +420,6 @@ export function CanvasStage({
               );
             })()}
 
-          {/* Empty state */}
-          {items.length === 0 && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="rounded-2xl border border-dashed border-white/15 bg-black/20 px-6 py-4 text-center text-sm text-white/60 backdrop-blur-sm">
-                {t('common.editorCanvasEmpty')}
-              </div>
-            </div>
-          )}
 
           {/* Items */}
           {items.map((item) => (
@@ -393,44 +446,73 @@ export function CanvasStage({
                 snapEnabled={snapEnabled}
                 gridSize={snapEnabled ? gridSize : 0}
                 lockRatio={item.type === 'image' && lockedRatioIds?.has(item.id)}
+                editing={editingId === item.id}
+                onRequestEdit={item.type === 'text' ? onRequestEdit : undefined}
+                onTextChange={onTextChange}
+                onEditStart={onEditStart}
+                onEditEnd={onEditEnd}
               />
             </div>
           ))}
         </div>
 
-        {/* Zoom controls */}
-        <div className="absolute bottom-3 right-3 flex items-center gap-2 z-50">
-          <button
-            type="button"
-            aria-label={t('common.editorZoomOut')}
-            onClick={() => setZoom((prev) => clampZoom(prev - 0.1))}
-            className="rounded-md bg-black/60 px-2 py-1 text-xs text-white/80 hover:bg-black/80"
-          >
-            -
-          </button>
-          <span className="rounded-md bg-black/60 px-2 py-1 text-xs text-white/80 min-w-[3rem] text-center">
-            {Math.round(zoom * 100)}%
-          </span>
-          <button
-            type="button"
-            aria-label={t('common.editorZoomIn')}
-            onClick={() => setZoom((prev) => clampZoom(prev + 0.1))}
-            className="rounded-md bg-black/60 px-2 py-1 text-xs text-white/80 hover:bg-black/80"
-          >
-            +
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setZoom(1);
-              setPanX(0);
-              setPanY(0);
-            }}
-            className="rounded-md bg-black/60 px-2 py-1 text-xs text-white/80 hover:bg-black/80"
-          >
-            {t('common.editorZoomReset')}
-          </button>
+        {items.length === 0 && (
+          <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center p-4">
+            {emptyState ?? (
+              <div className="rounded-lg border border-dashed border-white/15 bg-black/30 px-5 py-3 text-center text-sm text-white/60">
+                {t('common.editorCanvasEmpty')}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {toolbarVisible && toolbarPosition && (
+        <div
+          ref={toolbarRef}
+          className="editor-selection-toolbar absolute z-50"
+          style={{ top: toolbarPosition.top, left: toolbarPosition.left, transform: 'translateX(-50%)' }}
+        >
+          {selectionToolbar}
         </div>
+      )}
+      </div>
+
+      {/* View pill: toggles + zoom */}
+      <div className="absolute bottom-3 right-3 z-50 flex h-8 items-center gap-0.5 rounded-lg border border-white/[0.08] bg-surface/90 px-1 text-white/70 shadow-lg backdrop-blur">
+        {viewControls}
+        {viewControls && <span aria-hidden="true" className="mx-0.5 h-4 w-px bg-white/10" />}
+        <button
+          type="button"
+          aria-label={t('common.editorZoomOut')}
+          title={t('common.editorZoomOut')}
+          onClick={() => setZoom((prev) => clampZoom(prev - 0.1))}
+          className="grid h-6 w-6 place-items-center rounded-md text-sm hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        >
+          {'\u2212'}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setZoom(1);
+            setPanX(0);
+            setPanY(0);
+          }}
+          title={t('common.editorZoomReset')}
+          aria-label={t('common.editorZoomReset')}
+          className="h-6 min-w-[3rem] rounded-md px-1 text-center text-[11px] tabular-nums hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+        <button
+          type="button"
+          aria-label={t('common.editorZoomIn')}
+          title={t('common.editorZoomIn')}
+          onClick={() => setZoom((prev) => clampZoom(prev + 0.1))}
+          className="grid h-6 w-6 place-items-center rounded-md text-sm hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        >
+          +
+        </button>
       </div>
     </div>
   );
