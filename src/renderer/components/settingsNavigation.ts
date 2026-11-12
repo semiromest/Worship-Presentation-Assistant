@@ -29,6 +29,7 @@ export const settingsItems = [
   { id: 'stt-key', category: 'captions', titleKey: 'settings.sonioxApiKey', descriptionKey: 'settings.sonioxApiKeyHint', focusSelector: '#soniox-api-key' },
   { id: 'spoken-language', category: 'captions', titleKey: 'settings.sonioxSttLanguage', descriptionKey: 'settings.sonioxSttLanguageHint', focusSelector: '#soniox-stt-language' },
   { id: 'target-language', category: 'captions', titleKey: 'settings.sonioxTargetLanguage', descriptionKey: 'settings.sonioxTargetLanguageHint', focusSelector: '#soniox-target-language' },
+  { id: 'caption-overlay', category: 'captions', titleKey: 'captionOverlay.title', descriptionKey: 'captionOverlay.description' },
   { id: 'live-save', category: 'autosave', titleKey: 'settings.liveSave', descriptionKey: 'settings.navigation.descriptions.live-save', focusSelector: '[aria-pressed]' },
   { id: 'retention', category: 'autosave', titleKey: 'settings.liveSaveRetention', descriptionKey: 'settings.navigation.descriptions.retention' },
   { id: 'clear-live-saves', category: 'autosave', titleKey: 'settings.navigation.clearLiveSaves', descriptionKey: 'settings.navigation.descriptions.clear-live-saves' },

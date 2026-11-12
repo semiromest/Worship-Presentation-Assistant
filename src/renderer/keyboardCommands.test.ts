@@ -18,6 +18,12 @@ const key = (key: string, modifiers: Partial<KeyInput> = {}): KeyInput => ({
   ...modifiers,
 });
 
+test('Ctrl+K is reserved for quick search and never navigates slides', () => {
+  assert.equal(resolveKeyboardCommand(key('k', { ctrlKey: true }), context), null);
+  assert.equal(resolveKeyboardCommand(key('K', { metaKey: true }), context), null);
+  assert.deepEqual(resolveKeyboardCommand(key('k'), context), { type: 'navigate', direction: 'previous' });
+});
+
 test('editor owns editing keys while operator mute and blackout remain available', () => {
   const editor = { ...context, activeTab: 'editor', outputOpen: true };
   for (const name of ['Enter', 'Escape', 'Delete', 'Home', 'End', 'ArrowUp', 'j', ' '])

@@ -371,8 +371,21 @@ export function createPresentationSlice(
       set((state) => ({
         isBlackout: typeof blackout === 'function' ? blackout(state.isBlackout) : blackout,
       })),
-    autoGoLive: false,
-    setAutoGoLive: (auto) => set({ autoGoLive: auto }),
+    autoGoLive: (() => {
+      try {
+        return localStorage.getItem('autoGoLive') === '1';
+      } catch {
+        return false;
+      }
+    })(),
+    setAutoGoLive: (auto) => {
+      try {
+        localStorage.setItem('autoGoLive', auto ? '1' : '0');
+      } catch {
+        /* storage unavailable: the choice still applies for this session */
+      }
+      set({ autoGoLive: auto });
+    },
     setPresentationName: (name) =>
       set((state) => {
         if (name === state.presentation.name) return state;

@@ -7,6 +7,7 @@ import { AnimatedPreview } from './AnimatedPreview';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation';
 import { useSlideOperations } from './hooks/useSlideOperations';
 import { useStt } from './hooks/useStt';
+import CaptionOverlay from './components/CaptionOverlay';
 
 export default function ProjectorApp() {
   useStt();
@@ -122,6 +123,8 @@ function ProjectorView() {
         volume={mediaVolume}
         muted={isMediaMuted}
       />
+      {/* Outside AnimatedPreview so subtitles stay put while slides transition. */}
+      <CaptionOverlay slide={liveSlide} />
     </div>
   );
 

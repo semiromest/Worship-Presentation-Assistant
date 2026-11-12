@@ -12,6 +12,7 @@ const allowed = new Map([
   ['components/HymnLibraryList.tsx', 1], // tooltip Escape dismissal, not application shortcuts
   ['components/ControlTooltip.tsx', 1], // open hint Escape only; central Tour boundary retains priority
   ['hooks/useSlideInsertionDrag.ts', 1], // active drag cancellation only; no idle shortcut ownership
+  ['components/QuickSearch.tsx', 1], // Ctrl+K open/close only; checks isHelpActive
   ['sfx.ts', 1], // one-shot audio unlock, not an application shortcut
 ]);
 function captures(source, file = 'input.ts') {

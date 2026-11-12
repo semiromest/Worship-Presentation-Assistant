@@ -17,6 +17,7 @@ import {
 import { useStore } from '../state/useStore';
 import { cn, toFileUrl } from '../utils';
 import { AnimatedPreview } from '../AnimatedPreview';
+import CaptionOverlay from './CaptionOverlay';
 import { LivePreview } from '../LivePreview';
 import CountdownSlideEditor from '../CountdownSlideEditor';
 import SlideStyleEditor from './SlideStyleEditor';
@@ -140,7 +141,7 @@ export default function RightPanel({
             volume={0}
             muted={true}
           />}
-
+          {isRightPanelOpen && <CaptionOverlay slide={liveSlide} />}
         </div>
         {isRightPanelOpen && nextSlidePreviewEnabled && <NextSlidePreview />}
 

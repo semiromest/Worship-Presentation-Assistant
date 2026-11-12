@@ -63,6 +63,7 @@ import Toolbar from './components/Toolbar';
 import SlideGrid from './components/SlideGrid';
 import RightPanel from './components/RightPanel';
 import CheatsheetModal from './components/CheatsheetModal';
+import QuickSearch from './components/QuickSearch';
 import PreparationCheckModal from './components/PreparationCheckModal';
 import UpdatesModal from './components/UpdatesModal';
 import RemoteControlModal from './components/RemoteControlModal';
@@ -472,6 +473,11 @@ function ControlApp({ commands }: { commands: AppCommands }) {
 
 
       <ChoiceDialogHost />
+
+      {/* Ctrl+K: universal search for verses, hymns and media */}
+      {!IS_PROJECTOR_MODE && (
+        <QuickSearch onAddScripture={handleSendToLive} onAddHymn={handleHymnAdd} onAddMedia={handleMediaAdd} />
+      )}
 
       {/* Cheatsheet Modal */}
       <CheatsheetModal />

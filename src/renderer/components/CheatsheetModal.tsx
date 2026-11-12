@@ -50,6 +50,7 @@ export default function CheatsheetModal() {
 
       {/* Tab Switching */}
       <Section title={t('common.cheatsheet.tabs')}>
+        <ShortcutRow keys="Ctrl+K" label={t('common.quickSearch.title')} />
         <ShortcutRow keys="?" label={t('common.cheatsheet.openCheatsheet')} />
         <ShortcutRow keys="Alt+1-9 / Alt+0" label={t('common.cheatsheet.switchTab')} />
       </Section>

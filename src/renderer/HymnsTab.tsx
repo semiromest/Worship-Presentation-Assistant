@@ -18,6 +18,7 @@ import ProgressBar from './components/ProgressBar';
 import HymnLibraryList from './components/HymnLibraryList';
 import type { HymnFocus } from './components/HymnLibraryList';
 import { hymnSortOrder, sortHymns } from './hymnLibrary';
+import { CACHE_VERSION, cacheHymns, loadCachedHymns } from './hymnCache';
 import './hymn-library.css';
 
 interface HymnsTabProps {
@@ -115,23 +116,6 @@ function cleanLyrics(lyrics: string): string {
   while (out[0] === '') out.shift();
   while (out[out.length - 1] === '') out.pop();
   return out.join('\n');
-}
-
-// ─── Cache helpers ────────────────────────────────────────────────────────
-
-// Cache key version: v3 adds author/key/source metadata to cached entries,
-// so older caches are invalidated and re-parsed on next launch.
-const CACHE_VERSION = 'v3';
-
-function cacheHymns(path: string, list: Hymn[]) {
-  try { localStorage.setItem(`hymnsCache:${CACHE_VERSION}:${path}`, JSON.stringify(list)); } catch {}
-}
-
-function loadCachedHymns(path: string): Hymn[] | null {
-  try {
-    const raw = localStorage.getItem(`hymnsCache:${CACHE_VERSION}:${path}`);
-    return raw ? (JSON.parse(raw) as Hymn[]) : null;
-  } catch { return null; }
 }
 
 // ─── XML parsing — chunked to keep main thread free ───────────────────────

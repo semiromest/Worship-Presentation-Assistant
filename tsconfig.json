@@ -10,9 +10,8 @@
     // --- Modül Çözümleme ---
     "moduleResolution": "bundler",   // ✅ Vite projesi için doğru mod (node → bundler)
     "resolveJsonModule": true,
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     },
 
     // --- Emit ---

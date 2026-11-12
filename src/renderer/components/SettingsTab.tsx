@@ -20,6 +20,7 @@ import { Globe, Zap, Settings2, Save, Trash2, DatabaseBackup, Volume2, Mic, KeyR
 import { useStore } from '../state/useStore';
 import { useUpdaterStore } from '../state/useUpdaterStore';
 import { WatermarkSettingsPanel } from './WatermarkSettingsPanel';
+import { CaptionOverlaySettingsPanel } from './CaptionOverlaySettingsPanel';
 import { PositionPicker, SettingSlider } from './SettingsControls';
 import type { Position } from '../types';
 import { useSttStore, refreshSttStatus } from '../state/useSttStore';
@@ -337,7 +338,7 @@ export default function SettingsTab() {
           </div>
         </div>
       </>,
-    captions: <section className="rounded-xl border border-white/10 bg-surface-raised p-4 space-y-4" aria-label={t('settings.soniox')}>
+    captions: <><section className="rounded-xl border border-white/10 bg-surface-raised p-4 space-y-4" aria-label={t('settings.soniox')}>
           <div className="flex items-center gap-2">
             <Mic className="w-4 h-4 text-blue-400 shrink-0" aria-hidden="true" />
             <div>
@@ -472,7 +473,8 @@ export default function SettingsTab() {
             </div>
             <p className="text-xs leading-5 text-white/55">{t('settings.sonioxTargetLanguageHint')}</p>
           </div>
-        </section>,
+        </section>
+        <CaptionOverlaySettingsPanel /></>,
     autosave: <section id="settings-item-live-save" tabIndex={-1} className="rounded-xl border border-white/10 bg-surface-raised p-4" aria-label={t('settings.liveSave')}>
           <div className="settings-row flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 min-w-0">

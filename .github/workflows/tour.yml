@@ -40,6 +40,9 @@ jobs:
           export const DRIVE_CREDENTIALS = { clientId: '', clientSecret: '', scopes: ['https://www.googleapis.com/auth/drive.file'], redirectPort: 0 };
           '@ | Set-Content src/main/driveCredentials.ts
       - run: npx tsc --noEmit --incremental false
+      - name: Type check with tsrs (advisory, tsc stays the gate)
+        continue-on-error: true
+        run: npm run typecheck:rs
       - run: npm run lint:tour
       - name: Run tour unit tests
         if: ${{ !inputs.skip_tour_tests }}

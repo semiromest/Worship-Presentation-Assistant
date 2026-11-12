@@ -52,6 +52,8 @@ function editingCommand(e: KeyInput, state: KeyContext): KeyboardCommand | null 
 
 /** Pure routing; dialogs and editable elements are filtered by the DOM adapter. */
 export function resolveKeyboardCommand(e: KeyInput, state: KeyContext): KeyboardCommand | null {
+  // Ctrl/Cmd+K opens the quick search; it must not also step to the previous slide.
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') return null;
   if (state.activeTab === 'editor' && editorOwnsKey(e)) return null;
   if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) return { type: 'undo' };
   if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) return { type: 'redo' };
