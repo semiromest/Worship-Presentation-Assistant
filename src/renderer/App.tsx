@@ -43,6 +43,7 @@ import { useUiMotionEnabled } from './hooks/useUiMotionEnabled';
 
 // State & Hooks
 import { useStore } from './state/useStore';
+import { useLiveOverlayStore } from './state/useLiveOverlayStore';
 import { useRemoteControl } from './state/useRemoteControl';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation';
 import { useProjectorSync } from './hooks/useProjectorSync';
@@ -64,6 +65,8 @@ import SlideGrid from './components/SlideGrid';
 import RightPanel from './components/RightPanel';
 import CheatsheetModal from './components/CheatsheetModal';
 import QuickSearch from './components/QuickSearch';
+import { registerQuickSearchActions } from './quickSearch/quickSearchBridge';
+import { addHymnsToLibrary, readHymnAddPreferences } from './hymnCache';
 import PreparationCheckModal from './components/PreparationCheckModal';
 import UpdatesModal from './components/UpdatesModal';
 import RemoteControlModal from './components/RemoteControlModal';
@@ -146,6 +149,8 @@ function ControlApp({ commands }: { commands: AppCommands }) {
   const [pptxImporting, setPptxImporting] = useState(false);
   useOptionalServiceWarmup(pptxImporting);
   useEffect(() => { startupReady('shell'); }, []);
+  // An announcement or lower-third must never come back on air by itself after a restart.
+  useEffect(() => { useLiveOverlayStore.getState().takeAllOffAir(); }, []);
   const { t } = useTranslation();
   const { openLive, closeLive, openOutput, closeOutput, startScreenShare, stopScreenShare } = commands;
   // Layout-only subscriptions. Deck and live state belong to local connectors.
@@ -204,6 +209,19 @@ function ControlApp({ commands }: { commands: AppCommands }) {
     onDeleteSlides: deleteSelectedSlides,
     onDuplicateSlides: duplicateSelectedSlides,
   });
+
+  // Quick search (Ctrl+K and the phone remote) adds through the same handlers as the tabs.
+  useEffect(() => {
+    if (IS_PROJECTOR_MODE) return;
+    return registerQuickSearchActions({
+      addScripture: handleSendToLive,
+      addHymn: handleHymnAdd,
+      addMedia: handleMediaAdd,
+      selectedSlideId: () => useStore.getState().selectedSlideId,
+      addToLibrary: addHymnsToLibrary,
+      hymnPreferences: readHymnAddPreferences,
+    });
+  }, [handleSendToLive, handleHymnAdd, handleMediaAdd]);
 
   const SIDEBAR_TABS = useMemo(
     () =>
@@ -476,7 +494,7 @@ function ControlApp({ commands }: { commands: AppCommands }) {
 
       {/* Ctrl+K: universal search for verses, hymns and media */}
       {!IS_PROJECTOR_MODE && (
-        <QuickSearch onAddScripture={handleSendToLive} onAddHymn={handleHymnAdd} onAddMedia={handleMediaAdd} />
+        <QuickSearch />
       )}
 
       {/* Cheatsheet Modal */}

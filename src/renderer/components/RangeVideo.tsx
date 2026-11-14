@@ -1,5 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 import { attachVideoPlayback, videoAudio, type VideoPlaybackSettings } from '../videoPlayback';
+import { PROJECTOR_DISPLAY_ID } from '../constants';
+import { NDI_PROGRAM_OUTPUT_ID } from '../../shared/virtualOutputs';
+
+/**
+ * The NDI Program window captures video sound, which Chromium refuses for cross-origin media. The
+ * app's media protocol answers CORS, so its videos load in CORS mode there; other windows and
+ * external URLs keep the plain request.
+ */
+const CAPTURE_CORS = PROJECTOR_DISPLAY_ID === NDI_PROGRAM_OUTPUT_ID;
+const captureCrossOrigin = (src?: string) => (CAPTURE_CORS && src?.startsWith('local-resource:') ? 'anonymous' : undefined);
 
 /** Always-current ref: lets effects read fresh values without listing them as dependencies. */
 function useLatest<T>(value: T) {
@@ -96,6 +106,7 @@ export function RangeVideo({
   return (
     <video
       ref={ref}
+      crossOrigin={captureCrossOrigin(src)}
       src={src}
       controls={controls}
       playsInline

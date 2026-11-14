@@ -62,3 +62,12 @@ test('toOsPath yol biçimlerini doğru çözer', () => {
   assert.equal(toOsPath('https://example.com/a.png'), null);
   assert.equal(toOsPath('local-resource://media/x.png'), null);
 });
+
+test('loop item file URLs stream back to the exact OS path (Turkish chars, #, spaces)', () => {
+  const osPath = 'C:/Kilise Medya/Şükran #2 (yeni).png';
+  // Same per-segment encoding as utils.toFileUrl, which the media page uses for loop items.
+  const fileUrl = 'file:///' + osPath.split('/').map((seg, i) => (i === 0 ? seg : encodeURIComponent(seg))).join('/');
+  assert.equal(toOsPath(fileUrl), osPath);
+  const resolved = resolveCanvasSource(fileUrl, false, true);
+  assert.equal(resolved.url, `local-resource://mediafile/${encodeURIComponent(osPath)}`);
+});

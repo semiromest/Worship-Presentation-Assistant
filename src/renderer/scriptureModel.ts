@@ -1,5 +1,11 @@
 import type { BibleSourceDescriptor } from './bibleRepository';
-import { getChapterReading, resolveReadingReference, parseVerseNumbers, type ReadingEntry } from './scriptureReading';
+import {
+  getChapterReading,
+  resolveReadingReference,
+  parseVerseNumbers,
+  type ChapterReading,
+  type ReadingEntry,
+} from './scriptureReading';
 import type { BibleBook, Chapter } from './bibleParser';
 
 export interface ParsedScriptureReference {
@@ -7,6 +13,8 @@ export interface ParsedScriptureReference {
   chapter: number | null;
   verse: number | null;
   verseTo: number | null;
+  /** "Yuhanna 1::" — explicit request for every verse of the chapter. */
+  wholeChapter?: boolean;
 }
 
 export interface BibleSelection {
@@ -62,6 +70,17 @@ export function tokenizeScriptureText(value: string): string[] {
 export function parseScriptureReference(input: string): ParsedScriptureReference | null {
   const value = input.trim();
   if (!value) return null;
+
+  const whole = value.match(/^(.+?)\s+(\d+)\s*::$/);
+  if (whole) {
+    return {
+      book: normalizeScriptureText(whole[1]),
+      chapter: Number.parseInt(whole[2], 10),
+      verse: null,
+      verseTo: null,
+      wholeChapter: true,
+    };
+  }
 
   const patterns = [/^(.+?)\s+(\d+):(\d*)(?:[-–—](\d*))?$/, /^(.+?)\s+(\d+)$/, /^(.+?)$/];
   for (const pattern of patterns) {
@@ -164,6 +183,11 @@ export function createScriptureSlides(
   });
 }
 
+/** Every readable verse number of a chapter, ascending, as strings. */
+export function chapterVerseNumbers(reading: ChapterReading): string[] {
+  return [...new Set(reading.available.flatMap((entry) => entry.numbers))].sort((a, b) => a - b).map(String);
+}
+
 export function buildReferenceSuggestions(
   books: BibleBook[],
   query: string,
@@ -201,8 +225,9 @@ export function buildReferenceSuggestions(
     if (parsed?.chapter != null) {
       const chapter = book.chapters.find((candidate) => Number.parseInt(candidate.number, 10) === parsed.chapter);
       if (chapter) {
-        const verseNumbers =
-          parsed.verse != null && (parsed.verseTo ?? parsed.verse) >= parsed.verse
+        const verseNumbers = parsed.wholeChapter
+          ? chapterVerseNumbers(getChapterReading(book, chapter, source))
+          : parsed.verse != null && (parsed.verseTo ?? parsed.verse) >= parsed.verse
             ? parseVerseNumbers(String(parsed.verse) + '-' + String(parsed.verseTo ?? parsed.verse)).map(String)
             : [];
         const resolution = resolveReadingReference(getChapterReading(book, chapter, source), verseNumbers);

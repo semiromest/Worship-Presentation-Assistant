@@ -1,14 +1,14 @@
 import ControlTooltip from './ControlTooltip';
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GRADIENT_ANIMATIONS, GRADIENT_PALETTES, isTwoColorStyle, type GeneratedBackground, type GradientAnimation } from '../../shared/generatedBackground';
 import type { GradientDraft } from '../../shared/gradientDraft';
 import type { GradientStyle } from '../../shared/presentation';
 import type { GradientLibraryEntry } from '../../shared/gradientLibrary';
 import { generatedStyles } from '../gradientBackground';
-import { GradientLibraryGallery, useGradientLibrary } from './GradientLibraryGallery';
+import { useGradientLibrary } from './GradientLibraryGallery';
 import { playSfx } from '../sfx';
-import { Check } from 'lucide-react';
+import { ArrowUp, Bookmark, Check, Loader2, Shuffle, X } from 'lucide-react';
 import './GradientDesigner.css';
 
 export interface GradientPreview {
@@ -18,30 +18,19 @@ export interface GradientPreview {
 
 type Motion = NonNullable<GeneratedBackground['motion']>;
 type Patch = Partial<GeneratedBackground>;
-type Tab = 'design' | 'library';
+type Style = GeneratedBackground['style'];
 
 const CONTROL = 'gradient-control';
-const TABS: readonly Tab[] = ['design', 'library'];
-type Style = GeneratedBackground['style'];
-interface Look { id: string; style: Style; animation?: GradientAnimation }
+const STYLES: readonly Style[] = ['linear', 'radial', 'soft', 'flow'];
+const DIRECTIONS = [0, 45, 90, 135, 180, 225, 270, 315] as const;
 
-/** One list replaces the old style select + "live motion" switch + animation select. */
-const STILL_LOOKS: Look[] = (['linear', 'soft', 'flow', 'radial'] as const).map((style) => ({ id: style, style }));
-const LIVE_LOOKS: Look[] = GRADIENT_ANIMATIONS.map((animation) => ({ id: 'live:' + animation, style: 'flow', animation }));
-const LOOK_GROUPS = [
-  { group: 'still', looks: STILL_LOOKS },
-  { group: 'live', looks: LIVE_LOOKS },
-] as const;
-
-const lookIdOf = (recipe: GeneratedBackground): string =>
-  recipe.motion?.enabled && !isTwoColorStyle(recipe.style) ? 'live:' + (recipe.motion.type ?? 'flow') : recipe.style;
-
-/** Swatches show each look in the colors currently chosen, so the grid doubles as a preview. */
-function lookSwatch(look: Look, [a, b, c, d]: string[]): string {
-  if (look.id === 'linear') return `linear-gradient(135deg,${a},${d})`;
-  if (look.id === 'radial') return `radial-gradient(circle at 50% 50%,${c},${a} 85%)`;
+/** Swatches show each style/animation in the colors currently chosen, so the picker doubles as a preview. */
+function swatch(style: Style, animation: GradientAnimation | undefined, [a, b, c, d]: string[]): string {
+  if (!animation && style === 'linear') return `linear-gradient(135deg,${a},${d})`;
+  if (!animation && style === 'radial') return `radial-gradient(circle at 50% 50%,${a},${d} 85%)`;
+  if (!animation && style === 'soft') return `radial-gradient(at 30% 30%,${b} 0,transparent 70%),radial-gradient(at 75% 75%,${c} 0,transparent 70%),${a}`;
   const blobs = `radial-gradient(at 18% 22%,${b} 0,transparent 58%),radial-gradient(at 82% 30%,${c} 0,transparent 55%),radial-gradient(at 36% 88%,${d} 0,transparent 60%),${a}`;
-  switch (look.animation) {
+  switch (animation) {
     case 'aurora': return `linear-gradient(100deg,transparent 15%,${c}99 38%,transparent 52%,${d}88 70%,transparent 90%),linear-gradient(180deg,${a},${b})`;
     case 'waves': return `repeating-linear-gradient(165deg,${a} 0 9px,${b} 9px 18px,${c} 18px 27px,${d} 27px 36px)`;
     case 'fog': return `radial-gradient(ellipse at 30% 40%,${c}aa,transparent 60%),radial-gradient(ellipse at 75% 65%,${d}aa,transparent 55%),linear-gradient(180deg,${a},${b})`;
@@ -55,16 +44,27 @@ function lookSwatch(look: Look, [a, b, c, d]: string[]): string {
 const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
 const DEFAULT_MOTION: Motion = { enabled: false, type: 'flow', speed: 55, amount: 70 };
 const GENERATE_DEBOUNCE_MS = 180;
+/** A finished render is written to the slide once the controls have been still this long. */
+const COMMIT_SETTLE_MS = 400;
 const NAME_MAX_LENGTH = 80;
 
 // Palet listesi ve arka plan dizeleri her render'da değil, modül yüklenirken bir kez üretilir.
 const PALETTES = Object.entries(GRADIENT_PALETTES).map(([key, colors]) => ({
   key,
-  colors,
+  colors: colors as readonly string[],
   background: `linear-gradient(120deg,${colors.join(',')})`,
 }));
 
 const randomSeed = () => crypto.getRandomValues(new Uint32Array(1))[0];
+
+/** Names the palette whose colors these are, or `custom`. Two-color recipes match on a palette's ends. */
+function paletteOf(colors: string[]): string {
+  const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  const match = PALETTES.find(({ colors: p }) =>
+    colors.length === 2 ? same(colors[0], p[0]) && same(colors[1], p[3]) : colors.every((c, i) => same(c, p[i]))
+  );
+  return match?.key ?? 'custom';
+}
 
 /** Eski iki duraklı lineer gradyanı yeni tarife çevirir; dönüştürülemezse undefined. */
 function recipeFromLegacy(legacy?: GradientStyle): GeneratedBackground | undefined {
@@ -102,20 +102,6 @@ function createInitialRecipe(initial?: GeneratedBackground, legacy?: GradientSty
       darkness: 25,
     }
   );
-}
-
-function tabForKey(key: string, current: Tab): Tab | null {
-  switch (key) {
-    case 'Home':
-      return 'design';
-    case 'End':
-      return 'library';
-    case 'ArrowLeft':
-    case 'ArrowRight':
-      return current === 'design' ? 'library' : 'design';
-    default:
-      return null;
-  }
 }
 
 function RangeField({
@@ -156,6 +142,11 @@ function RangeField({
   );
 }
 
+/**
+ * Gradient background picker. Every change previews on the canvas at once and is
+ * written to the target slides as soon as the controls settle, like any other
+ * editor setting: one undo step per settled change, no separate apply button.
+ */
 export function GradientDesigner({
   slideId,
   initial,
@@ -164,6 +155,7 @@ export function GradientDesigner({
   canClear,
   targetIds,
   enabled,
+  autoStart = false,
   onPreview,
   onApply,
 }: {
@@ -174,12 +166,13 @@ export function GradientDesigner({
   canClear?: boolean;
   targetIds: string[];
   enabled: boolean;
+  /** Apply the starting recipe right away (the user just picked "gradient" as the background type). */
+  autoStart?: boolean;
   onPreview: (preview: GradientPreview | null) => void;
   onApply: (ids: string[], image: string, recipe: GeneratedBackground) => void;
 }) {
   const { t } = useTranslation();
   const id = useId();
-  const [tab, setTab] = useState<Tab>('design');
   const [recipe, setRecipe] = useState(() => createInitialRecipe(initial, legacy));
   const [designing, setDesigning] = useState(false);
   const [rendered, setRendered] = useState<{ draft: GradientDraft; signature: string } | null>(null);
@@ -198,13 +191,20 @@ export function GradientDesigner({
   }, [recipe]);
   // Imza aynı kaldıkça nesne kimliği de sabit kalır, böylece motion değişimi yeniden üretimi tetiklemez.
   const raster = useMemo(() => JSON.parse(signature) as GeneratedBackground, [signature]);
+  /** Full recipe (motion included): what the slides must end up holding. */
+  const recipeKey = useMemo(() => JSON.stringify(recipe), [recipe]);
   const targetSignature = JSON.stringify(targetIds);
+  const initialKey = initial ? JSON.stringify(initial) : '';
+
+  /** Recipe key last written to the slides (or found on them). */
+  const committed = useRef(initialKey);
+  const [committedKey, setCommittedKey] = useState(initialKey);
 
   // Async işlemler bitince güncel değerleri okumak için. Ref render sırasında değil, commit sonrası güncellenir.
-  const latest = useRef({ signature, targetSignature, enabled });
+  const latest = useRef({ signature, recipeKey, targetSignature, enabled });
   useEffect(() => {
-    latest.current = { signature, targetSignature, enabled };
-  }, [signature, targetSignature, enabled]);
+    latest.current = { signature, recipeKey, targetSignature, enabled };
+  }, [signature, recipeKey, targetSignature, enabled]);
 
   const mounted = useRef(true);
   useEffect(() => {
@@ -213,6 +213,50 @@ export function GradientDesigner({
       mounted.current = false;
     };
   }, []);
+
+  /** Saves the rendered raster and writes it to the slides. Safe to call while unmounting. */
+  const commit = useCallback(
+    async (draft: GradientDraft, value: GeneratedBackground, ids: string[]) => {
+      const key = JSON.stringify(value);
+      committed.current = key;
+      try {
+        const image = await window.electronAPI.saveGradient(draft.token);
+        // A newer settled change will commit itself; only a vanished editor flushes a stale one.
+        if (mounted.current && latest.current.recipeKey !== key) return;
+        onApply(ids, image, value);
+        if (mounted.current) setCommittedKey(key);
+      } catch {
+        if (committed.current === key) committed.current = '';
+        if (mounted.current) setError(true);
+      }
+    },
+    [onApply]
+  );
+
+  // Undo/redo or another surface changed the slide's gradient: follow it instead of fighting it.
+  useEffect(() => {
+    if (initialKey === committed.current) return;
+    committed.current = initialKey;
+    setCommittedKey(initialKey);
+    setDesigning(false);
+    if (initial) setRecipe(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialKey]);
+
+  const ready = !!rendered && rendered.signature === signature && !generating && !error && enabled;
+  const pending = designing && recipeKey !== committedKey;
+
+  // Leaving the slide, the tab or the editor never drops a finished change.
+  const flush = useRef<() => void>(() => {});
+  useLayoutEffect(() => {
+    flush.current = () => {
+      if (ready && rendered && targetIds.length && recipeKey !== committed.current) void commit(rendered.draft, recipe, [...targetIds]);
+    };
+  });
+  useEffect(() => {
+    if (!enabled) return;
+    return () => flush.current();
+  }, [enabled]);
 
   useEffect(() => {
     if (!enabled || !designing) {
@@ -246,8 +290,16 @@ export function GradientDesigner({
     };
   }, [enabled, designing, signature, raster]);
 
+  // Settled → written to the slides.
   useEffect(() => {
-    if (!enabled || tab !== 'design' || !designing || !rendered) {
+    if (!ready || !rendered || !targetIds.length || recipeKey === committed.current) return;
+    const timer = setTimeout(() => void commit(rendered.draft, recipe, [...targetIds]), COMMIT_SETTLE_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, rendered, recipeKey, targetSignature, commit]);
+
+  useEffect(() => {
+    if (!enabled || !designing || !rendered) {
       onPreview(null);
       return;
     }
@@ -257,100 +309,80 @@ export function GradientDesigner({
       styles: generatedStyles(rendered.draft.image, { ...rendered.draft.recipe, motion: recipe.motion }),
     });
     return () => onPreview(null);
-  }, [enabled, tab, designing, rendered, recipe.motion, slideId, onPreview]);
-
-  const ready = !!rendered && rendered.signature === signature && !generating && !error && enabled;
+  }, [enabled, designing, rendered, recipe.motion, slideId, onPreview]);
 
   // Fonksiyonel güncelleme: art arda gelen olaylarda eski `recipe` kapanışına bağımlı kalmaz.
   const edit = useCallback((patch: Patch | ((current: GeneratedBackground) => Patch)) => {
     setRecipe((current) => ({ ...current, ...(typeof patch === 'function' ? patch(current) : patch) }));
     setDesigning(true);
+    setError(false);
     setNotice('');
   }, []);
+
+  useEffect(() => {
+    if (autoStart && !initial) edit({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Four-color set kept aside while a two-color style is active, so switching back restores it. */
+  const fourColors = useRef<string[]>(recipe.colors.length === 4 ? recipe.colors : [...GRADIENT_PALETTES.ocean]);
+  useEffect(() => {
+    if (recipe.colors.length === 4) fourColors.current = recipe.colors;
+  }, [recipe.colors]);
 
   const editMotion = useCallback(
     (patch: Partial<Motion>) => edit((current) => ({ motion: { ...DEFAULT_MOTION, ...current.motion, ...patch } })),
     [edit],
   );
 
-  function changeStyle(style: GeneratedBackground['style']) {
+  function changeStyle(style: Style) {
     edit((current) => {
+      const fromTwo = isTwoColorStyle(current.style);
       if (isTwoColorStyle(style)) {
+        const colors = fromTwo ? current.colors : [current.colors[0], current.colors[current.colors.length - 1]];
         return {
           style,
-          colors: [current.colors[0], current.colors[current.colors.length - 1]],
-          palette: 'custom',
+          colors,
+          palette: fromTwo ? current.palette : paletteOf(colors),
           angle: style === 'linear' ? current.angle ?? 90 : undefined,
-          darkness: 0,
+          darkness: fromTwo ? current.darkness : 0,
           motion: undefined,
         };
       }
-      const fromLinear = isTwoColorStyle(current.style);
-      return {
-        style,
-        angle: undefined,
-        motion: current.motion ? { ...current.motion, enabled: false } : undefined,
-        colors: fromLinear ? [...GRADIENT_PALETTES.ocean] : current.colors,
-        palette: fromLinear ? 'ocean' : current.palette,
-      };
+      if (!fromTwo) return { style };
+      // Keep the user's two colors as the ends of the remembered four-color set.
+      const [first, last] = current.colors;
+      const colors = [first, fourColors.current[1], fourColors.current[2], last];
+      return { style, angle: undefined, colors, palette: paletteOf(colors), darkness: 25 };
     });
   }
 
-  function chooseLook(look: Look) {
-    if (!look.animation) {
-      changeStyle(look.style);
+  function toggleMotion(on: boolean) {
+    if (!on) {
+      editMotion({ enabled: false });
       return;
     }
-    // Live looks run on a four-color field: leave a two-color style on the way in.
-    edit((current) => ({
-      style: isTwoColorStyle(current.style) ? 'flow' : current.style,
-      angle: undefined,
-      colors: isTwoColorStyle(current.style) ? [...GRADIENT_PALETTES.ocean] : current.colors,
-      palette: isTwoColorStyle(current.style) ? 'ocean' : current.palette,
-      darkness: isTwoColorStyle(current.style) ? 25 : current.darkness,
-      motion: { ...DEFAULT_MOTION, ...current.motion, enabled: true, type: look.animation },
-    }));
+    // Motion runs on a four-color field: leave a two-color style on the way in.
+    if (isTwoColorStyle(recipe.style)) changeStyle('flow');
+    editMotion({ enabled: true });
+  }
+
+  function choosePalette(colors: readonly string[], key: string) {
+    edit((current) => ({ palette: key, colors: isTwoColorStyle(current.style) ? [colors[0], colors[3]] : [...colors] }));
   }
 
   function changeColor(index: number, value: string) {
-    edit((current) => ({
-      ...(!isTwoColorStyle(current.style) ? { palette: 'custom' } : {}),
-      colors: current.colors.map((color, i) => (i === index ? value : color)),
-    }));
-  }
-
-  /** busy/error/unmount kalıbı üç async işlemde aynıydı; tek yerde toplandı. */
-  async function run(task: () => Promise<void>) {
-    setBusy(true);
-    setError(false);
-    try {
-      await task();
-    } catch {
-      if (mounted.current) setError(true);
-    } finally {
-      if (mounted.current) setBusy(false);
-    }
-  }
-
-  async function apply() {
-    if (!ready || busy || !targetIds.length || !rendered) return;
-    const targets = targetSignature;
-    const current = signature;
-    await run(async () => {
-      const image = await window.electronAPI.saveGradient(rendered.draft.token);
-      const now = latest.current;
-      if (!mounted.current || !now.enabled || now.signature !== current || now.targetSignature !== targets) return;
-      onApply([...targetIds], image, recipe);
-      onPreview(null);
-      setNotice(t('gradientLibrary.appliedDraft'));
-      playSfx('success');
+    edit((current) => {
+      const colors = current.colors.map((color, i) => (i === index ? value : color));
+      return { colors, palette: paletteOf(colors) };
     });
   }
 
   async function save() {
     const trimmed = name.trim();
     if (!ready || busy || !rendered || !trimmed) return;
-    await run(async () => {
+    setBusy(true);
+    try {
       const list = await window.electronAPI.saveGradientLibrary({
         name: trimmed,
         token: rendered.draft.token,
@@ -362,257 +394,292 @@ export function GradientDesigner({
       setName('');
       setNotice(t('gradientLibrary.saved'));
       playSfx('success');
-    });
+    } catch {
+      if (mounted.current) setError(true);
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
   }
 
   function choose(entry: GradientLibraryEntry) {
+    if (!targetIds.length) return;
+    const key = JSON.stringify(entry.recipe);
+    committed.current = key;
+    setCommittedKey(key);
     setRecipe(entry.recipe);
     setDesigning(false);
     setError(false);
     onPreview(null);
     onApply([...targetIds], entry.image, entry.recipe);
-    setNotice(t('gradientLibrary.appliedDraft'));
     playSfx('success');
   }
 
   async function remove(entry: GradientLibraryEntry) {
-    await run(async () => {
+    setBusy(true);
+    try {
       const list = await window.electronAPI.deleteGradientLibrary(entry.id);
       if (!mounted.current) return;
       library.setEntries(list);
       setNotice(t('gradientLibrary.removed'));
-    });
+    } catch {
+      if (mounted.current) setError(true);
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  }
+
+  function openNaming() {
+    // Saving needs a fresh render of the current recipe; start one if the panel is idle.
+    if (!designing) setDesigning(true);
+    setNaming((value) => !value);
   }
 
   const motionSettings = recipe.motion;
   const twoColor = isTwoColorStyle(recipe.style);
-  const currentLook = lookIdOf(recipe);
-  const swatchColors = recipe.colors.length === 4 ? recipe.colors : [...GRADIENT_PALETTES.ocean].map((color, i) => (i === 0 ? recipe.colors[0] : i === 3 ? recipe.colors[1] : color));
+  const live = !!motionSettings?.enabled && !twoColor;
+  const swatchColors = recipe.colors.length === 4 ? recipe.colors : [recipe.colors[0], fourColors.current[1], fourColors.current[2], recipe.colors[1]];
+  const working = designing && (generating || pending) && !error;
+  const angle = recipe.angle ?? 90;
 
   return (
     <section
-      className="gradient-designer space-y-3 border-t border-white/[0.06] px-3 pb-3 pt-2.5"
+      className="gradient-designer min-w-0 space-y-3"
       aria-label={t('gradientLibrary.title')}
       data-testid="gradient-designer"
     >
-      <h3 className="text-[11px] font-semibold text-white/70">{t('gradientLibrary.title')}</h3>
-      <div role="tablist" aria-label={t('gradientLibrary.title')} className="flex rounded-lg bg-black/20 p-1">
-        {TABS.map((value) => (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            id={`${id}-${value}`}
-            aria-controls={`${id}-panel`}
-            aria-selected={tab === value}
-            tabIndex={tab === value ? 0 : -1}
-            onKeyDown={(event) => {
-              const next = tabForKey(event.key, tab);
-              if (!next) return;
-              event.preventDefault();
-              event.stopPropagation();
-              setTab(next);
-              document.getElementById(`${id}-${next}`)?.focus();
-            }}
-            onClick={() => setTab(value)}
-            className={`flex-1 rounded px-2 py-2 text-xs focus-visible:ring-2 focus-visible:ring-violet-400 ${tab === value ? 'bg-violet-500/25 text-violet-100' : 'text-white/60'}`}
-          >
-            {t(`gradientLibrary.${value}`)}
-          </button>
-        ))}
-      </div>
-      <div id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-${tab}`}>
-        {tab === 'design' ? (
-          <fieldset disabled={busy || !enabled} className="min-w-0 space-y-4">
-            {!notice && <p className="gradient-hint">{t('gradientLibrary.previewHint')}</p>}
-            <fieldset className="gradient-section">
-              <legend>{t('gradient.look')}</legend>
-              {LOOK_GROUPS.map(({ group, looks }) => (
-                <div key={group} className="space-y-1.5">
-                  <div className="gradient-color-heading">
-                    <span>{t('gradient.' + group + 'Looks')}</span>
-                  </div>
-                  <div className="gradient-looks" role="group" aria-label={t('gradient.' + group + 'Looks')}>
-                    {looks.map((look) => (
-                      <button
-                        key={look.id}
-                        type="button"
-                        aria-pressed={currentLook === look.id}
-                        onClick={() => chooseLook(look)}
-                        className="gradient-look"
-                        data-live={look.animation ? '' : undefined}
-                      >
-                        <span className="gradient-look-swatch" aria-hidden="true" style={{ background: lookSwatch(look, swatchColors) }} />
-                        <span className="gradient-look-name">
-                          <span>{t('gradient.' + (look.animation ?? look.style))}</span>
-                          {currentLook === look.id && <Check size={12} aria-hidden="true" className="shrink-0" />}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+      {library.entries.length > 0 && (
+        <div className="space-y-1.5">
+          <span className="gradient-label">{t('gradientLibrary.library')}</span>
+          <ul className="gradient-saved" aria-label={t('gradientLibrary.library')}>
+            {library.entries.map((entry) => (
+              <li key={entry.id} className="gradient-saved-item">
+                <ControlTooltip description={t('tooltipText.useGradient', { name: entry.name })}><button
+                  type="button"
+                  disabled={busy || !enabled || !targetIds.length}
+                  aria-label={entry.name}
+                  data-gradient-entry={entry.id}
+                  onClick={() => choose(entry)}
+                  className="gradient-saved-thumb"
+                >
+                  <img src={entry.image} alt="" loading="lazy" />
+                </button></ControlTooltip>
+                <button
+                  type="button"
+                  disabled={busy || !enabled}
+                  onClick={() => void remove(entry)}
+                  aria-label={t('gradientLibrary.deleteNamed', { name: entry.name })}
+                  title={t('gradientLibrary.deleteNamed', { name: entry.name })}
+                  className="gradient-saved-remove"
+                >
+                  <X size={10} aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <fieldset disabled={!enabled} className="min-w-0 space-y-3">
+        <div className="space-y-1.5">
+          <span className="gradient-label">{t('gradient.style')}</span>
+          <div className="gradient-looks" role="group" aria-label={t('gradient.style')}>
+            {STYLES.map((style) => (
+              <button
+                key={style}
+                type="button"
+                aria-pressed={recipe.style === style}
+                onClick={() => changeStyle(style)}
+                className="gradient-look"
+                title={t('gradient.' + style)}
+              >
+                <span className="gradient-look-swatch" aria-hidden="true" style={{ background: swatch(style, undefined, swatchColors) }} />
+                <span className="gradient-look-name">{t('gradient.' + style)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <span className="gradient-label">{t('gradient.colors')}</span>
+          <div className="gradient-palettes" data-testid="gradient-palettes" role="group" aria-label={t('gradient.presets')}>
+            {PALETTES.map(({ key, colors, background }) => (
+              <button
+                key={key}
+                type="button"
+                aria-label={t('gradient.palettes.' + key)}
+                title={t('gradient.palettes.' + key)}
+                aria-pressed={recipe.palette === key}
+                onClick={() => choosePalette(colors, key)}
+                className="gradient-palette-chip"
+                style={{ background: twoColor ? `linear-gradient(120deg,${colors[0]},${colors[3]})` : background }}
+              >
+                {recipe.palette === key && <Check size={11} aria-hidden="true" />}
+              </button>
+            ))}
+          </div>
+          <div className={'gradient-colors' + (twoColor ? ' gradient-colors-linear' : ' gradient-colors-row')} data-testid="gradient-colors">
+            {recipe.colors.map((color, index) => (
+              <ControlTooltip key={index} description={t('tooltipText.editColor', { color: color.toUpperCase() })}>
+                <input
+                  type="color"
+                  value={color}
+                  aria-label={
+                    twoColor
+                      ? t(index === 0 ? (recipe.style === 'radial' ? 'gradient.centerColor' : 'gradient.startColor') : (recipe.style === 'radial' ? 'gradient.edgeColor' : 'gradient.endColor'))
+                      : t('gradient.colorNumber', { number: index + 1 })
+                  }
+                  className="gradient-color"
+                  onChange={(e) => changeColor(index, e.target.value)}
+                />
+              </ControlTooltip>
+            ))}
+          </div>
+        </div>
+
+        {recipe.style === 'linear' && (
+          <div className="space-y-1.5">
+            <span className="gradient-label">{t('gradient.direction')}</span>
+            <div className="gradient-directions" role="group" aria-label={t('gradient.direction')}>
+              {DIRECTIONS.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={angle === value}
+                  aria-label={`${value}°`}
+                  title={`${value}°`}
+                  onClick={() => edit({ angle: value })}
+                  className="gradient-direction"
+                >
+                  <ArrowUp size={13} aria-hidden="true" style={{ transform: `rotate(${value}deg)` }} />
+                </button>
               ))}
-            </fieldset>
-            <fieldset className="gradient-section">
-              <legend>{t('gradient.colors')}</legend>
-              {!twoColor && (
-                <div className="gradient-palettes" data-testid="gradient-palettes" role="group" aria-label={t('gradient.presets')}>
-                  {PALETTES.map(({ key, colors, background }) => (
+            </div>
+          </div>
+        )}
+
+        {!twoColor && (
+          <div className="space-y-2">
+            <label className="gradient-motion-toggle">
+              <span className="gradient-label">{t('gradient.motion')}</span>
+              <input type="checkbox" role="switch" checked={live} onChange={(e) => toggleMotion(e.target.checked)} />
+            </label>
+            {live && (
+              <>
+                <div className="gradient-animations" role="group" aria-label={t('gradient.animation')}>
+                  {GRADIENT_ANIMATIONS.map((animation) => (
                     <button
-                      key={key}
+                      key={animation}
                       type="button"
-                      aria-label={t('gradient.palettes.' + key)}
-                      title={t('gradient.palettes.' + key)}
-                      aria-pressed={recipe.palette === key}
-                      onClick={() => edit({ palette: key, colors: [...colors] })}
-                      className="gradient-palette-chip"
-                      style={{ background }}
+                      aria-pressed={(motionSettings?.type ?? 'flow') === animation}
+                      onClick={() => editMotion({ enabled: true, type: animation })}
+                      className="gradient-animation"
+                      title={t('gradient.' + animation)}
                     >
-                      {recipe.palette === key && <Check size={12} aria-hidden="true" />}
+                      <span className="gradient-animation-swatch" aria-hidden="true" style={{ background: swatch(recipe.style, animation, swatchColors) }} />
+                      <span className="truncate">{t('gradient.' + animation)}</span>
                     </button>
                   ))}
                 </div>
-              )}
-              <div
-                className={'gradient-colors' + (twoColor ? ' gradient-colors-linear' : ' gradient-colors-row')}
-                data-testid="gradient-colors"
-              >
-                {recipe.colors.map((color, index) => (
-                  <label key={index} className="gradient-color-label">
-                    <span>
-                      {twoColor
-                        ? t(index === 0 ? (recipe.style === 'radial' ? 'gradient.centerColor' : 'gradient.startColor') : (recipe.style === 'radial' ? 'gradient.edgeColor' : 'gradient.endColor'))
-                        : t('gradient.colorNumber', { number: index + 1 })}
-                    </span>
-                    <ControlTooltip description={t('tooltipText.editColor', { color: color.toUpperCase() })}><input
-                      type="color"
-                      value={color}
-                      title={color.toUpperCase()}
-                      className="gradient-color"
-                      onChange={(e) => changeColor(index, e.target.value)}
-                    /></ControlTooltip>
-                  </label>
-                ))}
-              </div>
-              {recipe.palette === 'custom' && !twoColor && <span className="text-violet-200">{t('gradient.customColors')}</span>}
-            </fieldset>
-            {motionSettings?.enabled && !twoColor && (
-              <fieldset className="gradient-section">
                 <RangeField
                   label={t('gradient.speed')}
-                  value={motionSettings.speed ?? DEFAULT_MOTION.speed}
+                  value={motionSettings?.speed ?? DEFAULT_MOTION.speed}
                   min={1}
                   max={100}
                   unit="%"
                   onChange={(speed) => editMotion({ speed })}
                 />
-              </fieldset>
+              </>
             )}
-            <details className="gradient-more">
-              <summary>{t('gradient.moreOptions')}</summary>
-              <div className="gradient-section">
-                <RangeField
-                  label={t('gradient.darkness')}
-                  value={recipe.darkness}
-                  min={0}
-                  max={85}
-                  unit="%"
-                  onChange={(darkness) => edit({ darkness })}
-                />
-                {recipe.style === 'linear' && (
-                  <RangeField
-                    label={t('gradient.angle')}
-                    value={recipe.angle ?? 90}
-                    min={0}
-                    max={360}
-                    step={1}
-                    unit="°"
-                    onChange={(angle) => edit({ angle })}
-                  />
-                )}
-                {motionSettings?.enabled && !twoColor && (
-                  <RangeField
-                    label={t('gradient.amount')}
-                    value={motionSettings.amount ?? DEFAULT_MOTION.amount}
-                    min={1}
-                    max={100}
-                    unit="%"
-                    onChange={(amount) => editMotion({ amount })}
-                  />
-                )}
-                {(!twoColor || !designing || error) && (
-                  <button type="button" className="gradient-regenerate" onClick={() => edit({ seed: randomSeed() })}>
-                    {t('gradient.regenerate')}
-                  </button>
-                )}
-              </div>
-            </details>
-            <div className="gradient-actions">
-              {generating && (
-                <p role="status" className="gradient-hint">
-                  {t('gradient.generating')}
-                </p>
-              )}
-              <button
-                type="button"
-                disabled={!ready || !targetIds.length}
-                onClick={() => void apply()}
-                className="gradient-apply"
-              >
-                {t('gradientLibrary.applyDraft', { count: targetIds.length })}
-              </button>
-              <button
-                type="button"
-                disabled={!ready}
-                onClick={() => setNaming((v) => !v)}
-                aria-expanded={naming}
-                aria-controls={id + '-name-form'}
-                className={CONTROL}
-              >
-                {t('gradientLibrary.saveLibrary')}
-              </button>
-              {naming && (
-                <form
-                  id={id + '-name-form'}
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    void save();
-                  }}
-                  className="space-y-2"
-                >
-                  <p className="gradient-hint">{t('gradientLibrary.saveHint')}</p>
-                  <label className="gradient-color-label">
-                    <span>{t('gradientLibrary.name')}</span>
-                    <input
-                      autoFocus
-                      maxLength={NAME_MAX_LENGTH}
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className={CONTROL}
-                    />
-                  </label>
-                  <button type="submit" disabled={!ready || !name.trim()} className={CONTROL}>
-                    {t('gradientLibrary.confirmSave')}
-                  </button>
-                </form>
-              )}
-            </div>
-          </fieldset>
-        ) : (
-          <GradientLibraryGallery
-            {...library}
-            disabled={busy || !enabled || !targetIds.length}
-            onChoose={choose}
-            onRemove={(entry) => void remove(entry)}
-          />
+          </div>
         )}
+
+        <details className="gradient-more">
+          <summary>{t('gradient.moreOptions')}</summary>
+          <div className="gradient-section">
+            <RangeField
+              label={t('gradient.darkness')}
+              value={recipe.darkness}
+              min={0}
+              max={85}
+              unit="%"
+              onChange={(darkness) => edit({ darkness })}
+            />
+            {recipe.style === 'linear' && (
+              <RangeField label={t('gradient.angle')} value={angle} min={0} max={360} step={1} unit="°" onChange={(value) => edit({ angle: value })} />
+            )}
+            {live && (
+              <RangeField
+                label={t('gradient.amount')}
+                value={motionSettings?.amount ?? DEFAULT_MOTION.amount}
+                min={1}
+                max={100}
+                unit="%"
+                onChange={(amount) => editMotion({ amount })}
+              />
+            )}
+            {!twoColor && (
+              <button type="button" className="gradient-regenerate" onClick={() => edit({ seed: randomSeed() })}>
+                <Shuffle size={12} aria-hidden="true" />
+                {t('gradient.regenerate')}
+              </button>
+            )}
+          </div>
+        </details>
+      </fieldset>
+
+      <div className="gradient-footer">
+        <p role="status" className="gradient-status">
+          {working ? (
+            <>
+              <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+              {t('gradient.applying')}
+            </>
+          ) : designing && !error && committedKey === recipeKey ? (
+            <>
+              <Check size={12} aria-hidden="true" />
+              {t('gradient.appliedCount', { count: targetIds.length })}
+            </>
+          ) : null}
+        </p>
+        <ControlTooltip description={t('gradientLibrary.saveLibrary')}>
+          <button
+            type="button"
+            disabled={busy || !enabled}
+            onClick={openNaming}
+            aria-label={t('gradientLibrary.saveLibrary')}
+            aria-expanded={naming}
+            aria-controls={id + '-name-form'}
+            className="gradient-icon-button"
+          >
+            <Bookmark size={14} aria-hidden="true" />
+          </button>
+        </ControlTooltip>
       </div>
+      {naming && (
+        <form
+          id={id + '-name-form'}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save();
+          }}
+          className="flex items-end gap-1.5"
+        >
+          <label className="gradient-color-label min-w-0 flex-1">
+            <span>{t('gradientLibrary.name')}</span>
+            <input autoFocus maxLength={NAME_MAX_LENGTH} value={name} onChange={(e) => setName(e.target.value)} className={CONTROL} />
+          </label>
+          <button type="submit" disabled={!ready || busy || !name.trim()} className="gradient-save">
+            {t('gradientLibrary.confirmSave')}
+          </button>
+        </form>
+      )}
       {canClear && onClear && (
         <button
           type="button"
           disabled={busy || !enabled}
           className="gradient-remove"
           onClick={() => {
+            committed.current = '';
             setDesigning(false);
             onPreview(null);
             onClear();

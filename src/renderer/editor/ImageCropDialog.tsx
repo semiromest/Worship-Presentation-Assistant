@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Dialog from '../components/Dialog';
 import { SlideImage } from '../components/SlideImage';
 import { useImageSize } from '../hooks/useImageSize';
+import { resolveCanvasSource } from '../canvasSource';
 import type { SlideItem } from '../types';
 import { FULL_CROP, fitCropRatio, moveCrop, resizeCrop, sourceCrop, type CropRect } from '../imageGeometry';
 import { finishEditorGesture, usePointerGesture } from './usePointerGesture';
@@ -19,7 +20,10 @@ export function ImageCropDialog({
 }) {
   const { t } = useTranslation();
   const [retry, setRetry] = useState(0);
-  const size = useImageSize(item.mediaUrl, retry);
+  // A raw file:// (or bare OS path) src is blocked by webSecurity from the renderer origin, so the
+  // dialog must load the same media-protocol URL every other image surface uses (see SlideImage).
+  const imageSrc = item.mediaUrl ? resolveCanvasSource(item.mediaUrl, false).url : undefined;
+  const size = useImageSize(imageSrc, retry);
   const [crop, setCrop] = useState<CropRect>(FULL_CROP);
   const cropRef = useRef(crop);
   const imageRef = useRef<HTMLDivElement>(null);
@@ -159,7 +163,7 @@ export function ImageCropDialog({
                   aspectRatio: size.width / size.height,
                 }}
               >
-                <img src={item.mediaUrl} alt="" draggable={false} className="block w-full h-full pointer-events-none" />
+                <img src={imageSrc} alt="" draggable={false} className="block w-full h-full pointer-events-none" />
                 <div
                   role="button"
                   tabIndex={0}

@@ -7,6 +7,7 @@ import { createPreparationMonitor } from '../preparationMonitor';
 import { measureSlideReadability } from '../readinessMeasurement';
 import { useStore } from '../state/useStore';
 import { usePreparationStore } from '../state/usePreparationStore';
+import { isVirtualOutputId } from '../../shared/virtualOutputs';
 
 export function usePreparationCheck() {
   useEffect(() => {
@@ -33,11 +34,12 @@ export function usePreparationCheck() {
       (state, prev) => {
         const connected = new Set(state.displays.map((display) => display.id));
         const missing = new Set(usePreparationStore.getState().disconnectedOutputIds);
+        // Virtual (NDI) outputs have no display behind them and can never be disconnected.
         for (const [id, output] of Object.entries(prev.outputAssignments)) {
-          if (output.isOpen && !connected.has(id)) missing.add(id);
+          if (output.isOpen && !connected.has(id) && !isVirtualOutputId(id)) missing.add(id);
         }
         for (const [id, output] of Object.entries(state.outputAssignments)) {
-          if (output.isOpen && !connected.has(id)) missing.add(id);
+          if (output.isOpen && !connected.has(id) && !isVirtualOutputId(id)) missing.add(id);
         }
         for (const id of missing) if (connected.has(id)) missing.delete(id);
         const ids = [...missing];

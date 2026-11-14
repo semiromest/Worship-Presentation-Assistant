@@ -27,7 +27,9 @@ import {
   DatabaseBackup,
   ShieldCheck,
   FileDown,
+  FileText,
 } from 'lucide-react';
+import { onPdfImportProgress } from './pdfImport';
 import { AnimatedPreview } from './AnimatedPreview';
 import { cn } from './utils';
 import { type PptxImportResult } from './utils';
@@ -431,6 +433,8 @@ export default function PresentationsTab({
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => onPdfImportProgress(setImportProgress), []);
+
   useEffect(() => {
     if (!window.electronAPI?.onPptxExportProgress) return;
 
@@ -612,7 +616,7 @@ export default function PresentationsTab({
     }
   }, [presentation, t]);
 
-  const handleImportPptx = useCallback(async (cloud?: Exclude<PptxImportSource, string>) => {
+  const handleImportPptx = useCallback(async (cloud?: Exclude<PptxImportSource, string>, kind: 'pptx' | 'pdf' = 'pptx') => {
     try {
       setImportError(null);
       setImportWarnings([]);
@@ -624,7 +628,11 @@ export default function PresentationsTab({
 
       importStartTimeRef.current = performance.now();
 
-      const source = cloud ?? await window.electronAPI?.selectPptxFile?.();
+      const pickPdf = async (): Promise<PptxImportSource | null> => {
+        const pdfPath = await window.electronAPI?.selectPdfFile?.();
+        return pdfPath ? { pdfPath, name: pdfPath.split(/[\\/]/).pop()?.replace(/\.pdf$/i, '') || 'PDF' } : null;
+      };
+      const source = cloud ?? (kind === 'pdf' ? await pickPdf() : await window.electronAPI?.selectPptxFile?.());
       if (!source) {
         stopSfx(importLoopRef.current);
         importLoopRef.current = null;
@@ -632,9 +640,10 @@ export default function PresentationsTab({
         return false;
       }
 
-      const mode = typeof source !== 'string' ? 'append' : await choiceDialog({
-        title: t('fileOpen.pptxTitle'), message: t('fileOpen.pptxMessage'),
-        detail: `${source.split(/[\\/]/).pop()}\n\n${t('fileOpen.pptxOptionsDetail')}`,
+      const isPdf = typeof source !== 'string' && 'pdfPath' in source;
+      const mode = typeof source !== 'string' && !isPdf ? 'append' : await choiceDialog({
+        title: t(isPdf ? 'fileOpen.pdfTitle' : 'fileOpen.pptxTitle'), message: t('fileOpen.pptxMessage'),
+        detail: `${typeof source === 'string' ? source.split(/[\\/]/).pop() : `${source.name}.pdf`}\n\n${t(isPdf ? 'fileOpen.pdfOptionsDetail' : 'fileOpen.pptxOptionsDetail')}`,
         choices: [
           { value: 'cancel', label: t('common.cancel') },
           { value: 'new', label: t('fileOpen.newPresentation') },
@@ -725,6 +734,10 @@ export default function PresentationsTab({
               <Cloud aria-hidden="true" />Canva
             </button>}
           </div>
+          {!practice && onImportPptx && typeof window.electronAPI?.selectPdfFile === 'function' && <button type="button" onClick={() => void handleImportPptx(undefined, 'pdf')}
+            disabled={isImporting || isExporting} className="presentation-action">
+            <FileText aria-hidden="true" />{t('library.importPdf')}
+          </button>}
           <Menu.Root>
             <Menu.Trigger className="presentation-action">
               <FileUp aria-hidden="true" />{t('library.powerPoint')}<ChevronDown aria-hidden="true" />

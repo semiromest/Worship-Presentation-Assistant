@@ -24,6 +24,31 @@ export function loadLibraryHymns(): Hymn[] {
   return mergeImportedHymns(archive, loadCachedHymns('__online__') ?? []);
 }
 
+export const HYMN_LIBRARY_IMPORT_EVENT = 'hymn-library-import';
+
+export interface HymnLibraryImportDetail {
+  hymns: Hymn[];
+  /** Set by a mounted Hymns tab that took over merging and persisting. */
+  handled: boolean;
+}
+
+/**
+ * Adds hymns to the library from outside the Hymns tab (quick search, phone).
+ * A mounted Hymns tab merges them into its own state (which persists); with no
+ * tab listening, the persisted cache is updated directly.
+ */
+export function addHymnsToLibrary(hymns: Hymn[]): void {
+  if (!hymns.length) return;
+  const detail: HymnLibraryImportDetail = { hymns, handled: false };
+  try {
+    window.dispatchEvent(new CustomEvent<HymnLibraryImportDetail>(HYMN_LIBRARY_IMPORT_EVENT, { detail }));
+  } catch { /* no window (tests) */ }
+  if (detail.handled) return;
+  let path = '__online__';
+  try { path = localStorage.getItem('defaultHymnArchivePath') || '__online__'; } catch { /* storage unavailable */ }
+  cacheHymns(path, mergeImportedHymns(loadCachedHymns(path) ?? [], hymns));
+}
+
 export function readHymnAddPreferences(): { partsMode: boolean; showAuthor: boolean } {
   const flag = (key: string) => {
     try { const v = localStorage.getItem(key); return v === null ? true : v === '1'; } catch { return true; }

@@ -18,6 +18,13 @@ export default function BackgroundMusicPopover({ onAddSlide, label }: { label?: 
   useMusicPreparation();
   const { t } = useTranslation();
   const searchRequest = useRef(0);
+  // Bir sonuca kısa süre odaklanmak/üzerine gelmek oynatma bağlamını önceden hazırlar; tıklama beklemeden başlar.
+  const warmTimer = useRef<ReturnType<typeof setTimeout>>();
+  const warmResult = (id: string | null) => {
+    clearTimeout(warmTimer.current);
+    if (id) warmTimer.current = setTimeout(() => void window.electronAPI?.youtubeMusicPrepare?.(id).catch(() => {}), 300);
+  };
+  useEffect(() => () => clearTimeout(warmTimer.current), []);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   const [attachmentTarget, setAttachmentTarget] = useState<string | null>(null);
@@ -150,7 +157,7 @@ export default function BackgroundMusicPopover({ onAddSlide, label }: { label?: 
             </form>
             <div className="design-music-results mt-3 space-y-2" data-testid="youtube-music-results">
               {results.map(video => <div key={video.id} className={cn('design-music-result rounded-lg border border-white/10', track?.id === video.id ? 'bg-blue-600/20' : 'bg-white/5')}>
-                <button type="button" disabled={!!liveSlide} data-testid={`youtube-result-${video.id}`} onClick={() => void playYouTube(video)} className="w-full flex items-center gap-2 px-2 py-2 text-left text-xs text-white/80 hover:bg-white/10 disabled:opacity-40">
+                <button type="button" disabled={!!liveSlide} data-testid={`youtube-result-${video.id}`} onClick={() => { warmResult(null); void playYouTube(video); }} onPointerEnter={() => warmResult(video.id)} onPointerLeave={() => warmResult(null)} onFocus={() => warmResult(video.id)} onBlur={() => warmResult(null)} className="w-full flex items-center gap-2 px-2 py-2 text-left text-xs text-white/80 hover:bg-white/10 disabled:opacity-40">
                   <Play className="w-3.5 h-3.5 shrink-0" /><span className="min-w-0 flex-1 line-clamp-2">{video.title}</span>{video.duration > 0 && <span className="shrink-0 text-[11px] text-white/55">{Math.floor(video.duration / 60)}:{String(video.duration % 60).padStart(2, '0')}</span>}
                 </button>
                 {(onAddSlide || attachmentTarget) && <button type="button" data-testid={`youtube-add-slide-${video.id}`} onClick={() => { if (attachmentTarget) attach(video); else { onAddSlide?.(video); setAdded(video.title); } }} className="design-music-add flex items-center justify-center gap-1.5 rounded-lg bg-blue-600/15 px-3 py-2 text-xs font-medium text-blue-200 hover:bg-blue-600/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400"><Plus className="h-3.5 w-3.5" />{t(attachmentTarget ? 'slideAudio.attach' : 'settings.youtubeAddMusicSlide')}</button>}

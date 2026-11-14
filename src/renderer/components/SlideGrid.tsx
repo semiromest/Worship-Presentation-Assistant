@@ -12,7 +12,8 @@ import { SlideNavigation } from './OutputStatus';
 import { slideGridGeometry, slideGridScrollTop, ROW_GAP, CONTENT_PADDING } from './slideGridGeometry';
 import { memo, useMemo, useEffect, useLayoutEffect, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, X, Plus, Grid2X2, Minus, ChevronLeft, ChevronRight, Lock, ChevronUp, ChevronDown, Copy, Trash2, Undo2, Redo2 } from 'lucide-react';
+import { Search, X, Plus, Grid2X2, Minus, ChevronLeft, ChevronRight, Lock, ChevronUp, ChevronDown, Copy, Trash2, Undo2, Redo2, Languages } from 'lucide-react';
+import { BulkImageTranslateDialog } from './BulkImageTranslateDialog';
 import { useStore } from '../state/useStore';
 import { SlideCard } from '../SlideCard';
 import { useSlideInsertionDrag } from '../hooks/useSlideInsertionDrag';
@@ -115,6 +116,8 @@ export default function SlideGrid({
   updateTransition,
 }: SlideGridProps) {
   const { t } = useTranslation();
+  const [bulkTranslateOpen, setBulkTranslateOpen] = useState(false);
+  const canTranslateImages = !!window.electronAPI?.imageTranslate;
   const searchInputRef = useRef<HTMLInputElement>(null);
   const tools = useToolbarOverflow();
   const sectionsEnabled = useStore(s => s.serviceSectionsEnabled);
@@ -458,6 +461,7 @@ export default function SlideGrid({
           <ControlTooltip shortcut="Alt+↑" description={t('controlHints.moveUp')}><button onClick={()=>moveSelectedSlides(-1)} disabled={orderRestricted || !selectedSlideIds.size} title={t('common.moveSelectedUp')} aria-label={t('common.moveSelectedUp')}><ChevronUp /></button></ControlTooltip>
           <ControlTooltip shortcut="Alt+↓" description={t('controlHints.moveDown')}><button onClick={()=>moveSelectedSlides(1)} disabled={orderRestricted || !selectedSlideIds.size} title={t('common.moveSelectedDown')} aria-label={t('common.moveSelectedDown')}><ChevronDown /></button></ControlTooltip>
           <span className="design-tool-divider" aria-hidden="true" />
+          {canTranslateImages && <ControlTooltip description={t('common.imageTranslateBulkHint')}><button type="button" onClick={() => setBulkTranslateOpen(true)} title={t('common.imageTranslateBulkTitle')} aria-label={t('common.imageTranslateBulkTitle')}><Languages /></button></ControlTooltip>}
           <ControlTooltip shortcut="Ctrl+D" description={t('controlHints.duplicate')}><button onClick={duplicateSelectedSlides} disabled={!selectedSlideIds.size} title={t('common.duplicateSelected')} aria-label={t('common.duplicateSelected')}><Copy /></button></ControlTooltip>
           <ControlTooltip shortcut="Del" description={t('controlHints.delete')}><button onClick={deleteSelectedSlides} disabled={!selectedSlideIds.size} title={t('common.deleteSelected')} aria-label={t('common.deleteSelected')} className="design-delete"><Trash2 /></button></ControlTooltip>
           </div>
@@ -470,6 +474,7 @@ export default function SlideGrid({
         <ControlTooltip descriptionKey={'slidesWorkspace.nextTools'}><button type="button" className="design-toolbar-scroll design-toolbar-scroll-right" disabled={!tools.edges.right} aria-label={t('slidesWorkspace.nextTools')} onClick={() => tools.scroll(1)}><ChevronRight aria-hidden="true" /></button></ControlTooltip>
       </>}
       </div>
+      {bulkTranslateOpen && <BulkImageTranslateDialog onClose={() => setBulkTranslateOpen(false)} />}
       {indicator && createPortal(<div aria-hidden="true" className="design-insertion-overlay">
         <div data-slide-insertion-indicator data-horizontal={indicator.horizontal} className="design-slide-insertion" style={{
           left: indicator.x, top: indicator.y, width: indicator.horizontal ? indicator.length : 3, height: indicator.horizontal ? 3 : indicator.length,

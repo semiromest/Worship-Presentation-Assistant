@@ -32,6 +32,8 @@ export function createPreferencesSlice(
   | 'setServiceSectionsEnabled'
   | 'uiMotionEnabled'
   | 'setUiMotionEnabled'
+  | 'shareSlideImagesEnabled'
+  | 'setShareSlideImagesEnabled'
 > {
   return {
     liveSaveEnabled: (() => {
@@ -135,6 +137,21 @@ export function createPreferencesSlice(
     setUiMotionEnabled: (enabled) => {
       writeUiMotionEnabled(enabled);
       set({ uiMotionEnabled: enabled });
+    },
+    shareSlideImagesEnabled: (() => {
+      try {
+        return localStorage.getItem('shareSlideImagesEnabled') !== '0';
+      } catch {
+        return true;
+      }
+    })(),
+    setShareSlideImagesEnabled: (enabled) => {
+      try {
+        localStorage.setItem('shareSlideImagesEnabled', enabled ? '1' : '0');
+      } catch {
+        /* unavailable */
+      }
+      set({ shareSlideImagesEnabled: enabled });
     },
   };
 }

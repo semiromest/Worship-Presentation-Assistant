@@ -278,6 +278,16 @@ test('remove sole section preserves all slides as unassigned; delete protects lo
   assert.equal(removeSection(locked, 'intro', undefined, true), locked);
   assert.deepEqual(ids(removeSection(divided(), 'intro', undefined, true)), ['c', 'd', 'e', 'f']);
 });
+test('deleting a section holding every slide leaves the fallback blank slide', () => {
+  const all = base();
+  const deck = createSectionFromSelection(all, new Set(ids(all)), { id: 'single', title: 'Named' });
+  assert.ok(deck.slides.every((s) => s.sectionId === 'single'));
+  const blank = { ...deck.slides[0], id: 'blank', sectionId: 'single', content: '' };
+  const next = removeSection(deck, 'single', undefined, true, blank);
+  assert.deepEqual(ids(next), ['blank']);
+  assert.equal(next.sections?.length, 1);
+  assert.equal(next.sections?.[0].unassigned, true);
+});
 test('single and multi up/down commands do not fragment destination sections', () => {
   const down = moveSectionSlidesOneStep(divided(), new Set(['b']), 1);
   assert.deepEqual(ids(down), ['a', 'c', 'b', 'd', 'e', 'f']);

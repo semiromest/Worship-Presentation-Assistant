@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import QRCode from 'qrcode';
 import { useStore } from '../state/useStore';
-import type { ShareSnapshot } from '../../shared/share';
+import type { ShareSlideImage, ShareSnapshot } from '../../shared/share';
+import { useShareSlideImages } from './useShareSlideImages';
 import { IS_PROJECTOR_MODE } from '../constants';
 import { useSttStore } from '../state/useSttStore';
 
@@ -14,7 +15,7 @@ const HISTORY_LIMIT = 15;
 type SttState = ReturnType<typeof useSttStore.getState>;
 
 /** Normalize the STT store into the single snapshot phones consume. */
-function buildSnapshot(s: SttState): ShareSnapshot {
+function buildSnapshot(s: SttState, slideImages: ShareSlideImage[] = []): ShareSnapshot {
   const translations = Object.fromEntries(s.targetLanguages.map((code) => [
     code,
     s.currentTranslations[code] ?? (code === s.targetLanguage ? s.currentTranslation : ''),
@@ -46,6 +47,7 @@ function buildSnapshot(s: SttState): ShareSnapshot {
       translation: u.translation,
       translations: u.translations,
     })),
+    slideImages,
   };
 }
 
@@ -70,6 +72,11 @@ export function useShare(): { startShare: () => Promise<void>; stopShare: () => 
   // Mirrors shareActive for the STT subscription without re-subscribing on toggle.
   const activeRef = useRef(useStore.getState().shareActive);
 
+  // Pictures on the live slide (translated per phone language) ride along in every snapshot.
+  const slideImagesRef = useShareSlideImages(!IS_PROJECTOR_MODE && !practice, () => {
+    if (activeRef.current) window.electronAPI?.sharePublish?.(buildSnapshot(useSttStore.getState(), slideImagesRef.current));
+  });
+
   useEffect(() => {
     const unsub = useStore.subscribe(s => s.shareActive, active => { activeRef.current = active; });
     return unsub;
@@ -83,7 +90,7 @@ export function useShare(): { startShare: () => Promise<void>; stopShare: () => 
       if (!activeRef.current || timer) return;
       timer = setTimeout(() => {
         timer = undefined;
-        if (activeRef.current) window.electronAPI?.sharePublish?.(buildSnapshot(useSttStore.getState()));
+        if (activeRef.current) window.electronAPI?.sharePublish?.(buildSnapshot(useSttStore.getState(), slideImagesRef.current));
       }, 80);
     };
     const unsub = useSttStore.subscribe(publish);
@@ -145,7 +152,7 @@ export function useShare(): { startShare: () => Promise<void>; stopShare: () => 
         .then(setShareQr)
         .catch(() => setShareQr(null));
       // Publish the current state immediately (the subscription only fires on change).
-      window.electronAPI?.sharePublish?.(buildSnapshot(useSttStore.getState()));
+      window.electronAPI?.sharePublish?.(buildSnapshot(useSttStore.getState(), slideImagesRef.current));
     } catch (error) {
       setToastMessage(t('common.phoneShareFailed', { detail: error instanceof Error ? error.message : String(error) }), 'error');
     }

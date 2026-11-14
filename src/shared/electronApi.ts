@@ -4,6 +4,23 @@ import type { DriveFile, DriveStatus } from './presentation';
 import type { PerfSnapshot, MainPerfSnapshot } from './perf';
 type MediaKind = 'image' | 'video';
 
+/** Quick-search results the control window sends to phone remotes. */
+export interface RemoteSearchResultsPayload {
+  requestId: string;
+  query: string;
+  results: Array<{
+    id: string;
+    kind: 'scripture' | 'hymn' | 'media' | 'setLink';
+    title: string;
+    subtitle?: string;
+    mediaType?: MediaKind;
+    hasChords?: boolean;
+    songCount?: number;
+    error?: 'set-id-only';
+  }>;
+  noBible?: boolean;
+}
+
 /** The preload capability surface shared by the bridge and renderer. */
 export interface ElectronAPI {
   getSupportAvailability: () => Promise<import('./support').SupportAvailability>;
@@ -39,6 +56,10 @@ export interface ElectronAPI {
   mediaOptimizeVideoWrite?: (id: string, position: number, bytes: Uint8Array) => Promise<void>;
   mediaOptimizeVideoFinish?: (id: string, ext: string) => Promise<{ ref: string; bytes: number } | null>;
   mediaOptimizeVideoAbort?: (id: string) => Promise<void>;
+  /** Desktop only: translate the text baked into a library image (see src/main/imageTranslate.ts). */
+  imageTranslate?: (ref: string, source: import('./imageTranslate').ImageTranslateLang | 'auto', target: import('./imageTranslate').ImageTranslateLang, options?: { cachedOnly?: boolean }) => Promise<import('./imageTranslate').ImageTranslateResult>;
+  /** Desktop only: generate a picture from a text prompt (see src/main/imageGenerate.ts). */
+  imageGenerate?: (prompt: string, style: import('./imageGenerate').ImageGenerateStyle, ratio: import('./imageGenerate').ImageGenerateRatio, seed: number) => Promise<import('./imageGenerate').ImageGenerateResult>;
   /** Web only: asks the browser not to evict stored media. */
   mediaStorageRequestPersistence?: () => Promise<boolean | null>;
   /** Web only: downloads the Windows policy file that lets the output open fullscreen without a click. */
@@ -112,10 +133,16 @@ export interface ElectronAPI {
   deleteBibleData: (filePath: string) => Promise<boolean | null>;
   selectMediaFile: (type: MediaKind) => Promise<string | null>;
   getDroppedImagePath: (file: File) => Promise<string | null>;
+  getDroppedFilePath?: (file: File) => Promise<string | null>;
+  selectMediaFiles?: (type: MediaKind) => Promise<string[] | null>;
   selectMediaFilesAll?: () => Promise<string[] | null>;
   importHymnArchive: (dirPath?: string) => Promise<any>;
   selectPptxFile: () => Promise<string | null>;
   importPptx: (filePath: string) => Promise<any>;
+  selectPdfFile?: () => Promise<string | null>;
+  pdfRead?: (filePath: string) => Promise<Uint8Array>;
+  /** Stores one rasterized PDF page in the media library; returns its ref. */
+  pdfStorePage?: (bytes: Uint8Array, ext: 'jpg' | 'png') => Promise<string | null>;
   googleSlidesStatus: () => Promise<DriveStatus>;
   googleSlidesConnect: () => Promise<DriveStatus>;
   googleSlidesCancel: () => Promise<void>;
@@ -175,7 +202,10 @@ export interface ElectronAPI {
   updateAllSlidePreviews: (previews: (string | null)[]) => Promise<void>;
   updateSlidePreviewsDelta: (updates: { i: number; url: string }[]) => Promise<void>;
   sendSlidePreview: (dataUrl: string) => Promise<void>;
-  sendRemoteNotice: (notice: { text: string; tone?: 'ok' | 'error' }) => Promise<boolean>;
+  sendRemoteNotice: (notice: { text: string; tone?: 'ok' | 'error' | 'progress' }) => Promise<boolean>;
+  sendRemoteSearchResults: (payload: RemoteSearchResultsPayload) => Promise<boolean>;
+  /** Writes plain text to the system clipboard (control window only). */
+  writeClipboardText: (text: string) => Promise<boolean>;
   generateThumbnail: (slide: any) => Promise<string | null>;
   onAppDialog: (callback: (request: import('./appDialog').AppDialogRequest) => void) => () => void;
   appDialogsReady: () => void;
@@ -195,6 +225,12 @@ export interface ElectronAPI {
   onProjectorReady: (callback: (data?: { displayId?: string }) => void) => () => void;
   onDisplaysChanged: (callback: (displays: DisplayInfo[]) => void) => () => void;
   onProjectorOutputStatus: (callback: (outputs: ProjectorOutputStatus[]) => void) => () => void;
+  // NDI outputs (desktop only; the web bridge leaves these undefined so the UI hides NDI).
+  // Open/close goes through openProjector/closeProjector with the virtual output ids.
+  getNdiStatus?: () => Promise<import('./virtualOutputs').NdiStatusMap>;
+  onNdiStatus?: (callback: (status: import('./virtualOutputs').NdiStatusMap) => void) => () => void;
+  /** 20 ms planar stereo 48 kHz block for the NDI Program audio (fire-and-forget). */
+  programAudioPcm?: (source: 'video' | 'music', block: Float32Array) => void;
   onPptxImportProgress: (callback: (data: { current: number; total: number }) => void) => () => void;
   onPptxExportProgress: (callback: (data: { current: number; total: number }) => void) => () => void;
 

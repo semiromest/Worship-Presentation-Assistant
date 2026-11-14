@@ -10,6 +10,15 @@ export interface Hymn {
   key?: string;
   /** Source book reference (e.g. "TY527, RT38"), when known. */
   source?: string;
+  /**
+   * Lyrics with inline ChordPro chords (`[G]Amazing [C]grace`). When present it is
+   * the source of truth and `lyrics` is its chord-free form.
+   */
+  chordPro?: string;
+  /** Tempo in beats per minute, when known. */
+  bpm?: number;
+  /** Time signature such as "4/4" or "6/8", when known. */
+  timeSignature?: string;
 }
 
 /**
@@ -23,6 +32,30 @@ function normalizeTitle(title: string): string {
     .replace(/ı/g, 'i');
 }
 
+const comparableLyrics = (text: string) => text.replace(/\s+/g, ' ').trim().toLowerCase();
+
+/**
+ * A re-import without chords (e.g. from a plain XML archive) must not wipe chords
+ * or tempo the user already added to the same song text.
+ */
+function keepChordData(previous: Hymn, fresh: Hymn): Hymn {
+  if (fresh.chordPro || !previous.chordPro) {
+    return {
+      ...fresh,
+      bpm: fresh.bpm ?? previous.bpm,
+      timeSignature: fresh.timeSignature ?? previous.timeSignature,
+    };
+  }
+  if (comparableLyrics(previous.lyrics) !== comparableLyrics(fresh.lyrics)) return fresh;
+  return {
+    ...fresh,
+    chordPro: previous.chordPro,
+    key: fresh.key ?? previous.key,
+    bpm: fresh.bpm ?? previous.bpm,
+    timeSignature: fresh.timeSignature ?? previous.timeSignature,
+  };
+}
+
 export function mergeImportedHymns(existing: Hymn[], imported: Hymn[]): Hymn[] {
   if (imported.length === 0) return existing;
 
@@ -33,7 +66,7 @@ export function mergeImportedHymns(existing: Hymn[], imported: Hymn[]): Hymn[] {
   for (const fresh of imported) {
     const idx = indexByTitle.get(normalizeTitle(fresh.title));
     if (idx !== undefined) {
-      result[idx] = fresh;
+      result[idx] = keepChordData(result[idx], fresh);
     } else {
       indexByTitle.set(normalizeTitle(fresh.title), result.length);
       result.push(fresh);

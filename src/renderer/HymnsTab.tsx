@@ -11,6 +11,10 @@ import { Skeleton } from './components/Skeleton';
 import OnlineHymnsPanel from './components/OnlineHymnsPanel';
 import SetLinkImportDialog from './components/SetLinkImportDialog';
 import { mergeImportedHymns } from './hymnImport';
+import { cleanTitle, prepareHymn, prepareHymnText } from './hymnLyrics';
+import { copyText } from './copyText';
+import { HYMN_LIBRARY_IMPORT_EVENT, type HymnLibraryImportDetail } from './hymnCache';
+import { buildChordProDocument, detectKey, hasChords, mergeChordsAboveLyrics, transposeChordPro, transposeKey } from '../shared/chords';
 import { cn, normalizeSearchText, sourceTextMatches, useDebounce } from './utils';
 import { confirmDialog } from './dialogs';
 import Dialog from './components/Dialog';
@@ -23,99 +27,6 @@ import './hymn-library.css';
 
 interface HymnsTabProps {
   onAddHymnToPresentation: (hymn: Hymn, partsMode?: boolean, goLive?: boolean) => void;
-}
-
-// ─── Pure helper functions (outside component) ────────────────────────────
-
-// Strip ID codes like BG, TC (keep TY and RT)
-const TITLE_PATTERNS = [/(?:BG|TC)\d+/gi, /\s{2,}/g];
-
-function cleanTitle(title: string): string {
-  let t = title;
-  t = t.replace(TITLE_PATTERNS[0], '').replace(TITLE_PATTERNS[1], ' ');
-  return t.trim();
-}
-
-const CHORD_TOKEN_RE =
-  /^(?:\d+|\.?[A-G](#|b)?(?:M(?:aj)?(?:7|9)?|maj(?:7|9)?|min(?:7|9)?|mn?|m(?:7|9)?|sus(?:2|4)?|dim7?|aug|add\d+|\d+)?[+o°]?(?:\/[A-G](#|b)?)?(?:\([A-GMmb#0-9\/+]+\))?)$/;
-
-/** Are all tokens in this line chords? If so, the whole line is removed. */
-function isPureChordLine(line: string): boolean {
-  const tokens = line.trim().split(/\s+/);
-  return tokens.length > 0 && tokens.every(t => CHORD_TOKEN_RE.test(t));
-}
-
-/** Remove inline chord tokens from a mixed (lyrics + chords) line. */
-function removeInlineChords(line: string): string {
-  return line
-    .split(/\s+/)
-    .filter(token => !CHORD_TOKEN_RE.test(token))
-    .join(' ')
-    .trim();
-}
-
-// ─── cleanLyrics ──────────────────────────────────────────────────────────
-
-const SECTION_TAG_RE = /\[(V|C|B|CHORUS|BRIDGE|VERSE|PRE|OUTRO|INTRO)?\d*\]/gi;
-const MULTI_SPACE_RE  = /\s{2,}/g;
-const SENTENCE_SPLIT_RE = /(!|\?|\.|,)/;
-const HTML_ENTITIES: Record<string, string> = {
-  '&quot;': '"', '&amp;': '&', '&lt;': '<', '&gt;': '>',
-};
-
-function cleanLyrics(lyrics: string): string {
-  if (!lyrics) return '';
-
-  let text = lyrics.replace(/\r\n/g, '\n');
-
-  // HTML entity decode
-  for (const [entity, char] of Object.entries(HTML_ENTITIES)) {
-    text = text.split(entity).join(char);
-  }
-
-  // Strip section tags: [V1] [CHORUS] etc.
-  text = text.replace(SECTION_TAG_RE, '\n\n');
-
-  const lines = text.split('\n');
-  const out: string[] = [];
-
-  for (const raw of lines) {
-    let line = raw.trim();
-
-    // Empty line — avoid consecutive blank lines
-    if (!line) {
-      if (out.length > 0 && out[out.length - 1] !== '') out.push('');
-      continue;
-    }
-
-    // 1) Skip lines that are entirely chords (e.g. "G F", "Am7 Dsus4", ".D .G")
-    if (isPureChordLine(line)) continue;
-
-    // 2) Remove chord tokens from mixed lines (e.g. "Seni Am seviyorum G7")
-    line = removeInlineChords(line);
-
-    // 3) Clean dots, dashes, underscores + fix spacing
-    line = line.replace(/[.\-_]+/g, ' ').replace(MULTI_SPACE_RE, ' ').trim();
-    if (!line) continue;
-
-    // 4) Merge over-split repeated fragments separated by commas/punctuation
-    const parts = line.split(SENTENCE_SPLIT_RE);
-    if (parts.length > 3) {
-      const seen = new Set<string>();
-      const rebuilt: string[] = [];
-      for (let i = 0; i < parts.length; i += 2) {
-        const s = (parts[i] + (parts[i + 1] ?? '')).trim();
-        if (!seen.has(s)) { seen.add(s); rebuilt.push(s); }
-      }
-      line = rebuilt.join(' ');
-    }
-
-    out.push(line);
-  }
-
-  while (out[0] === '') out.shift();
-  while (out[out.length - 1] === '') out.pop();
-  return out.join('\n');
 }
 
 // ─── XML parsing — chunked to keep main thread free ───────────────────────
@@ -171,14 +82,14 @@ async function parseXmlFiles(
           const rawTitle =
             node.querySelector?.('title')?.textContent ?? file.name.replace('.xml', '');
           const rawLyrics = node.querySelector?.('lyrics')?.textContent ?? '';
-          const lyrics = cleanLyrics(rawLyrics);
-          if (!lyrics.trim()) continue;
+          const prepared = prepareHymnText(rawLyrics);
+          if (!prepared.lyrics.trim()) continue;
 
           const cleaned = cleanTitle(rawTitle);
           const key = cleaned.toLowerCase();
 
           if (!titleMap.has(key)) {
-            const hymn = { id: crypto.randomUUID(), title: cleaned, lyrics, ...extractXmlMeta(node) };
+            const hymn: Hymn = { id: crypto.randomUUID(), title: cleaned, ...prepared, ...extractXmlMeta(node) };
             titleMap.set(key, hymn);
             results.push(hymn);
           }
@@ -193,6 +104,33 @@ async function parseXmlFiles(
   }
 
   return { hymns: results, failedCount };
+}
+
+interface EditForm {
+  title: string;
+  lyrics: string;
+  author: string;
+  key: string;
+  bpm: string;
+  timeSignature: string;
+}
+
+const EMPTY_EDIT_FORM: EditForm = { title: '', lyrics: '', author: '', key: '', bpm: '', timeSignature: '' };
+
+function parseBpm(value: string): number | undefined {
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) && n >= 20 && n <= 400 ? n : undefined;
+}
+
+function downloadTextFile(name: string, text: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = name;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // ─── Main component ───────────────────────────────────────────────────────
@@ -212,7 +150,8 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<number | null>(null);
   const [editingHymn, setEditingHymn] = useState<Hymn | null>(null);
-  const [editForm, setEditForm] = useState({ title: '', lyrics: '', author: '' });
+  const [editForm, setEditForm] = useState<EditForm>(EMPTY_EDIT_FORM);
+  const [chordNotice, setChordNotice] = useState<string | null>(null);
   const [partsModeEnabled, setPartsModeEnabled] = useState(() => {
     if (practice) return true;
     try {
@@ -330,9 +269,16 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
     const lyrics = newHymn.lyrics.trim();
     const author = newHymn.author.trim();
     if (!title || !lyrics) return;
+    const prepared = prepareHymnText(lyrics);
     setHymns(prev => [
       ...prev,
-      { id: crypto.randomUUID(), title: cleanTitle(title), lyrics: cleanLyrics(lyrics), author: author || undefined },
+      {
+        id: crypto.randomUUID(),
+        title: cleanTitle(title),
+        ...prepared,
+        key: prepared.chordPro ? detectKey(prepared.chordPro) ?? undefined : undefined,
+        author: author || undefined,
+      },
     ]);
     setNewHymn({ title: '', lyrics: '', author: '' });
     setIsAddingNew(false);
@@ -341,10 +287,22 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
 
   const handleOnlineImport = useCallback((imported: Hymn[], _failedCount = 0) => {
     if (imported.length === 0) { if (_failedCount) playSfx('error'); return; }
-    setHymns(prev => mergeImportedHymns(prev, imported.map(h => ({ ...h, lyrics: cleanLyrics(h.lyrics) }))));
+    setHymns(prev => mergeImportedHymns(prev, imported.map(prepareHymn)));
     setImportSuccess(imported.length);
     playSfx('complete');
     // Import failures are intentionally silent: the success banner is enough.
+  }, []);
+
+  // Hymns added from quick search / the phone remote while this tab is mounted.
+  useEffect(() => {
+    const onImport = (event: Event) => {
+      const detail = (event as CustomEvent<HymnLibraryImportDetail>).detail;
+      if (!detail?.hymns?.length) return;
+      detail.handled = true;
+      setHymns(prev => mergeImportedHymns(prev, detail.hymns.map(prepareHymn)));
+    };
+    window.addEventListener(HYMN_LIBRARY_IMPORT_EVENT, onImport);
+    return () => window.removeEventListener(HYMN_LIBRARY_IMPORT_EVENT, onImport);
   }, []);
 
   // Auto-dismiss success banner after 4 seconds
@@ -393,7 +351,15 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
     playSfx('open');
     editReturnRef.current = document.activeElement as HTMLElement;
     setEditingHymn(hymn);
-    setEditForm({ title: hymn.title, lyrics: hymn.lyrics, author: hymn.author ?? '' });
+    setChordNotice(null);
+    setEditForm({
+      title: hymn.title,
+      lyrics: hymn.chordPro ?? hymn.lyrics,
+      author: hymn.author ?? '',
+      key: hymn.key ?? '',
+      bpm: hymn.bpm ? String(hymn.bpm) : '',
+      timeSignature: hymn.timeSignature ?? '',
+    });
   }, []);
 
   const closeEditModal = useCallback((updated?: Hymn) => {
@@ -407,7 +373,7 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
       requestAnimationFrame(() => searchRef.current?.focus());
     }
     setEditingHymn(null);
-    setEditForm({ title: '', lyrics: '', author: '' });
+    setEditForm(EMPTY_EDIT_FORM);
   }, [editingHymn, requestFocus, debouncedSearch, searchInLyrics]);
 
   const saveEditedHymn = useCallback(() => {
@@ -416,22 +382,72 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
     const trimmedLyrics = editForm.lyrics.trim();
     const author = editForm.author.trim();
     if (!trimmedTitle || !trimmedLyrics) return;
-    if (editingHymn.title === cleanTitle(trimmedTitle) && editingHymn.lyrics === cleanLyrics(trimmedLyrics) && (editingHymn.author ?? '') === author) { closeEditModal(); return; }
+    const prepared = prepareHymnText(trimmedLyrics);
+    const next: Hymn = {
+      ...editingHymn,
+      title: cleanTitle(trimmedTitle),
+      lyrics: prepared.lyrics,
+      chordPro: prepared.chordPro,
+      author: author || undefined,
+      key: editForm.key.trim() || (prepared.chordPro ? detectKey(prepared.chordPro) ?? undefined : undefined),
+      bpm: parseBpm(editForm.bpm),
+      timeSignature: editForm.timeSignature.trim() || undefined,
+    };
+    const fields = (h: Hymn) => JSON.stringify([h.title, h.lyrics, h.chordPro ?? '', h.author ?? '', h.key ?? '', h.bpm ?? '', h.timeSignature ?? '']);
+    if (fields(editingHymn) === fields(next)) { closeEditModal(); return; }
 
     setHymns(prev => {
-      const updated = prev.map(h =>
-        h.id === editingHymn.id
-          ? { ...h, title: cleanTitle(trimmedTitle), lyrics: cleanLyrics(trimmedLyrics), author: author || undefined }
-          : h
-      );
+      const updated = prev.map(h => (h.id === editingHymn.id ? next : h));
       const savedPath = localStorage.getItem('defaultHymnArchivePath');
       if (savedPath) cacheHymns(savedPath, updated);
       return updated;
     });
 
-    closeEditModal({ ...editingHymn, title: cleanTitle(trimmedTitle), lyrics: cleanLyrics(trimmedLyrics), author: author || undefined });
+    closeEditModal(next);
     playSfx('success');
   }, [editingHymn, editForm, closeEditModal]);
+
+  /** "Akorları hizala": chords typed above the lyrics become inline [G] chords right away. */
+  const alignEditChords = useCallback(() => {
+    const merged = mergeChordsAboveLyrics(editForm.lyrics);
+    const found = hasChords(merged);
+    setChordNotice(found ? t('hymnChords.aligned') : t('hymnChords.noneFound'));
+    if (found) setEditForm({ ...editForm, lyrics: merged, key: editForm.key || detectKey(merged) || '' });
+  }, [editForm, t]);
+
+  /** Transposes the song being edited (text and key) by a semitone step. */
+  const transposeEditForm = useCallback((step: number) => {
+    const merged = mergeChordsAboveLyrics(editForm.lyrics);
+    if (!hasChords(merged)) { setChordNotice(t('hymnChords.noneFound')); return; }
+    const key = editForm.key || detectKey(merged) || '';
+    setChordNotice(null);
+    setEditForm({ ...editForm, lyrics: transposeChordPro(merged, step, { key }), key: key ? transposeKey(key, step) : '' });
+  }, [editForm, t]);
+
+  const editChordPro = useMemo(() => {
+    const merged = mergeChordsAboveLyrics(editForm.lyrics);
+    return hasChords(merged) ? merged : null;
+  }, [editForm.lyrics]);
+
+  const exportEditChordPro = useCallback(async (mode: 'copy' | 'save') => {
+    if (!editChordPro) return;
+    const doc = buildChordProDocument({
+      title: editForm.title.trim() || 'Song',
+      chordPro: prepareHymnText(editChordPro).chordPro ?? editChordPro,
+      author: editForm.author.trim() || undefined,
+      key: editForm.key.trim() || undefined,
+      bpm: parseBpm(editForm.bpm),
+      timeSignature: editForm.timeSignature.trim() || undefined,
+    });
+    if (mode === 'copy') {
+      const copied = await copyText(doc);
+      setChordNotice(t(copied ? 'hymnChords.copied' : 'hymnChords.copyFailed'));
+      playSfx(copied ? 'success' : 'error');
+      return;
+    }
+    const safeName = (editForm.title.trim() || 'song').replace(/[\\/:*?"<>|]+/g, '').slice(0, 80);
+    downloadTextFile(`${safeName}.cho`, doc);
+  }, [editChordPro, editForm, t]);
 
   // ─── Render ───────────────────────────────────────────────────────────
 
@@ -732,8 +748,42 @@ export default function HymnsTab({ onAddHymnToPresentation }: HymnsTabProps) {
                   id="edit-hymn-lyrics"
                   value={editForm.lyrics}
                   onChange={e => setEditForm(p => ({ ...p, lyrics: e.target.value }))}
-                  className="w-full h-64 bg-black/30 border border-white/10 rounded-md p-2 text-sm text-white resize-none focus-visible:border-blue-500/60 focus-visible:outline-none"
+                  spellCheck={false}
+                  className="w-full h-64 bg-black/30 border border-white/10 rounded-md p-2 text-sm text-white resize-none font-mono focus-visible:border-blue-500/60 focus-visible:outline-none"
                 />
+                <p className="mt-1 text-[11px] text-white/45">{t('hymnChords.hint')}</p>
+              </div>
+
+              <div className="hymn-chord-meta">
+                <label>
+                  <span>{t('hymnChords.key')}</span>
+                  <span className="hymn-chord-key">
+                    <button type="button" onClick={() => transposeEditForm(-1)} aria-label={t('hymnChords.transposeDown')} title={t('hymnChords.transposeDown')}>−</button>
+                    <input
+                      type="text"
+                      value={editForm.key}
+                      maxLength={8}
+                      onChange={e => setEditForm(p => ({ ...p, key: e.target.value }))}
+                      aria-label={t('hymnChords.key')}
+                    />
+                    <button type="button" onClick={() => transposeEditForm(1)} aria-label={t('hymnChords.transposeUp')} title={t('hymnChords.transposeUp')}>+</button>
+                  </span>
+                </label>
+                <label>
+                  <span>{t('hymnChords.bpm')}</span>
+                  <input type="number" min={20} max={400} value={editForm.bpm} onChange={e => setEditForm(p => ({ ...p, bpm: e.target.value }))} />
+                </label>
+                <label>
+                  <span>{t('hymnChords.timeSignature')}</span>
+                  <input type="text" maxLength={6} placeholder="4/4" value={editForm.timeSignature} onChange={e => setEditForm(p => ({ ...p, timeSignature: e.target.value }))} />
+                </label>
+              </div>
+
+              <div className="hymn-chord-actions">
+                <button type="button" className="hymn-tool" onClick={alignEditChords}>{t('hymnChords.align')}</button>
+                <button type="button" className="hymn-tool" disabled={!editChordPro} onClick={() => void exportEditChordPro('copy')}>{t('hymnChords.copy')}</button>
+                <button type="button" className="hymn-tool" disabled={!editChordPro} onClick={() => void exportEditChordPro('save')}>{t('hymnChords.save')}</button>
+                {chordNotice && <span role="status" className="text-xs text-white/60">{chordNotice}</span>}
               </div>
             </div>
 

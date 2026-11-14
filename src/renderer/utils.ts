@@ -3,7 +3,7 @@ import { hymnCreditFontSize, formatHymnCredit, readHymnAuthorPosition, readHymnA
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useEffect, useState, useRef } from 'react';
-import type { Slide, WatermarkConfig, Position } from './types';
+import type { Slide, WatermarkConfig, WatermarkPosition } from './types';
 import { getSlideDisplayContent } from '../shared/slideContent';
 import { useWatermarkStore } from './state/useWatermarkStore';
 import { parseCountdownContent, getCountdownRemaining } from './countdownUtils';
@@ -728,7 +728,7 @@ export function shouldRenderWatermark(
 }
 
 function getWatermarkCanvasPosition(
-  position: Position,
+  position: WatermarkPosition,
   W: number,
   H: number,
   logoW: number,
@@ -736,6 +736,8 @@ function getWatermarkCanvasPosition(
   margin: number,
 ): { x: number; y: number } {
   switch (position) {
+    case 'center':
+      return { x: (W - logoW) / 2, y: (H - logoH) / 2 };
     case 'top-left':
       return { x: margin, y: margin };
     case 'top-center':

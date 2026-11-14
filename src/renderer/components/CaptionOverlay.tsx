@@ -1,4 +1,5 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { memo, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useSlideBox } from '../hooks/useSlideBox';
 import { useShallow } from 'zustand/react/shallow';
 import type { Slide } from '../types';
 import type { CaptionDisplayState } from '../captionDisplay';
@@ -15,28 +16,6 @@ const selectCaptionState = (s: CaptionDisplayState): CaptionDisplayState => ({
   lastOriginal: s.lastOriginal, lastTranslation: s.lastTranslation, lastTranslations: s.lastTranslations,
   targetLanguage: s.targetLanguage, targetLanguages: s.targetLanguages, translationEnabled: s.translationEnabled,
 });
-
-/** Tracks the 16:9 slide box inside a letterboxed parent, like LivePreview does. */
-function useSlideBox() {
-  const ref = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState({ width: 0, height: 0 });
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const update = () => {
-      const w = el.clientWidth;
-      const h = el.clientHeight;
-      if (!w || !h) return;
-      const width = w / h > 16 / 9 ? h * 16 / 9 : w;
-      setBox(prev => prev.width === width ? prev : { width, height: width * 9 / 16 });
-    };
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-  return [ref, box] as const;
-}
 
 interface CaptionOverlayViewProps {
   blocks: CaptionOverlayBlock[];

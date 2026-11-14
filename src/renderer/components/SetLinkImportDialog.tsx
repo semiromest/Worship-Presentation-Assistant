@@ -3,25 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { Link2, Loader2, Download, CheckSquare, AlertTriangle, X } from 'lucide-react';
 import Dialog from './Dialog';
 import { cn } from '../utils';
-import { parseSetLink, fetchSongsByIds, parseSongXml, extractSongAuthor, extractSongSource } from '../worshipLeaderApi';
+import { parseSetLink, fetchSongsByIds, songDetailToHymn } from '../worshipLeaderApi';
+import type { Hymn } from '../hymnImport';
 
-export interface SetImportHymn {
-  id: string;
-  title: string;
-  lyrics: string;
-  author?: string;
-  key?: string;
-  source?: string;
-}
+export type SetImportHymn = Hymn;
 
-interface ResultSong {
-  id: number;
-  title: string;
-  lyrics: string;
-  author?: string;
-  key?: string;
-  source?: string;
-}
+/** Library hymn plus the numeric catalog id used for selection in this dialog. */
+type ResultSong = Hymn & { songId: number };
 
 interface Props {
   open: boolean;
@@ -87,19 +75,12 @@ export default function SetLinkImportDialog({
       );
       const results: ResultSong[] = [];
       for (const d of details) {
-        const lyrics = parseSongXml(d.songxml);
-        if (!lyrics.trim()) continue;
-        results.push({
-          id: d.id,
-          title: d.title,
-          lyrics,
-          author: extractSongAuthor(d) ?? undefined,
-          key: d.songkey ?? undefined,
-          source: extractSongSource(d) ?? undefined,
-        });
+        const hymn = songDetailToHymn(d);
+        if (!hymn.lyrics.trim()) continue;
+        results.push({ ...hymn, songId: d.id });
       }
       setSongs(results);
-      setSelectedIds(new Set(results.map((s) => s.id)));
+      setSelectedIds(new Set(results.map((s) => s.songId)));
       if (results.length === 0) {
         setNote(t('common.setImportNoSongs'));
       }
@@ -122,21 +103,18 @@ export default function SetLinkImportDialog({
 
   const toggleSelectAll = () => {
     if (selectedIds.size === songs.length) setSelectedIds(new Set());
-    else setSelectedIds(new Set(songs.map((s) => s.id)));
+    else setSelectedIds(new Set(songs.map((s) => s.songId)));
   };
 
   const handleAddToPresentation = () => {
-    const chosen = songs.filter((s) => selectedIds.has(s.id));
+    const chosen = songs.filter((s) => selectedIds.has(s.songId));
     if (chosen.length === 0) return;
 
-    const imported: SetImportHymn[] = chosen.map((s) => ({
-      id: String(s.id),
-      title: s.title,
-      lyrics: s.lyrics,
-      author: s.author,
-      key: s.key,
-      source: s.source,
-    }));
+    const imported: SetImportHymn[] = chosen.map((song) => {
+      const hymn: SetImportHymn & { songId?: number } = { ...song };
+      delete hymn.songId;
+      return hymn;
+    });
 
     for (const hymn of imported) {
       onAddHymn(hymn, partsMode);
@@ -228,30 +206,30 @@ export default function SetLinkImportDialog({
             <div className="max-h-60 overflow-y-auto border border-white/10 rounded-lg divide-y divide-white/5">
               {songs.map((song) => (
                 <div
-                  key={song.id}
-                  onClick={() => toggleSelect(song.id)}
+                  key={song.songId}
+                  onClick={() => toggleSelect(song.songId)}
                   role="checkbox"
-                  aria-checked={selectedIds.has(song.id)}
+                  aria-checked={selectedIds.has(song.songId)}
                   tabIndex={0}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      toggleSelect(song.id);
+                      toggleSelect(song.songId);
                     }
                   }}
                   className={cn(
                     'flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors',
-                    selectedIds.has(song.id) ? 'bg-blue-600/20' : 'hover:bg-white/5'
+                    selectedIds.has(song.songId) ? 'bg-blue-600/20' : 'hover:bg-white/5'
                   )}
                 >
                   <div
                     className={cn(
                       'w-4 h-4 rounded border flex items-center justify-center shrink-0',
-                      selectedIds.has(song.id) ? 'bg-blue-600 border-blue-600' : 'border-white/25'
+                      selectedIds.has(song.songId) ? 'bg-blue-600 border-blue-600' : 'border-white/25'
                     )}
                     aria-hidden="true"
                   >
-                    {selectedIds.has(song.id) && (
+                    {selectedIds.has(song.songId) && (
                       <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>

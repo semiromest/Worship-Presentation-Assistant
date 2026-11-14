@@ -198,6 +198,11 @@ function validateSlide(slide: any): void {
   if (slide.parts !== undefined && (!Array.isArray(slide.parts) || slide.parts.some((part: any) => typeof part !== 'string')))
     throw new Error('Invalid text parts');
   if (slide.videoPlayback !== undefined) fields(slide.videoPlayback, NONE, PLAYBACK_NUMBERS, PLAYBACK_BOOLEANS);
+  if (slide.chords !== undefined) {
+    fields(slide.chords, ['key'], ['transpose']);
+    if (!Array.isArray(slide.chords.parts) || slide.chords.parts.some((part: any) => typeof part !== 'string'))
+      throw new Error('Invalid slide chords');
+  }
   if (slide.items !== undefined || slide.videoOverlays !== undefined) validateSlideItems(slide);
   if (slide.loopItems !== undefined) {
     if (!Array.isArray(slide.loopItems)) throw new Error('Invalid loop');

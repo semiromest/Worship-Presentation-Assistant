@@ -7,7 +7,19 @@ import { useListMotion } from './hooks/useListMotion';
 import * as m from 'motion/react-m';
 import { playSfx } from './sfx';
 import { usePractice } from './hooks/usePractice';
-import { useState, useCallback, useRef, useMemo, useEffect, memo, type ReactNode } from 'react';
+import {
+  useState,
+  useCallback,
+  useRef,
+  useMemo,
+  useEffect,
+  useDeferredValue,
+  memo,
+  type ReactNode,
+  type DragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Image as ImageIcon,
@@ -18,37 +30,66 @@ import {
   FolderOpen,
   ChevronDown,
   Repeat,
-  Clock,
   GripVertical,
   RefreshCw,
   X,
   Check,
+  Search,
+  Grid2x2,
+  Grid3x3,
+  ArrowUp,
+  ArrowDown,
+  Minus,
+  CheckCheck,
+  TriangleAlert,
+  Upload,
+  Play,
+  ListPlus,
+  CircleCheck,
+  Sparkles,
 } from 'lucide-react';
 import type { LoopItem, MediaItem, MediaKind } from './types';
 import { LOOP_DEFAULT_DURATION } from './constants';
-import { cn } from './utils';
+import { cn, toFileUrl as toSlideFileUrl } from './utils';
+import { toOsPath } from './canvasSource';
 import { confirmDialog } from './dialogs';
 import { useStore } from './state/useStore';
 import { loadMediaFolderSettings, saveMediaFolderSettings, type MediaFolderSettings } from './mediaFolderSettings';
+import {
+  CARD_META_HEIGHT,
+  GRID_GAP,
+  clampDurationSecs,
+  computeGridMetrics,
+  computeVisibleRange,
+  countMediaByType,
+  filterAndSortMedia,
+  formatLoopTime,
+  moveItem,
+  parseMediaViewPrefs,
+  rangeIds,
+  sortMedia,
+  type GridMetrics,
+  type MediaDensity,
+  type MediaFilter,
+  type MediaSort,
+  type MediaViewPrefs,
+} from './mediaLibraryModel';
+import './media-library.css';
+import { ImageGenerateDialog } from './components/ImageGenerateDialog';
 
-// ─── Constants (Virtualization + Thumbnails) ────────────────────────────────
+// ─── Constants ──────────────────────────────────────────────────────────────
 
 const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tif', 'tiff', 'avif', 'svg']);
-const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'mkv', 'avi', 'm4v', 'wmv', 'flv', 'mpeg', 'mpg']);
+const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'mkv', 'avi', 'm4v', 'wmv', 'flv', 'mpeg', 'mpg', 'ogg']);
 const THUMBNAIL_TIMEOUT_MS = 8_000;
 const MIN_DURATION_MS = 1_000;
 const MAX_DURATION_MS = 300_000;
-
 const THUMB_MAX_EDGE = 400;
 const THUMB_CACHE_LIMIT = 800;
-
-const MIN_CARD_WIDTH = 320;
-const GRID_GAP = 8;
-// Keep the card and virtual row heights stable as the preview fills its column.
-const CARD_PREVIEW_HEIGHT = 180;
-const CARD_HEIGHT = 228;
-const ROW_HEIGHT = CARD_HEIGHT + GRID_GAP;
 const OVERSCAN_ROWS = 2;
+const VIEW_PREFS_KEY = 'wpa.media.view';
+const LOOP_DURATION_KEY = 'wpa.media.loopDefaultDuration';
+const LOOP_DRAG_TYPE = 'application/x-wpa-loop-item';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -59,11 +100,12 @@ const toFileUrl = (p: string) => {
   return encodeURI(`${n.startsWith('/') ? 'file://' : 'file:///'}${n}`);
 };
 
+/** Inverse of toFileUrl for loop items, so their previews can use the shared thumbnail cache. */
+const fileUrlToPath = (url: string): string | null => (url.startsWith('file:') ? toOsPath(url) : null);
+
 // Stream a media file through the main process's local-resource protocol
 // (Range-capable). Unlike file:// URLs this works from the dev-server origin
-// (http://localhost:5173), where webSecurity blocks file:// subresources —
-// which is exactly why the old <video src="file://..."> thumbnails never
-// loaded in dev. Falls back to file:// when the protocol isn't reachable.
+// (http://localhost:5173), where webSecurity blocks file:// subresources.
 // encodeURIComponent: unicode-safe and needs no Buffer polyfill in the
 // renderer (nodeIntegration is off); the main-process handler decodes it.
 const toMediaStreamUrl = (p: string) => `local-resource://mediafile/${encodeURIComponent(normalizePath(p))}`;
@@ -82,41 +124,24 @@ const isMediaFile = (p: string) => detectMediaType(p) !== null;
 const makeId = () =>
   globalThis.crypto?.randomUUID?.() ?? `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
 
-function parseDurationSecs(value: string | number): number {
-  const n = typeof value === 'string' ? parseFloat(value) : value;
-  if (!isFinite(n) || n < 1) return 1;
-  if (n > 300) return 300;
-  return Math.round(n);
+function readStored<T>(key: string, parse: (raw: unknown) => T, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw === null ? fallback : parse(JSON.parse(raw));
+  } catch {
+    return fallback;
+  }
 }
 
-function formatTotalTime(ms: number): string {
-  const s = Math.round(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  const r = s % 60;
-  return r > 0 ? `${m}m ${r}s` : `${m}m`;
+function writeStored(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Preferences are a convenience; the page works without storage.
+  }
 }
 
-// ─── Virtualization Math ────────────────────────────────────────────────────
-
-function computeColumns(containerWidth: number, minCardWidth: number, gap: number): number {
-  if (containerWidth <= 0) return 1;
-  const cols = Math.floor((containerWidth + gap) / (minCardWidth + gap));
-  return Math.max(1, cols);
-}
-
-function computeVisibleRange(
-  scrollTop: number,
-  viewportHeight: number,
-  rowHeight: number,
-  totalRows: number,
-  overscanRows: number
-): { startRow: number; endRow: number } {
-  if (totalRows <= 0 || rowHeight <= 0) return { startRow: 0, endRow: -1 };
-  const rawStart = Math.floor(scrollTop / rowHeight) - overscanRows;
-  const rawEnd = Math.ceil((scrollTop + viewportHeight) / rowHeight) + overscanRows;
-  return { startRow: Math.max(0, rawStart), endRow: Math.min(totalRows - 1, rawEnd) };
-}
+const isFileDrag = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
 
 // ─── Concurrency Limiter ────────────────────────────────────────────────────
 
@@ -174,6 +199,8 @@ interface ThumbEntry {
   isBlob: boolean;
 }
 const thumbnailCache = new Map<string, ThumbEntry>();
+/** Paths whose thumbnail failed this session, so scrolling back doesn't retry forever. */
+const thumbnailFailures = new Set<string>();
 
 function cacheThumb(key: string, entry: ThumbEntry) {
   if (thumbnailCache.has(key)) thumbnailCache.delete(key);
@@ -188,12 +215,8 @@ function cacheThumb(key: string, entry: ThumbEntry) {
   }
 }
 
-type ExtendedElectronAPI = NonNullable<typeof window.electronAPI> & {
-  getMediaThumbnail?: (filePath: string, maxEdge: number) => Promise<string | null>;
-};
-
 async function generateImageThumbnail(filePath: string, signal: AbortSignal): Promise<ThumbEntry | null> {
-  const api = window.electronAPI as ExtendedElectronAPI | undefined;
+  const api = window.electronAPI;
   if (api?.getMediaThumbnail) {
     const url = await api.getMediaThumbnail(filePath, THUMB_MAX_EDGE);
     if (signal.aborted) return null;
@@ -237,22 +260,18 @@ function createVideoThumbnailBlob(
     video.muted = true;
     video.playsInline = true;
     // The file is served by the local-resource protocol while the renderer
-    // normally runs from http://localhost (dev) or file:// (packaged). Tell
-    // Chromium that this media is intentionally CORS-readable; otherwise
-    // drawImage() may work but getImageData()/toBlob() fails with a tainted
-    // canvas and the card falls back to the camera icon.
+    // normally runs from http://localhost (dev) or file:// (packaged). Mark the
+    // media CORS-readable so getImageData()/toBlob() don't hit a tainted canvas.
     video.crossOrigin = 'anonymous';
     video.setAttribute('muted', '');
     video.setAttribute('playsinline', '');
-    video.setAttribute('webkit-playsinline', '');
-    // Prefer the main-process stream when IPC exists (Electron dev+packaged);
-    // the file:// form is only a last resort for non-Electron environments.
     video.src = window.electronAPI ? toMediaStreamUrl(filePath) : toFileUrl(filePath);
 
     let settled = false;
     let retries = 0;
     const cleanup = () => {
       clearTimeout(timer);
+      clearTimeout(metadataFallback);
       signal.removeEventListener('abort', onAbort);
       video.removeAttribute('src');
       try {
@@ -273,13 +292,10 @@ function createVideoThumbnailBlob(
     const timer = setTimeout(() => done(null), timeout);
 
     const tryCapture = () => {
+      if (settled) return;
       try {
         const vw = video.videoWidth || 640;
         const vh = video.videoHeight || 360;
-        if (!vw || !vh) {
-          done(null);
-          return;
-        }
         const c = document.createElement('canvas');
         c.width = Math.min(vw, THUMB_MAX_EDGE);
         const scale = c.width / vw;
@@ -295,21 +311,17 @@ function createVideoThumbnailBlob(
           done(null);
           return;
         }
-        // Check for all-black / empty frame (Chrome decodes black on some codecs)
+        // Chrome decodes an all-black first frame for some codecs; seek further in.
         const isEmpty = (() => {
           try {
             const data = ctx.getImageData(0, 0, Math.min(c.width, 40), Math.min(c.height, 40)).data;
-            let sumR = 0,
-              sumG = 0,
-              sumB = 0,
-              samples = 0;
+            let sum = 0;
+            let samples = 0;
             for (let i = 0; i < data.length; i += 4 * 17) {
-              sumR += data[i];
-              sumG += data[i + 1];
-              sumB += data[i + 2];
+              sum += data[i] + data[i + 1] + data[i + 2];
               samples++;
             }
-            return samples > 0 && (sumR + sumG + sumB) / (samples * 3) < 12;
+            return samples > 0 && sum / (samples * 3) < 12;
           } catch {
             return false;
           }
@@ -317,8 +329,7 @@ function createVideoThumbnailBlob(
         if (isEmpty && retries < 3) {
           retries++;
           const dur = video.duration || 3;
-          const next = Math.min(dur, Math.max(1, dur * 0.05 * (retries + 2)));
-          video.currentTime = next;
+          video.currentTime = Math.min(dur, Math.max(1, dur * 0.05 * (retries + 2)));
           return;
         }
         c.toBlob(
@@ -338,43 +349,24 @@ function createVideoThumbnailBlob(
     };
 
     const afterSeek = () => {
-      // Wait for the video engine to actually decode the frame at the new
-      // position before drawing to canvas. requestVideoFrameCallback fires
-      // exactly when a new decoded frame is presented; fall back to a small
-      // timeout on browsers that don't support it.
-      if (typeof (video as any).requestVideoFrameCallback === 'function') {
-        // Trigger the decoder so it renders the current frame into the buffer.
-        video.play().catch(() => {});
-        video.pause();
-        (video as any).requestVideoFrameCallback(() => {
-          if (settled) return;
-          tryCapture();
-        });
-        // Safety net: if the callback never fires (e.g. paused video on some
-        // codecs), capture after 800 ms anyway.
-        setTimeout(() => {
-          if (!settled) tryCapture();
-        }, 800);
+      // Wait until the decoder has actually presented the frame at the new
+      // position. requestVideoFrameCallback fires exactly then; otherwise fall
+      // back to a couple of frames plus a small delay.
+      video.play().catch(() => {});
+      video.pause();
+      const rvfc = (video as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number })
+        .requestVideoFrameCallback;
+      if (typeof rvfc === 'function') {
+        rvfc.call(video, tryCapture);
+        setTimeout(tryCapture, 800);
       } else {
-        // Trigger decode: play/pause forces the codec to render into the buffer.
-        video.play().catch(() => {});
-        video.pause();
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() => {
-            // Give the compositor one extra tick so the decoded frame is
-            // actually available in the video element's pixel buffer.
-            setTimeout(() => {
-              if (!settled) tryCapture();
-            }, 80);
-          })
-        );
+        requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(tryCapture, 80)));
       }
     };
 
     video.onloadedmetadata = () => {
       const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
-      // Keep the timestamp valid for short clips; seeking to exactly 1s would
-      // otherwise fail for videos shorter than one second.
+      // Keep the timestamp valid for clips shorter than a second.
       const seekTo = duration > 0 ? Math.min(Math.max(duration * 0.08, 0.01), Math.max(0, duration - 0.01)) : 0;
       try {
         if (seekTo > 0) video.currentTime = seekTo;
@@ -386,13 +378,13 @@ function createVideoThumbnailBlob(
 
     video.onseeked = afterSeek;
     video.onerror = () => done(null);
-    // Defensive: some MP4s never fire onloadedmetadata due to bad atom layout
-    setTimeout(() => {
+    // Some MP4s never fire onloadedmetadata due to bad atom layout.
+    const metadataFallback = setTimeout(() => {
       if (!settled && video.readyState >= 1 && video.videoWidth && video.videoHeight) {
         try {
           video.currentTime = Math.max(0.5, Math.min(video.duration || 2, 1.5));
         } catch {
-          // Ignore media cleanup failures.
+          // Ignore seek failures; the timeout settles the promise.
         }
       }
     }, 2500);
@@ -400,6 +392,18 @@ function createVideoThumbnailBlob(
 }
 
 async function generateVideoThumbnail(filePath: string, signal: AbortSignal): Promise<ThumbEntry | null> {
+  const api = window.electronAPI;
+  // The main process (ffmpeg, disk-cached) is faster and more reliable than
+  // decoding in the renderer; fall back to the renderer decoder without it.
+  if (api?.getMediaThumbnail) {
+    try {
+      const url = await api.getMediaThumbnail(filePath, THUMB_MAX_EDGE);
+      if (signal.aborted) return null;
+      if (url) return { url, isBlob: false };
+    } catch {
+      // Fall through to the renderer-side decoder.
+    }
+  }
   const url = await createVideoThumbnailBlob(filePath, signal);
   return url ? { url, isBlob: true } : null;
 }
@@ -407,50 +411,20 @@ async function generateVideoThumbnail(filePath: string, signal: AbortSignal): Pr
 async function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('thumbnail conversion failed'));
+    reader.onload = () =>
+      typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('thumbnail conversion failed'));
     reader.onerror = () => reject(reader.error ?? new Error('thumbnail conversion failed'));
     reader.readAsDataURL(blob);
   });
 }
 
 /**
- * Create a portable thumbnail for a loop video. The main-process thumbnail
- * cache is preferred, while the renderer decoder remains a fallback for
- * installations without ffmpeg. Data URLs are used here because a loop item
- * is persisted inside the presentation and must not depend on the disposable
- * thumbnail cache surviving a save/reopen.
+ * Create a portable thumbnail for a loop video. Data URLs are used because a
+ * loop item is persisted inside the presentation and must not depend on the
+ * disposable thumbnail cache surviving a save/reopen.
  */
 async function generateLoopVideoThumbnail(filePath: string): Promise<string | undefined> {
-  // ── 1. Try Electron main-process thumbnail (ffmpeg – most reliable) ──────
-  const api = window.electronAPI as (NonNullable<typeof window.electronAPI> & {
-    getMediaThumbnail?: (filePath: string, maxEdge: number) => Promise<string | null>;
-  }) | undefined;
-
-  if (api?.getMediaThumbnail) {
-    try {
-      const thumbUrl = await api.getMediaThumbnail(filePath, 400);
-      if (thumbUrl) {
-        // Convert the local-resource:// URL to a data URL so it survives
-        // save/reopen without depending on the thumbnail cache.
-        try {
-          const response = await fetch(thumbUrl);
-          if (response.ok) {
-            const blob = await response.blob();
-            return await blobToDataUrl(blob);
-          }
-        } catch {
-          // Network fetch failed; return the URL as-is as a best-effort.
-          return thumbUrl;
-        }
-      }
-    } catch {
-      // IPC failed; fall through to renderer-side decoder.
-    }
-  }
-
-  // ── 2. Renderer-side decoder fallback ────────────────────────────────────
-  const controller = new AbortController();
-  const entry = await generateVideoThumbnail(filePath, controller.signal);
+  const entry = thumbnailCache.get(filePath) ?? (await generateVideoThumbnail(filePath, new AbortController().signal));
   if (!entry) return undefined;
   try {
     const response = await fetch(entry.url);
@@ -459,22 +433,54 @@ async function generateLoopVideoThumbnail(filePath: string): Promise<string | un
   } catch {
     return entry.url;
   } finally {
-    if (entry.isBlob && entry.url.startsWith('blob:')) URL.revokeObjectURL(entry.url);
+    // Only revoke blobs we created here; cached ones stay owned by the cache.
+    if (entry.isBlob && thumbnailCache.get(filePath) !== entry) URL.revokeObjectURL(entry.url);
   }
 }
 
-function useThumbnail(type: MediaKind, filePath: string): string | undefined {
-  const [url, setUrl] = useState<string | undefined>(() => thumbnailCache.get(filePath)?.url);
+async function createLoopItems(paths: string[], durationMs: number): Promise<LoopItem[]> {
+  return Promise.all(
+    paths.map(async (p) => {
+      const type: MediaKind = detectMediaType(p) === 'video' ? 'video' : 'image';
+      return {
+        id: makeId(),
+        type,
+        mediaUrl: toSlideFileUrl(p),
+        fileName: getFileName(p),
+        duration: durationMs,
+        thumbnailUrl: type === 'video' ? await limitVideoThumb(() => generateLoopVideoThumbnail(p)) : undefined,
+      } satisfies LoopItem;
+    })
+  );
+}
+
+const toPresentationItems = (items: MediaItem[]) =>
+  items.map((item) => ({ type: item.type, path: item.path, thumbnailUrl: thumbnailCache.get(item.path)?.url }));
+
+type ThumbState = { url?: string; failed: boolean };
+
+function useThumbnail(type: MediaKind, filePath: string | null, enabled = true): ThumbState {
+  const initial = (): ThumbState => ({
+    url: filePath ? thumbnailCache.get(filePath)?.url : undefined,
+    failed: !!filePath && thumbnailFailures.has(filePath),
+  });
+  const [state, setState] = useState<ThumbState>(initial);
   useEffect(() => {
+    if (!enabled || !filePath) return;
     const cached = thumbnailCache.get(filePath);
     if (cached) {
-      setUrl(cached.url);
+      setState({ url: cached.url, failed: false });
+      return;
+    }
+    if (thumbnailFailures.has(filePath)) {
+      setState({ failed: true });
       return;
     }
     if (type === 'image' && getExtension(filePath) === 'svg') {
-      setUrl(window.electronAPI ? toMediaStreamUrl(filePath) : toFileUrl(filePath));
+      setState({ url: window.electronAPI ? toMediaStreamUrl(filePath) : toFileUrl(filePath), failed: false });
       return;
     }
+    setState({ failed: false });
     const controller = new AbortController();
     let alive = true;
     const limiter = type === 'video' ? limitVideoThumb : limitImageThumb;
@@ -484,184 +490,257 @@ function useThumbnail(type: MediaKind, filePath: string): string | undefined {
         : () => generateImageThumbnail(filePath, controller.signal);
     limiter(task, controller.signal)
       .then((entry) => {
-        if (!entry) return;
+        if (controller.signal.aborted) return;
+        if (!entry) {
+          thumbnailFailures.add(filePath);
+          if (alive) setState({ failed: true });
+          return;
+        }
         cacheThumb(filePath, entry);
-        if (alive) setUrl(entry.url);
+        if (alive) setState({ url: entry.url, failed: false });
       })
       .catch(() => {});
     return () => {
       alive = false;
       controller.abort();
     };
-  }, [filePath, type]);
-  return url;
+  }, [filePath, type, enabled]);
+  return state;
 }
 
-// ─── DurationInput ──────────────────────────────────────────────────────────
+// ─── Duration Stepper ───────────────────────────────────────────────────────
 
-const DurationInput = memo(function DurationInput({
+const DurationStepper = memo(function DurationStepper({
+  id,
   valueSecs,
   onChange,
   disabled = false,
-  'aria-label': ariaLabel,
+  label,
 }: {
+  id?: string;
   valueSecs: number;
   onChange: (secs: number) => void;
   disabled?: boolean;
-  'aria-label'?: string;
+  label: string;
 }) {
+  const { t } = useTranslation();
   const [local, setLocal] = useState(String(valueSecs));
-  const isFocused = useRef(false);
+  const focused = useRef(false);
   useEffect(() => {
-    if (!isFocused.current) setLocal(String(valueSecs));
+    if (!focused.current) setLocal(String(valueSecs));
   }, [valueSecs]);
-  const commit = useCallback(() => {
-    const parsed = parseDurationSecs(local);
+  const commit = (value: string | number) => {
+    const parsed = clampDurationSecs(value);
     setLocal(String(parsed));
-    onChange(parsed);
-  }, [local, onChange]);
+    if (parsed !== valueSecs) onChange(parsed);
+  };
   return (
-    <div className="flex items-center gap-1 shrink-0">
+    <div className="media-stepper" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        disabled={disabled || valueSecs <= 1}
+        onClick={() => commit(valueSecs - 1)}
+        aria-label={`${label}: ${t('mediaPage.decrease')}`}
+        title={t('mediaPage.decrease')}
+      >
+        <Minus size={13} aria-hidden="true" />
+      </button>
       <input
+        id={id}
         type="number"
+        inputMode="numeric"
         min={1}
         max={300}
         value={local}
         disabled={disabled}
+        aria-label={label}
         onChange={(e) => setLocal(e.target.value)}
-        onFocus={() => {
-          isFocused.current = true;
+        onFocus={(e) => {
+          focused.current = true;
+          e.target.select();
         }}
         onBlur={() => {
-          isFocused.current = false;
-          commit();
+          focused.current = false;
+          commit(local);
         }}
         onKeyDown={(e) => {
+          e.stopPropagation();
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          if (e.key === 'Escape') {
+            setLocal(String(valueSecs));
+            (e.target as HTMLInputElement).blur();
+          }
         }}
-        onClick={(e) => e.stopPropagation()}
-        aria-label={ariaLabel}
-        className={cn(
-          'w-12 bg-zinc-900 border border-zinc-700 rounded px-1 py-0.5 text-[11px] text-white text-center font-mono focus:outline-none focus:border-amber-500/70 transition-colors',
-          disabled && 'opacity-40 cursor-not-allowed'
-        )}
       />
-      <span className="text-[11px] text-zinc-500 select-none">s</span>
+      <button
+        type="button"
+        disabled={disabled || valueSecs >= 300}
+        onClick={() => commit(valueSecs + 1)}
+        aria-label={`${label}: ${t('mediaPage.increase')}`}
+        title={t('mediaPage.increase')}
+      >
+        <Plus size={13} aria-hidden="true" />
+      </button>
+      <span className="media-unit" aria-hidden="true">
+        s
+      </span>
     </div>
   );
 });
 
 // ─── Loop Item Row ──────────────────────────────────────────────────────────
 
+type DropPosition = 'before' | 'after';
+
 const LoopItemRow = memo(function LoopItemRow({
   item,
   index,
-  isDragOver,
+  count,
+  dropPosition,
+  dragging,
   onDragStart,
-  onDragEnter,
+  onDragOverRow,
+  onDropRow,
   onDragEnd,
+  onMove,
   onRemove,
   onDurationChange,
   onUseVideoDurationChange,
 }: {
   item: LoopItem;
   index: number;
-  isDragOver: boolean;
-  onDragStart: (i: number) => void;
-  onDragEnter: (i: number) => void;
+  count: number;
+  dropPosition: DropPosition | null;
+  dragging: boolean;
+  onDragStart: (index: number) => void;
+  onDragOverRow: (index: number, position: DropPosition) => void;
+  onDropRow: (index: number, position: DropPosition) => void;
   onDragEnd: () => void;
+  onMove: (from: number, to: number) => void;
   onRemove: (id: string) => void;
   onDurationChange: (id: string, ms: number) => void;
   onUseVideoDurationChange: (id: string, enabled: boolean) => void;
 }) {
   const { t } = useTranslation();
-  const [imgErr, setImgErr] = useState(false);
+  const path = useMemo(() => fileUrlToPath(item.mediaUrl), [item.mediaUrl]);
+  const needsThumb = item.type === 'image' || !item.thumbnailUrl;
+  const thumb = useThumbnail(item.type, path, needsThumb);
+  const src = item.type === 'video' ? item.thumbnailUrl ?? thumb.url : thumb.url ?? (path ? undefined : item.mediaUrl);
   const handleDur = useCallback((secs: number) => onDurationChange(item.id, secs * 1000), [item.id, onDurationChange]);
+  const fullVideo = item.type === 'video' && !!item.useVideoDuration;
+  const positionOf = (event: DragEvent<HTMLDivElement>): DropPosition => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+  };
   return (
     <div
+      className="loop-row"
       draggable
-      data-motion-item="loop" data-motion-id={item.id}
-      onDragStart={() => onDragStart(index)}
-      onDragEnter={() => onDragEnter(index)}
+      data-motion-item="loop"
+      data-motion-id={item.id}
+      data-drop={dropPosition ?? undefined}
+      data-dragging={dragging || undefined}
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData(LOOP_DRAG_TYPE, item.id);
+        onDragStart(index);
+      }}
+      onDragOver={(event) => {
+        if (!Array.from(event.dataTransfer.types).includes(LOOP_DRAG_TYPE)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        onDragOverRow(index, positionOf(event));
+      }}
+      onDrop={(event) => {
+        if (!Array.from(event.dataTransfer.types).includes(LOOP_DRAG_TYPE)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onDropRow(index, positionOf(event));
+      }}
       onDragEnd={onDragEnd}
-      onDragOver={(e) => e.preventDefault()}
-      className={cn(
-        'group flex items-center gap-2 px-2 py-1.5 rounded-lg',
-        'bg-zinc-800/60 hover:bg-zinc-800 transition-colors duration-[var(--ui-motion-fast,120ms)] select-none',
-        isDragOver && 'ring-1 ring-amber-500/50 bg-zinc-800 scale-[1.01]'
-      )}
+      onKeyDown={(event) => {
+        if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onMove(index, event.key === 'ArrowUp' ? index - 1 : index + 1);
+      }}
     >
-      <ControlTooltip descriptionKey={'common.loopDragToReorder'}><div
-        className="text-zinc-600 hover:text-zinc-400 cursor-grab active:cursor-grabbing shrink-0"
-        title={t('common.loopDragToReorder')}
-      >
-        <GripVertical className="w-3.5 h-3.5" />
-      </div></ControlTooltip>
-      <span className="text-[11px] font-mono text-zinc-600 w-5 shrink-0">{String(index + 1).padStart(2, '0')}</span>
-      <div className="relative w-10 h-10 rounded-md overflow-hidden bg-zinc-900 shrink-0 ring-1 ring-white/5">
-        {item.type === 'video' ? (
-          <>
-            <video src={item.mediaUrl} className="w-full h-full object-cover" muted preload="metadata" />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-              <Film className="w-3.5 h-3.5 text-amber-400" />
-            </div>
-          </>
-        ) : imgErr ? (
-          <div className="w-full h-full flex items-center justify-center bg-zinc-800">
-            <ImageIcon className="w-4 h-4 text-zinc-600" />
-          </div>
+      <span className="loop-grip" title={t('common.loopDragToReorder')} aria-hidden="true">
+        <GripVertical size={15} />
+      </span>
+      <span className="loop-index">{index + 1}</span>
+      <div className="loop-thumb">
+        {src ? (
+          <img src={src} alt="" loading="lazy" decoding="async" draggable={false} />
         ) : (
-          <img src={item.mediaUrl} className="w-full h-full object-cover" alt="" onError={() => setImgErr(true)} />
+          <div className={cn('media-thumb-empty', !thumb.failed && needsThumb && 'media-loading')}>
+            {item.type === 'video' ? <Film size={16} /> : <ImageIcon size={16} />}
+          </div>
         )}
+        <span className="loop-thumb-kind" aria-hidden="true">
+          {item.type === 'video' ? <Play size={9} fill="currentColor" /> : <ImageIcon size={9} />}
+        </span>
       </div>
-      <div className="flex-1 min-w-0">
-        <ControlTooltip><div className="text-xs text-zinc-200 truncate font-medium leading-tight" title={item.fileName}>
+      <div className="loop-info">
+        <div className="media-name" title={item.fileName}>
           {item.fileName}
-        </div></ControlTooltip>
-        <div className="flex items-center gap-1 text-[11px] text-zinc-500 mt-0.5">
-          {item.type === 'video' ? (
-            <>
-              <Film className="w-2.5 h-2.5" />
-              {t('common.loopVideo')}
-            </>
-          ) : (
-            <>
-              <ImageIcon className="w-2.5 h-2.5" />
-              {t('common.loopImage')}
-            </>
-          )}
+        </div>
+        <div className="media-sub">
+          {item.type === 'video' ? t('common.loopVideo') : t('common.loopImage')}
+          {fullVideo && ` · ${t('mediaPage.loopVideoLength')}`}
         </div>
       </div>
-      {item.type === 'video' && (
-        <ControlTooltip descriptionKey={'common.loopUseVideoDuration'}><button
+      <div className="loop-controls">
+        {item.type === 'video' && (
+          <button
+            type="button"
+            className="loop-full"
+            aria-pressed={fullVideo}
+            onClick={() => onUseVideoDurationChange(item.id, !fullVideo)}
+            title={t('common.loopUseVideoDuration')}
+          >
+            <Play size={11} aria-hidden="true" />
+            {t('mediaPage.loopFullVideo')}
+          </button>
+        )}
+        <DurationStepper
+          valueSecs={Math.round(item.duration / 1000)}
+          onChange={handleDur}
+          disabled={fullVideo}
+          label={`${t('common.loopDuration')} — ${item.fileName ?? index + 1}`}
+        />
+        <div className="loop-move">
+          <button
+            type="button"
+            className="media-icon"
+            disabled={index === 0}
+            onClick={() => onMove(index, index - 1)}
+            aria-label={t('common.moveUp')}
+            title={t('common.moveUp')}
+          >
+            <ArrowUp size={14} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="media-icon"
+            disabled={index === count - 1}
+            onClick={() => onMove(index, index + 1)}
+            aria-label={t('common.moveDown')}
+            title={t('common.moveDown')}
+          >
+            <ArrowDown size={14} aria-hidden="true" />
+          </button>
+        </div>
+        <button
           type="button"
-          onClick={() => onUseVideoDurationChange(item.id, !item.useVideoDuration)}
-          aria-pressed={item.useVideoDuration}
-          title={t('common.loopUseVideoDuration')}
-          className={cn(
-            'w-6 h-6 rounded border text-[11px] font-bold transition-colors shrink-0',
-            item.useVideoDuration
-              ? 'bg-blue-500/25 border-blue-400/60 text-blue-300'
-              : 'bg-black/20 border-white/10 text-zinc-500 hover:text-zinc-300'
-          )}
+          className="media-icon media-quick-danger"
+          onClick={() => onRemove(item.id)}
+          aria-label={t('common.loopRemove')}
+          title={t('common.loopRemove')}
         >
-          ▶
-        </button></ControlTooltip>
-      )}
-      <DurationInput
-        valueSecs={Math.round(item.duration / 1000)}
-        onChange={handleDur}
-        disabled={item.type === 'video' && item.useVideoDuration}
-        aria-label={t('common.loopDuration')}
-      />
-      <ControlTooltip descriptionKey={'common.loopRemove'}><button
-        onClick={() => onRemove(item.id)}
-        className="text-zinc-600 hover:text-red-400 opacity-60 hover:opacity-100 focus-visible:opacity-100 transition-all shrink-0"
-        title={t('common.loopRemove')}
-        aria-label={t('common.loopRemove')}
-      >
-        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-      </button></ControlTooltip>
+          <Trash2 size={14} aria-hidden="true" />
+        </button>
+      </div>
     </div>
   );
 });
@@ -671,137 +750,113 @@ const LoopItemRow = memo(function LoopItemRow({
 const MediaCard = memo(function MediaCard({
   item,
   selected,
+  previewHeight,
+  onActivate,
   onAdd,
+  onAddToLoop,
   onRemove,
-  onToggleSelect,
 }: {
   item: MediaItem;
   selected: boolean;
+  previewHeight: number;
+  onActivate: (id: string, event: ReactMouseEvent) => void;
   onAdd: (item: MediaItem, thumbnailUrl?: string) => void;
+  onAddToLoop: (item: MediaItem) => void;
   onRemove: (id: string) => void;
-  onToggleSelect: (id: string) => void;
 }) {
   const { t } = useTranslation();
   const isImage = item.type === 'image';
   const ext = getExtension(item.path).toUpperCase();
-  const thumbUrl = useThumbnail(item.type, item.path);
-  const pillBg = isImage ? 'rgba(184,134,11,0.85)' : 'rgba(106,79,200,0.85)';
+  const thumb = useThumbnail(item.type, item.path);
   return (
     <div
-      className="group relative rounded-lg border overflow-hidden media-card"
+      className="media-card"
+      data-selected={selected}
       onKeyDown={(event) => {
-        // Let the focused button activate natively without also navigating or
-        // sending a slide through the global operator shortcuts.
+        // Let the focused button activate natively without also triggering the
+        // global operator shortcuts (Enter/Space navigate or send slides).
         if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
       }}
-      style={{
-        height: CARD_HEIGHT,
-        contain: 'layout paint style',
-        contentVisibility: 'auto',
-        containIntrinsicSize: `auto ${MIN_CARD_WIDTH}px ${CARD_HEIGHT}px`,
-        borderColor: selected ? (isImage ? 'rgba(200,146,10,0.9)' : 'rgba(124,92,191,0.9)') : undefined,
-        background: selected ? (isImage ? 'rgba(184,134,11,0.15)' : 'rgba(106,79,200,0.15)') : undefined,
-      }}
     >
-      <ControlTooltip description={t(selected ? 'tooltipText.unselectMedia' : 'tooltipText.selectMedia', { name: item.name })}><button
+      <button
         type="button"
-        onClick={() => onToggleSelect(item.id)}
-        aria-label={item.name}
+        className="media-hit"
+        onClick={(event) => onActivate(item.id, event)}
+        onDoubleClick={() => onAdd(item, thumb.url)}
+        aria-label={t(selected ? 'tooltipText.unselectMedia' : 'tooltipText.selectMedia', { name: item.name })}
         aria-pressed={selected}
         title={item.name}
-        className="absolute inset-0 z-10 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400"
-      /></ControlTooltip>
-      <div className="pointer-events-none relative w-full bg-black overflow-hidden" style={{ height: CARD_PREVIEW_HEIGHT }}>
-        {thumbUrl ? (
-          <img
-            src={thumbUrl}
-            alt={item.name}
-            loading="lazy"
-            decoding="async"
-            className="w-full h-full object-cover opacity-72 group-hover:opacity-100 transition-opacity duration-200"
-          />
+      />
+      <div className="media-thumb" style={{ height: previewHeight }}>
+        {thumb.url ? (
+          <img src={thumb.url} alt="" loading="lazy" decoding="async" draggable={false} />
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-[#0f0a1a] group-hover:bg-[#160d2a] transition-colors">
-            {isImage ? (
-              <ImageIcon
-                size={18}
-                className="text-white/[0.18] group-hover:text-[rgba(232,199,102,0.7)] transition-colors"
-              />
-            ) : (
-              <Video
-                size={18}
-                className="text-white/[0.18] group-hover:text-[rgba(156,120,230,0.7)] transition-colors"
-              />
-            )}
+          <div className={cn('media-thumb-empty', !thumb.failed && 'media-loading')}>
+            {isImage ? <ImageIcon size={22} /> : <Video size={22} />}
           </div>
         )}
-        <span
-          className="absolute top-1 left-1 text-[7px] font-bold font-mono tracking-wider text-white px-1.5 py-0.5 rounded"
-          style={{ background: pillBg }}
-        >
+        <span className="media-kind">
+          {isImage ? <ImageIcon size={10} aria-hidden="true" /> : <Play size={10} fill="currentColor" aria-hidden="true" />}
           {ext || (isImage ? 'IMG' : 'VID')}
         </span>
-        {selected ? (
-          <div className="ui-choice-mark absolute top-1 right-1 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center shadow-lg">
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="white"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          </div>
-        ) : (
-          <div className="absolute top-1 right-1 w-5 h-5 rounded-full border-2 border-white/0 group-hover:border-white/50 flex items-center justify-center" />
-        )}
+        <span className="media-check" aria-hidden="true">
+          {selected && <Check size={13} strokeWidth={3} className="ui-choice-mark" />}
+        </span>
       </div>
-      <div className="pointer-events-none flex items-center gap-1 px-2 py-1.5 bg-black/30" style={{ height: CARD_HEIGHT - CARD_PREVIEW_HEIGHT - 2 }}>
-        <ControlTooltip><span className="text-xs text-white/70 font-medium flex-1 min-w-0 truncate" title={item.name}>
-          {item.name}
-        </span></ControlTooltip>
-        <ControlTooltip descriptionKey={'common.mediaAddToSlide'}><button
+      <div className="media-quick">
+        <button
           type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onAdd(item, thumbUrl);
-          }}
-          className="pointer-events-auto relative z-20 w-8 h-8 flex items-center justify-center rounded border border-white/[0.13] bg-white/[0.06] text-white/70 hover:bg-amber-500 hover:text-white hover:border-transparent transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+          onClick={() => onAddToLoop(item)}
+          aria-label={`${t('mediaPage.addToLoop')}: ${item.name}`}
+          title={t('mediaPage.addToLoop')}
+        >
+          <ListPlus size={15} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="media-quick-danger"
+          onClick={() => onRemove(item.id)}
+          aria-label={`${t('common.mediaRemove')}: ${item.name}`}
+          title={t('common.mediaRemove')}
+        >
+          <Trash2 size={15} aria-hidden="true" />
+        </button>
+      </div>
+      <div className="media-meta" style={{ height: CARD_META_HEIGHT }}>
+        <div className="media-meta-text">
+          <span className="media-name">{item.name}</span>
+          <span className="media-sub">
+            {isImage ? t('common.loopImage') : t('common.loopVideo')}
+            {item.origin === 'folder' && ` · ${t('mediaPage.folderLinked')}`}
+          </span>
+        </div>
+        <button
+          type="button"
+          className="media-add"
+          onClick={() => onAdd(item, thumb.url)}
           data-guide-anchor={item.name === 'practice-image.svg' ? 'media-add' : undefined}
           title={t('common.mediaAddToSlide')}
-          aria-label={t('common.mediaAddToSlide')}
+          aria-label={`${t('common.mediaAddToSlide')}: ${item.name}`}
         >
-          <Plus size={14} aria-hidden="true" />
-        </button></ControlTooltip>
-        <ControlTooltip descriptionKey={'common.mediaRemove'}><button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove(item.id);
-          }}
-          className="pointer-events-auto relative z-20 w-8 h-8 flex items-center justify-center rounded border border-white/[0.13] bg-white/[0.06] text-white/70 hover:bg-red-600 hover:text-white hover:border-transparent transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-          title={t('common.mediaRemove')}
-          aria-label={t('common.mediaRemove')}
-        >
-          <Trash2 size={14} aria-hidden="true" />
-        </button></ControlTooltip>
+          <Plus size={16} aria-hidden="true" />
+        </button>
       </div>
     </div>
   );
 });
 
-// ─── MediaGrid (Virtualized) ────────────────────────────────────────────────
+// ─── Virtualized Grid ───────────────────────────────────────────────────────
 
 const VirtualizedMediaGrid = memo(function VirtualizedMediaGrid({
   items,
-  children,
+  density,
+  resetKey,
+  renderItem,
 }: {
   items: MediaItem[];
-  children: (item: MediaItem) => ReactNode;
+  density: MediaDensity;
+  resetKey: string;
+  renderItem: (item: MediaItem, metrics: GridMetrics) => ReactNode;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState({ width: 0, height: 0, scrollTop: 0 });
@@ -809,7 +864,15 @@ const VirtualizedMediaGrid = memo(function VirtualizedMediaGrid({
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const update = () => setViewport({ width: el.clientWidth, height: el.clientHeight, scrollTop: el.scrollTop });
+    const update = () => {
+      const style = getComputedStyle(el);
+      const inner = el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      setViewport((prev) =>
+        prev.width === inner && prev.height === el.clientHeight && prev.scrollTop === el.scrollTop
+          ? prev
+          : { width: inner, height: el.clientHeight, scrollTop: el.scrollTop }
+      );
+    };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
@@ -829,55 +892,44 @@ const VirtualizedMediaGrid = memo(function VirtualizedMediaGrid({
     };
   }, []);
 
-  const { visibleItems, topOffset, totalHeight, cols } = useMemo(() => {
-    const columns = computeColumns(viewport.width, MIN_CARD_WIDTH, GRID_GAP);
-    const totalRows = items.length > 0 ? Math.ceil(items.length / columns) : 0;
-    const height = totalRows > 0 ? totalRows * ROW_HEIGHT - GRID_GAP : 0;
-    const { startRow, endRow } = computeVisibleRange(
-      viewport.scrollTop,
-      viewport.height,
-      ROW_HEIGHT,
-      totalRows,
-      OVERSCAN_ROWS
-    );
-    const startIndex = startRow * columns;
-    const endIndex = Math.min(items.length, (endRow + 1) * columns);
-    return {
-      visibleItems: items.slice(startIndex, endIndex),
-      topOffset: startRow * ROW_HEIGHT,
-      totalHeight: height,
-      cols: columns,
-    };
-  }, [items, viewport]);
+  // A new search / filter / sort starts from the top instead of a stale offset.
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [resetKey]);
 
-  if (items.length === 0) return null;
+  const metrics = useMemo(() => computeGridMetrics(viewport.width, density), [viewport.width, density]);
+  const totalRows = Math.ceil(items.length / metrics.cols);
+  const { startRow, endRow } = computeVisibleRange(
+    viewport.scrollTop,
+    viewport.height,
+    metrics.rowHeight,
+    totalRows,
+    OVERSCAN_ROWS
+  );
+  const visibleItems = useMemo(
+    () => items.slice(startRow * metrics.cols, Math.min(items.length, (endRow + 1) * metrics.cols)),
+    [items, startRow, endRow, metrics.cols]
+  );
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 pb-4" role="list">
-      <div style={{ position: 'relative', width: '100%', height: totalHeight }}>
+    <div ref={scrollRef} className="media-viewport">
+      <div style={{ position: 'relative', width: '100%', height: totalRows > 0 ? totalRows * metrics.rowHeight - GRID_GAP : 0 }}>
         <div
+          role="list"
           style={{
             position: 'absolute',
-            top: topOffset,
+            top: startRow * metrics.rowHeight,
             left: 0,
             right: 0,
             display: 'grid',
-            gridTemplateColumns: `repeat(${cols}, 1fr)`,
+            gridTemplateColumns: `repeat(${metrics.cols}, minmax(0, 1fr))`,
+            gridAutoRows: metrics.cardHeight,
             gap: GRID_GAP,
           }}
         >
           {visibleItems.map((item) => (
-            <div
-              key={item.id}
-              data-motion-item="media" data-motion-id={item.id}
-              style={{ height: CARD_HEIGHT, minWidth: 0, contain: 'layout paint style' }}
-              // minWidth:0 — a grid item's default automatic minimum is its
-              // content's min-content size; without this an oversized child
-              // (e.g. a wide intrinsic image) could stretch its track and
-              // make columns unequal. 1fr tracks are equal only when every
-              // item can shrink below the track width.
-            >
-              {children(item)}
+            <div key={item.id} role="listitem" data-motion-item="media" data-motion-id={item.id} style={{ minWidth: 0 }}>
+              {renderItem(item, metrics)}
             </div>
           ))}
         </div>
@@ -886,7 +938,7 @@ const VirtualizedMediaGrid = memo(function VirtualizedMediaGrid({
   );
 });
 
-// ─── Drop Item ──────────────────────────────────────────────────────────────
+// ─── Menu Item ──────────────────────────────────────────────────────────────
 
 const DropItem = memo(function DropItem({
   icon,
@@ -908,9 +960,7 @@ const DropItem = memo(function DropItem({
       data-guide-anchor={guideAnchor}
       className="w-full flex items-center gap-2.5 p-2.5 rounded-lg hover:bg-white/[0.06] transition-colors text-left outline-none"
     >
-      <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-white/[0.06] text-white/85 shrink-0">
-        {icon}
-      </div>
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-500/15 text-blue-300 shrink-0">{icon}</div>
       <div>
         <div className="text-xs font-semibold text-white/90">{title}</div>
         <div className="text-[11px] text-white/60 leading-snug">{desc}</div>
@@ -927,56 +977,182 @@ interface MediaLoopTabProps {
   onAddLoopToPresentation: (items: LoopItem[], defaultDuration: number) => void;
 }
 
+type ScanInfo = { status: 'ok'; count: number } | { status: 'failed' } | null;
+
 export default function MediaLoopTab({
   onAddMediaToPresentation,
   onAddAllMediaToPresentation,
   onAddLoopToPresentation,
 }: MediaLoopTabProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const practice = usePractice();
-  const [imageImported,setImageImported] = useState(false);
+  const [imageImported, setImageImported] = useState(false);
   const [activeSub, setActiveSub] = useState<'media' | 'loop'>('media');
   const motionRoot = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const motionEnabled = useUiMotionEnabled();
 
   const mediaItems = useStore((s) => s.mediaItems);
   const setMediaItems = useStore((s) => s.setMediaItems);
   useEffect(() => {
     if (!practice || useStore.getState().mediaItems.length) return;
-    try { const saved = JSON.parse(localStorage.getItem('wpa.practice.sampleMedia') ?? '[]');
-      if (Array.isArray(saved)) setMediaItems(saved.filter(item => item?.type === 'image' && item.name === 'practice-image.svg' && typeof item.path === 'string' && typeof item.id === 'string').slice(0,1));
-    } catch { /* Reimport the practice sample if storage is unavailable. */ }
-  }, [practice,setMediaItems]);
-  useEffect(() => { if (practice) { try { localStorage.setItem('wpa.practice.sampleMedia', JSON.stringify(mediaItems.filter(item => item.name === 'practice-image.svg'))); } catch { /* Workspace outcomes remain authoritative. */ } } }, [practice,mediaItems]);
+    try {
+      const saved = JSON.parse(localStorage.getItem('wpa.practice.sampleMedia') ?? '[]');
+      if (Array.isArray(saved))
+        setMediaItems(
+          saved
+            .filter(
+              (item) =>
+                item?.type === 'image' &&
+                item.name === 'practice-image.svg' &&
+                typeof item.path === 'string' &&
+                typeof item.id === 'string'
+            )
+            .slice(0, 1)
+        );
+    } catch {
+      /* Reimport the practice sample if storage is unavailable. */
+    }
+  }, [practice, setMediaItems]);
+  useEffect(() => {
+    if (!practice) return;
+    try {
+      localStorage.setItem(
+        'wpa.practice.sampleMedia',
+        JSON.stringify(mediaItems.filter((item) => item.name === 'practice-image.svg'))
+      );
+    } catch {
+      /* Workspace outcomes remain authoritative. */
+    }
+  }, [practice, mediaItems]);
   const loopItems = useStore((s) => s.loopItems);
   const setLoopItems = useStore((s) => s.setLoopItems);
-  useListMotion(motionRoot, mediaItems.map(item => item.id), 'media-library', 'media', activeSub);
-  useListMotion(motionRoot, loopItems.map(item => item.id), 'loop-library', 'loop', activeSub);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // ── View state ──
+  const [view, setView] = useState<MediaViewPrefs>(() => readStored(VIEW_PREFS_KEY, parseMediaViewPrefs, parseMediaViewPrefs(null)));
+  const updateView = useCallback((patch: Partial<MediaViewPrefs>) => {
+    setView((prev) => {
+      const next = { ...prev, ...patch };
+      writeStored(VIEW_PREFS_KEY, next);
+      return next;
+    });
+  }, []);
+  const [query, setQuery] = useState('');
+  const deferredQuery = useDeferredValue(query);
+  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const counts = useMemo(() => countMediaByType(mediaItems), [mediaItems]);
+  const visibleItems = useMemo(
+    () => filterAndSortMedia(mediaItems, { query: deferredQuery, filter: view.filter, sort: view.sort }, locale),
+    [mediaItems, deferredQuery, view.filter, view.sort, locale]
+  );
+  const filtersActive = view.filter !== 'all' || query.trim() !== '';
+  const resetFilters = useCallback(() => {
+    setQuery('');
+    updateView({ filter: 'all' });
+  }, [updateView]);
+
+  const viewKey = `${activeSub}|${view.filter}|${view.sort}|${deferredQuery}`;
+  const mediaIds = useMemo(() => mediaItems.map((item) => item.id), [mediaItems]);
+  const loopIds = useMemo(() => loopItems.map((item) => item.id), [loopItems]);
+  useListMotion(motionRoot, mediaIds, 'media-library', 'media', viewKey);
+  useListMotion(motionRoot, loopIds, 'loop-library', 'loop', activeSub);
+
+  // ── Selection (Set + ref so card callbacks stay stable) ──
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  const anchorRef = useRef<string | null>(null);
+  const visibleRef = useRef(visibleItems);
+  visibleRef.current = visibleItems;
+
+  // Drop selections whose items were removed (folder rescans, deletes).
+  useEffect(() => {
+    setSelected((prev) => {
+      if (!prev.size) return prev;
+      const ids = new Set(mediaIds);
+      const next = new Set([...prev].filter((id) => ids.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [mediaIds]);
+
+  const activateCard = useCallback((id: string, event: ReactMouseEvent) => {
+    const current = selectedRef.current;
+    if (event.shiftKey && anchorRef.current) {
+      const ids = rangeIds(visibleRef.current, anchorRef.current, id);
+      setSelected(new Set([...current, ...ids]));
+      playSfx('check');
+      return;
+    }
+    const next = new Set(current);
+    if (next.has(id)) {
+      next.delete(id);
+      playSfx('uncheck');
+    } else {
+      next.add(id);
+      playSfx('check');
+    }
+    anchorRef.current = id;
+    setSelected(next);
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    if (!selectedRef.current.size) return;
+    setSelected(new Set());
+    anchorRef.current = null;
+    playSfx('uncheck');
+  }, []);
+
+  const selectAllVisible = useCallback(() => {
+    if (!visibleRef.current.length) return;
+    setSelected(new Set([...selectedRef.current, ...visibleRef.current.map((item) => item.id)]));
+    playSfx('check');
+  }, []);
+
+  /** Selected items in the current sort order (including any hidden by the filter). */
+  const selectedItems = useCallback(
+    () => sortMedia(mediaItems, view.sort, locale).filter((item) => selectedRef.current.has(item.id)),
+    [mediaItems, view.sort, locale]
+  );
+
+  // ── Toast ──
+  const [toast, setToast] = useState<string | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
+  const canGenerateImage = typeof window !== 'undefined' && !!window.electronAPI?.imageGenerate;
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 2600);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  // ── Folder ──
   const [menuOpen, setMenuOpen] = useState(false);
   const [folderSettings, setFolderSettings] = useState<MediaFolderSettings>(() => loadMediaFolderSettings());
   const [scanLoading, setScanLoading] = useState(false);
   const [folderMissing, setFolderMissing] = useState(false);
+  const [scanInfo, setScanInfo] = useState<ScanInfo>(null);
 
-  const [defaultDuration, setDefaultDuration] = useState(LOOP_DEFAULT_DURATION / 1000);
-  const [isLoading, setIsLoading] = useState(false);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  const dragItemIndex = useRef<number | null>(null);
-
+  // ── Loop ──
+  const [defaultDuration, setDefaultDuration] = useState(() =>
+    readStored(LOOP_DURATION_KEY, (raw) => clampDurationSecs(Number(raw)), LOOP_DEFAULT_DURATION / 1000)
+  );
+  const [loopBusy, setLoopBusy] = useState(0);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ index: number; position: DropPosition } | null>(null);
   const totalMs = useMemo(() => loopItems.reduce((acc, i) => acc + i.duration, 0), [loopItems]);
 
+  // ── File drop ──
+  const [dropActive, setDropActive] = useState(false);
+  const dragDepth = useRef(0);
 
   const addMediaPaths = useCallback(
     async (paths: string[], origin: 'manual' | 'folder' = 'manual') => {
       const incoming = paths
         .filter((p) => p && isMediaFile(p))
-        .map((p) => {
-          const type = detectMediaType(p)!;
-          return { id: makeId(), type, path: p, name: getFileName(p), preview: undefined, origin } satisfies MediaItem;
-        });
-      if (!incoming.length) return;
-      const existing = new Set(useStore.getState().mediaItems.map(i => normalizePath(i.path)));
-      if (origin === 'manual' && incoming.some(i => !existing.has(normalizePath(i.path)))) playSfx('complete');
+        .map((p) => ({ id: makeId(), type: detectMediaType(p)!, path: p, name: getFileName(p), preview: undefined, origin }) satisfies MediaItem);
+      if (!incoming.length) return 0;
+      const existing = new Set(useStore.getState().mediaItems.map((i) => normalizePath(i.path)));
+      const fresh = incoming.filter((i) => !existing.has(normalizePath(i.path)));
+      if (origin === 'manual' && fresh.length) playSfx('complete');
       setMediaItems((prev) => {
         const seen = new Set(prev.map((i) => normalizePath(i.path)));
         const unique = incoming.filter((i) => {
@@ -985,19 +1161,16 @@ export default function MediaLoopTab({
           seen.add(k);
           return true;
         });
-        return [...prev, ...unique];
+        return unique.length ? [...prev, ...unique] : prev;
       });
+      return fresh.length;
     },
     [setMediaItems]
   );
 
   const importFiles = useCallback(
     async (type: MediaKind) => {
-      const api = window.electronAPI as
-        | (NonNullable<typeof window.electronAPI> & {
-            selectMediaFiles?: (type: string) => Promise<string | string[] | null>;
-          })
-        | undefined;
+      const api = window.electronAPI;
       if (!api) return;
       try {
         if (api.selectMediaFiles) {
@@ -1005,25 +1178,18 @@ export default function MediaLoopTab({
           if (r) await addMediaPaths(Array.isArray(r) ? r : [r]);
           return;
         }
-        if (api.selectMediaFile) {
-          const r = await api.selectMediaFile(type);
-          if (r) await addMediaPaths([r]);
-        }
-      } catch { playSfx('error'); }
+        const r = await api.selectMediaFile(type);
+        if (r) await addMediaPaths([r]);
+      } catch {
+        playSfx('error');
+      }
     },
     [addMediaPaths]
   );
 
   const scanFolder = useCallback(
     async (settings: MediaFolderSettings, feedback = false) => {
-      const api = window.electronAPI as
-        | (NonNullable<typeof window.electronAPI> & {
-            readMediaFolder?: (
-              folder: string,
-              options?: { recursive?: boolean; includeImages?: boolean; includeVideos?: boolean }
-            ) => Promise<{ paths: string[]; missing: boolean } | null>;
-          })
-        | undefined;
+      const api = window.electronAPI;
       if (!api?.readMediaFolder || !settings.path) return;
       setScanLoading(true);
       try {
@@ -1032,17 +1198,26 @@ export default function MediaLoopTab({
           includeImages: settings.includeImages,
           includeVideos: settings.includeVideos,
         });
-        if (!result) { if (feedback) playSfx('error'); return; }
+        if (!result) {
+          setScanInfo({ status: 'failed' });
+          if (feedback) playSfx('error');
+          return;
+        }
         if (feedback) playSfx(result.missing ? 'error' : 'complete');
         setFolderMissing(result.missing);
+        setScanInfo({ status: 'ok', count: result.missing ? 0 : result.paths.length });
         if (result.missing) {
           setMediaItems((prev) => prev.filter((i) => i.origin !== 'folder'));
         } else {
           const keep = new Set(result.paths.map(normalizePath));
-          setMediaItems((prev) => prev.filter((i) => i.origin !== 'folder' || keep.has(normalizePath(i.path))));
+          setMediaItems((prev) => {
+            const next = prev.filter((i) => i.origin !== 'folder' || keep.has(normalizePath(i.path)));
+            return next.length === prev.length ? prev : next;
+          });
           if (result.paths.length) await addMediaPaths(result.paths, 'folder');
         }
       } catch {
+        setScanInfo({ status: 'failed' });
         if (feedback) playSfx('error');
       } finally {
         setScanLoading(false);
@@ -1060,103 +1235,136 @@ export default function MediaLoopTab({
   }, []);
 
   const chooseFolder = useCallback(async () => {
-    const api = window.electronAPI as
-      | (NonNullable<typeof window.electronAPI> & { selectMediaFolder?: () => Promise<string | null> })
-      | undefined;
+    const api = window.electronAPI;
     if (!api?.selectMediaFolder) return;
     const folder = await api.selectMediaFolder();
     if (!folder) return;
     setFolderMissing(false);
+    setScanInfo(null);
     updateFolderSettings({ path: folder });
     playSfx('open');
   }, [updateFolderSettings]);
 
   const clearFolder = useCallback(() => {
     updateFolderSettings({ path: '', recursive: false, includeImages: true, includeVideos: true });
+    setScanInfo(null);
+    setFolderMissing(false);
     setMediaItems((prev) => prev.filter((i) => i.origin !== 'folder'));
   }, [updateFolderSettings, setMediaItems]);
 
   useEffect(() => {
-    if (folderSettings.path) scanFolder(folderSettings);
+    if (folderSettings.path) void scanFolder(folderSettings);
   }, [folderSettings, scanFolder]);
 
+  // ── Library actions ──
   const removeMediaItem = useCallback(
-    (id: string) => { setMediaItems(prev => prev.filter(i => i.id !== id)); playSfx('delete'); },
+    (id: string) => {
+      setMediaItems((prev) => prev.filter((i) => i.id !== id));
+      playSfx('delete');
+    },
     [setMediaItems]
   );
+
   const addMediaToPres = useCallback(
-    (item: MediaItem, thumb?: string) => {
-      onAddMediaToPresentation(item.type, item.path, thumb);
-    },
+    (item: MediaItem, thumb?: string) => onAddMediaToPresentation(item.type, item.path, thumb),
     [onAddMediaToPresentation]
   );
-  const toggleSelect = useCallback((id: string) => {
-    playSfx(selectedIds.includes(id) ? 'uncheck' : 'check');
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  }, [selectedIds]);
-  const clearSelection = useCallback(() => { if (selectedIds.length) { setSelectedIds([]); playSfx('uncheck'); } }, [selectedIds]);
 
   const handleAddSelected = useCallback(() => {
-    if (selectedIds.length === 0) return;
-    const items = mediaItems.filter((m) => selectedIds.includes(m.id));
-    onAddAllMediaToPresentation(
-      items.map((item) => ({ type: item.type, path: item.path, thumbnailUrl: thumbnailCache.get(item.path)?.url }))
-    );
-    setSelectedIds([]);
-  }, [mediaItems, selectedIds, onAddAllMediaToPresentation]);
+    const items = selectedItems();
+    if (!items.length) return;
+    onAddAllMediaToPresentation(toPresentationItems(items));
+    setSelected(new Set());
+  }, [selectedItems, onAddAllMediaToPresentation]);
 
-  const handleAddAllMediaClick = useCallback(async () => {
-    if (mediaItems.length === 0) return;
-    const confirmed = await confirmDialog(`${mediaItems.length} medya dosyasının tamamı slayt olarak eklensin mi?`);
+  const handleAddAllVisible = useCallback(async () => {
+    const items = visibleRef.current;
+    if (!items.length) return;
+    const confirmed = await confirmDialog(t('mediaPage.confirmAddAll', { count: items.length }));
     if (!confirmed) return;
-    onAddAllMediaToPresentation(
-      mediaItems.map((item) => ({ type: item.type, path: item.path, thumbnailUrl: thumbnailCache.get(item.path)?.url }))
-    );
-  }, [mediaItems, onAddAllMediaToPresentation]);
+    onAddAllMediaToPresentation(toPresentationItems(items));
+  }, [onAddAllMediaToPresentation, t]);
+
+  const handleRemoveSelected = useCallback(async () => {
+    const ids = selectedRef.current;
+    if (!ids.size) return;
+    if (ids.size > 1 && !(await confirmDialog(t('mediaPage.confirmRemove', { count: ids.size })))) return;
+    setMediaItems((prev) => prev.filter((i) => !ids.has(i.id)));
+    setSelected(new Set());
+    playSfx('delete');
+  }, [setMediaItems, t]);
+
+  // ── Loop actions ──
+  const addLoopPaths = useCallback(
+    async (paths: string[]) => {
+      const media = paths.filter(isMediaFile);
+      if (!media.length) return 0;
+      setLoopBusy((n) => n + media.length);
+      try {
+        const items = await createLoopItems(media, defaultDuration * 1000);
+        setLoopItems((prev) => [...prev, ...items]);
+        playSfx('complete');
+        return items.length;
+      } catch {
+        playSfx('error');
+        return 0;
+      } finally {
+        setLoopBusy((n) => Math.max(0, n - media.length));
+      }
+    },
+    [defaultDuration, setLoopItems]
+  );
 
   const addLoopFiles = useCallback(async () => {
-    const api = (window as any).electronAPI as
-      | (NonNullable<typeof window.electronAPI> & {
-          selectMediaFilesAll?: () => Promise<string | string[] | null>;
-        })
-      | undefined;
+    const api = window.electronAPI;
     if (!api) return;
-    setIsLoading(true);
     try {
       let paths: string[] = [];
       if (api.selectMediaFilesAll) {
         const r = await api.selectMediaFilesAll();
         if (r) paths = Array.isArray(r) ? r : [r];
-      } else if (api.selectMediaFile) {
+      } else {
         const r = await api.selectMediaFile('image');
         if (r) paths = [r];
       }
-      if (paths.length === 0) return;
-      const newItems: LoopItem[] = await Promise.all(paths.map(async (p) => {
-        const type = VIDEO_EXTS.has(getExtension(p)) ? 'video' : 'image';
-        return {
-          id: crypto.randomUUID(),
-          type,
-          mediaUrl: toFileUrl(p),
-          fileName: getFileName(p),
-          duration: defaultDuration * 1000,
-          thumbnailUrl: type === 'video' ? await generateLoopVideoThumbnail(p) : undefined,
-        };
-      }));
-      setLoopItems((prev) => [...prev, ...newItems]);
-      playSfx('complete');
+      if (paths.length) await addLoopPaths(paths);
     } catch {
       playSfx('error');
-    } finally {
-      setIsLoading(false);
     }
-  }, [defaultDuration, setLoopItems]);
+  }, [addLoopPaths]);
+
+  const addItemToLoop = useCallback(
+    async (item: MediaItem) => {
+      const added = await addLoopPaths([item.path]);
+      if (added) setToast(t('mediaPage.addedToLoop', { count: added }));
+    },
+    [addLoopPaths, t]
+  );
+
+  const handleAddSelectedToLoop = useCallback(async () => {
+    const items = selectedItems();
+    if (!items.length) return;
+    setSelected(new Set());
+    const added = await addLoopPaths(items.map((item) => item.path));
+    if (added) setToast(t('mediaPage.addedToLoop', { count: added }));
+  }, [selectedItems, addLoopPaths, t]);
 
   const removeLoopItem = useCallback(
-    (id: string) => { setLoopItems(prev => prev.filter(i => i.id !== id)); playSfx('delete'); },
+    (id: string) => {
+      setLoopItems((prev) => prev.filter((i) => i.id !== id));
+      playSfx('delete');
+    },
     [setLoopItems]
   );
-  const clearLoop = useCallback(() => { if (loopItems.length) { setLoopItems([]); playSfx('delete'); } }, [loopItems.length, setLoopItems]);
+
+  const clearLoop = useCallback(async () => {
+    const count = useStore.getState().loopItems.length;
+    if (!count) return;
+    if (count > 1 && !(await confirmDialog(t('mediaPage.confirmClearLoop', { count })))) return;
+    setLoopItems([]);
+    playSfx('delete');
+  }, [setLoopItems, t]);
+
   const updateLoopDuration = useCallback(
     (id: string, ms: number) => {
       const clamped = Math.max(MIN_DURATION_MS, Math.min(MAX_DURATION_MS, ms));
@@ -1167,30 +1375,53 @@ export default function MediaLoopTab({
 
   const updateLoopUseVideoDuration = useCallback(
     (id: string, enabled: boolean) => {
+      playSfx(enabled ? 'toggle-on' : 'toggle-off');
       setLoopItems((prev) => prev.map((i) => (i.id === id ? { ...i, useVideoDuration: enabled } : i)));
     },
     [setLoopItems]
   );
 
-  const handleDragStart = useCallback((index: number) => {
-    dragItemIndex.current = index;
+  const changeDefaultDuration = useCallback((secs: number) => {
+    setDefaultDuration(secs);
+    writeStored(LOOP_DURATION_KEY, secs);
   }, []);
-  const handleDragEnter = useCallback((index: number) => setDragOverIndex(index), []);
-  const handleDragEnd = useCallback(() => {
-    const from = dragItemIndex.current;
-    const to = dragOverIndex;
-    if (from !== null && to !== null && from !== to) {
+
+  const applyDefaultToAll = useCallback(() => {
+    const ms = defaultDuration * 1000;
+    setLoopItems((prev) => (prev.some((i) => i.duration !== ms) ? prev.map((i) => ({ ...i, duration: ms })) : prev));
+    playSfx('complete');
+  }, [defaultDuration, setLoopItems]);
+
+  const moveLoopItem = useCallback(
+    (from: number, to: number) => {
+      const prev = useStore.getState().loopItems;
+      const next = moveItem(prev, from, to);
+      if (next === prev) return;
+      setLoopItems(next as LoopItem[]);
       playSfx('reorder');
-      setLoopItems((prev) => {
-        const next = [...prev];
-        const [moved] = next.splice(from, 1);
-        next.splice(to, 0, moved);
-        return next;
-      });
-    }
-    dragItemIndex.current = null;
-    setDragOverIndex(null);
-  }, [dragOverIndex, setLoopItems]);
+    },
+    [setLoopItems]
+  );
+
+  const handleLoopDragOver = useCallback((index: number, position: DropPosition) => {
+    setDropTarget((prev) => (prev?.index === index && prev.position === position ? prev : { index, position }));
+  }, []);
+  const handleLoopDragEnd = useCallback(() => {
+    setDragIndex(null);
+    setDropTarget(null);
+  }, []);
+  const handleLoopDrop = useCallback(
+    (index: number, position: DropPosition) => {
+      const from = dragIndex;
+      setDragIndex(null);
+      setDropTarget(null);
+      if (from === null) return;
+      let to = position === 'after' ? index + 1 : index;
+      if (from < to) to -= 1;
+      moveLoopItem(from, to);
+    },
+    [dragIndex, moveLoopItem]
+  );
 
   const handleAddLoop = useCallback(() => {
     if (loopItems.length === 0) return;
@@ -1198,422 +1429,657 @@ export default function MediaLoopTab({
     setLoopItems([]);
   }, [loopItems, defaultDuration, onAddLoopToPresentation, setLoopItems]);
 
-  const handleDefaultDuration = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setDefaultDuration(parseDurationSecs(e.target.value));
-  }, []);
+  const switchSub = useCallback(
+    (next: 'media' | 'loop') => {
+      if (next === activeSub) return;
+      setActiveSub(next);
+      playSfx('swipe');
+    },
+    [activeSub]
+  );
+
+  // ── Page-level file drop (OS files → library or loop) ──
+  const onPageDragEnter = (event: DragEvent<HTMLDivElement>) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    dragDepth.current += 1;
+    setDropActive(true);
+  };
+  const onPageDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  };
+  const onPageDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    if (!isFileDrag(event)) return;
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (!dragDepth.current) setDropActive(false);
+  };
+  const onPageDrop = async (event: DragEvent<HTMLDivElement>) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepth.current = 0;
+    setDropActive(false);
+    const api = window.electronAPI;
+    const files = Array.from(event.dataTransfer.files);
+    if (!api || !files.length) return;
+    const resolve = api.getDroppedFilePath ?? api.getDroppedImagePath;
+    const paths = (await Promise.all(files.map((file) => resolve(file).catch(() => null)))).filter(
+      (p): p is string => !!p && isMediaFile(p)
+    );
+    if (!paths.length) {
+      playSfx('error');
+      return;
+    }
+    if (activeSub === 'loop') await addLoopPaths(paths);
+    else if (!(await addMediaPaths(paths))) playSfx('error');
+  };
+
+  const onPageKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (activeSub !== 'media') return;
+    if ((event.target as HTMLElement).closest('input, textarea, select, [contenteditable="true"]')) return;
+    if (event.key === 'Escape' && selectedRef.current.size) {
+      event.stopPropagation();
+      clearSelection();
+    } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a' && visibleRef.current.length) {
+      event.preventDefault();
+      event.stopPropagation();
+      selectAllVisible();
+    } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f' && mediaItems.length) {
+      event.preventDefault();
+      event.stopPropagation();
+      searchRef.current?.focus();
+    }
+  };
+
+  const renderCard = useCallback(
+    (item: MediaItem, metrics: GridMetrics) => (
+      <MediaCard
+        item={item}
+        selected={selected.has(item.id)}
+        previewHeight={metrics.previewHeight}
+        onActivate={activateCard}
+        onAdd={addMediaToPres}
+        onAddToLoop={addItemToLoop}
+        onRemove={removeMediaItem}
+      />
+    ),
+    [selected, activateCard, addMediaToPres, addItemToLoop, removeMediaItem]
+  );
+
+  const subTab = (id: 'media' | 'loop', icon: ReactNode, label: string, count: number) => (
+    <button
+      type="button"
+      role="tab"
+      id={`${id}-tab`}
+      aria-controls={`${id}-panel`}
+      aria-selected={activeSub === id}
+      onClick={() => switchSub(id)}
+    >
+      {activeSub === id && (
+        <m.span
+          layoutId="media-active-tab"
+          className="media-seg-pill"
+          transition={{ duration: motionEnabled ? uiMotion.duration.fast : 0, ease: uiMotion.ease }}
+        />
+      )}
+      {icon}
+      {label}
+      {count > 0 && <span className="media-count">{count.toLocaleString(locale)}</span>}
+    </button>
+  );
+
+  const filterOptions: Array<{ value: MediaFilter; label: string }> = [
+    { value: 'all', label: t('mediaPage.filterAll') },
+    { value: 'image', label: t('mediaPage.filterImages') },
+    { value: 'video', label: t('mediaPage.filterVideos') },
+  ];
+
+  const filtersOff = !!folderSettings.path && !folderSettings.includeImages && !folderSettings.includeVideos;
+  const folderNotice = !folderSettings.path
+    ? null
+    : filtersOff
+      ? t('common.mediaFiltersOff')
+      : scanInfo?.status === 'failed'
+        ? t('common.mediaScanFailed')
+        : scanInfo?.status === 'ok' && scanInfo.count === 0 && !folderMissing
+          ? t('common.mediaFolderNoMatches')
+          : null;
+
+  const importMenuItems = (
+    <>
+      <DropItem
+        icon={<ImageIcon size={15} />}
+        guideAnchor="media-import"
+        title={t('common.mediaSelectImages')}
+        desc={t('common.mediaSelectImagesDesc')}
+        onClick={() => {
+          setMenuOpen(false);
+          void importFiles('image').then(() => setImageImported(true));
+        }}
+      />
+      <DropItem
+        icon={<Video size={15} />}
+        title={t('common.mediaSelectVideos')}
+        desc={t('common.mediaSelectVideosDesc')}
+        onClick={() => {
+          setMenuOpen(false);
+          void importFiles('video');
+        }}
+      />
+      <DropItem
+        icon={<FolderOpen size={15} />}
+        title={t('common.mediaSelectFolder')}
+        desc={t('common.mediaSelectFolderDesc')}
+        onClick={() => {
+          setMenuOpen(false);
+          void chooseFolder();
+        }}
+      />
+    </>
+  );
 
   return (
-    <div ref={motionRoot} data-guide-state={JSON.stringify({ mediaMenu: menuOpen, imageReady: mediaItems.some(item => item.name === 'practice-image.svg'), imageImported })} className="flex flex-col h-full bg-[#181818] text-white overflow-hidden">
-      <div className="shrink-0 px-3 pt-3 pb-2 border-b border-white/[0.07]">
-        <div
-          role="tablist"
-          aria-label={t('common.mediaTabs')}
-          className="inline-flex max-w-full flex-wrap items-center gap-1 p-1 rounded-lg bg-white/[0.03] border border-white/[0.06]"
-        >
-          <button
-            role="tab"
-            aria-selected={activeSub === 'media'}
-            id="media-tab"
-            aria-controls="media-panel"
-            onClick={() => { if (activeSub !== 'media') { setActiveSub('media'); playSfx('swipe'); } }}
-            className={cn(
-              'relative isolate min-h-9 min-w-0 flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
-              activeSub === 'media'
-                ? 'text-white shadow-lg shadow-blue-900/30'
-                : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'
-            )}
-          >
-
-            {activeSub === 'media' && <m.span layoutId="media-active-tab" className="pointer-events-none absolute inset-0 -z-10 rounded-lg bg-blue-600" transition={{ duration: motionEnabled ? uiMotion.duration.fast : 0, ease: uiMotion.ease }} />}            <ImageIcon className="w-3.5 h-3.5" />
-            {t('common.mediaLibrary')}
-            {mediaItems.length > 0 && (
-              <span
-                className={cn(
-                  'text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center',
-                  activeSub === 'media'
-                    ? 'bg-white/20 text-white'
-                    : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                )}
+    <div
+      ref={motionRoot}
+      className="media-page"
+      data-selecting={selected.size > 0}
+      data-guide-state={JSON.stringify({
+        mediaMenu: menuOpen,
+        imageReady: mediaItems.some((item) => item.name === 'practice-image.svg'),
+        imageImported,
+      })}
+      onKeyDown={onPageKeyDown}
+      onDragEnter={onPageDragEnter}
+      onDragOver={onPageDragOver}
+      onDragLeave={onPageDragLeave}
+      onDrop={onPageDrop}
+    >
+      <div className="media-top">
+        <div className="media-head">
+          <h2>
+            <Film size={16} aria-hidden="true" />
+            {t('mediaPage.title')}
+          </h2>
+          <div role="tablist" aria-label={t('common.mediaTabs')} className="media-seg">
+            {subTab('media', <ImageIcon size={14} aria-hidden="true" />, t('mediaPage.library'), mediaItems.length)}
+            {subTab('loop', <Repeat size={14} aria-hidden="true" />, t('mediaPage.loop'), loopItems.length)}
+          </div>
+          <div className="media-head-actions">
+            {activeSub === 'media' ? (
+              <>
+              {canGenerateImage && (
+                <button
+                  type="button"
+                  className="media-tool media-outline media-ai"
+                  onClick={() => { setAiOpen(true); playSfx('open'); }}
+                  title={t('common.imageGenerateTitle')}
+                >
+                  <Sparkles size={15} aria-hidden="true" />
+                  {t('common.imageGenerateShort')}
+                </button>
+              )}
+              <Menu.Root
+                modal={false}
+                open={menuOpen}
+                onOpenChange={(next, details) => {
+                  // The guide owns focus until its asynchronous next-step lease arrives.
+                  if (!next && details.reason === 'focus-out' && isGuideActive()) {
+                    details.cancel();
+                    return;
+                  }
+                  if (next !== menuOpen) {
+                    setMenuOpen(next);
+                    playSfx(next ? 'open' : 'close');
+                  }
+                }}
               >
-                {mediaItems.length}
-              </span>
+                <Menu.Trigger data-guide-anchor="media-menu" className="media-primary">
+                  <Plus size={15} aria-hidden="true" /> {t('common.mediaAdd')}
+                  <ChevronDown size={13} className="opacity-70" aria-hidden="true" />
+                </Menu.Trigger>
+                <Menu.Portal>
+                  <Menu.Positioner side="bottom" align="end" sideOffset={6} className="z-[80]">
+                    <Menu.Popup
+                      className="design-action-menu w-[290px]"
+                      aria-label={t('common.mediaAdd')}
+                      onKeyDown={(event) => event.stopPropagation()}
+                    >
+                      {importMenuItems}
+                    </Menu.Popup>
+                  </Menu.Positioner>
+                </Menu.Portal>
+              </Menu.Root>
+              </>
+            ) : (
+              <>
+                <ControlTooltip descriptionKey={'common.loopClearAll'}>
+                  <button
+                    type="button"
+                    className="media-tool media-danger"
+                    onClick={clearLoop}
+                    disabled={loopItems.length === 0}
+                    title={t('common.loopClearAll')}
+                  >
+                    <Trash2 size={15} aria-hidden="true" />
+                    {t('common.loopClearAll')}
+                  </button>
+                </ControlTooltip>
+                <button type="button" className="media-primary" onClick={addLoopFiles} disabled={loopBusy > 0}>
+                  {loopBusy > 0 ? (
+                    <RefreshCw size={15} className="animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Plus size={15} aria-hidden="true" />
+                  )}
+                  {loopBusy > 0 ? t('mediaPage.preparing') : t('mediaPage.loopAddFiles')}
+                </button>
+              </>
             )}
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeSub === 'loop'}
-            id="loop-tab"
-            aria-controls="loop-panel"
-            onClick={() => { if (activeSub !== 'loop') { setActiveSub('loop'); playSfx('swipe'); } }}
-            className={cn(
-              'relative isolate min-h-9 min-w-0 flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
-              activeSub === 'loop'
-                ? 'text-white shadow-lg shadow-blue-900/30'
-                : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'
-            )}
-          >
-
-            {activeSub === 'loop' && <m.span layoutId="media-active-tab" className="pointer-events-none absolute inset-0 -z-10 rounded-lg bg-blue-600" transition={{ duration: motionEnabled ? uiMotion.duration.fast : 0, ease: uiMotion.ease }} />}            <Repeat className="w-3.5 h-3.5" />
-            {t('common.loopTitle')}
-            {loopItems.length > 0 && (
-              <span
-                className={cn(
-                  'text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center',
-                  activeSub === 'loop'
-                    ? 'bg-white/20 text-white'
-                    : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                )}
-              >
-                {loopItems.length}
-              </span>
-            )}
-          </button>
+          </div>
         </div>
+
+        {activeSub === 'media' && (
+          <>
+            {mediaItems.length > 0 && (
+              <div className="media-find">
+                <div className="media-search">
+                  <Search size={15} aria-hidden="true" />
+                  <input
+                    ref={searchRef}
+                    type="search"
+                    value={query}
+                    placeholder={t('mediaPage.search')}
+                    aria-label={t('mediaPage.search')}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === 'Escape' && query) setQuery('');
+                    }}
+                  />
+                  {query && (
+                    <button
+                      type="button"
+                      aria-label={t('mediaPage.clearSearch')}
+                      onClick={() => {
+                        setQuery('');
+                        searchRef.current?.focus();
+                      }}
+                    >
+                      <X size={14} aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
+                <div role="radiogroup" aria-label={t('mediaPage.filterLabel')} className="media-seg media-seg-sm">
+                  {filterOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={view.filter === option.value}
+                      onClick={() => updateView({ filter: option.value })}
+                    >
+                      {option.label}
+                      <span className="media-count">{counts[option.value].toLocaleString(locale)}</span>
+                    </button>
+                  ))}
+                </div>
+                <select
+                  className="media-select"
+                  aria-label={t('mediaPage.sortLabel')}
+                  value={view.sort}
+                  onChange={(e) => updateView({ sort: e.target.value as MediaSort })}
+                >
+                  <option value="added">{t('mediaPage.sortAdded')}</option>
+                  <option value="name">{t('mediaPage.sortName')}</option>
+                  <option value="type">{t('mediaPage.sortType')}</option>
+                </select>
+                <div className="media-density" role="group" aria-label={t('mediaPage.densityLabel')}>
+                  <button
+                    type="button"
+                    className="media-icon"
+                    aria-pressed={view.density === 'compact'}
+                    onClick={() => updateView({ density: 'compact' })}
+                    aria-label={t('mediaPage.densityCompact')}
+                    title={t('mediaPage.densityCompact')}
+                  >
+                    <Grid3x3 size={15} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className="media-icon"
+                    aria-pressed={view.density === 'comfortable'}
+                    onClick={() => updateView({ density: 'comfortable' })}
+                    aria-label={t('mediaPage.densityComfortable')}
+                    title={t('mediaPage.densityComfortable')}
+                  >
+                    <Grid2x2 size={15} aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {folderSettings.path && (
+              <div className="media-folder">
+                <div className="media-folder-path">
+                  <FolderOpen size={14} aria-hidden="true" />
+                  <strong>{t('mediaPage.folderLinked')}</strong>
+                  <code title={folderSettings.path}>{folderSettings.path}</code>
+                  {folderMissing && <span className="media-badge-warn">{t('common.mediaFolderMissing')}</span>}
+                </div>
+                <div className="media-folder-opts">
+                  <div role="radiogroup" aria-label={t('mediaPage.folderScope')} className="media-seg media-seg-sm">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={!folderSettings.recursive}
+                      onClick={() => updateFolderSettings({ recursive: false })}
+                    >
+                      {t('common.mediaFolderOnlyThis')}
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={folderSettings.recursive}
+                      onClick={() => updateFolderSettings({ recursive: true })}
+                    >
+                      {t('common.mediaFolderWithSubs')}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    className="media-chip"
+                    aria-pressed={folderSettings.includeImages}
+                    onClick={() => updateFolderSettings({ includeImages: !folderSettings.includeImages })}
+                  >
+                    {folderSettings.includeImages ? <Check size={12} aria-hidden="true" /> : <ImageIcon size={12} aria-hidden="true" />}
+                    {t('common.mediaFolderImages')}
+                  </button>
+                  <button
+                    type="button"
+                    className="media-chip"
+                    aria-pressed={folderSettings.includeVideos}
+                    onClick={() => updateFolderSettings({ includeVideos: !folderSettings.includeVideos })}
+                  >
+                    {folderSettings.includeVideos ? <Check size={12} aria-hidden="true" /> : <Video size={12} aria-hidden="true" />}
+                    {t('common.mediaFolderVideos')}
+                  </button>
+                  <ControlTooltip descriptionKey={'common.mediaFolderRefresh'}>
+                    <button
+                      type="button"
+                      className="media-icon"
+                      onClick={() => void scanFolder(folderSettings, true)}
+                      disabled={scanLoading}
+                      title={scanLoading ? t('common.mediaFolderLoading') : t('common.mediaFolderRefresh')}
+                      aria-label={scanLoading ? t('common.mediaFolderLoading') : t('common.mediaFolderRefresh')}
+                    >
+                      <RefreshCw size={14} className={cn(scanLoading && 'animate-spin')} aria-hidden="true" />
+                    </button>
+                  </ControlTooltip>
+                  <button type="button" className="media-tool" onClick={chooseFolder} disabled={scanLoading}>
+                    {t('common.mediaFolderChange')}
+                  </button>
+                  <ControlTooltip descriptionKey={'common.mediaFolderClear'}>
+                    <button
+                      type="button"
+                      className="media-icon"
+                      onClick={clearFolder}
+                      title={t('common.mediaFolderClear')}
+                      aria-label={t('common.mediaFolderClear')}
+                    >
+                      <X size={14} aria-hidden="true" />
+                    </button>
+                  </ControlTooltip>
+                </div>
+              </div>
+            )}
+
+            {folderNotice && (
+              <div className="media-notice" role="status">
+                <TriangleAlert size={14} aria-hidden="true" />
+                {folderNotice}
+              </div>
+            )}
+
+            {mediaItems.length > 0 &&
+              (selected.size > 0 ? (
+                <div className="media-selection ui-fade-enter" role="toolbar" aria-label={t('mediaPage.selectedCount', { count: selected.size })}>
+                  <span className="media-selection-count" role="status" aria-live="polite">
+                    {t('mediaPage.selectedCount', { count: selected.size })}
+                  </span>
+                  <button type="button" className="media-tool" onClick={selectAllVisible}>
+                    <CheckCheck size={15} aria-hidden="true" />
+                    {t('mediaPage.selectAll')}
+                  </button>
+                  <button type="button" className="media-tool media-danger" onClick={handleRemoveSelected}>
+                    <Trash2 size={15} aria-hidden="true" />
+                    {t('mediaPage.removeSelected')}
+                  </button>
+                  <button type="button" className="media-tool media-outline" onClick={handleAddSelectedToLoop} disabled={loopBusy > 0}>
+                    <ListPlus size={15} aria-hidden="true" />
+                    {t('mediaPage.addToLoop')}
+                  </button>
+                  <button type="button" className="media-primary" onClick={handleAddSelected}>
+                    <Plus size={15} aria-hidden="true" />
+                    {t('common.mediaAddSelected', { count: selected.size })}
+                  </button>
+                  <button
+                    type="button"
+                    className="media-icon"
+                    onClick={clearSelection}
+                    aria-label={t('common.mediaClearSelection')}
+                    title={t('common.mediaClearSelection')}
+                  >
+                    <X size={15} aria-hidden="true" />
+                  </button>
+                </div>
+              ) : (
+                <div className="media-summary">
+                  {toast ? (
+                    <span className="media-toast ui-fade-enter">
+                      <CircleCheck size={14} aria-hidden="true" />
+                      {toast}
+                    </span>
+                  ) : (
+                    <span>{t('mediaPage.hint')}</span>
+                  )}
+                  <span className="flex items-center gap-2">
+                    <span role="status" aria-live="polite">
+                      {t('mediaPage.resultCount', {
+                        shown: visibleItems.length.toLocaleString(locale),
+                        total: mediaItems.length.toLocaleString(locale),
+                      })}
+                    </span>
+                    <button
+                      type="button"
+                      className="media-tool"
+                      onClick={handleAddAllVisible}
+                      disabled={visibleItems.length === 0}
+                    >
+                      <Plus size={14} aria-hidden="true" />
+                      {t('common.mediaAddAll')}
+                    </button>
+                  </span>
+                </div>
+              ))}
+          </>
+        )}
+
+        {activeSub === 'loop' && (
+          <div className="loop-toolbar">
+            <label htmlFor="loop-default-duration">{t('common.loopDefaultDuration')}</label>
+            <DurationStepper
+              id="loop-default-duration"
+              valueSecs={defaultDuration}
+              onChange={changeDefaultDuration}
+              label={t('common.loopDefaultDuration')}
+            />
+            <button type="button" className="media-tool media-outline" onClick={applyDefaultToAll} disabled={loopItems.length === 0}>
+              {t('mediaPage.applyToAll')}
+            </button>
+            <span className="flex-1" />
+            {mediaItems.length > 0 && (
+              <button type="button" className="media-tool" onClick={() => switchSub('media')}>
+                <ImageIcon size={15} aria-hidden="true" />
+                {t('mediaPage.loopFromLibrary')}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {activeSub === 'media' && (
-        <div
-          role="tabpanel"
-          id="media-panel"
-          aria-labelledby="media-tab"
-          className="ui-fade-enter flex flex-col flex-1 overflow-hidden"
-        >
-          <div className="shrink-0 px-3 py-2.5 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1.5">
-                <Film className="w-3 h-3 text-amber-500" />
-                <span className="text-sm font-semibold text-white/80">
-                  {t('common.mediaLibrary')}
-                </span>
-              </div>
-              {selectedIds.length > 0 ? (
-                <>
-                  <button
-                    onClick={handleAddSelected}
-                    className="inline-flex min-h-9 max-w-full items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                  >
-                    <Plus size={14} className="shrink-0" aria-hidden="true" /> {t('common.mediaAddSelected', { count: selectedIds.length })}
-                  </button>
-                  <button
-                    onClick={clearSelection}
-                    className="min-h-9 px-2 rounded-lg text-sm text-white/65 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                  >
-                    {t('common.mediaClearSelection')}
-                  </button>
-                </>
-              ) : (
-                mediaItems.length > 0 && (
-                  <button
-                    onClick={handleAddAllMediaClick}
-                    className="workspace-secondary-action max-w-full transition-colors"
-                  >
-                    <Plus size={14} className="shrink-0" aria-hidden="true" /> {t('common.mediaAddAll')}
-                  </button>
-                )
-              )}
-            </div>
-            <Menu.Root modal={false} open={menuOpen} onOpenChange={(next, details) => {
-              // The guide owns focus until its asynchronous next-step lease arrives.
-              if (!next && details.reason === 'focus-out' && isGuideActive()) { details.cancel(); return; }
-              if (next !== menuOpen) { setMenuOpen(next); playSfx(next ? 'open' : 'close'); }
-            }}>
-            <div className="relative shrink-0">
-              <Menu.Trigger
-                data-guide-anchor="media-menu"
-                className="workspace-secondary-action transition-colors"
-              >
-                <Plus size={13} /> {t('common.mediaAdd')} <ChevronDown size={12} className="opacity-60" />
-              </Menu.Trigger>
-              <Menu.Portal><Menu.Positioner side="bottom" align="end" sideOffset={6} className="z-[80]">
-                <Menu.Popup className="design-action-menu w-[280px]" aria-label={t('common.mediaAdd')} onKeyDown={event => event.stopPropagation()}>
-                  <DropItem
-                    icon={<ImageIcon size={14} />}
-                    guideAnchor="media-import"
-                    title={t('common.mediaSelectImages')}
-                    desc={t('common.mediaSelectImagesDesc')}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      void importFiles('image').then(() => setImageImported(true));
-                    }}
-                  />
-                  <DropItem
-                    icon={<Video size={14} />}
-                    title={t('common.mediaSelectVideos')}
-                    desc={t('common.mediaSelectVideosDesc')}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      importFiles('video');
-                    }}
-                  />
-                  <DropItem
-                    icon={<FolderOpen size={14} />}
-                    title={t('common.mediaSelectFolder')}
-                    desc={t('common.mediaSelectFolderDesc')}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      chooseFolder();
-                    }}
-                  />
-                </Menu.Popup>
-              </Menu.Positioner></Menu.Portal>
-            </div>
-            </Menu.Root>
-          </div>
-
-          {folderSettings.path && (
-            <div className="shrink-0 mx-3 mb-2 px-2.5 py-2 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] space-y-2">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <FolderOpen className="w-3 h-3 text-amber-600 shrink-0" />
-                <ControlTooltip><span
-                  className="flex-1 min-w-0 truncate font-mono text-[11px] font-semibold text-white/65"
-                  title={folderSettings.path}
-                >
-                  {folderSettings.path}
-                </span></ControlTooltip>
-                {folderMissing && (
-                  <span className="shrink-0 text-[10px] font-bold text-red-300 bg-red-500/15 border border-red-500/35 rounded px-1.5 py-0.5 whitespace-nowrap">
-                    {t('common.mediaFolderMissing')}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <div className="flex p-0.5 rounded-lg border border-white/10 bg-black/25">
-                  <button
-                    type="button"
-                    onClick={() => updateFolderSettings({ recursive: false })}
-                    className={cn(
-                      'px-2 py-1 rounded-md text-[11px] font-semibold transition-all',
-                      !folderSettings.recursive ? 'bg-amber-500/20 text-amber-300' : 'text-white/60 hover:text-white/70'
-                    )}
-                  >
-                    {t('common.mediaFolderOnlyThis')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateFolderSettings({ recursive: true })}
-                    className={cn(
-                      'px-2 py-1 rounded-md text-[11px] font-semibold transition-all',
-                      folderSettings.recursive ? 'bg-amber-500/20 text-amber-300' : 'text-white/60 hover:text-white/70'
-                    )}
-                  >
-                    {t('common.mediaFolderWithSubs')}
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => updateFolderSettings({ includeImages: !folderSettings.includeImages })}
-                  className={cn(
-                    'flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-semibold border transition-all',
-                    folderSettings.includeImages
-                      ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                      : 'border-white/10 bg-white/[0.04] text-white/60'
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'w-3 h-3 rounded-[3px] border flex items-center justify-center',
-                      folderSettings.includeImages ? 'bg-amber-500 border-transparent' : 'border-white/30'
-                    )}
-                  >
-                    {folderSettings.includeImages && <Check className="w-2 h-2 text-black" strokeWidth={3.5} />}
-                  </span>
-                  {t('common.mediaFolderImages')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => updateFolderSettings({ includeVideos: !folderSettings.includeVideos })}
-                  className={cn(
-                    'flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-semibold border transition-all',
-                    folderSettings.includeVideos
-                      ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                      : 'border-white/10 bg-white/[0.04] text-white/60'
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'w-3 h-3 rounded-[3px] border flex items-center justify-center',
-                      folderSettings.includeVideos ? 'bg-amber-500 border-transparent' : 'border-white/30'
-                    )}
-                  >
-                    {folderSettings.includeVideos && <Check className="w-2 h-2 text-black" strokeWidth={3.5} />}
-                  </span>
-                  {t('common.mediaFolderVideos')}
-                </button>
-                <span className="flex-1" />
-                <button
-                  type="button"
-                  onClick={chooseFolder}
-                  disabled={scanLoading}
-                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold tracking-wider border border-amber-500/40 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 transition-all disabled:opacity-40"
-                >
-                  {t('common.mediaFolderChange')}
-                </button>
-                <ControlTooltip descriptionKey={'common.mediaFolderRefresh'}><button
-                  type="button"
-                  onClick={() => scanFolder(folderSettings, true)}
-                  disabled={scanLoading}
-                  title={t('common.mediaFolderRefresh')}
-                  className="w-6 h-6 flex items-center justify-center rounded border border-white/[0.14] bg-white/[0.05] text-white/60 hover:text-white hover:bg-white/[0.1] transition-all disabled:opacity-40"
-                >
-                  {scanLoading ? (
-                    <span className="text-[10px] font-bold px-0.5">{t('common.mediaFolderLoading')}</span>
-                  ) : (
-                    <RefreshCw className="w-3 h-3" />
-                  )}
-                </button></ControlTooltip>
-                <ControlTooltip descriptionKey={'common.mediaFolderClear'}><button
-                  type="button"
-                  onClick={clearFolder}
-                  title={t('common.mediaFolderClear')}
-                  className="w-6 h-6 flex items-center justify-center rounded border border-white/[0.14] bg-white/[0.05] text-white/60 hover:text-red-400 hover:border-red-500/40 transition-all"
-                >
-                  <X className="w-3 h-3" />
-                </button></ControlTooltip>
-              </div>
-            </div>
-          )}
-
+        <div role="tabpanel" id="media-panel" aria-labelledby="media-tab" className="ui-fade-enter flex flex-col flex-1 min-h-0">
           {mediaItems.length === 0 ? (
-            <div className="flex-1 overflow-y-auto px-3 pb-4">
-              <div className="h-full flex flex-col items-center justify-center text-center p-6">
-                <div className="relative w-16 h-16 flex items-center justify-center mb-4">
-                  <Film size={28} className="text-white/10" />
-                  <div className="absolute inset-0 rounded-full border border-white/[0.05]" />
+            <div className="media-empty">
+              <div className="media-empty-card">
+                <div className="media-empty-icon">
+                  <Upload size={24} aria-hidden="true" />
                 </div>
-                <p className="text-sm font-bold text-white/75">{t('common.mediaEmpty')}</p>
-                <p className="text-[11px] text-white/55 mt-1.5 leading-relaxed">{t('common.mediaEmptyDesc')}</p>
+                <h3>{t('mediaPage.emptyTitle')}</h3>
+                <p>{t('mediaPage.emptyDesc')}</p>
+                <div className="media-empty-actions">
+                  <button type="button" className="media-tool media-outline" onClick={() => void importFiles('image')}>
+                    <ImageIcon size={15} aria-hidden="true" />
+                    {t('common.mediaSelectImages')}
+                  </button>
+                  <button type="button" className="media-tool media-outline" onClick={() => void importFiles('video')}>
+                    <Video size={15} aria-hidden="true" />
+                    {t('common.mediaSelectVideos')}
+                  </button>
+                  <button type="button" className="media-tool media-outline" onClick={() => void chooseFolder()}>
+                    <FolderOpen size={15} aria-hidden="true" />
+                    {t('common.mediaSelectFolder')}
+                  </button>
+                </div>
+                <p className="media-empty-hint">{t('mediaPage.emptyDrop')}</p>
+              </div>
+            </div>
+          ) : visibleItems.length === 0 ? (
+            <div className="media-empty">
+              <div className="media-empty-card">
+                <div className="media-empty-icon">
+                  <Search size={24} aria-hidden="true" />
+                </div>
+                <h3>{t('mediaPage.noResults')}</h3>
+                <p>{t('mediaPage.noResultsDesc')}</p>
+                {filtersActive && (
+                  <div className="media-empty-actions">
+                    <button type="button" className="media-tool media-outline" onClick={resetFilters}>
+                      <X size={15} aria-hidden="true" />
+                      {t('mediaPage.resetFilters')}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
-            <VirtualizedMediaGrid items={mediaItems}>
-              {(item) => (
-                <MediaCard
-                  key={item.id}
-                  item={item}
-                  selected={selectedIds.includes(item.id)}
-                  onAdd={addMediaToPres}
-                  onRemove={removeMediaItem}
-                  onToggleSelect={toggleSelect}
-                />
-              )}
-            </VirtualizedMediaGrid>
+            <VirtualizedMediaGrid items={visibleItems} density={view.density} resetKey={viewKey} renderItem={renderCard} />
           )}
         </div>
       )}
 
       {activeSub === 'loop' && (
-        <div
-          role="tabpanel"
-          id="loop-panel"
-          aria-labelledby="loop-tab"
-          className="ui-fade-enter flex flex-col flex-1 overflow-hidden"
-        >
-          <div className="shrink-0 px-3 pt-2.5 pb-2 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <Repeat className="w-3 h-3 text-amber-400" />
-                <span className="text-sm font-semibold text-white/80">
-                  {t('common.loopTitle')}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <ControlTooltip descriptionKey={'common.loopAddMedia'}><button
-                  onClick={addLoopFiles}
-                  disabled={isLoading}
-                  title={t('common.loopAddMedia')}
-                  aria-label={t('common.loopAddMedia')}
-                  className="flex items-center justify-center w-8 h-8 rounded-lg border bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/20 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                >
-                  {isLoading ? (
-                    <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <Plus className="w-3.5 h-3.5" />
-                  )}
-                </button></ControlTooltip>
-                <ControlTooltip descriptionKey={'common.loopClearAll'}><button
-                  onClick={clearLoop}
-                  disabled={loopItems.length === 0}
-                  title={t('common.loopClearAll')}
-                  aria-label={t('common.loopClearAll')}
-                  className="flex items-center justify-center w-8 h-8 rounded-lg border bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/20 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button></ControlTooltip>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Clock className="w-3.5 h-3.5 text-white/55 shrink-0" aria-hidden="true" />
-              <label htmlFor="loop-default-duration" className="text-sm text-white/65">{t('common.loopDefaultDuration')}</label>
-              <div className="flex items-center gap-1 ml-auto">
-                <input
-                  id="loop-default-duration"
-                  type="number"
-                  min={1}
-                  max={300}
-                  value={defaultDuration}
-                  onChange={handleDefaultDuration}
-                  className="min-h-9 w-16 bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-sm text-white text-center font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 transition-colors"
-                />
-                <span className="text-[11px] text-zinc-500 select-none">s</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {loopItems.length === 0 ? (
-              <button
-                onClick={addLoopFiles}
-                className="w-full h-full min-h-36 flex flex-col items-center justify-center gap-2.5 border border-dashed border-zinc-700 rounded-xl text-zinc-600 hover:text-zinc-400 hover:border-zinc-500 transition-colors cursor-pointer"
-              >
-                <Repeat className="w-6 h-6 opacity-60" />
-                <div className="text-center space-y-0.5">
-                  <div className="text-xs font-medium">{t('common.loopClickToAdd')}</div>
-                  <div className="text-[11px] text-zinc-600">{t('common.loopDragFiles')}</div>
+        <div role="tabpanel" id="loop-panel" aria-labelledby="loop-tab" className="ui-fade-enter flex flex-col flex-1 min-h-0">
+          {loopItems.length === 0 ? (
+            <div className="media-empty">
+              <div className="media-empty-card">
+                <div className="media-empty-icon">
+                  <Repeat size={24} aria-hidden="true" />
                 </div>
-              </button>
-            ) : (
-              <>
+                <h3>{t('mediaPage.loopEmptyTitle')}</h3>
+                <p>{t('mediaPage.loopEmptyDesc')}</p>
+                <div className="media-empty-actions">
+                  <button type="button" className="media-primary" onClick={addLoopFiles} disabled={loopBusy > 0}>
+                    <Plus size={15} aria-hidden="true" />
+                    {loopBusy > 0 ? t('mediaPage.preparing') : t('mediaPage.loopAddFiles')}
+                  </button>
+                  {mediaItems.length > 0 && (
+                    <button type="button" className="media-tool media-outline" onClick={() => switchSub('media')}>
+                      <ImageIcon size={15} aria-hidden="true" />
+                      {t('mediaPage.loopFromLibrary')}
+                    </button>
+                  )}
+                </div>
+                <p className="media-empty-hint">{t('mediaPage.emptyDrop')}</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="loop-list">
                 {loopItems.map((item, index) => (
                   <LoopItemRow
                     key={item.id}
                     item={item}
                     index={index}
-                    isDragOver={dragOverIndex === index}
-                    onDragStart={handleDragStart}
-                    onDragEnter={handleDragEnter}
-                    onDragEnd={handleDragEnd}
+                    count={loopItems.length}
+                    dropPosition={dropTarget?.index === index && dragIndex !== index ? dropTarget.position : null}
+                    dragging={dragIndex === index}
+                    onDragStart={setDragIndex}
+                    onDragOverRow={handleLoopDragOver}
+                    onDropRow={handleLoopDrop}
+                    onDragEnd={handleLoopDragEnd}
+                    onMove={moveLoopItem}
                     onRemove={removeLoopItem}
                     onDurationChange={updateLoopDuration}
                     onUseVideoDurationChange={updateLoopUseVideoDuration}
                   />
                 ))}
-                <button
-                  onClick={addLoopFiles}
-                  className="w-full py-2 mt-1 flex items-center justify-center gap-1.5 border border-dashed border-zinc-700 rounded-lg text-[11px] text-zinc-500 hover:text-zinc-300 hover:border-zinc-500 transition-colors"
-                >
-                  <Plus className="w-3 h-3" /> {t('common.loopAddMedia')}
+                <button type="button" className="loop-add-more" onClick={addLoopFiles} disabled={loopBusy > 0}>
+                  {loopBusy > 0 ? <RefreshCw size={13} className="animate-spin" aria-hidden="true" /> : <Plus size={13} aria-hidden="true" />}
+                  {loopBusy > 0 ? t('mediaPage.preparing') : t('common.loopAddMedia')}
                 </button>
-              </>
-            )}
-          </div>
-
-          {loopItems.length > 0 && (
-            <div className="shrink-0 px-3 py-3 border-t border-white/[0.07] space-y-2">
-              <div className="flex items-center justify-between text-[11px] text-zinc-500">
-                <span>{t('common.loopItemCount', { count: loopItems.length })}</span>
-                <span className="flex items-center gap-1" aria-live="polite">
-                  <Clock className="w-2.5 h-2.5" />
-                  {t('common.loopTotal')} <strong className="text-zinc-400">{formatTotalTime(totalMs)}</strong>
-                </span>
               </div>
-              <button
-                onClick={handleAddLoop}
-                className="w-full flex items-center justify-center gap-2 py-2.5 bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black text-xs font-semibold rounded-lg transition-colors"
-              >
-                <Repeat className="w-3.5 h-3.5" /> {t('common.loopAddToSlide')}
-              </button>
-            </div>
+              <div className="loop-footer">
+                <div className="loop-summary">
+                  <div className="loop-summary-text">
+                    <span>{t('common.loopItemCount', { count: loopItems.length })}</span>
+                    <span aria-live="polite">
+                      {t('common.loopTotal')} <strong>{formatLoopTime(totalMs)}</strong>
+                    </span>
+                  </div>
+                  <div className="loop-timeline" role="img" aria-label={t('mediaPage.loopTimeline')}>
+                    {loopItems.map((item) => (
+                      <span
+                        key={item.id}
+                        data-kind={item.type}
+                        data-full={(item.type === 'video' && item.useVideoDuration) || undefined}
+                        style={{ flexGrow: Math.max(1, item.duration) }}
+                        title={`${item.fileName ?? ''} · ${formatLoopTime(item.duration)}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <button type="button" className="media-primary" onClick={handleAddLoop}>
+                  <Repeat size={15} aria-hidden="true" />
+                  {t('mediaPage.loopAddToSlide')}
+                </button>
+              </div>
+            </>
           )}
+        </div>
+      )}
+
+      {aiOpen && (
+        <ImageGenerateDialog
+          onClose={() => setAiOpen(false)}
+          onAddToMedia={(file) => {
+            void addMediaPaths([file]).then(() => setToast(t('common.imageGenerateAddedToMedia')));
+          }}
+          onAddAsSlide={(file) => {
+            onAddMediaToPresentation('image', file);
+            playSfx('complete');
+          }}
+        />
+      )}
+
+      {dropActive && (
+        <div className="media-drop ui-fade-enter" aria-hidden="true">
+          <div>
+            <Upload size={30} className="mx-auto text-blue-300" />
+            <strong>{t('mediaPage.dropTitle')}</strong>
+            <span>{activeSub === 'loop' ? t('mediaPage.dropLoop') : t('mediaPage.dropLibrary')}</span>
+          </div>
         </div>
       )}
     </div>

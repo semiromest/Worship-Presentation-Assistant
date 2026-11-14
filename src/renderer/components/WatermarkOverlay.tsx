@@ -1,4 +1,4 @@
-import type { Slide, WatermarkConfig, Position } from '../types';
+import type { Slide, WatermarkConfig, WatermarkPosition } from '../types';
 import { cn, shouldRenderWatermark } from '../utils';
 
 export interface WatermarkOverlayProps {
@@ -6,7 +6,8 @@ export interface WatermarkOverlayProps {
   config: WatermarkConfig;
 }
 
-const POSITION_CLASSES: Record<Position, string> = {
+const POSITION_CLASSES: Record<WatermarkPosition, string> = {
+  center: 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2',
   'top-left': 'top-[2%] left-[2%]',
   'top-center': 'top-[2%] left-1/2 -translate-x-1/2',
   'top-right': 'top-[2%] right-[2%]',

@@ -132,3 +132,23 @@ test('autoplay is opt-in for attachments, preserves legacy music, and persists t
     assert.deepEqual(JSON.parse(JSON.stringify(actual)).slides[1].musicSettings, { attachment: true, autoPlay, volume: 0.4 });
   }
 });
+
+test('the NDI program counts as an audience output, after physical screens', async () => {
+  const { NDI_PROGRAM_OUTPUT_ID } = await import('../shared/virtualOutputs');
+  const state = fixture();
+  state.liveIndex = 1;
+  state.outputAssignments[NDI_PROGRAM_OUTPUT_ID] = { mode: 'follow', isOpen: true, isBlackout: false, slideIndex: 0 };
+  assert.equal(activeMusicSlide(state)?.id, 'music', 'music plays when only NDI is live');
+  state.outputAssignments.tv = { mode: 'manual', isOpen: true, isBlackout: false, slideIndex: 0 };
+  assert.equal(activeMusicSlide(state), null, 'an open physical screen keeps audio ownership');
+});
+
+test('the silent NDI lyrics layer never starts background music', async () => {
+  const { NDI_LYRICS_OUTPUT_ID, NDI_PROGRAM_OUTPUT_ID } = await import('../shared/virtualOutputs');
+  const state = fixture();
+  state.liveIndex = 1;
+  state.outputAssignments[NDI_LYRICS_OUTPUT_ID] = { mode: 'follow', isOpen: true, isBlackout: false, slideIndex: 0 };
+  assert.equal(activeMusicSlide(state), null);
+  state.outputAssignments[NDI_PROGRAM_OUTPUT_ID] = { mode: 'follow', isOpen: true, isBlackout: false, slideIndex: 0 };
+  assert.equal(activeMusicSlide(state)?.id, 'music');
+});

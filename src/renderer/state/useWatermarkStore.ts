@@ -1,12 +1,13 @@
 import { create } from 'zustand';
-import type { WatermarkConfig, Position } from '../types';
+import type { WatermarkConfig, WatermarkPosition } from '../types';
 import {
   DEFAULT_WATERMARK_CONFIG,
   WATERMARK_STORAGE_KEY,
   WATERMARK_DEBOUNCE_MS,
 } from '../constants';
 
-const VALID_POSITIONS: Position[] = [
+const VALID_POSITIONS: WatermarkPosition[] = [
+  'center',
   'top-left',
   'top-center',
   'top-right',
@@ -15,8 +16,8 @@ const VALID_POSITIONS: Position[] = [
   'bottom-right',
 ];
 
-function isValidPosition(value: unknown): value is Position {
-  return typeof value === 'string' && VALID_POSITIONS.includes(value as Position);
+function isValidPosition(value: unknown): value is WatermarkPosition {
+  return typeof value === 'string' && VALID_POSITIONS.includes(value as WatermarkPosition);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

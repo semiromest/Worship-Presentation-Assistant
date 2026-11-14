@@ -1,5 +1,5 @@
 import ControlTooltip from './ControlTooltip';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Mic,
@@ -15,12 +15,17 @@ import {
   ChevronDown,
   ChevronUp,
   Download,
+  Lock,
 } from 'lucide-react';
+import LanguagePicker from './LanguagePicker';
+import { languageLabel } from '../sttLanguageOptions';
 import { useSttStore } from '../state/useSttStore';
 import { refreshSttInputDevices } from '../hooks/useStt';
 import { useSlideTrackerStore } from '../state/useSlideTrackerStore';
 import { useStore } from '../state/useStore';
-import { AUTO_STT_LANGUAGE, isAutoSttLanguage, languageName, STT_LANGUAGES } from '../../shared/stt';
+import { AUTO_STT_LANGUAGE, isAutoSttLanguage, languageName } from '../../shared/stt';
+
+const languageTriggerClass = 'flex w-full items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-xs text-white/85 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50 disabled:hover:bg-white/5';
 import type { Slide } from '../types';
 import { SLIDE_REFERENCE_WIDTH } from '../constants';
 import { cn } from '../utils';
@@ -147,24 +152,18 @@ export default function LiveCaptionsConsole({
 
   const active = status !== 'idle';
   const [openSections, setOpenSections] = useState<string[]>(['mic']);
-  const [targetLanguageSearch, setTargetLanguageSearch] = useState('');
   const [tickerOpen, setTickerOpen] = useState(true);
   const [tab, setTab] = useState<ConsoleTab>('setup');
   const prevActiveRef = useRef(active);
 
-  const detectedName = detectedLanguage ? languageName(detectedLanguage) : null;
-  const spokenName = isAutoSttLanguage(sttLanguage) ? t('common.sttSpokenLanguageAuto') : languageName(sttLanguage);
-  const targetsName = targetLanguages.map(languageName).join(', ');
+  const uiLocale = i18n.language || 'en';
+  const detectedName = detectedLanguage ? languageLabel(detectedLanguage, uiLocale) : null;
+  const spokenName = isAutoSttLanguage(sttLanguage) ? t('common.sttSpokenLanguageAuto') : languageLabel(sttLanguage, uiLocale);
+  const targetsName = targetLanguages.map(code => languageLabel(code, uiLocale)).join(', ');
 
   const liveText = translationEnabled
     ? (currentTranslation + partialTranslation).trim() || (currentOriginal + partialOriginal).trim()
     : (currentOriginal + partialOriginal).trim();
-
-  const filteredTargetLanguages = useMemo(() => {
-    const query = targetLanguageSearch.trim().toLocaleLowerCase();
-    if (!query) return STT_LANGUAGES;
-    return STT_LANGUAGES.filter((lang) => `${lang.name} ${lang.code}`.toLocaleLowerCase().includes(query));
-  }, [targetLanguageSearch]);
 
   // Default tab: idle → Setup; live → History (or Share if already broadcasting).
   useEffect(() => {
@@ -543,139 +542,92 @@ export default function LiveCaptionsConsole({
                   aria-labelledby="stt-tab-setup"
                   className="space-y-2.5"
                 >
-                  {active && (
-                    <p className="text-[11px] text-white/60 leading-snug">{t('common.sttLangLocked')}</p>
-                  )}
-
-                  {/* Languages — always visible */}
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold text-white/70">{t('common.sttLanguages')}</p>
-
-                    <label className="block space-y-1">
-                      <FieldLabel>{t('common.sttSpokenLanguage')}</FieldLabel>
-                      <div className="flex items-center gap-2">
-                        <Mic className="w-4 h-4 text-white/55 shrink-0" aria-hidden="true" />
-                        <select
-                          value={sttLanguage}
-                          onChange={(e) => setSttLanguage(e.target.value)}
-                          disabled={active}
-                          aria-label={t('common.sttSpokenLanguage')}
-                          className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/80 outline-none focus-visible:border-blue-500/60 transition-colors disabled:opacity-50"
-                        >
-                          <option value={AUTO_STT_LANGUAGE} className="bg-surface-overlay">
-                            {t('common.sttSpokenLanguageAuto')}
-                          </option>
-                          {STT_LANGUAGES.map((lang) => (
-                            <option key={lang.code} value={lang.code} className="bg-surface-overlay">
-                              {lang.name} ({lang.code})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      {!isAutoSttLanguage(sttLanguage) && (
-                        <span className="block text-[11px] text-white/55">{t('common.sttSpokenLanguageHint')}</span>
+                  {/* Languages: one route card — who speaks what, and what the captions show. */}
+                  <section aria-label={t('common.sttLanguages')} className="space-y-3 rounded-lg border border-white/10 bg-black/15 p-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-white/75">{t('common.sttLanguages')}</p>
+                      {active && (
+                        <span title={t('common.sttLangLocked')}
+                          className="inline-flex items-center gap-1 rounded-md border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-200">
+                          <Lock className="h-3 w-3" aria-hidden="true" />{t('common.sttLangLockedShort')}
+                        </span>
                       )}
-                    </label>
-
-                    <div className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Languages
-                          className={cn(
-                            'w-4 h-4 shrink-0',
-                            translationEnabled ? 'text-emerald-300' : 'text-white/55'
-                          )}
-                          aria-hidden="true"
-                        />
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold truncate">{t('common.sttTranslationToggle')}</p>
-                          <p className="text-[11px] text-white/60 truncate">
-                            {translationEnabled
-                              ? t('common.sttTranslationOnDesc')
-                              : t('common.sttTranslationOffDesc')}
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={translationEnabled}
-                        disabled={active}
-                        onClick={() => setTranslationEnabled(!translationEnabled)}
-                        aria-label={t('common.sttTranslationToggle')}
-                        className={cn(
-                          'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none active:scale-[0.96] disabled:opacity-40',
-                          translationEnabled ? 'bg-emerald-500' : 'bg-white/15'
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            'inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform',
-                            translationEnabled ? 'translate-x-[18px]' : 'translate-x-[3px]'
-                          )}
-                        />
-                      </button>
                     </div>
 
-                    {translationEnabled && (
-                      <label className="block space-y-1.5">
-                        <FieldLabel>
-                          {t('common.sttTargetLanguage')} ({targetLanguages.length})
-                        </FieldLabel>
-                        <input
-                          type="search"
-                          value={targetLanguageSearch}
-                          onChange={(e) => setTargetLanguageSearch(e.target.value)}
-                          disabled={active}
-                          placeholder={t('common.sttTargetLanguageSearch')}
-                          aria-label={t('common.sttTargetLanguageSearch')}
-                          className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/80 placeholder:text-white/35 outline-none focus-visible:border-blue-500/60 transition-colors disabled:opacity-50"
-                        />
-                        <div className="grid grid-cols-2 gap-1 max-h-28 overflow-y-auto rounded-lg border border-white/10 bg-black/10 p-1">
-                          {filteredTargetLanguages.length > 0 ? (
-                            filteredTargetLanguages.map((lang) => {
-                              const selected = targetLanguages.includes(lang.code);
-                              return (
-                                <button
-                                  key={lang.code}
-                                  type="button"
-                                  onClick={() => toggleTargetLanguage(lang.code)}
-                                  disabled={active}
-                                  aria-pressed={selected}
-                                  className={cn(
-                                    'rounded-md px-2 py-1 text-left text-[11px] transition-colors disabled:opacity-50',
-                                    selected
-                                      ? 'bg-emerald-400/20 text-emerald-100 ring-1 ring-emerald-400/40'
-                                      : 'bg-white/5 text-white/65 hover:bg-white/10 hover:text-white'
-                                  )}
-                                >
-                                  {lang.name} <span className="text-white/55">({lang.code})</span>
-                                </button>
-                              );
-                            })
-                          ) : (
-                            <span className="col-span-2 px-2 py-2 text-[11px] text-white/55">
-                              {t('common.sttTargetLanguageNoResults')}
+                    <div className="space-y-1">
+                      <FieldLabel>{t('common.sttSpeakerLanguage')}</FieldLabel>
+                      <LanguagePicker
+                        selected={[sttLanguage]}
+                        onSelect={setSttLanguage}
+                        auto={{ code: AUTO_STT_LANGUAGE, label: t('common.sttSpokenLanguageAuto'), description: t('common.sttAutoDescription') }}
+                        disabled={active}
+                        ariaLabel={t('common.sttSpokenLanguage')}
+                        triggerClassName={languageTriggerClass}
+                      >
+                        <Mic className="h-4 w-4 shrink-0 text-white/55" aria-hidden="true" />
+                        <span className="min-w-0 flex-1 truncate text-left">{spokenName}</span>
+                        {isAutoSttLanguage(sttLanguage) && detectedName && active && (
+                          <span className="shrink-0 rounded bg-white/10 px-1.5 text-[10px] text-white/65">{detectedName}</span>
+                        )}
+                        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-white/45" aria-hidden="true" />
+                      </LanguagePicker>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <FieldLabel>{t('common.sttCaptionsShow')}</FieldLabel>
+                      <div role="radiogroup" aria-label={t('common.sttCaptionsShow')} className="grid grid-cols-2 gap-1 rounded-lg border border-white/10 bg-black/20 p-1">
+                        {([false, true] as const).map((value) => (
+                          <button key={String(value)} type="button" role="radio" aria-checked={translationEnabled === value}
+                            disabled={active}
+                            onClick={() => { if (translationEnabled !== value) setTranslationEnabled(value); }}
+                            className={cn('inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50',
+                              translationEnabled === value
+                                ? value ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/15 text-white'
+                                : 'text-white/55 hover:text-white')}>
+                            {value ? <Languages className="h-3.5 w-3.5" aria-hidden="true" /> : <Captions className="h-3.5 w-3.5" aria-hidden="true" />}
+                            {value ? t('common.sttShowTranslation') : t('common.sttShowOriginal')}
+                          </button>
+                        ))}
+                      </div>
+
+                      {translationEnabled && (
+                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                          {targetLanguages.map((code, index) => (
+                            <span key={code}
+                              className={cn('inline-flex items-center gap-1 rounded-full border py-0.5 pl-2.5 pr-1 text-[11px]',
+                                index === 0 ? 'border-emerald-400/45 bg-emerald-400/15 text-emerald-50' : 'border-white/15 bg-white/5 text-white/80')}>
+                              {languageLabel(code, uiLocale)}
+                              <button type="button" onClick={() => toggleTargetLanguage(code)}
+                                disabled={active || targetLanguages.length === 1}
+                                title={t('common.sttTargetLanguageRemove')}
+                                aria-label={`${languageLabel(code, uiLocale)} ${t('common.sttTargetLanguageRemove')}`}
+                                className="rounded-full p-0.5 text-current/70 hover:bg-white/15 disabled:opacity-30 disabled:hover:bg-transparent">
+                                <X className="h-3 w-3" aria-hidden="true" />
+                              </button>
                             </span>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                          {targetLanguages.map((code) => (
-                            <ControlTooltip key={code} descriptionKey={'common.sttTargetLanguageRemove'}><button
-                              key={code}
-                              type="button"
-                              onClick={() => toggleTargetLanguage(code)}
-                              disabled={active}
-                              title={t('common.sttTargetLanguageRemove')}
-                              aria-label={`${languageName(code)} ${t('common.sttTargetLanguageRemove')}`}
-                              className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[11px] text-emerald-100 hover:bg-red-400/15 hover:border-red-400/40 hover:text-red-100 disabled:opacity-50"
-                            >
-                              {languageName(code)} ×
-                            </button></ControlTooltip>
                           ))}
+                          <LanguagePicker
+                            selected={targetLanguages}
+                            exclude={targetLanguages}
+                            onSelect={toggleTargetLanguage}
+                            disabled={active}
+                            ariaLabel={t('common.sttAddLanguage')}
+                            triggerClassName="inline-flex items-center gap-1 rounded-full border border-dashed border-white/25 px-2.5 py-0.5 text-[11px] font-semibold text-white/70 hover:border-white/45 hover:text-white disabled:opacity-40"
+                          >
+                            <Plus className="h-3 w-3" aria-hidden="true" />{t('common.sttAddLanguage')}
+                          </LanguagePicker>
                         </div>
-                      </label>
-                    )}
-                  </div>
+                      )}
+                    </div>
+
+                    <p className="flex items-center gap-1.5 rounded-md bg-white/[0.04] px-2 py-1.5 text-[11px] text-white/60">
+                      <span className="truncate">{spokenName}</span>
+                      <span className="text-white/30" aria-hidden="true">→</span>
+                      <span className={cn('truncate', translationEnabled && 'text-emerald-200/90')}>
+                        {translationEnabled ? targetLanguages.map(code => languageLabel(code, uiLocale)).join(', ') : t('common.sttShowOriginal')}
+                      </span>
+                    </p>
+                  </section>
 
                   {/* Mic — collapsible */}
                   <Section

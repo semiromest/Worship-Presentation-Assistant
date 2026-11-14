@@ -42,3 +42,15 @@ test('cancelling an audio response cancels its source request', async () => {
     assert.equal(cancelled, true);
   } finally { globalThis.fetch = original; }
 });
+
+test('paced fetch waits only after a response that brought no new media', async () => {
+  const { pacedMusicFetch, SABR_PROGRESS_BYTES } = await import('./musicStreamFetch');
+  const sizes = [SABR_PROGRESS_BYTES * 4, 10, SABR_PROGRESS_BYTES];
+  const waits: number[] = [];
+  let call = 0;
+  const fetcher = (async () => new Response(new Uint8Array(sizes[call++] ?? 0))) as typeof fetch;
+  const paced = pacedMusicFetch(fetcher, 200, async ms => { waits.push(call); void ms; });
+  for (let index = 0; index < 4; index++) await (await paced('https://fixture.invalid/sabr')).arrayBuffer();
+  // 1st: no wait. 2nd: previous was large → no wait. 3rd: previous was tiny → wait. 4th: previous was large → no wait.
+  assert.deepEqual(waits, [2]);
+});

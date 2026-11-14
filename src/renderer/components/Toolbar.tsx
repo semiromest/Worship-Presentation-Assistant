@@ -23,7 +23,9 @@ import { useSttStore } from '../state/useSttStore';
 import { usePreparationStore } from '../state/usePreparationStore';
 import { cn } from '../utils';
 import DisplayOutputsPopover from './DisplayOutputsPopover';
+import BroadcastPopover from './BroadcastPopover';
 import BackgroundMusicPopover from './BackgroundMusicPopover';
+import LiveOverlaysPopover from './LiveOverlaysPopover';
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 interface ToolbarProps {
@@ -201,7 +203,7 @@ export default function Toolbar({
         </button></ControlTooltip>
 
 </div>}</div>
-    <div className="design-secondary"><div className="design-connections">{!practice && <><DisplayOutputsPopover label={activeTab === 'slides' ? t('slidesWorkspace.displays') : undefined} openOutput={openOutput} closeOutput={closeOutput} />        {/* Phone viewers (live-slide broadcast) */}
+    <div className="design-secondary"><div className="design-connections">{!practice && <><DisplayOutputsPopover label={activeTab === 'slides' ? t('slidesWorkspace.displays') : undefined} openOutput={openOutput} closeOutput={closeOutput} /><BroadcastPopover openOutput={openOutput} closeOutput={closeOutput} />        {/* Phone viewers (live-slide broadcast) */}
         <div className="relative shrink-0">
           <ControlTooltip descriptionKey={'common.liveShareButton'}><button
             onClick={() => { setIsLiveShareOpen(true); playSfx('open'); }}
@@ -279,6 +281,8 @@ export default function Toolbar({
             </span>
           )}
         </button></ControlTooltip>
+
+        {!practice && <LiveOverlaysPopover />}
 
         <BackgroundMusicPopover label={t('slidesWorkspace.music')} onAddSlide={practice ? undefined : addYouTubeMusicSlide} />
 

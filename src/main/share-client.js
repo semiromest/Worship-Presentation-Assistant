@@ -7,11 +7,11 @@
   var panel = $('settings-panel'), settingsButton = $('settings-button'), closeButton = $('settings-close');
   var locale = (navigator.language || 'en').split('-')[0];
   var labels = {
-    en: { connecting:'Connecting…', waiting:'Waiting for speech', live:'Live', reconnecting:'Connection lost · reconnecting…', ended:'Broadcast ended', all:'All languages', original:'Original', showOriginal:'Also show original', textSize:'Text size', language:'Translation language', returnLive:'Back to live', expired:'This link has expired. Scan the current QR code.', settings:'Reading settings', close:'Close', theme:'Appearance', dark:'Dark', light:'Light', system:'System', smaller:'Smaller text', normal:'Default text', larger:'Larger text', newItems:'new updates' },
-    tr: { connecting:'Bağlanıyor…', waiting:'Konuşma bekleniyor', live:'Canlı', reconnecting:'Bağlantı kesildi · yeniden bağlanıyor…', ended:'Yayın sona erdi', all:'Tüm diller', original:'Orijinal', showOriginal:'Orijinali de göster', textSize:'Yazı boyutu', language:'Çeviri dili', returnLive:'Canlıya dön', expired:'Bu bağlantının süresi doldu. Güncel QR kodunu tarayın.', settings:'Okuma ayarları', close:'Kapat', theme:'Görünüm', dark:'Koyu', light:'Açık', system:'Sistem', smaller:'Küçük yazı', normal:'Normal yazı', larger:'Büyük yazı', newItems:'yeni kayıt' },
-    de: { connecting:'Verbindung wird hergestellt…', waiting:'Warte auf Sprache', live:'Live', reconnecting:'Verbindung unterbrochen · erneuter Versuch…', ended:'Übertragung beendet', all:'Alle Sprachen', original:'Original', showOriginal:'Original zusätzlich anzeigen', textSize:'Textgröße', language:'Übersetzungssprache', returnLive:'Zur Live-Ansicht', expired:'Dieser Link ist abgelaufen. Bitte den aktuellen QR-Code scannen.', settings:'Leseeinstellungen', close:'Schließen', theme:'Darstellung', dark:'Dunkel', light:'Hell', system:'System', smaller:'Kleiner Text', normal:'Standardtext', larger:'Größerer Text', newItems:'neue Einträge' },
-    es: { connecting:'Conectando…', waiting:'Esperando voz', live:'En vivo', reconnecting:'Conexión perdida · reconectando…', ended:'Transmisión finalizada', all:'Todos los idiomas', original:'Original', showOriginal:'Mostrar también el original', textSize:'Tamaño del texto', language:'Idioma de traducción', returnLive:'Volver al directo', expired:'Este enlace ha caducado. Escanea el código QR actual.', settings:'Ajustes de lectura', close:'Cerrar', theme:'Apariencia', dark:'Oscuro', light:'Claro', system:'Sistema', smaller:'Texto pequeño', normal:'Texto normal', larger:'Texto grande', newItems:'nuevas entradas' },
-    ko: { connecting:'연결 중…', waiting:'음성 대기 중', live:'실시간', reconnecting:'연결 끊김 · 재연결 중…', ended:'방송 종료', all:'모든 언어', original:'원문', showOriginal:'원문도 표시', textSize:'글자 크기', language:'번역 언어', returnLive:'실시간으로 돌아가기', expired:'링크가 만료되었습니다. 현재 QR 코드를 스캔하세요.', settings:'읽기 설정', close:'닫기', theme:'화면 모드', dark:'어둡게', light:'밝게', system:'시스템', smaller:'작은 글자', normal:'기본 글자', larger:'큰 글자', newItems:'새 항목' }
+    en: { connecting:'Connecting…', waiting:'Waiting for speech', live:'Live', reconnecting:'Connection lost · reconnecting…', ended:'Broadcast ended', all:'All languages', original:'Original', showOriginal:'Also show original', textSize:'Text size', language:'Translation language', returnLive:'Back to live', expired:'This link has expired. Scan the current QR code.', settings:'Reading settings', close:'Close', theme:'Appearance', dark:'Dark', light:'Light', system:'System', smaller:'Smaller text', normal:'Default text', larger:'Larger text', newItems:'new updates', slideImage:'Slide image' },
+    tr: { connecting:'Bağlanıyor…', waiting:'Konuşma bekleniyor', live:'Canlı', reconnecting:'Bağlantı kesildi · yeniden bağlanıyor…', ended:'Yayın sona erdi', all:'Tüm diller', original:'Orijinal', showOriginal:'Orijinali de göster', textSize:'Yazı boyutu', language:'Çeviri dili', returnLive:'Canlıya dön', expired:'Bu bağlantının süresi doldu. Güncel QR kodunu tarayın.', settings:'Okuma ayarları', close:'Kapat', theme:'Görünüm', dark:'Koyu', light:'Açık', system:'Sistem', smaller:'Küçük yazı', normal:'Normal yazı', larger:'Büyük yazı', newItems:'yeni kayıt', slideImage:'Slayt görseli' },
+    de: { connecting:'Verbindung wird hergestellt…', waiting:'Warte auf Sprache', live:'Live', reconnecting:'Verbindung unterbrochen · erneuter Versuch…', ended:'Übertragung beendet', all:'Alle Sprachen', original:'Original', showOriginal:'Original zusätzlich anzeigen', textSize:'Textgröße', language:'Übersetzungssprache', returnLive:'Zur Live-Ansicht', expired:'Dieser Link ist abgelaufen. Bitte den aktuellen QR-Code scannen.', settings:'Leseeinstellungen', close:'Schließen', theme:'Darstellung', dark:'Dunkel', light:'Hell', system:'System', smaller:'Kleiner Text', normal:'Standardtext', larger:'Größerer Text', newItems:'neue Einträge', slideImage:'Folienbild' },
+    es: { connecting:'Conectando…', waiting:'Esperando voz', live:'En vivo', reconnecting:'Conexión perdida · reconectando…', ended:'Transmisión finalizada', all:'Todos los idiomas', original:'Original', showOriginal:'Mostrar también el original', textSize:'Tamaño del texto', language:'Idioma de traducción', returnLive:'Volver al directo', expired:'Este enlace ha caducado. Escanea el código QR actual.', settings:'Ajustes de lectura', close:'Cerrar', theme:'Apariencia', dark:'Oscuro', light:'Claro', system:'Sistema', smaller:'Texto pequeño', normal:'Texto normal', larger:'Texto grande', newItems:'nuevas entradas', slideImage:'Imagen de la diapositiva' },
+    ko: { connecting:'연결 중…', waiting:'음성 대기 중', live:'실시간', reconnecting:'연결 끊김 · 재연결 중…', ended:'방송 종료', all:'모든 언어', original:'원문', showOriginal:'원문도 표시', textSize:'글자 크기', language:'번역 언어', returnLive:'실시간으로 돌아가기', expired:'링크가 만료되었습니다. 현재 QR 코드를 스캔하세요.', settings:'읽기 설정', close:'닫기', theme:'화면 모드', dark:'어둡게', light:'밝게', system:'시스템', smaller:'작은 글자', normal:'기본 글자', larger:'큰 글자', newItems:'새 항목', slideImage:'슬라이드 이미지' }
   };
   var L = labels[locale] || labels.en;
   document.documentElement.lang = labels[locale] ? locale : 'en';
@@ -230,8 +230,37 @@
     var accessible = L.returnLive + (unread.size ? ', ' + unread.size + ' ' + L.newItems : '');
     button.setAttribute('aria-label', accessible); button.setAttribute('title', L.returnLive);
   }
+  // Pictures on the live slide, translated into the reader's language by the presenter's app.
+  var slideBox = $('slide-images'), slideSignature = '';
+  function renderSlideImages() {
+    if (!slideBox) return;
+    var list = (snapshot && snapshot.slideImages) || [];
+    var targets = (snapshot && snapshot.targetLanguages) || [];
+    // Only translated pictures are shown: in the chosen language, or (all languages) the first
+    // language that has one; "original" shows the source of pictures that were translated.
+    var urls = [];
+    list.forEach(function(item) {
+      var translations = item.translations || {};
+      var url = '';
+      if (selected === '__original__') url = Object.keys(translations).length ? item.original : '';
+      else if (selected === '__all__') { var code = targets.concat(Object.keys(translations)).find(function(c) { return translations[c]; }); url = code ? translations[code] : ''; }
+      else url = translations[selected] || '';
+      if (url) urls.push(url + (url.indexOf('?') < 0 ? '?' : '&') + 'token=' + encodeURIComponent(token));
+    });
+    var next = urls.join('|');
+    if (next === slideSignature) return;
+    slideSignature = next;
+    slideBox.replaceChildren();
+    urls.forEach(function(url) {
+      var link = element('a', 'slide-image'); link.href = url; link.target = '_blank'; link.rel = 'noopener';
+      var img = element('img'); img.src = url; img.alt = L.slideImage; img.decoding = 'async';
+      link.appendChild(img); slideBox.appendChild(link);
+    });
+    slideBox.classList.toggle('hidden', !urls.length);
+  }
   function render() {
     if (!snapshot) return;
+    renderSlideImages();
     var animate = hasRendered && !suppressMotion && snapshot.uiMotionEnabled !== false && !(reducedMotion && reducedMotion.matches) && !document.hidden;
     suppressMotion = false;
     var anchor = Array.from(feed.children).find(function(node) { return !node.hidden && node.getBoundingClientRect().bottom > feed.getBoundingClientRect().top; });

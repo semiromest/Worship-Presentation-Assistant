@@ -34,6 +34,17 @@ export interface ShareSnapshot {
   lastTranslations?: Record<string, string>;
   /** Bounded finalized history, oldest → newest. */
   history: ShareHistoryItem[];
+  /**
+   * Pictures on the live slide with their translated copies per target language. The renderer
+   * sends media refs; the main process swaps them for token-protected `/share/img/…` paths.
+   */
+  slideImages?: ShareSlideImage[];
+}
+
+export interface ShareSlideImage {
+  original: string;
+  /** Target language → translated picture (missing: no text found or not ready yet). */
+  translations: Record<string, string>;
 }
 
 export interface ShareStatus {

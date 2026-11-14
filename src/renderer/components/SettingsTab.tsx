@@ -16,7 +16,7 @@ import { registerTourAnchor } from './Tour/tourController';
 import { useMemo, useState, useEffect, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supportedUiLanguages } from '../i18n';
-import { Globe, Zap, Settings2, Save, Trash2, DatabaseBackup, Volume2, Mic, KeyRound, Languages, Check, Loader2, Music, Palette, Sparkles, Search, X, ChevronRight, BookOpen, Monitor, RefreshCw, Keyboard, Heart } from 'lucide-react';
+import { Globe, Zap, Settings2, Save, Trash2, DatabaseBackup, Volume2, Mic, KeyRound, Languages, Check, Loader2, Music, Palette, Sparkles, Search, X, ChevronRight, ChevronDown, BookOpen, Monitor, RefreshCw, Keyboard, Heart } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { useUpdaterStore } from '../state/useUpdaterStore';
 import { WatermarkSettingsPanel } from './WatermarkSettingsPanel';
@@ -24,7 +24,9 @@ import { CaptionOverlaySettingsPanel } from './CaptionOverlaySettingsPanel';
 import { PositionPicker, SettingSlider } from './SettingsControls';
 import type { Position } from '../types';
 import { useSttStore, refreshSttStatus } from '../state/useSttStore';
-import { AUTO_STT_LANGUAGE, STT_LANGUAGES } from '../../shared/stt';
+import { AUTO_STT_LANGUAGE } from '../../shared/stt';
+import LanguagePicker from './LanguagePicker';
+import { languageLabel } from '../sttLanguageOptions';
 import { cn } from '../utils';
 import { DEFAULT_LIVE_SAVE_RETENTION_MS, isLiveSavePreset, LIVE_SAVE_RETENTION_OPTIONS, getLiveSaveRetention } from '../hooks/useLiveSave';
 import SettingSwitch from './SettingSwitch';
@@ -425,51 +427,41 @@ export default function SettingsTab() {
 
           {/* Default spoken language (STT recognition) */}
           <div id="settings-item-spoken-language" tabIndex={-1} className="space-y-1.5">
-            <label htmlFor="soniox-stt-language" className="block text-xs text-white/65">
+            <label id="soniox-stt-language-label" className="block text-xs text-white/65">
               {t('settings.sonioxSttLanguage')}
             </label>
             <div className="flex items-center gap-2">
               <Mic className="w-4 h-4 text-white/55 shrink-0" aria-hidden="true" />
-              <select
-                id="soniox-stt-language"
-                value={sttSpokenLanguage}
-                onChange={(e) => changeSpokenLanguage(e.target.value)}
-                aria-label={t('settings.sonioxSttLanguage')}
-                className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/40 transition-colors"
+              <LanguagePicker
+                selected={[sttSpokenLanguage]}
+                onSelect={changeSpokenLanguage}
+                auto={{ code: AUTO_STT_LANGUAGE, label: t('settings.sonioxSttAuto') }}
+                ariaLabel={t('settings.sonioxSttLanguage')}
+                triggerClassName="flex flex-1 min-w-0 items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-left hover:bg-white/10 outline-none focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/40 transition-colors"
               >
-                <option value={AUTO_STT_LANGUAGE} className="bg-surface-overlay">
-                  {t('settings.sonioxSttAuto')}
-                </option>
-                {STT_LANGUAGES.map((lang) => (
-                  <option key={lang.code} value={lang.code} className="bg-surface-overlay">
-                    {lang.name} ({lang.code})
-                  </option>
-                ))}
-              </select>
+                <span id="soniox-stt-language" className="min-w-0 flex-1 truncate">{sttSpokenLanguage === AUTO_STT_LANGUAGE ? t('settings.sonioxSttAuto') : languageLabel(sttSpokenLanguage, i18n.language)}</span>
+                <ChevronDown className="h-4 w-4 shrink-0 text-white/45" aria-hidden="true" />
+              </LanguagePicker>
             </div>
             <p className="text-xs leading-5 text-white/55">{t('settings.sonioxSttLanguageHint')}</p>
           </div>
 
           {/* Translation target language */}
           <div id="settings-item-target-language" tabIndex={-1} className="space-y-1.5">
-            <label htmlFor="soniox-target-language" className="block text-xs text-white/65">
+            <label id="soniox-target-language-label" className="block text-xs text-white/65">
               {t('settings.sonioxTargetLanguage')}
             </label>
             <div className="flex items-center gap-2">
               <Languages className="w-4 h-4 text-white/55 shrink-0" aria-hidden="true" />
-              <select
-                id="soniox-target-language"
-                value={sttTargetLanguage}
-                onChange={(e) => changeTargetLanguage(e.target.value)}
-                aria-label={t('settings.sonioxTargetLanguage')}
-                className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/40 transition-colors disabled:opacity-50"
+              <LanguagePicker
+                selected={[sttTargetLanguage]}
+                onSelect={changeTargetLanguage}
+                ariaLabel={t('settings.sonioxTargetLanguage')}
+                triggerClassName="flex flex-1 min-w-0 items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-left hover:bg-white/10 outline-none focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/40 transition-colors"
               >
-                {STT_LANGUAGES.map((lang) => (
-                  <option key={lang.code} value={lang.code} className="bg-surface-overlay">
-                    {lang.name} ({lang.code})
-                  </option>
-                ))}
-              </select>
+                <span id="soniox-target-language" className="min-w-0 flex-1 truncate">{languageLabel(sttTargetLanguage, i18n.language)}</span>
+                <ChevronDown className="h-4 w-4 shrink-0 text-white/45" aria-hidden="true" />
+              </LanguagePicker>
             </div>
             <p className="text-xs leading-5 text-white/55">{t('settings.sonioxTargetLanguageHint')}</p>
           </div>

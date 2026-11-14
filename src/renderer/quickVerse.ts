@@ -1,6 +1,7 @@
 import { getChapterReading, resolveReadingReference, parseVerseNumbers } from './scriptureReading';
 import { bibleRepository } from './bibleRepository';
 import {
+  chapterVerseNumbers,
   createScriptureSlides,
   findBookForReference,
   parseScriptureReference,
@@ -34,7 +35,7 @@ export function resolveQuickVerse(reference: string): QuickVerseOutcome {
   if (!bible) return { ok: false, error: 'no-bible' };
 
   const parsed = parseScriptureReference(reference);
-  if (!parsed || parsed.chapter == null || parsed.verse == null) {
+  if (!parsed || parsed.chapter == null || (parsed.verse == null && !parsed.wholeChapter)) {
     return { ok: false, error: 'invalid' };
   }
 
@@ -44,13 +45,22 @@ export function resolveQuickVerse(reference: string): QuickVerseOutcome {
   const chapter = book.chapters.find((item) => Number(item.number) === parsed.chapter);
   if (!chapter) return { ok: false, error: 'not-found' };
 
-  const verseTo = parsed.verseTo ?? parsed.verse;
-  if (parsed.verse < 1 || verseTo < parsed.verse || /[:–—-]\s*$/.test(reference)) {
-    return { ok: false, error: 'invalid' };
-  }
   const source = bibleRepository.currentSource;
-  const verseNumbers = parseVerseNumbers(parsed.verse + '-' + verseTo).map(String);
-  const resolution = resolveReadingReference(getChapterReading(book, chapter, source), verseNumbers);
+  const reading = getChapterReading(book, chapter, source);
+  let verseNumbers: string[];
+  if (parsed.wholeChapter) {
+    // "Yuhanna 1::" — every verse of the chapter.
+    verseNumbers = chapterVerseNumbers(reading);
+    if (!verseNumbers.length) return { ok: false, error: 'no-verses' };
+  } else {
+    const verse = parsed.verse as number;
+    const verseTo = parsed.verseTo ?? verse;
+    if (verse < 1 || verseTo < verse || /[:–—-]\s*$/.test(reference)) {
+      return { ok: false, error: 'invalid' };
+    }
+    verseNumbers = parseVerseNumbers(verse + '-' + verseTo).map(String);
+  }
+  const resolution = resolveReadingReference(reading, verseNumbers);
   if (resolution.status !== 'complete')
     return {
       ok: false,

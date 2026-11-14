@@ -13,6 +13,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { analyzeMediaStorage, collectMediaNames, confirmRemovable, GB, type MediaStorageReport, type MediaStorageSettings, type StoredMedia } from '../shared/mediaStorage';
+import { IMAGE_TRANSLATION_INDEX } from '../shared/imageTranslate';
 
 /** Content-addressed library names written by mediaLibrary.ts / gpresReader.ts. */
 const LIBRARY_NAME = /^[A-Za-z0-9_-]+\.[A-Za-z0-9]{1,10}$/;
@@ -80,6 +81,8 @@ async function referencedNames(deps: MediaStorageDeps, rendererNames: unknown): 
   const presets = await deps.readPresets();
   collectMediaNames(presets, names);
   collectMediaNames(await readJson(path.join(deps.userData, 'gradient-library.json')), names);
+  // Stored image translations stay reusable (editor, bulk tool, phone broadcast): never "unused".
+  collectMediaNames(await readJson(path.join(deps.userData, IMAGE_TRANSLATION_INDEX)), names);
   return { names, presets };
 }
 

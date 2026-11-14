@@ -12,6 +12,8 @@ interface ImageStyleEditorProps {
   canCrop: boolean;
   /** Source actions (replace / remove) rendered at the top of the section. */
   source?: ReactNode;
+  /** Optional action under the source row (image text translation). */
+  translate?: ReactNode;
 }
 
 export const ImageStyleEditor = memo(function ImageStyleEditor({
@@ -20,6 +22,7 @@ export const ImageStyleEditor = memo(function ImageStyleEditor({
   onCrop,
   canCrop,
   source,
+  translate,
 }: ImageStyleEditorProps) {
   const { t } = useTranslation();
   const styles = item.imageStyles ?? DEFAULT_IMAGE_STYLE;
@@ -64,6 +67,7 @@ export const ImageStyleEditor = memo(function ImageStyleEditor({
         }
       >
         {source}
+        {translate}
         {!item.mediaUrl && (
           <p className="rounded-md bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-100/85">{t('common.editorNoImage')}</p>
         )}

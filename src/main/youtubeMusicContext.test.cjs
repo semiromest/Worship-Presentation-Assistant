@@ -21,7 +21,8 @@ test('simultaneous play and download claim separate single-use SABR preparations
     'bgutils-js/utils': {},
     '../shared/youtubeMusic': {},
     './youtubeSearchPager': { YouTubeSearchPager: class {} },
-    './musicStreamFetch': {},
+    './musicStreamFetch': { pacedMusicFetch: fetcher => fetcher },
+    './musicFormat': {},
     './offlineMusicCache': { OfflineMusicCache: class {} },
     './youtubeMusicLookup': {},
   };

@@ -1,42 +1,33 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BookOpen, Image as ImageIcon, Music, Search, Video } from 'lucide-react';
+import { BookOpen, Image as ImageIcon, Link2, Loader2, Music, Search, Video } from 'lucide-react';
 import { useStore } from '../state/useStore';
 import { bibleRepository } from '../bibleRepository';
-import { createScriptureSlides, saveRecentScriptureReference } from '../scriptureModel';
-import { loadLibraryHymns, readHymnAddPreferences } from '../hymnCache';
-import { searchHymns, searchMedia, searchScripture } from '../quickSearchModel';
+import { loadLibraryHymns } from '../hymnCache';
 import type { Hymn } from '../hymnImport';
-import type { MediaKind } from '../../shared/presentation';
+import { buildQuickSearch, runQuickEntry, type QuickEntry, type QuickRunOutcome } from '../quickSearch/quickSearchEngine';
+import { getQuickSearchActions, goLiveWithSlide } from '../quickSearch/quickSearchBridge';
 import { playSfx } from '../sfx';
 import { isHelpActive } from './Tour/tourController';
 import { cn } from '../utils';
 
-// Same chunking the Bible tab uses, so a verse added here looks identical.
-const CHUNK_CONFIG = { maxVerses: 3, maxChars: 120, maxLines: 2 } as const;
 const PANEL_WIDTH = 560;
 const PANEL_MAX_HEIGHT = 460;
 const EDGE = 12;
 
-interface QuickSearchProps {
-  onAddScripture: (content: string | string[], options?: { groupTitle?: string; goLive?: boolean }) => void;
-  onAddHymn: (hymn: Hymn & { showAuthorOnSlides?: boolean }, partsMode?: boolean, goLive?: boolean) => void;
-  onAddMedia: (type: MediaKind, path: string) => void;
-}
+type Group = 'scripture' | 'hymns' | 'media' | 'setLink';
 
-interface Row {
-  id: string;
-  group: 'scripture' | 'hymns' | 'media';
-  title: string;
-  subtitle?: string;
-  icon: typeof BookOpen;
-  run: (goLive: boolean) => void;
-}
+const GROUP_OF: Record<QuickEntry['kind'], Group> = {
+  scripture: 'scripture',
+  hymn: 'hymns',
+  media: 'media',
+  setLink: 'setLink',
+};
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, Math.max(min, max)));
 
-/** Ctrl/Cmd+K palette that opens at the pointer and adds verses, hymns and media to the service. */
-export default function QuickSearch({ onAddScripture, onAddHymn, onAddMedia }: QuickSearchProps) {
+/** Ctrl/Cmd+K palette that opens at the pointer and adds verses, hymns, media and set links to the service. */
+export default function QuickSearch() {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -44,15 +35,19 @@ export default function QuickSearch({ onAddScripture, onAddHymn, onAddMedia }: Q
   const [position, setPosition] = useState({ left: EDGE, top: EDGE });
   const [hymns, setHymns] = useState<Hymn[]>([]);
   const [bibleVersion, setBibleVersion] = useState(0);
+  const [busy, setBusy] = useState<{ fetched: number; total: number } | null>(null);
+  const [status, setStatus] = useState<{ text: string; tone: 'ok' | 'error' } | null>(null);
   const mediaItems = useStore((s) => s.mediaItems);
   const pointer = useRef({ x: 0, y: 0 });
   const openRef = useRef(false);
+  const busyRef = useRef(false);
   const returnFocus = useRef<HTMLElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const baseId = useId();
 
   const close = useCallback(() => {
+    if (busyRef.current) return;
     openRef.current = false;
     setOpen(false);
     const target = returnFocus.current;
@@ -79,6 +74,7 @@ export default function QuickSearch({ onAddScripture, onAddHymn, onAddMedia }: Q
       });
       setQuery('');
       setActive(0);
+      setStatus(null);
       setHymns(loadLibraryHymns());
       setOpen(true);
     };
@@ -98,75 +94,119 @@ export default function QuickSearch({ onAddScripture, onAddHymn, onAddMedia }: Q
     }
   }, [open]);
 
-  const rows = useMemo<Row[]>(() => {
+  const entries = useMemo<QuickEntry[]>(() => {
     if (!open || !query.trim()) return [];
-    const bible = bibleRepository.currentBible;
-    const source = bibleRepository.currentSource;
-    const out: Row[] = [];
-    for (const hit of searchScripture(bible, source, query)) {
-      out.push({
-        id: `s:${hit.id}`, group: 'scripture', title: hit.label, subtitle: hit.preview, icon: BookOpen,
-        run: (goLive) => {
-          const slides = createScriptureSlides(hit.book, hit.chapter, hit.verseNumbers, CHUNK_CONFIG, source);
-          if (!slides.length) return;
-          onAddScripture(slides.length === 1 ? slides[0] : slides, { groupTitle: `${hit.book.name} ${hit.chapter.number}`, goLive });
-          saveRecentScriptureReference(bibleRepository.sourceId, { book: hit.book, chapter: hit.chapter, verseNumbers: hit.verseNumbers });
-        },
-      });
-    }
-    for (const hymn of searchHymns(hymns, query)) {
-      out.push({
-        id: `h:${hymn.id}`, group: 'hymns', title: hymn.title, subtitle: hymn.author, icon: Music,
-        run: (goLive) => {
-          const prefs = readHymnAddPreferences();
-          onAddHymn({ ...hymn, showAuthorOnSlides: prefs.showAuthor }, prefs.partsMode, goLive);
-        },
-      });
-    }
-    for (const item of searchMedia(mediaItems, query)) {
-      out.push({
-        id: `m:${item.id}`, group: 'media', title: item.name,
-        subtitle: item.type === 'video' ? t('common.quickSearch.video') : t('common.quickSearch.image'),
-        icon: item.type === 'video' ? Video : ImageIcon,
-        run: () => onAddMedia(item.type, item.path),
-      });
-    }
-    return out;
+    return buildQuickSearch(query, {
+      bible: bibleRepository.currentBible,
+      source: bibleRepository.currentSource,
+      hymns,
+      media: mediaItems,
+    });
     // bibleVersion re-runs the search once an asynchronous Bible restore finishes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, query, hymns, mediaItems, onAddScripture, onAddHymn, onAddMedia, t, bibleVersion]);
+  }, [open, query, hymns, mediaItems, bibleVersion]);
 
-  useEffect(() => { setActive(0); }, [query]);
+  useEffect(() => { setActive(0); setStatus(null); }, [query]);
   useEffect(() => {
     listRef.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
-  }, [active, rows]);
+  }, [active, entries]);
 
-  const choose = useCallback((row: Row | undefined, goLive: boolean) => {
-    if (!row) return;
-    row.run(goLive);
+  const describeFailure = useCallback((outcome: QuickRunOutcome) => {
+    switch (outcome.error) {
+      case 'set-id-only': return t('quickSearchSet.setIdOnly');
+      case 'set-empty': return t('quickSearchSet.empty');
+      case 'set-fetch': return t('quickSearchSet.fetchError');
+      default: return t('common.quickSearch.noResults');
+    }
+  }, [t]);
+
+  const choose = useCallback(async (entry: QuickEntry | undefined, goLive: boolean) => {
+    if (!entry || busyRef.current) return;
+    const actions = getQuickSearchActions();
+    if (!actions) return;
+    if (entry.kind === 'setLink' && entry.result.error) {
+      setStatus({ text: t('quickSearchSet.setIdOnly'), tone: 'error' });
+      playSfx('error');
+      return;
+    }
+    const isSet = entry.kind === 'setLink';
+    if (isSet) {
+      busyRef.current = true;
+      setBusy({ fetched: 0, total: entry.result.songCount ?? 0 });
+    }
+    let outcome: QuickRunOutcome;
+    try {
+      outcome = await runQuickEntry(
+        entry,
+        actions,
+        { source: bibleRepository.currentSource, sourceId: bibleRepository.sourceId },
+        (fetched, total) => setBusy({ fetched, total }),
+      );
+    } finally {
+      busyRef.current = false;
+      setBusy(null);
+    }
+    if (!outcome.ok) {
+      setStatus({ text: describeFailure(outcome), tone: 'error' });
+      playSfx('error');
+      return;
+    }
+    if (goLive) await goLiveWithSlide(outcome.firstSlideId);
     playSfx('select');
+    if (isSet && outcome.failed > 0) {
+      // Keep the palette open so the partial result stays visible.
+      setStatus({ text: t('quickSearchSet.partial', { added: outcome.added, failed: outcome.failed }), tone: 'error' });
+      return;
+    }
     close();
-  }, [close]);
+  }, [close, describeFailure, t]);
 
   const onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); return; }
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
-      if (!rows.length) return;
-      setActive((i) => (i + (e.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length);
+      if (!entries.length) return;
+      setActive((i) => (i + (e.key === 'ArrowDown' ? 1 : -1) + entries.length) % entries.length);
       return;
     }
-    if (e.key === 'Enter') { e.preventDefault(); choose(rows[active], e.shiftKey); }
+    if (e.key === 'Enter') { e.preventDefault(); void choose(entries[active], e.shiftKey); }
   };
 
   if (!open) return null;
   const width = Math.min(PANEL_WIDTH, window.innerWidth - EDGE * 2);
-  const groupLabel = {
+  const groupLabel: Record<Group, string> = {
     scripture: t('common.quickSearch.scripture'),
     hymns: t('common.quickSearch.hymns'),
     media: t('common.quickSearch.media'),
+    setLink: t('quickSearchSet.group'),
   };
   const noBible = !bibleRepository.currentBible;
+
+  const rowView = (entry: QuickEntry): { icon: typeof BookOpen; title: string; subtitle?: string; badge?: string } => {
+    const r = entry.result;
+    switch (entry.kind) {
+      case 'scripture':
+        return { icon: BookOpen, title: r.title, subtitle: r.subtitle };
+      case 'hymn':
+        return { icon: Music, title: r.title, subtitle: r.subtitle, badge: r.hasChords ? '♪' : undefined };
+      case 'media':
+        return {
+          icon: r.mediaType === 'video' ? Video : ImageIcon,
+          title: r.title,
+          subtitle: r.mediaType === 'video' ? t('common.quickSearch.video') : t('common.quickSearch.image'),
+        };
+      case 'setLink':
+        return {
+          icon: Link2,
+          title: r.error ? t('quickSearchSet.setIdOnlyTitle') : r.title || t('quickSearchSet.title'),
+          subtitle: r.error
+            ? t('quickSearchSet.setIdOnly')
+            : busy
+              ? t('quickSearchSet.fetching', { fetched: busy.fetched, total: busy.total })
+              : t('quickSearchSet.songs', { count: r.songCount ?? 0 }),
+        };
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[100]" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
@@ -179,18 +219,23 @@ export default function QuickSearch({ onAddScripture, onAddHymn, onAddMedia }: Q
         style={{ left: position.left, top: position.top, width, maxHeight: PANEL_MAX_HEIGHT }}
       >
         <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2.5">
-          <Search className="h-4 w-4 shrink-0 text-white/50" aria-hidden="true" />
+          {busy ? (
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-white/50" aria-hidden="true" />
+          ) : (
+            <Search className="h-4 w-4 shrink-0 text-white/50" aria-hidden="true" />
+          )}
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onInputKeyDown}
+            readOnly={!!busy}
             role="combobox"
-            aria-expanded={rows.length > 0}
+            aria-expanded={entries.length > 0}
             aria-controls={`${baseId}-list`}
-            aria-activedescendant={rows[active] ? `${baseId}-${active}` : undefined}
+            aria-activedescendant={entries[active] ? `${baseId}-${active}` : undefined}
             aria-autocomplete="list"
-            placeholder={t('common.quickSearch.placeholder')}
+            placeholder={t('quickSearchSet.placeholder')}
             autoComplete="off"
             spellCheck={false}
             className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-white/40 focus:outline-none"
@@ -198,21 +243,24 @@ export default function QuickSearch({ onAddScripture, onAddHymn, onAddMedia }: Q
           <kbd className="rounded border border-white/15 px-1.5 py-0.5 text-[10px] text-white/50">Esc</kbd>
         </div>
         <ul id={`${baseId}-list`} ref={listRef} role="listbox" className="min-h-0 flex-1 overflow-y-auto py-1">
-          {rows.map((row, index) => {
-            const Icon = row.icon;
+          {entries.map((entry, index) => {
+            const view = rowView(entry);
+            const Icon = view.icon;
+            const group = GROUP_OF[entry.kind];
             return (
-              <li key={row.id} role="presentation">
-                {(index === 0 || rows[index - 1].group !== row.group) && (
+              <li key={entry.result.id} role="presentation">
+                {(index === 0 || GROUP_OF[entries[index - 1].kind] !== group) && (
                   <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-white/40">
-                    {groupLabel[row.group]}
+                    {groupLabel[group]}
                   </div>
                 )}
                 <div
                   id={`${baseId}-${index}`}
                   role="option"
                   aria-selected={index === active}
+                  aria-disabled={entry.kind === 'setLink' && !!entry.result.error}
                   onMouseMove={() => { if (index !== active) setActive(index); }}
-                  onClick={(e) => choose(row, e.shiftKey)}
+                  onClick={(e) => void choose(entry, e.shiftKey)}
                   className={cn(
                     'mx-1 flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2',
                     index === active ? 'bg-blue-600' : 'hover:bg-white/5'
@@ -220,20 +268,30 @@ export default function QuickSearch({ onAddScripture, onAddHymn, onAddMedia }: Q
                 >
                   <Icon className="h-4 w-4 shrink-0 text-white/70" aria-hidden="true" />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">{row.title}</div>
-                    {row.subtitle && <div className="truncate text-xs text-white/60">{row.subtitle}</div>}
+                    <div className="truncate text-sm font-medium">
+                      {view.title}
+                      {view.badge && (
+                        <span className="ml-1.5 text-xs text-violet-300" title={t('hymnChords.badgeTitle')}>{view.badge}</span>
+                      )}
+                    </div>
+                    {view.subtitle && <div className="truncate text-xs text-white/60">{view.subtitle}</div>}
                   </div>
                 </div>
               </li>
             );
           })}
-          {!rows.length && (
+          {!entries.length && (
             <li role="presentation" className="px-4 py-6 text-center text-xs text-white/50">
-              {query.trim() ? t('common.quickSearch.noResults') : t('common.quickSearch.hint')}
+              {query.trim() ? t('common.quickSearch.noResults') : t('quickSearchSet.hint')}
               {!query.trim() && noBible && <div className="mt-1 text-white/35">{t('common.quickSearch.noBible')}</div>}
             </li>
           )}
         </ul>
+        {status && (
+          <div role="status" className={cn('border-t border-white/10 px-3 py-1.5 text-xs', status.tone === 'error' ? 'text-amber-300' : 'text-green-300')}>
+            {status.text}
+          </div>
+        )}
         <div className="flex items-center gap-4 border-t border-white/10 px-3 py-1.5 text-[11px] text-white/50">
           <span><kbd className="font-sans">↑↓</kbd> {t('common.quickSearch.navigate')}</span>
           <span><kbd className="font-sans">Enter</kbd> {t('common.quickSearch.add')}</span>

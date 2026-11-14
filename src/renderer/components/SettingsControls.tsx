@@ -5,8 +5,10 @@ import * as m from 'motion/react-m';
 import { playSfx } from '../sfx';
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Position } from '../types';
+import type { Position, WatermarkPosition } from '../types';
 import { cn } from '../utils';
+
+const CENTER_OPTION = { value: 'center' as const, label: '•', labelKey: 'watermark.positionCenter' };
 
 const POSITION_OPTIONS: { value: Position; label: string; labelKey: string }[] = [
   { value: 'top-left', label: '↖', labelKey: 'common.hymnsAuthorPosTopLeft' },
@@ -17,25 +19,32 @@ const POSITION_OPTIONS: { value: Position; label: string; labelKey: string }[] =
   { value: 'bottom-right', label: '↘', labelKey: 'common.hymnsAuthorPosBottomRight' },
 ];
 
-interface PositionPickerProps {
-  value: Position;
-  onChange: (value: Position) => void;
+interface PositionPickerProps<T extends WatermarkPosition = Position> {
+  value: T;
+  onChange: (value: T) => void;
   disabled?: boolean;
-  labelFor?: (value: Position) => string;
+  /** Orta hücreyi ekler (3×3 ızgara). Yalnızca T 'center' içerdiğinde kullanılmalı. */
+  includeCenter?: boolean;
+  labelFor?: (value: T) => string;
   ariaLabel?: string;
   className?: string;
 }
 
 /** 3×2 konum ızgarası. Yazar konumu ve logo filigranı aynı kontrolü paylaşır. */
-export function PositionPicker({ value, onChange, disabled, labelFor, ariaLabel, className }: PositionPickerProps) {
+export function PositionPicker<T extends WatermarkPosition = Position>({ value, onChange, disabled, includeCenter, labelFor, ariaLabel, className }: PositionPickerProps<T>) {
   const { t } = useTranslation();
   const indicatorId = useId();
   const motionEnabled = useUiMotionEnabled();
+  const options: ({ value: WatermarkPosition; label: string; labelKey: string } | null)[] = includeCenter
+    ? [...POSITION_OPTIONS.slice(0, 3), null, CENTER_OPTION, null, ...POSITION_OPTIONS.slice(3)]
+    : POSITION_OPTIONS;
   return (
     <div role="group" className={cn('grid grid-cols-3 gap-1.5', disabled && 'opacity-40', className)} aria-label={ariaLabel}>
-      {POSITION_OPTIONS.map((opt) => {
-        const active = value === opt.value;
-        const label = labelFor?.(opt.value) ?? t(opt.labelKey);
+      {options.map((opt, index) => {
+        if (!opt) return <span key={`gap-${index}`} aria-hidden="true" className="h-9 rounded-lg border border-dashed border-white/5" />;
+        const optValue = opt.value as T;
+        const active = value === optValue;
+        const label = labelFor?.(optValue) ?? t(opt.labelKey);
         return (
           <ControlTooltip key={opt.value} description={t('tooltipText.setPosition', { position: label })}><button
             key={opt.value}
@@ -44,7 +53,7 @@ export function PositionPicker({ value, onChange, disabled, labelFor, ariaLabel,
             aria-pressed={active}
             aria-label={label}
             title={label}
-            onClick={() => { if (value !== opt.value) { onChange(opt.value); playSfx('snap'); } }}
+            onClick={() => { if (value !== optValue) { onChange(optValue); playSfx('snap'); } }}
             className={cn(
               'relative isolate flex h-9 items-center justify-center rounded-lg border text-sm font-bold transition-colors',
               active

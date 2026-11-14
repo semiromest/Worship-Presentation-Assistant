@@ -13,6 +13,8 @@ import { ipcMain, type WebContents, type WebFrameMain } from 'electron';
 /** Channels a projector output renderer may use. Keep this list read-only. */
 export const PROJECTOR_CHANNELS: ReadonlySet<string> = new Set([
   'projector-ready',
+  // NDI Program window only; main checks the sender before using the audio.
+  'program-audio:pcm',
   'cache-google-font',
   'media:getThumbnail',
   'stt:get-status',

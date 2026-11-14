@@ -95,6 +95,10 @@ export interface AppState {
   uiMotionEnabled: boolean;
   setUiMotionEnabled: (enabled: boolean) => void;
 
+  /** Phone share: translate pictures on the live slide and show them on phones (on by default). */
+  shareSlideImagesEnabled: boolean;
+  setShareSlideImagesEnabled: (enabled: boolean) => void;
+
   sectionFilterId: string;
   setSectionFilterId: (id: string) => void;
   serviceSectionsEnabled: boolean;

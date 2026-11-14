@@ -171,6 +171,11 @@ export interface Slide {
   locked?: boolean;
   /** Operator-only note shown on the confidence monitor, never on the audience output. */
   operatorNotes?: string;
+  /**
+   * Song chords for musicians (stage display only, never the audience output).
+   * `parts` lines up with `parts` (parts mode) or holds one entry for this slide.
+   */
+  chords?: import('./slideChords').SlideChords;
   styles?: {
     fontSize: number;
     textTransform?: 'none' | 'uppercase' | 'lowercase';
@@ -256,9 +261,12 @@ export type DriveStatus = { signedIn: false; email: null } | { signedIn: true; e
 
 export type Position = 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
 
+/** Logo filigranı ek olarak tam ortaya yerleştirilebilir. */
+export type WatermarkPosition = Position | 'center';
+
 export interface WatermarkConfig {
   logoDataUrl: string | null;
-  position: Position;
+  position: WatermarkPosition;
   size: number;
   opacity: number;
   applyToHymns: boolean;

@@ -1,3 +1,6 @@
+import { detectKey, hasChords, isChordToken, stripChords, xmlChordsToInline } from '../shared/chords';
+import type { Hymn } from './hymnImport';
+
 export interface WorshipSong {
   id: number;
   title: string;
@@ -130,11 +133,17 @@ export function extractSongSource(
 // Tags treated as stanza boundaries: opening/closing map to \n\n
 const RE_BLOCK_TAGS = /<\s*\/?\s*(?:verse|chorus|refrain|bridge|stanza|paragraph|para|section|part|repeat|intro|outro|tag|interlude)\b[^>]*\s*>/gi;
 
+/** Plain lyrics (no chords) from a worship-leader songxml. */
 export function parseSongXml(songxml: string): string {
+  return stripChords(parseSongXmlChordPro(songxml));
+}
+
+/** Lyrics with inline ChordPro chords (`[G]Amazing grace`) from a worship-leader songxml. */
+export function parseSongXmlChordPro(songxml: string): string {
   if (!songxml) return '';
   let text = songxml;
-  // Chords are removed entirely
-  text = text.replace(/<chord>[^<]*<\/chord>/g, '');
+  // Chords become inline ChordPro brackets
+  text = xmlChordsToInline(text);
   // Block tags become stanza gaps (stanza structure preserved)
   text = text.replace(RE_BLOCK_TAGS, '\n\n');
   // Line-break tags -> newline (with trailing whitespace/newline)
@@ -153,7 +162,27 @@ export function parseSongXml(songxml: string): string {
   text = text.replace(/[^\S\n]+$/gm, '');
   text = text.replace(/^[^\S\n]+/gm, '');
   text = text.replace(/\n{3,}/g, '\n\n');
+  // A lone "[G]" line would read as a section label; mark it as a chord-only line.
+  text = text.replace(/^\[([^\]\n]+)\]$/gm, (line, inner: string) => (isChordToken(inner) ? `${line} |` : line));
   return text.trim();
+}
+
+/** Maps an API song detail to a library hymn, keeping chords when the song has them. */
+export function songDetailToHymn(detail: WorshipSongDetail): Hymn {
+  const chordPro = parseSongXmlChordPro(detail.songxml);
+  const hymn: Hymn = {
+    id: String(detail.id),
+    title: detail.title,
+    lyrics: stripChords(chordPro),
+  };
+  if (hasChords(chordPro)) hymn.chordPro = chordPro;
+  const author = extractSongAuthor(detail);
+  if (author) hymn.author = author;
+  const key = detail.songkey?.trim() || (hymn.chordPro ? detectKey(hymn.chordPro) : null);
+  if (key) hymn.key = key;
+  const source = extractSongSource(detail);
+  if (source) hymn.source = source;
+  return hymn;
 }
 
 // Set (list) link parsing.
@@ -230,4 +259,35 @@ export async function fetchSongsByIds(
     onProgress?.(done, ids.length);
   }
   return results;
+}
+
+/** True when pasted text is a worship-leader set link that can be imported (carries song_ids). */
+export function isSetLink(text: string): boolean {
+  const trimmed = text.trim();
+  if (!/song_ids=|set_id=/i.test(trimmed)) return false;
+  return parseSetLink(trimmed).kind !== 'none';
+}
+
+export interface SetLinkImportResult {
+  hymns: Hymn[];
+  requested: number;
+  failed: number;
+  setTitle: string | null;
+}
+
+/** Fetches every song of a set link in link order and maps them to hymns (empty songs dropped). */
+export async function importSetLinkSongs(
+  link: string,
+  onProgress?: (fetched: number, total: number) => void
+): Promise<SetLinkImportResult> {
+  const info = parseSetLink(link);
+  if (info.kind !== 'songs') return { hymns: [], requested: 0, failed: 0, setTitle: info.setTitle };
+  const details = await fetchSongsByIds(info.songIds, onProgress);
+  const hymns = details.map(songDetailToHymn).filter((hymn) => hymn.lyrics.trim());
+  return {
+    hymns,
+    requested: info.songIds.length,
+    failed: info.songIds.length - hymns.length,
+    setTitle: info.setTitle,
+  };
 }

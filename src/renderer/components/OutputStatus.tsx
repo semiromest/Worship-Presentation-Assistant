@@ -2,6 +2,7 @@ import ControlTooltip from './ControlTooltip';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../state/useStore';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { VIRTUAL_OUTPUT_IDS, isVirtualOutputId } from '../../shared/virtualOutputs';
 
 export function SlidePositionLabels() {
   const { t } = useTranslation();
@@ -54,11 +55,15 @@ export default function OutputStatus() {
   const blackout = useStore(s => s.isBlackout);
   const sessionError = useStore(s => s.sessionSaveStatus === 'error');
   const enabled = useStore(s => s.liveSaveEnabled);
-  const stage = Object.values(assignments).some(a => a.isOpen && a.mode === 'stage');
-  const live = open || Object.values(assignments).some(a => a.isOpen && a.mode !== 'stage');
-  const black = blackout || Object.values(assignments).some(a => a.isOpen && a.isBlackout);
+  // Screens only: the NDI program is reported on its own item.
+  const screens = Object.entries(assignments).filter(([id]) => !isVirtualOutputId(id)).map(([, a]) => a);
+  const ndi = VIRTUAL_OUTPUT_IDS.some(id => assignments[id]?.isOpen);
+  const stage = screens.some(a => a.isOpen && a.mode === 'stage');
+  const live = open || screens.some(a => a.isOpen && a.mode !== 'stage');
+  const black = blackout || screens.some(a => a.isOpen && a.isBlackout);
+  const items = [['presentation', live], ['stage', stage], ['blackout', black], ...(ndi ? [['ndi', true] as const] : [])] as const;
   return <div className="output-status-items" role="status">
-    {([['presentation', live], ['stage', stage], ['blackout', black]] as const).map(([key, active]) =>
+    {items.map(([key, active]) =>
       <span key={key} className="inline-flex items-center gap-1.5"><span aria-hidden="true" className={`w-1.5 h-1.5 rounded-full ${active ? key === 'blackout' ? 'bg-amber-400' : 'bg-emerald-400' : 'bg-white/25'}`} />
         {t(`outputStatus.${key}`)}: {t(active ? 'outputStatus.on' : 'outputStatus.off')}
       </span>)}

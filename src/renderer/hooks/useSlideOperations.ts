@@ -16,6 +16,7 @@ import { findPresetByRef } from '../presetUtils';
 import { isLiveSavePreset, getLiveSaveRetention } from './useLiveSave';
 import { parseCountdownContent, serializeCountdownContent, CountdownSlideData } from '../countdownUtils';
 import { splitHymnLyrics } from '../hymnSplit';
+import { splitChordProParts } from '../hymnLyrics';
 import { findLockedSlideIndex } from '../slideLock';
 import { playSfx } from '../sfx';
 import { isYouTubeMusicResult, type YouTubeMusicResult } from '../../shared/youtubeMusic';
@@ -98,12 +99,15 @@ export function useSlideOperations() {
   const removeSlide = useCallback((id: string) => {
     const state = useStore.getState();
     const { presentation, selectedSlideId, selectedSlideIds } = state;
-    if (presentation.slides.length <= 1) return;
     // A locked slide is pinned to the live output — removing it would leave
     // the broadcast dangling, so it must be unlocked first.
     const target = presentation.slides.find((s) => s.id === id);
-    if (target?.locked) return;
-    const slides = presentation.slides.filter((s) => s.id !== id);
+    if (!target || target.locked) return;
+    let slides = presentation.slides.filter((s) => s.id !== id);
+    // Deleting the last slide leaves a fresh blank one rather than blocking.
+    if (slides.length === 0) {
+      slides = [createSlide('text', { content: t('common.newSlideContent'), sectionId: target.sectionId })];
+    }
     dispatchUndo({
       type: 'SET',
       payload: { ...presentation, slides },
@@ -118,7 +122,7 @@ export function useSlideOperations() {
       state.setSelectedSlideIds(ids);
     }
     playSfx('delete');
-  }, [dispatchUndo]);
+  }, [t, dispatchUndo]);
 
   const moveSelectedSlide = useCallback((direction: -1 | 1) => {
     const { presentation, selectedSlideId } = useStore.getState();
@@ -420,6 +424,13 @@ export function useSlideOperations() {
           sectionId: typeof s.sectionId === 'string' ? s.sectionId : undefined,
           section: s.section && typeof s.section.id === 'string' && typeof s.section.title === 'string' ? s.section : undefined,
           operatorNotes: typeof s.operatorNotes === 'string' ? s.operatorNotes : undefined,
+          chords: s.chords && typeof s.chords === 'object' && Array.isArray(s.chords.parts)
+            ? {
+                parts: s.chords.parts.filter((part: unknown) => typeof part === 'string'),
+                key: typeof s.chords.key === 'string' ? s.chords.key : undefined,
+                transpose: typeof s.chords.transpose === 'number' && Number.isFinite(s.chords.transpose) ? s.chords.transpose : 0,
+              }
+            : undefined,
           gridEnabled: s.gridEnabled === true,
           gridSize: typeof s.gridSize === 'number' ? s.gridSize : undefined,
           gridColor: typeof s.gridColor === 'string' ? s.gridColor : undefined,
@@ -468,6 +479,7 @@ export function useSlideOperations() {
     const signature = documentSignature(useStore.getState().presentation);
     const result: PptxImportResult = typeof source === 'string'
       ? await window.electronAPI.importPptx(source)
+      : 'pdfPath' in source ? await (await import('../pdfImport')).importPdfFile(source.pdfPath, source.name)
       : 'canvaId' in source ? await window.electronAPI.canvaImport(source.canvaId)
         : await window.electronAPI.googleSlidesImport(source.googleSlidesId);
     if (!result?.success || !result.slides) throw new Error(result?.error || t('common.importFailedGeneric'));
@@ -733,9 +745,13 @@ export function useSlideOperations() {
     appendSlides([qrSlide]);
   }, [appendSlides, t]);
 
-  const handleHymnAdd = useCallback((hymn: { title: string; lyrics: string; author?: string; showAuthorOnSlides?: boolean }, partsMode?: boolean, goLive?: boolean) => {
+  const handleHymnAdd = useCallback((hymn: { title: string; lyrics: string; author?: string; showAuthorOnSlides?: boolean; chordPro?: string; key?: string }, partsMode?: boolean, goLive?: boolean) => {
     const split = splitHymnLyrics(hymn.lyrics);
     if (split.parts.length === 0) return;
+    // Chords travel with the slides for the stage display; null when they don't line up.
+    const chordParts = hymn.chordPro ? splitChordProParts(hymn.chordPro, split.parts) : null;
+    const chordsFor = (parts: string[]): Slide['chords'] =>
+      chordParts ? { parts, key: hymn.key || undefined, transpose: 0 } : undefined;
 
     if (partsMode === false) {
       const groupId = makeSlideId();
@@ -743,6 +759,7 @@ export function useSlideOperations() {
       const newSlides: Slide[] = split.parts.map((part, idx) =>
         createSlide('text', {
           content: part,
+          chords: chordParts ? chordsFor([chordParts[idx]]) : undefined,
           group: {
             id: groupId,
             title: hymn.title,
@@ -769,6 +786,7 @@ export function useSlideOperations() {
         partsMode: true,
         parts: split.parts,
         activePart: 0,
+        chords: chordParts ? chordsFor(chordParts) : undefined,
         group: {
           id: groupId,
           title: hymn.title,
@@ -913,13 +931,11 @@ export function useSlideOperations() {
     if (selectedSlideIds.size === 0) return;
     // The locked slide pins the live output and must not be deleted.
     if (presentation.slides.some((s) => s.locked && selectedSlideIds.has(s.id))) return;
-    if (presentation.slides.length - selectedSlideIds.size < 1) {
-      await alertDialog(t('warnings.minSlides'));
-      return;
+    let slides = presentation.slides.filter((s) => !selectedSlideIds.has(s.id));
+    // Deleting everything leaves a fresh blank slide rather than blocking.
+    if (slides.length === 0) {
+      slides = [createSlide('text', { content: t('common.newSlideContent') })];
     }
-
-    const slides = presentation.slides.filter((s) => !selectedSlideIds.has(s.id));
-    if (slides.length === 0) return;
     const replacementIndex = presentation.slides
       .slice(0, presentation.slides.findIndex(s => s.id === selectedSlideId))
       .filter(s => !selectedSlideIds.has(s.id)).length;

@@ -6,4 +6,4 @@ export interface OpenFileConfirmation {
   openLabel: string;
 }
 export type PptxImportMode = 'new' | 'append';
-export type PptxImportSource = string | { googleSlidesId: string; name: string } | { canvaId: string; name: string };
+export type PptxImportSource = string | { googleSlidesId: string; name: string } | { canvaId: string; name: string } | { pdfPath: string; name: string };

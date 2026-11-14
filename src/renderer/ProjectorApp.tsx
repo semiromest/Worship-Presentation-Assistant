@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useStore } from './state/useStore';
-import { DEFAULT__TRANSITION, PROJECTOR_DISPLAY_ID } from './constants';
+import { DEFAULT__TRANSITION, PROJECTOR_DISPLAY_ID, injectTransitionStyles } from './constants';
 import { resolveCanvasSource } from './canvasSource';
 import StageDisplay from './components/StageDisplay';
 import { AnimatedPreview } from './AnimatedPreview';
@@ -8,9 +8,22 @@ import { useKeyboardNavigation } from './hooks/useKeyboardNavigation';
 import { useSlideOperations } from './hooks/useSlideOperations';
 import { useStt } from './hooks/useStt';
 import CaptionOverlay from './components/CaptionOverlay';
+import LyricsView from './components/LyricsView';
+import { NDI_LYRICS_OUTPUT_ID, NDI_PROGRAM_OUTPUT_ID } from '../shared/virtualOutputs';
+import { useProgramVideoAudio } from './hooks/useProgramAudioTap';
+
+/** The NDI Lyrics window is a key layer: its page must stay transparent from the first paint. */
+const IS_LYRICS_OUTPUT = PROJECTOR_DISPLAY_ID === NDI_LYRICS_OUTPUT_ID;
+if (IS_LYRICS_OUTPUT) {
+  for (const element of [document.documentElement, document.body]) element.style.setProperty('background', 'transparent', 'important');
+  injectTransitionStyles();
+}
+import LiveOverlays from './components/LiveOverlays';
 
 export default function ProjectorApp() {
   useStt();
+  // The NDI Program window sends the sound of the videos it plays.
+  useProgramVideoAudio(PROJECTOR_DISPLAY_ID === NDI_PROGRAM_OUTPUT_ID);
   useEffect(() => {
     const { dispatchUndo, setLiveIndex, setIsBlackout, setMediaVolume, setIsMediaMuted,
       setInstantTransition, setOutputWindowMode, setProjectorReady } = useStore.getState();
@@ -70,7 +83,7 @@ export default function ProjectorApp() {
   const instant = useStore(s => s.instantTransition);
   useEffect(() => { if (!instant) return; const timer = setTimeout(() => useStore.getState().setInstantTransition(false), 0);
     return () => clearTimeout(timer); }, [instant]);
-  return <ProjectorView />;
+  return IS_LYRICS_OUTPUT ? <LyricsView /> : <ProjectorView />;
 }
 
 function ProjectorView() {
@@ -125,6 +138,7 @@ function ProjectorView() {
       />
       {/* Outside AnimatedPreview so subtitles stay put while slides transition. */}
       <CaptionOverlay slide={liveSlide} />
+      <LiveOverlays />
     </div>
   );
 

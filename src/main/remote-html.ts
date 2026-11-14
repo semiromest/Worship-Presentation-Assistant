@@ -436,6 +436,40 @@ body::after {
 }
 .verse-live input:focus-visible + .verse-box { outline: 2.5px solid var(--blue); outline-offset: 2px; }
 .verse-live-txt { font-size: .82rem; font-weight: 600; color: var(--tx2); letter-spacing: .01em; }
+.verse-inp::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+/* ── Quick search results ────────────────────────────────────────────── */
+.search-results { display: flex; flex-direction: column; gap: .45rem; margin-top: .6rem; }
+.search-results:empty { display: none; }
+.sr-group {
+  font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted); margin: .35rem 0 .05rem;
+}
+.sr-row {
+  display: flex; align-items: center; gap: .6rem; min-width: 0;
+  padding: .55rem .6rem; border-radius: var(--r);
+  background: var(--z2); border: 1.5px solid var(--rim);
+}
+.sr-ico {
+  width: 30px; height: 30px; flex-shrink: 0; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--z3); color: var(--tx2); font-size: .85rem; font-weight: 800;
+}
+.sr-txt { flex: 1; min-width: 0; }
+.sr-title, .sr-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sr-title { font-size: .9rem; font-weight: 700; color: var(--tx); }
+.sr-sub { font-size: .75rem; color: var(--tx2); margin-top: .1rem; }
+.sr-chord { color: #c4b5fd; font-weight: 800; margin-left: .35rem; }
+.sr-acts { display: flex; gap: .35rem; flex-shrink: 0; }
+.sr-btn {
+  height: 36px; min-width: 52px; padding: 0 .7rem; border-radius: 10px;
+  font-family: inherit; font-size: .78rem; font-weight: 800; letter-spacing: .02em;
+  border: 1.5px solid var(--rim2); background: var(--z3); color: var(--tx); cursor: pointer;
+}
+.sr-btn.live { background: rgba(0,229,160,.12); border-color: rgba(0,229,160,.55); color: var(--green); }
+.sr-btn:disabled { opacity: .45; cursor: default; }
+.sr-empty { font-size: .8rem; color: var(--muted); padding: .3rem .1rem; }
+.sr-error { font-size: .8rem; color: var(--red); padding: .3rem .1rem; }
 
 /* ── Transient notice toast ──────────────────────────────────────────── */
 .notice {
@@ -938,30 +972,17 @@ body::after {
 
   <div class="sep"></div>
 
-  <!-- Quick verse — resolves against the Bible currently loaded on the
-       presenter; no version/book picker. "Go live now" sends immediately,
-       otherwise the verse is appended as a slide. -->
-  <span class="lbl">Quick verse</span>
-  <form class="goto-row" id="verseForm" novalidate>
-    <input class="goto-inp verse-inp" id="verseInp" type="text"
-           placeholder="John 3:16" autocomplete="off" autocapitalize="off"
-           spellcheck="false" maxlength="160" enterkeyhint="send" aria-label="Bible reference">
-    <button class="btn btn-go" id="verseSubmit" type="submit" aria-label="Add verse">
-      <svg width="16" height="16" fill="none" viewBox="0 0 24 24"
-           stroke="currentColor" stroke-width="2" aria-hidden="true">
-        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-      </svg>
-    </button>
+  <!-- Quick search — the same search as Ctrl+K on the presenter: verses
+       (John 3:16, John 3:16-18, John 3:: for the whole chapter), songs from
+       the library, media, or a pasted worship-leader set link. -->
+  <span class="lbl">Search</span>
+  <form class="goto-row" id="searchForm" novalidate role="search">
+    <input class="goto-inp verse-inp" id="searchInp" type="search"
+           placeholder="Verse, song, media or set link" autocomplete="off" autocapitalize="off"
+           spellcheck="false" maxlength="2000" enterkeyhint="search" aria-label="Search verses, songs, media or paste a set link"
+           aria-controls="searchResults">
   </form>
-  <label class="verse-live" for="verseLive">
-    <input type="checkbox" id="verseLive">
-    <span class="verse-box" aria-hidden="true">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
-    </span>
-    <span class="verse-live-txt">Go live now</span>
-  </label>
+  <div class="search-results" id="searchResults" aria-live="polite"></div>
 
   <div class="sep"></div>
 

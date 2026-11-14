@@ -10,6 +10,7 @@ import { useSttStore } from './useSttStore';
 import { IS_PROJECTOR_MODE, PROJECTOR_DISPLAY_ID } from '../constants';
 import { chooseDefaultOutputDisplay, effectiveOutputSlideIndex } from '../../shared/displays';
 import { findLockedSlideIndex } from '../slideLock';
+import { VIRTUAL_OUTPUT_IDS, isVirtualOutputId } from '../../shared/virtualOutputs';
 import { getActivePartIndex, getDisplayStep, getNextPartIndex, getPartIndex, getPreviousPartIndex, getSlideDisplayContent } from '../../shared/slideContent';
 import { createSlide } from '../hooks/useSlideOperations';
 import { DEFAULT_STYLES } from '../constants';
@@ -20,6 +21,9 @@ import type { Slide } from '../types';
 import { playSfx, withSfxOutputTransition } from '../sfx';
 import { confirmDialog } from '../dialogs';
 import { desktopCommandsBlocked } from '../desktopState';
+import { buildQuickSearch, runQuickEntry, type QuickEntry } from '../quickSearch/quickSearchEngine';
+import { getQuickSearchActions, registerGoLive, type GoLiveOutcome } from '../quickSearch/quickSearchBridge';
+import { loadLibraryHymns } from '../hymnCache';
 
 const REMOTE_ACTIONS = {
   next: 'next',
@@ -32,7 +36,25 @@ const REMOTE_ACTIONS = {
   partPrev: 'partPrev',
   partGoto: 'partGoto',
   quickVerse: 'quickVerse',
+  quickSearch: 'quickSearch',
+  quickSearchRun: 'quickSearchRun',
 } as const;
+
+const REMOTE_SEARCH_LIMIT = 12;
+const REMOTE_SEARCH_MAX_QUERY = 2000;
+/** Last few phone searches, so a tap can only pick a result the desktop itself produced. */
+const remoteSearchCache = new Map<string, QuickEntry[]>();
+const REMOTE_SEARCH_CACHE_SIZE = 5;
+
+function rememberRemoteSearch(requestId: string, entries: QuickEntry[]): void {
+  remoteSearchCache.delete(requestId);
+  remoteSearchCache.set(requestId, entries);
+  while (remoteSearchCache.size > REMOTE_SEARCH_CACHE_SIZE) {
+    const oldest = remoteSearchCache.keys().next().value;
+    if (oldest === undefined) break;
+    remoteSearchCache.delete(oldest);
+  }
+}
 
 export function useRemoteControl() {
   const practice = usePractice();
@@ -81,7 +103,8 @@ export function useRemoteControl() {
       state.liveIndex,
       state.presentation.slides.length,
     );
-    const isDefaultOutput = targetId !== undefined && targetId === defaultDisplayId;
+    // The NDI program follows the audience screen, including its blackout.
+    const isDefaultOutput = targetId !== undefined && (targetId === defaultDisplayId || isVirtualOutputId(targetId));
 
     return {
       // The first snapshot uses fullPresentation (projector applies it as a
@@ -111,6 +134,24 @@ export function useRemoteControl() {
     setIsProjectorWindowOpen(!!isOpen);
     if (isOpen) playSfx('start');
   });
+
+  /**
+   * Shared "send to broadcast": never moves a locked (pinned) output, clears
+   * blackout and opens the projector when it is closed.
+   */
+  const goLiveWithSlide = async (slideId: string): Promise<GoLiveOutcome> => {
+    const state = useStore.getState();
+    if (!state.presentation.slides.some((slide) => slide.id === slideId)) return 'failed';
+    if (findLockedSlideIndex(state.presentation.slides) >= 0) return 'locked';
+    state.selectSlides({ activeId: slideId, liveTargetId: slideId });
+    setIsBlackout(false);
+    try {
+      await openLive();
+    } catch {
+      return 'failed';
+    }
+    return 'live';
+  };
 
   const closeLive = async () => withSfxOutputTransition(async () => {
     const state = useStore.getState();
@@ -185,12 +226,14 @@ export function useRemoteControl() {
       const lastIndex = slides.length - 1;
       const currentIdx = slides.findIndex(s => s.id === state.selectedSlideId);
       const projOpen = state.isProjectorWindowOpen;
+      // An NDI-only service is live too: phone navigation and blackout act on the live slide.
+      const live = projOpen || VIRTUAL_OUTPUT_IDS.some((id) => state.outputAssignments[id]?.isOpen);
 
       switch (data.action) {
         case REMOTE_ACTIONS.next:
         case REMOTE_ACTIONS.prev: {
           if (findLockedSlideIndex(slides) >= 0) break;
-          const baseIdx = projOpen ? state.liveIndex : Math.max(currentIdx, 0);
+          const baseIdx = live ? state.liveIndex : Math.max(currentIdx, 0);
           const direction = data.action === REMOTE_ACTIONS.next ? 1 : -1;
           const step = state.autoGoLive
             ? getDisplayStep(slides, baseIdx, direction)
@@ -201,7 +244,7 @@ export function useRemoteControl() {
           break;
         }
         case REMOTE_ACTIONS.blackout:
-          if (projOpen) {
+          if (live) {
             const next = !useStore.getState().isBlackout;
             playSfx(next ? 'lock' : 'unlock');
             setIsBlackout(next);
@@ -323,9 +366,99 @@ export function useRemoteControl() {
           );
           break;
         }
+        case REMOTE_ACTIONS.quickSearch: {
+          if (IS_PROJECTOR_MODE) break;
+          const val = data.value as { requestId?: unknown; query?: unknown } | undefined;
+          const requestId = typeof val?.requestId === 'string' ? val.requestId.slice(0, 64) : '';
+          const query = typeof val?.query === 'string' ? val.query.slice(0, REMOTE_SEARCH_MAX_QUERY) : '';
+          if (!requestId) break;
+          try {
+            await bibleRepository.restore();
+          } catch {
+            /* search hymns and media without a Bible */
+          }
+          const entries = buildQuickSearch(
+            query,
+            {
+              bible: bibleRepository.currentBible,
+              source: bibleRepository.currentSource,
+              hymns: loadLibraryHymns(),
+              media: useStore.getState().mediaItems,
+            },
+            REMOTE_SEARCH_LIMIT,
+          );
+          rememberRemoteSearch(requestId, entries);
+          void window.electronAPI?.sendRemoteSearchResults?.({
+            requestId,
+            query,
+            results: entries.map((entry) => entry.result),
+            noBible: !bibleRepository.currentBible,
+          });
+          break;
+        }
+        case REMOTE_ACTIONS.quickSearchRun: {
+          if (IS_PROJECTOR_MODE) break;
+          const val = data.value as { requestId?: unknown; resultId?: unknown; goLive?: unknown } | undefined;
+          const requestId = typeof val?.requestId === 'string' ? val.requestId : '';
+          const resultId = typeof val?.resultId === 'string' ? val.resultId : '';
+          const goLive = val?.goLive === true;
+          const notice = (text: string, tone: 'ok' | 'error' | 'progress') => {
+            void window.electronAPI?.sendRemoteNotice?.({ text, tone });
+          };
+          const entry = remoteSearchCache.get(requestId)?.find((candidate) => candidate.result.id === resultId);
+          const actions = getQuickSearchActions();
+          if (!entry || !actions) {
+            notice(t('remoteSearch.expired'), 'error');
+            break;
+          }
+          let lastReported = 0;
+          const outcome = await runQuickEntry(
+            entry,
+            actions,
+            { source: bibleRepository.currentSource, sourceId: bibleRepository.sourceId },
+            (fetched, total) => {
+              // Progress for long set links, at most every third song.
+              if (fetched < total && fetched - lastReported >= 3) {
+                lastReported = fetched;
+                notice(t('quickSearchSet.fetching', { fetched, total }), 'progress');
+              }
+            },
+          );
+          if (!outcome.ok) {
+            notice(
+              outcome.error === 'set-id-only'
+                ? t('quickSearchSet.setIdOnly')
+                : outcome.error === 'set-empty'
+                  ? t('quickSearchSet.empty')
+                  : outcome.error === 'set-fetch'
+                    ? t('quickSearchSet.fetchError')
+                    : t('common.quickSearch.noResults'),
+              'error',
+            );
+            playSfx('error');
+            break;
+          }
+          let live: GoLiveOutcome | null = null;
+          if (goLive && outcome.firstSlideId) live = await goLiveWithSlide(outcome.firstSlideId);
+          const label = entry.kind === 'setLink'
+            ? t('remoteSearch.setAdded', { count: outcome.added, failed: outcome.failed })
+            : outcome.label;
+          notice(
+            live === 'live'
+              ? t('remoteSearch.live', { label })
+              : live === 'locked'
+                ? t('remoteSearch.addedLocked', { label })
+                : live === 'failed'
+                  ? t('remoteSearch.addedNoBroadcast', { label })
+                  : t('remoteSearch.added', { label }),
+            live === 'failed' || live === 'locked' ? 'error' : 'ok',
+          );
+          break;
+        }
       }
     };
     const removeListener = window.electronAPI?.onRemoteAction?.(handleRemoteAction);
+    const removeGoLive = IS_PROJECTOR_MODE ? undefined : registerGoLive(goLiveWithSlide);
     const removeDesktopCommand = window.electronAPI?.onDesktopCommand?.(command => {
       void handleRemoteAction({ action: command === 'previous' ? 'prev' : command });
     });
@@ -441,6 +574,7 @@ export function useRemoteControl() {
 
 return () => {
   if (typeof removeListener === 'function') removeListener();
+  removeGoLive?.();
   removeRemoteUrlListener?.();
   removeDesktopCommand?.();
   if (typeof removeProjectorUpdate === 'function') removeProjectorUpdate();

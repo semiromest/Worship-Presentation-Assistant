@@ -5,6 +5,7 @@ import SlideMusicAttachment from './SlideMusicAttachment';
 import { SlideSelectionStatus, SlidePositionLabels } from './OutputStatus';
 import BroadcastControls from './BroadcastControls';
 import NextSlidePreview from './NextSlidePreview';
+import SlideChordControl from './SlideChordControl';
 import { canAttachSlideMusic } from '../../shared/youtubeMusic';
 import { isEditorEditableSlide } from '../editor/slideCapabilities';
 import { useEffect, useRef } from 'react';
@@ -18,6 +19,7 @@ import { useStore } from '../state/useStore';
 import { cn, toFileUrl } from '../utils';
 import { AnimatedPreview } from '../AnimatedPreview';
 import CaptionOverlay from './CaptionOverlay';
+import LiveOverlays from './LiveOverlays';
 import { LivePreview } from '../LivePreview';
 import CountdownSlideEditor from '../CountdownSlideEditor';
 import SlideStyleEditor from './SlideStyleEditor';
@@ -142,6 +144,7 @@ export default function RightPanel({
             muted={true}
           />}
           {isRightPanelOpen && <CaptionOverlay slide={liveSlide} />}
+          {isRightPanelOpen && <LiveOverlays />}
         </div>
         {isRightPanelOpen && nextSlidePreviewEnabled && <NextSlidePreview />}
 
@@ -333,6 +336,7 @@ export default function RightPanel({
             )}
           </div>
         </div>
+        {selectedSlide?.chords?.parts?.length ? <SlideChordControl slide={selectedSlide} /> : null}
         {operatorNotesEnabled && selectedSlide && (
           <div className="m-4 rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
             <label

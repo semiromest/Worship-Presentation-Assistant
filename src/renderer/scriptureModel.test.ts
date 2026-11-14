@@ -36,6 +36,14 @@ test('parses Turkish and English-style scripture ranges', () => {
     verse: 13,
     verseTo: 13,
   });
+  assert.deepEqual(parseScriptureReference('Yuhanna 1::'), {
+    book: 'yuhanna',
+    chapter: 1,
+    verse: null,
+    verseTo: null,
+    wholeChapter: true,
+  });
+  assert.equal(parseScriptureReference('Yuhanna 1')?.wholeChapter, undefined);
 });
 
 test('filters the canonical book list and only auto-selects an unambiguous match', () => {

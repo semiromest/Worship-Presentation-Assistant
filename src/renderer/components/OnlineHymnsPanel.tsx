@@ -7,22 +7,15 @@ import { cn, normalizeSearchText, sourceTextMatches, useDebounce } from '../util
 import {
   listSongs,
   getSong,
-  parseSongXml,
+  parseSongXmlChordPro,
   extractSongAuthor,
   extractSongSource,
   WorshipSong,
 } from '../worshipLeaderApi';
 import ProgressBar from './ProgressBar';
 import { confirmDialog } from '../dialogs';
-
-interface Hymn {
-  id: string;
-  title: string;
-  lyrics: string;
-  author?: string;
-  key?: string;
-  source?: string;
-}
+import { detectKey, hasChords, stripChords } from '../../shared/chords';
+import type { Hymn } from '../hymnImport';
 
 interface OnlineHymnsPanelProps {
   onImport: (hymns: Hymn[], failedCount?: number) => void;
@@ -225,7 +218,8 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
     const results = await Promise.all(
       ids.map(id =>
         getSong(id).then(detail => {
-          const lyrics = parseSongXml(detail.songxml);
+          const chordPro = parseSongXmlChordPro(detail.songxml);
+          const lyrics = stripChords(chordPro);
           const gridSong = gridBySongId.get(id);
           return lyrics.trim()
             ? {
@@ -233,8 +227,9 @@ export default function OnlineHymnsPanel({ onImport, onClose }: OnlineHymnsPanel
                   id: crypto.randomUUID(),
                   title: detail.title,
                   lyrics,
+                  chordPro: hasChords(chordPro) ? chordPro : undefined,
                   author: extractSongAuthor(detail) ?? undefined,
-                  key: detail.songkey ?? gridSong?.songkey ?? undefined,
+                  key: detail.songkey ?? gridSong?.songkey ?? (hasChords(chordPro) ? detectKey(chordPro) ?? undefined : undefined),
                   source: extractSongSource({
                     source_title: gridSong?.source_title ?? null,
                     sources: detail.sources,

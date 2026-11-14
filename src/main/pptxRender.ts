@@ -1,30 +1,21 @@
 import AdmZip from 'adm-zip';
+import os from 'node:os';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import sharp from 'sharp';
 import { clearFontCache, collectUsedFonts, convertPptxToSvg, DEFAULT_FONT_MAPPING, getMappedFont, getWarningEntries, type SlideImage } from 'pptx-glimpse';
+import { decodeEmbeddedFont, sfntExtension } from './mtxFont';
+import { shrinkSlideMedia } from './pptxMedia';
 import { mapLimit, platformFontFallbacks, requiredDeckFonts, selectSystemFontFiles } from './pptxFontFiles';
 
 /** Çıktı genişliği. Değiştirmek, içe aktarılmış tüm slaytların piksellerini değiştirir. */
 const OUTPUT_WIDTH = 1024;
-/** Eşzamanlı rasterlama. SVG içindeki büyük bitmap'ler açılınca bellek artar; yükselirse 1 yapın. */
-const RASTER_CONCURRENCY = 2;
+/**
+ * Eşzamanlı rasterlama. librsvg tek iş parçacıklı; resimler önceden küçültüldüğü için
+ * bellek düşük kalır. Bellek sorunu olursa 1-2'ye indirin.
+ */
+const RASTER_CONCURRENCY = Math.max(1, Math.min(6, (os.availableParallelism?.() ?? os.cpus().length) - 1));
 const BASE_FALLBACK_FONTS = ['Arial', 'Calibri', 'Liberation Sans', 'DejaVu Sans'];
-
-const SFNT_TTF = 0x00010000;
-const SFNT_TRUE = 0x74727565; // 'true' (Apple TrueType)
-const SFNT_OTF = 0x4f54544f; // 'OTTO'
-
-/** EOT is a wrapper, not a TTF file. Compressed/obfuscated payloads need a decoder. */
-export function embeddedFontPayload(bytes: Buffer): Buffer | null {
-  if (bytes.length < 82 || bytes.readUInt16LE(34) !== 0x504c) return null;
-  const size = bytes.readUInt32LE(4);
-  const flags = bytes.readUInt32LE(12);
-  if ((flags & (4 | 0x10000000)) !== 0 || size < 12 || size > bytes.length - 82) return null;
-  const data = bytes.subarray(bytes.length - size);
-  const signature = data.readUInt32BE(0);
-  return signature === SFNT_TTF || signature === SFNT_OTF || signature === SFNT_TRUE ? data : null;
-}
 
 export function sourceSlideCount(zip: AdmZip): number {
   const xml = zip.readAsText('ppt/presentation.xml');
@@ -68,22 +59,27 @@ async function installFile(source: string, destination: string): Promise<void> {
 export async function renderPptx(buffer: Buffer, tempDir: string): Promise<{ slides: SlideImage[]; warnings: string[] }> {
   const zip = new AdmZip(buffer);
   const expected = sourceSlideCount(zip);
+  // Oversized photos are shrunk on sharp's thread pool while fonts are being prepared.
+  const mediaShrink = shrinkSlideMedia(zip, OUTPUT_WIDTH).catch(() => 0);
   const warnings: string[] = [];
   const used = requiredDeckFonts(zip, collectUsedFonts(buffer));
   const mapped = used.map(name => getMappedFont(name, DEFAULT_FONT_MAPPING)).filter((name): name is string => !!name);
   const wanted = [...used, ...mapped, ...platformFontFallbacks(mapped), ...BASE_FALLBACK_FONTS];
 
   const installs: (() => Promise<void>)[] = [];
-  const embedded = zip.getEntries().filter(e => /^ppt\/fonts\/[^/]+\.fntdata$/i.test(e.entryName));
+  // PowerPoint and Google Slides embed fonts as EOT, usually MicroType Express compressed.
+  const embedded = zip.getEntries().filter(e => !e.isDirectory && /^ppt\/fonts\/[^/]+$/i.test(e.entryName));
   for (const [index, entry] of embedded.entries()) {
-    const data = embeddedFontPayload(entry.getData());
-    if (!data) {
-      warnings.push(`Embedded font could not be decoded (${path.posix.basename(entry.entryName)}); text may use a substitute font.`);
+    let font: Buffer;
+    try {
+      font = decodeEmbeddedFont(entry.getData());
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      warnings.push(`Embedded font could not be decoded (${path.posix.basename(entry.entryName)}: ${reason}); text may use a substitute font.`);
       continue;
     }
     // No names from the input become filesystem paths; never install fonts system-wide.
-    const ext = data.readUInt32BE(0) === SFNT_OTF ? 'otf' : 'ttf';
-    installs.push(() => fs.writeFile(path.join(tempDir, `font-${index}.${ext}`), data));
+    installs.push(() => fs.writeFile(path.join(tempDir, `font-${index}.${sfntExtension(font)}`), font));
   }
   const systemFonts = await selectSystemFontFiles(wanted);
   for (const [index, file] of systemFonts.entries()) {
@@ -91,9 +87,10 @@ export async function renderPptx(buffer: Buffer, tempDir: string): Promise<{ sli
   }
   await mapLimit(installs, 16, install => install());
 
+  const source = (await mediaShrink) > 0 ? zip.toBuffer() : buffer;
   clearFontCache();
   try {
-    const vectors = await convertPptxToSvg(buffer, { logLevel: 'off', fontDirs: [tempDir], skipSystemFonts: true });
+    const vectors = await convertPptxToSvg(source, { logLevel: 'off', fontDirs: [tempDir], skipSystemFonts: true });
     if (vectors.length !== expected) throw new Error(`PPTX conversion incomplete: expected ${expected} slides, received ${vectors.length}`);
     for (const w of getWarningEntries()) warnings.push(`${w.context ? w.context + ': ' : ''}${w.message}`);
 

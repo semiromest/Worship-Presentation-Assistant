@@ -33,6 +33,9 @@ export default function SharePanel({
   const shareClientCount = useStore((s) => s.shareClientCount);
   const shareNetworkChanged = useStore((s) => s.shareNetworkChanged);
   const setShareNetworkChanged = useStore((s) => s.setShareNetworkChanged);
+  const shareSlideImagesEnabled = useStore((s) => s.shareSlideImagesEnabled);
+  const setShareSlideImagesEnabled = useStore((s) => s.setShareSlideImagesEnabled);
+  const canTranslateImages = !!window.electronAPI?.imageTranslate;
 
   const [busy, setBusy] = useState(false);
 
@@ -154,6 +157,21 @@ export default function SharePanel({
             </button>
           </div>
         </>
+      )}
+
+      {canTranslateImages && (
+        <label className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2 text-[11px] text-white/75">
+          <input
+            type="checkbox"
+            checked={shareSlideImagesEnabled}
+            onChange={(event) => setShareSlideImagesEnabled(event.target.checked)}
+            className="mt-0.5 h-3.5 w-3.5 accent-emerald-500"
+          />
+          <span>
+            <span className="block font-semibold text-white/85">{t('common.shareSlideImages')}</span>
+            <span className="block text-white/55">{t('common.shareSlideImagesHint')}</span>
+          </span>
+        </label>
       )}
 
       {!shareActive && (

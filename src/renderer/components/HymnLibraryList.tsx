@@ -188,7 +188,7 @@ export const HymnRow = memo(function HymnRow({ hymn, top, index, count, onSelect
       onClick={event => { hide(); if (event.detail === 1) ignoreClickContinuation(); onSelect(hymn); }}
       onMouseEnter={() => { pointerInside.current = true; show(); }} onMouseLeave={() => { pointerInside.current = false; leave(); }}
       onFocus={() => { focusInside.current = true; show(); }} onBlur={() => { focusInside.current = false; leave(); }}>
-      <span className="hymn-title-block"><span data-truncate className="hymn-title">{hymn.title}</span><span data-truncate className="hymn-first-line">{firstLine}</span><span data-truncate className="hymn-mobile-meta">{meta}</span></span>
+      <span className="hymn-title-block"><span data-truncate className="hymn-title">{hymn.title}{hymn.chordPro && <span className="hymn-chord-badge" title={t('hymnChords.badgeTitle')}>♪ {hymn.key || t('hymnChords.badge')}</span>}</span><span data-truncate className="hymn-first-line">{firstLine}</span><span data-truncate className="hymn-mobile-meta">{meta}</span></span>
       <span data-truncate className="hymn-author">{hymn.author || '—'}</span><span data-truncate className="hymn-source">{hymn.source || '—'}</span>
     </button>
     <div className="hymn-row-actions">

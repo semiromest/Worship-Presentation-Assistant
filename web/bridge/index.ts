@@ -97,6 +97,7 @@ const methods: Partial<Record<keyof ElectronAPI, unknown>> & Record<string, unkn
   selectMediaFilesAll: () => chooseMedia('all', true),
   selectAudioFile: async () => (await chooseMedia('audio'))?.[0] ?? null,
   getDroppedImagePath: async (file: File) => file?.type?.startsWith('image/') ? importFile(file) : null,
+  getDroppedFilePath: async (file: File) => /^(image|video)\//.test(file?.type ?? '') ? importFile(file) : null,
   getMediaThumbnail: async (source: string) => {
     if (/^data:image\//.test(source)) return source;
     const key = mediaKeyOf(source);

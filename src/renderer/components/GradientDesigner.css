@@ -294,3 +294,201 @@ html:not([data-ui-motion='off']) .gradient-look[data-live] .gradient-look-swatch
 .gradient-more[open] > summary {
   margin-bottom: 6px;
 }
+
+/* ── Compact background picker (2026-11 revision) ─────────────────────────── */
+.gradient-label {
+  display: block;
+  color: rgb(255 255 255 / 0.55);
+  font-size: 11px;
+  font-weight: 500;
+}
+.gradient-designer .gradient-looks {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.gradient-designer .gradient-look {
+  padding: 3px;
+  border-radius: 7px;
+}
+.gradient-designer .gradient-look-swatch {
+  height: 30px;
+}
+.gradient-designer .gradient-look-name {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  color: rgb(255 255 255 / 0.75);
+}
+.gradient-designer .gradient-palettes {
+  gap: 6px;
+}
+.gradient-designer .gradient-palette-chip {
+  width: 24px;
+  height: 24px;
+}
+.gradient-designer .gradient-colors {
+  gap: 6px;
+}
+.gradient-designer .gradient-colors-linear {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.gradient-designer .gradient-color {
+  height: 28px;
+}
+.gradient-directions {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 3px;
+  padding: 2px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.25);
+}
+.gradient-direction {
+  display: grid;
+  place-items: center;
+  height: 24px;
+  border-radius: 4px;
+  color: rgb(255 255 255 / 0.55);
+}
+.gradient-direction:hover {
+  color: rgb(255 255 255 / 0.9);
+}
+.gradient-direction[aria-pressed='true'] {
+  background: rgb(139 92 246 / 0.3);
+  color: #fff;
+}
+.gradient-designer .gradient-motion-toggle {
+  min-height: 24px;
+}
+.gradient-designer .gradient-motion-toggle input {
+  width: 16px;
+  height: 16px;
+}
+.gradient-animations {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+.gradient-animation {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px 3px 3px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 6px;
+  font-size: 11px;
+  text-align: left;
+  color: rgb(255 255 255 / 0.75);
+}
+.gradient-animation:hover {
+  background: rgb(255 255 255 / 0.05);
+}
+.gradient-animation[aria-pressed='true'] {
+  border-color: #a78bfa;
+  background: rgb(139 92 246 / 0.14);
+  color: #fff;
+}
+.gradient-animation-swatch {
+  flex-shrink: 0;
+  width: 22px;
+  height: 16px;
+  border-radius: 3px;
+}
+.gradient-designer .gradient-regenerate {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.gradient-footer {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.gradient-status {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  color: rgb(255 255 255 / 0.55);
+  font-size: 11px;
+}
+.gradient-icon-button {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: rgb(255 255 255 / 0.6);
+}
+.gradient-icon-button:hover:not(:disabled),
+.gradient-icon-button[aria-expanded='true'] {
+  background: rgb(255 255 255 / 0.08);
+  color: #fff;
+}
+.gradient-save {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: #7c3aed;
+  font-weight: 600;
+}
+.gradient-save:hover:not(:disabled) {
+  background: #6d28d9;
+}
+.gradient-saved {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 2px 4px;
+  scrollbar-width: thin;
+}
+.gradient-saved-item {
+  position: relative;
+  flex-shrink: 0;
+}
+.gradient-saved-thumb {
+  display: block;
+  width: 56px;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.15);
+  border-radius: 6px;
+}
+.gradient-saved-thumb:hover:not(:disabled) {
+  border-color: #a78bfa;
+}
+.gradient-saved-thumb img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+.gradient-saved-remove {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #1f2130;
+  color: rgb(255 255 255 / 0.7);
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.gradient-saved-item:hover .gradient-saved-remove,
+.gradient-saved-remove:focus-visible {
+  opacity: 1;
+}
+.gradient-saved-remove:hover {
+  color: #fca5a5;
+}

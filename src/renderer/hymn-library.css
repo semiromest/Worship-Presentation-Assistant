@@ -47,3 +47,15 @@
 .hymn-tooltip strong{display:block;color:white}
 @container (min-width:56rem){.hymn-list-shell{--hymn-row-height:3.5rem}.hymn-column-header{display:block}.hymn-add{grid-template-columns:var(--hymn-columns)}.hymn-mobile-meta{display:none}.hymn-author,.hymn-source{display:block}}
 @container (max-width:55.99rem){.hymn-library-top{padding:10px 12px 8px}.hymn-tools{gap:4px}.hymn-add-options{width:100%}.hymn-find{gap:6px 10px}.hymn-search{flex-basis:240px}.hymn-management h2{margin-right:auto}}
+.hymn-chord-meta{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:8px}
+.hymn-chord-meta label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#ffffff99;font-weight:600;min-width:0}
+.hymn-chord-meta input{width:100%;min-width:0;background:#0000004d;border:1px solid #ffffff1a;border-radius:6px;padding:6px 8px;font-size:13px;color:white;font-weight:400}
+.hymn-chord-meta input:focus-visible{border-color:#3b82f699;outline:none}
+.hymn-chord-key{display:flex;align-items:stretch;gap:4px}
+.hymn-chord-key button{width:30px;flex-shrink:0;border-radius:6px;border:1px solid #ffffff1a;background:#ffffff0d;font-size:15px;line-height:1}
+.hymn-chord-key button:hover{background:#ffffff1a}
+.hymn-chord-key input{text-align:center}
+.hymn-chord-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hymn-chord-actions .hymn-tool{border-color:#ffffff1a;min-height:32px;font-size:12px}
+.hymn-chord-actions .hymn-tool:disabled{opacity:.4;cursor:not-allowed}
+.hymn-chord-badge{display:inline-flex;align-items:center;margin-left:6px;padding:0 5px;border-radius:4px;font-size:10px;font-weight:600;line-height:16px;color:#c4b5fd;background:#8b5cf626;vertical-align:middle}

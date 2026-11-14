@@ -2,6 +2,7 @@ import { chooseDefaultOutputDisplay, effectiveOutputSlideIndex } from '../shared
 import { canAttachSlideMusic, isYouTubeMusicResult } from '../shared/youtubeMusic';
 import type { useStore } from './state/useStore';
 import type { Slide } from './types';
+import { NDI_LYRICS_OUTPUT_ID } from '../shared/virtualOutputs';
 
 /** One audio owner, even when multiple output windows show the same slide. */
 type MusicState = Pick<ReturnType<typeof useStore.getState>, 'displays' | 'outputAssignments' | 'isProjectorWindowOpen' | 'liveIndex' | 'presentation'>;
@@ -14,7 +15,8 @@ function audienceSlide(state: MusicState): Slide | null {
   for (const id of ids) {
     const assignment = state.outputAssignments[id];
     const open = assignment?.isOpen || (id === defaultId && state.isProjectorWindowOpen);
-    if (!open || assignment?.mode === 'stage') continue;
+    // Stage screens and the silent NDI lyrics key layer never own audience audio.
+    if (!open || assignment?.mode === 'stage' || id === NDI_LYRICS_OUTPUT_ID) continue;
     // The default audience output owns audio; other screens never double it.
     const index = effectiveOutputSlideIndex(assignment, state.liveIndex, state.presentation.slides.length);
     const slide = state.presentation.slides[index];

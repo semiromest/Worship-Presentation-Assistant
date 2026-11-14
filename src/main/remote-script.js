@@ -81,6 +81,7 @@ function connect() {
       else if (msg.type === 'previewsDelta'){ applyPreviewsDelta(msg.data); }
       else if (msg.type === 'slideMeta')    { mergeSlideMeta(msg.data); renderGrid(); }
       else if (msg.type === 'notice')       { showNotice(msg.data); }
+      else if (msg.type === 'searchResults'){ renderSearchResults(msg.data); }
     } catch (e) {
       console.warn('[remote] ws parse error', e);
     }
@@ -631,8 +632,6 @@ function cmd(action, value) {
   ws.send(JSON.stringify({ type: 'command', action, value }));
 }
 
-let versePending = false;
-let verseTimer;
 let noticeTimer;
 function showNotice(data) {
   const notice = $('notice');
@@ -640,25 +639,141 @@ function showNotice(data) {
   notice.className = 'notice show ' + (data && data.tone === 'error' ? 'error' : 'ok');
   clearTimeout(noticeTimer);
   noticeTimer = setTimeout(() => notice.classList.remove('show'), 4500);
-  versePending = false;
-  clearTimeout(verseTimer);
-  $('verseSubmit').disabled = false;
+  // A progress notice (set link "3/7") keeps the run pending; anything else ends it.
+  if (!(data && data.tone === 'progress')) endRun();
 }
 
-$('verseForm').addEventListener('submit', e => {
+/* ── Quick search (same engine as Ctrl+K on the presenter) ───────────── */
+let searchSeq = 0;
+let searchRequestId = '';
+let searchTimer;
+let runPending = false;
+let runTimer;
+
+function endRun() {
+  runPending = false;
+  clearTimeout(runTimer);
+  document.querySelectorAll('#searchResults .sr-btn').forEach(b => { b.disabled = false; });
+}
+
+function sendSearch() {
+  const query = $('searchInp').value.trim();
+  const box = $('searchResults');
+  if (!query) { searchRequestId = ''; box.textContent = ''; return; }
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    box.textContent = '';
+    const err = document.createElement('div');
+    err.className = 'sr-error';
+    err.textContent = 'Not connected. Please reconnect and try again.';
+    box.appendChild(err);
+    return;
+  }
+  searchSeq += 1;
+  searchRequestId = 'q' + searchSeq + '-' + Date.now().toString(36);
+  cmd('quickSearch', { requestId: searchRequestId, query });
+}
+
+$('searchInp').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(sendSearch, 300);
+});
+$('searchForm').addEventListener('submit', e => {
   e.preventDefault();
-  if (versePending) return;
-  const reference = $('verseInp').value.trim();
-  if (!reference) { $('verseInp').focus(); return; }
+  clearTimeout(searchTimer);
+  sendSearch();
+});
+
+const SEARCH_GROUPS = { scripture: 'Bible', hymn: 'Songs', media: 'Media', setLink: 'Set link' };
+const SEARCH_ICONS = { scripture: '§', hymn: '♪', media: '▣', setLink: '⛓' };
+
+function runSearchResult(resultId, goLive, isSet) {
+  if (runPending) return;
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     showNotice({ text: 'Not connected. Please reconnect and try again.', tone: 'error' });
     return;
   }
-  versePending = true;
-  $('verseSubmit').disabled = true;
-  cmd('quickVerse', { reference, goLive: $('verseLive').checked });
-  verseTimer = setTimeout(() => showNotice({ text: 'No response. Check the presentation before retrying.', tone: 'error' }), 15000);
-});
+  runPending = true;
+  document.querySelectorAll('#searchResults .sr-btn').forEach(b => { b.disabled = true; });
+  cmd('quickSearchRun', { requestId: searchRequestId, resultId, goLive });
+  clearTimeout(runTimer);
+  runTimer = setTimeout(
+    () => showNotice({ text: 'No response. Check the presentation before retrying.', tone: 'error' }),
+    isSet ? 90000 : 15000,
+  );
+}
+
+function renderSearchResults(data) {
+  if (!data || data.requestId !== searchRequestId) return;
+  const box = $('searchResults');
+  box.textContent = '';
+  const results = Array.isArray(data.results) ? data.results : [];
+  if (!results.length) {
+    const empty = document.createElement('div');
+    empty.className = 'sr-empty';
+    empty.textContent = data.noBible ? 'No results. (No Bible is loaded on the presenter.)' : 'No results';
+    box.appendChild(empty);
+    return;
+  }
+  let lastKind = '';
+  for (const r of results) {
+    if (r.kind !== lastKind) {
+      lastKind = r.kind;
+      const g = document.createElement('div');
+      g.className = 'sr-group';
+      g.textContent = SEARCH_GROUPS[r.kind] || '';
+      box.appendChild(g);
+    }
+    const row = document.createElement('div');
+    row.className = 'sr-row';
+    const ico = document.createElement('span');
+    ico.className = 'sr-ico';
+    ico.setAttribute('aria-hidden', 'true');
+    ico.textContent = r.kind === 'media' && r.mediaType === 'video' ? '▶' : (SEARCH_ICONS[r.kind] || '•');
+    const txt = document.createElement('div');
+    txt.className = 'sr-txt';
+    const title = document.createElement('div');
+    title.className = 'sr-title';
+    const isSet = r.kind === 'setLink';
+    title.textContent = isSet ? (r.error ? 'Set link cannot be imported' : (r.title || 'Worship leader set')) : r.title;
+    if (r.hasChords) {
+      const chord = document.createElement('span');
+      chord.className = 'sr-chord';
+      chord.textContent = '♪';
+      chord.title = 'Has chords';
+      title.appendChild(chord);
+    }
+    const sub = document.createElement('div');
+    sub.className = 'sr-sub';
+    sub.textContent = isSet
+      ? (r.error ? 'This link is a local set view. Share the set to get a link with songs.' : (r.songCount || 0) + ' songs')
+      : (r.subtitle || (r.kind === 'media' ? (r.mediaType === 'video' ? 'Video' : 'Image') : ''));
+    txt.appendChild(title);
+    if (sub.textContent) txt.appendChild(sub);
+    row.appendChild(ico);
+    row.appendChild(txt);
+    if (!(isSet && r.error)) {
+      const acts = document.createElement('div');
+      acts.className = 'sr-acts';
+      const add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'sr-btn';
+      add.textContent = isSet ? 'Add all' : 'Add';
+      add.setAttribute('aria-label', (isSet ? 'Add all songs: ' : 'Add: ') + title.textContent);
+      add.addEventListener('click', () => runSearchResult(r.id, false, isSet));
+      const live = document.createElement('button');
+      live.type = 'button';
+      live.className = 'sr-btn live';
+      live.textContent = 'Live';
+      live.setAttribute('aria-label', 'Add and go live: ' + title.textContent);
+      live.addEventListener('click', () => runSearchResult(r.id, true, isSet));
+      acts.appendChild(add);
+      acts.appendChild(live);
+      row.appendChild(acts);
+    }
+    box.appendChild(row);
+  }
+  if (runPending) document.querySelectorAll('#searchResults .sr-btn').forEach(b => { b.disabled = true; });
+}
 
 // FIX: gotoSlide now shows visual feedback when the input is invalid or empty
 function gotoSlide() {

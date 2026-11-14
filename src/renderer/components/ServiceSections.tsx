@@ -261,7 +261,11 @@ export default function ServiceSections({
     if (editor.kind === 'edit') commit(updateSection(current, editor.sectionId, { title: name, color, icon }), 'success');
     if (editor.kind === 'move') commit(moveSlidesToSection(current, new Set(editor.slideIds), target, position));
     if (editor.kind === 'remove') commit(removeSection(current, editor.sectionId, target), 'delete');
-    if (editor.kind === 'delete') commit(removeSection(current, editor.sectionId, undefined, true), 'delete');
+    if (editor.kind === 'delete') {
+      // Deleting every slide leaves one blank slide instead of being blocked.
+      const blank: Slide = { id: crypto.randomUUID(), type: 'text', content: t('common.newSlideContent'), styles: { ...DEFAULT_STYLES } };
+      commit(removeSection(current, editor.sectionId, undefined, true, blank), 'delete');
+    }
     setEditor(null);
   }
   function resetDrag() {

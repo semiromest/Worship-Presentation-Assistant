@@ -113,7 +113,9 @@ function LoopRenderer({ slide, width, height, isActive = true, volume = 1, muted
             }}
           >
             {item.type === 'image' ? (
-              <img src={item.mediaUrl} className="w-full h-full object-contain" alt="" />
+              // A raw file:// src is blocked by webSecurity from the http(s) renderer origin, so
+              // stream local files through the media protocol like every other image slide.
+              <img src={resolveCanvasSource(item.mediaUrl, false).url} className="w-full h-full object-contain" alt="" />
             ) : (
               <LoopVideoPlayer
                 onEnded={
@@ -121,7 +123,7 @@ function LoopRenderer({ slide, width, height, isActive = true, volume = 1, muted
                     ? advanceToNext
                     : undefined
                 }
-                mediaUrl={item.mediaUrl}
+                mediaUrl={resolveCanvasSource(item.mediaUrl, false).url}
                 isActive={isActive && isCurrent}
                 preload={isCurrent || index === (currentIndex + 1) % items.length ? 'auto' : 'metadata'}
                 volume={volume}

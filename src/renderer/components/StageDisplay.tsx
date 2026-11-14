@@ -5,6 +5,9 @@ import { useStore } from '../state/useStore';
 import { getSlideDisplayContent, getNextDisplaySlide } from '../../shared/slideContent';
 import { cn } from '../utils';
 import type { Slide } from '../types';
+import { parseChordLine } from '../../shared/chords';
+import { getSlideChordKey, getSlideChordText } from '../../shared/slideChords';
+import { useStageChordsEnabled } from '../stageChordsPreference';
 
 function pad(n: number): string {
   return String(n).padStart(2, '0');
@@ -83,6 +86,44 @@ function StagePreview({ slide, fill = false }: { slide?: Slide; fill?: boolean }
   );
 }
 
+/**
+ * Chords over the syllables they belong to. Each segment is an inline-block
+ * (chord on top, text below), so alignment survives any line wrap.
+ */
+function ChordSheet({ text, size }: { text: string; size: 'large' | 'small' }) {
+  const large = size === 'large';
+  return (
+    <div className={cn('text-center max-w-[92%]', large ? 'text-5xl leading-tight' : 'text-2xl leading-snug')}>
+      {text.split('\n').map((line, lineIndex) => {
+        const segments = parseChordLine(line);
+        const hasChord = segments.some((segment) => segment.chord);
+        return (
+          <div key={lineIndex} className={cn('whitespace-pre-wrap break-words', hasChord && (large ? 'mt-3' : 'mt-1'))}>
+            {segments.map((segment, index) =>
+              hasChord ? (
+                <span key={index} className="inline-flex flex-col items-start align-bottom">
+                  <span
+                    className={cn(
+                      'font-bold text-amber-300 leading-none whitespace-pre',
+                      large ? 'text-3xl mb-1' : 'text-lg mb-0.5',
+                      !segment.chord && 'invisible',
+                    )}
+                  >
+                    {segment.chord ? `${segment.chord} ` : ' '}
+                  </span>
+                  <span className="whitespace-pre-wrap">{segment.text || ' '}</span>
+                </span>
+              ) : (
+                <span key={index}>{segment.text}</span>
+              ),
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function StageDisplay() {
   const { t } = useTranslation();
   const presentation = useStore((s) => s.presentation);
@@ -106,6 +147,10 @@ export default function StageDisplay() {
   // (not the generic type label) is shown alongside it.
   const nextDisplayText = nextIsVisual && next ? getSlideDisplayContent(next).trim() : nextText;
   const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - startedAtRef.current) / 1000));
+  const showChords = useStageChordsEnabled();
+  const currentChords = showChords ? getSlideChordText(current) : null;
+  const nextChords = showChords ? getSlideChordText(next) : null;
+  const chordKey = currentChords ? getSlideChordKey(current) : null;
 
   return (
     <div className="fixed inset-0 bg-[#0d0d12] text-white flex flex-col overflow-hidden select-none">
@@ -133,9 +178,19 @@ export default function StageDisplay() {
       {/* Current slide — large, centered */}
       <main className="flex-1 flex flex-col items-center justify-center px-16 min-h-0">
         {current?.group?.title && (
-          <p className="text-2xl font-bold text-blue-300/90 mb-4 text-center">{current.group.title}</p>
+          <p className="text-2xl font-bold text-blue-300/90 mb-4 text-center">
+            {current.group.title}
+            {chordKey?.from && (
+              <span className="ml-3 text-xl font-semibold text-amber-300/90">
+                {t('stage.key')}: {chordKey.transpose ? `${chordKey.from} → ${chordKey.to}` : chordKey.from}
+                {chordKey.transpose !== 0 && ` (${chordKey.transpose > 0 ? '+' : ''}${chordKey.transpose})`}
+              </span>
+            )}
+          </p>
         )}
-        {currentIsVisual ? (
+        {currentChords ? (
+          <ChordSheet text={currentChords} size="large" />
+        ) : currentIsVisual ? (
           <>
             <div className="max-w-[85%] max-h-[58vh] rounded-lg overflow-hidden bg-black/40 border border-white/10 shadow-2xl">
               <StagePreview slide={current} />
@@ -182,9 +237,15 @@ export default function StageDisplay() {
               {next.group?.title && (
                 <p className="text-lg font-semibold text-blue-300/70 mb-1">{next.group.title}</p>
               )}
-              <p className="text-3xl leading-snug text-white/55 whitespace-pre-wrap break-words max-w-[95%]">
-                {nextDisplayText}
-              </p>
+              {nextChords ? (
+                <div className="text-white/60 [&>div]:text-left [&>div]:max-w-[95%]">
+                  <ChordSheet text={nextChords} size="small" />
+                </div>
+              ) : (
+                <p className="text-3xl leading-snug text-white/55 whitespace-pre-wrap break-words max-w-[95%]">
+                  {nextDisplayText}
+                </p>
+              )}
               {next.operatorNotes?.trim() && (
                 <p className="mt-2 text-base text-amber-200/70 italic whitespace-pre-wrap break-words max-w-[95%]">
                   {next.operatorNotes}

@@ -187,6 +187,11 @@ body {
   animation: gpSlideEnter 160ms ease-out;
 }
 
+/* ─── Live overlays (ticker / lower-third) ───────────────── */
+@keyframes liveTickerScroll { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(var(--ticker-shift, -50%), 0, 0); } }
+@keyframes liveSpeakerEnter { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: translateX(0); } }
+.live-speaker-enter { animation: liveSpeakerEnter 420ms cubic-bezier(.2, .8, .2, 1) both; }
+
 /* ─── Reduced Motion ─────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
 

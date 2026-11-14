@@ -11,6 +11,7 @@ ChevronLeft,
 ChevronRight,
 Copy,
 Crop,
+  Languages,
 Grid3x3,
 Group,
 Image,
@@ -89,6 +90,8 @@ toggleVisibility,
 import { writeElementDrag } from './elementDrag';
 import { createGroup,ungroupGroup } from './groupUtils';
 import { ImageCropDialog } from './ImageCropDialog';
+import { ImageTranslateDialog } from './ImageTranslateDialog';
+import { isLocalImageSource } from '../../shared/imageTranslate';
 import { replaceImage,restoreImageRatio } from './imageOperations';
 import { useKeyboardShortcuts } from './keyboardShortcuts';
 import { LayerPanel } from './panels/LayerPanel';
@@ -165,6 +168,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [cropTarget, setCropTarget] = useState<{ slideId: string; itemId: string } | null>(null);
+  const [translateTarget, setTranslateTarget] = useState<{ slideId: string; itemId: string } | null>(null);
   const [lockedRatioKeys, setLockedRatioKeys] = useState<Set<string>>(new Set());
   const [safeAreaEnabled, setSafeAreaEnabled] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -296,6 +300,15 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
   useEffect(() => {
     if (cropTarget && !cropItem) setCropTarget(null);
   }, [cropTarget, cropItem]);
+  const translateItem =
+    translateTarget?.slideId === session.activeId
+      ? items.find((item) => item.id === translateTarget.itemId && item.type === 'image' && !item.locked && !!item.mediaUrl)
+      : undefined;
+  useEffect(() => {
+    if (translateTarget && !translateItem) setTranslateTarget(null);
+  }, [translateTarget, translateItem]);
+  const canTranslateImage = (item: SlideItem | undefined) =>
+    !!window.electronAPI?.imageTranslate && !!item?.mediaUrl && !item.locked && isLocalImageSource(item.mediaUrl);
 
   const activeIndex = Math.max(0, deck.slides.findIndex(candidate => candidate.id === session.activeId));
   const liveSlideId = deck.liveSlideId ?? null;
@@ -788,6 +801,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
     setShowTemplates(false);
     setPasteMenu(null);
     setCropTarget(null);
+    setTranslateTarget(null);
     setInspectorOpen(false);
   }, [active, finishInteraction]);
 
@@ -895,6 +909,26 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
   const gridSize = activeDraft?.gridSize ?? 10;
   const gridColor = activeDraft?.gridColor ?? 'rgba(255,255,255,0.06)';
   const snapEnabled = activeDraft?.snapEnabled ?? false;
+
+  const clearGradient = () => {
+    session.applyBackground(styles => ({ backgroundGradient: undefined, ...(styles.generatedBackground ? { generatedBackground: undefined, backgroundImage: undefined, backgroundBlur: 0, generatedGroupBackground: undefined } : {}) }), gradientIds);
+    setGradientPreview(null);
+  };
+  const renderGradient = (autoStart: boolean, withClear: boolean) => activeSlide && activeDraft && (
+    <GradientDesigner
+      key={activeSlide.id}
+      slideId={activeSlide.id}
+      initial={activeDraft.styles.generatedBackground as import('../../shared/generatedBackground').GeneratedBackground | undefined}
+      legacy={activeDraft.styles.backgroundGradient as import('../../shared/presentation').GradientStyle | undefined}
+      canClear={withClear && !!(activeDraft.styles.backgroundGradient || activeDraft.styles.generatedBackground)}
+      onClear={withClear ? clearGradient : undefined}
+      autoStart={autoStart}
+      targetIds={gradientIds}
+      enabled={active && tab === 'slide'}
+      onPreview={setGradientPreview}
+      onApply={applyGradient}
+    />
+  );
 
   const inspectorTabs: Array<{ id: InspectorTab; label: string; icon: ComponentType<{ className?: string }> }> = [
     ...(!gradientOnly ? [{ id: 'item' as const, label: t('common.editorTabItem'), icon: MousePointer2 }] : []),
@@ -1027,6 +1061,17 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                     setCropTarget({ slideId: session.activeId, itemId: primarySelected.id });
                   }}
                 />
+                {canTranslateImage(primarySelected) && (
+                  <ToolButton
+                    label={t('common.imageTranslateTitle')}
+                    icon={Languages}
+                    disabled={selectedItems.length !== 1}
+                    onClick={() => {
+                      finishInteraction();
+                      setTranslateTarget({ slideId: session.activeId, itemId: primarySelected.id });
+                    }}
+                  />
+                )}
               </>
             )}
             <ToolDivider />
@@ -1479,12 +1524,20 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                     slideCount={slideOrder.length}
                     onChange={setScope}
                   />
-                  {!gradientOnly && <SlideSettingsPanel styles={activeDraft.styles} onChange={updateSlideStyles} />}
-                  {(activeSlide.type === 'text' || activeSlide.type === 'image') && <GradientDesigner key={activeSlide.id} slideId={activeSlide.id} initial={activeDraft.styles.generatedBackground as import('../../shared/generatedBackground').GeneratedBackground | undefined}
-                    legacy={activeDraft.styles.backgroundGradient as import('../../shared/presentation').GradientStyle | undefined}
-                    canClear={!!(activeDraft.styles.backgroundGradient || activeDraft.styles.generatedBackground)}
-                    onClear={() => { session.applyBackground(styles => ({ backgroundGradient: undefined, ...(styles.generatedBackground ? { generatedBackground: undefined, backgroundImage: undefined, backgroundBlur: 0, generatedGroupBackground: undefined } : {}) }), gradientIds); setGradientPreview(null); }}
-                    targetIds={gradientIds} enabled={active && tab === 'slide'} onPreview={setGradientPreview} onApply={applyGradient} />}
+                  {gradientOnly ? (
+                    <Section id="slide-background" title={t('common.editorSlideBackground')}>
+                      {renderGradient(false, true)}
+                    </Section>
+                  ) : (
+                    <SlideSettingsPanel
+                      key={activeSlide.id}
+                      styles={activeDraft.styles}
+                      onChange={updateSlideStyles}
+                      slideType={activeSlide.type}
+                      renderGradient={activeSlide.type === 'text' || activeSlide.type === 'image' ? (autoStart) => renderGradient(autoStart, false) : undefined}
+                      onClearGradient={clearGradient}
+                    />
+                  )}
                 </>
               )}
 
@@ -1708,6 +1761,21 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                               )}
                             </div>
                           }
+                          translate={
+                            canTranslateImage(primarySelected) && selectedItems.length === 1 ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  finishInteraction();
+                                  setTranslateTarget({ slideId: session.activeId, itemId: primarySelected.id });
+                                }}
+                                className="mt-1.5 inline-flex h-7 w-full items-center justify-center gap-1.5 rounded-md border border-blue-400/30 bg-blue-500/10 px-2 text-xs text-blue-100 transition hover:bg-blue-500/20"
+                              >
+                                <Languages className="h-3.5 w-3.5" aria-hidden="true" />
+                                <span className="truncate">{t('common.imageTranslateTitle')}</span>
+                              </button>
+                            ) : null
+                          }
                         />
                       )}
 
@@ -1784,6 +1852,20 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                 )
               );
               setCropTarget(null);
+            }}
+          />
+        )}
+        {active && translateItem && (
+          <ImageTranslateDialog
+            key={translateItem.id + translateItem.mediaUrl}
+            item={translateItem}
+            onClose={() => setTranslateTarget(null)}
+            onApply={(ref) => {
+              finishInteraction();
+              session.updateItems((prev) =>
+                prev.map((item) => (item.id === translateItem.id && !item.locked ? { ...item, mediaUrl: ref } : item))
+              );
+              setTranslateTarget(null);
             }}
           />
         )}

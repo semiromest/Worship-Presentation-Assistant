@@ -8,6 +8,8 @@ import { MusicEnvelope, MUSIC_FADE_IN_MS, MUSIC_FADE_OUT_MS } from '../audio/mus
 import { toFileUrl } from '../utils';
 import type { YouTubeMusicResult } from '../../shared/youtubeMusic';
 import { slideMusicAutoPlay } from '../../shared/youtubeMusic';
+import { NDI_PROGRAM_OUTPUT_ID } from '../../shared/virtualOutputs';
+import { useProgramMusicAudio } from './useProgramAudioTap';
 
 export function useBackgroundMusicPlayback() {
   const { t } = useTranslation();
@@ -38,6 +40,8 @@ export function useBackgroundMusicPlayback() {
   const muted = useStore(state => state.isMediaMuted);
   const liveSlide = useStore(activeMusicSlide);
   const audienceOpen = useStore(hasAudienceOutput);
+  // While NDI Program is on, the music also feeds its audio (volume, fades and mute included).
+  useProgramMusicAudio(audioRef, useStore(state => !!state.outputAssignments[NDI_PROGRAM_OUTPUT_ID]?.isOpen));
   const audienceCue = useStore(audienceMusicCue);
   const presentationId = useStore(state => state.presentation.id);
   const setCurrent = useStore(state => state.setBackgroundMusicCurrent);
@@ -58,6 +62,8 @@ export function useBackgroundMusicPlayback() {
     const audio = audioRef.current;
     if (!audio) return;
     audio.pause();
+    // App-served streams answer CORS; loading them in CORS mode keeps the element capturable for NDI.
+    audio.crossOrigin = current && /^(http:\/\/127\.0\.0\.1:|local-resource:)/i.test(current) ? 'anonymous' : null;
     if (current) audio.src = /^https?:\/\//i.test(current) ? current : toFileUrl(current);
     else { audio.removeAttribute('src'); audio.load(); }
   }, [current]);
@@ -97,8 +103,7 @@ export function useBackgroundMusicPlayback() {
     youtubeActive.current = true; stream.current = undefined;
     setLoading(true); setPlaying(false); setCurrent(null); setTrack(video); setError(null);
     try {
-      await window.electronAPI.youtubeMusicStop();
-      if (ownRequest !== request.current) return;
+      // play() stops the previous stream itself; a separate stop round trip only delays the start.
       const response = await window.electronAPI.youtubeMusicPlay(video.id);
       if (ownRequest !== request.current || (owner && owner.key !== desired.current.key)) {
         if (response.ok) void window.electronAPI.youtubeMusicStop(response.streamId);

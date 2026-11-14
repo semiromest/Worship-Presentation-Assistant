@@ -51,6 +51,8 @@ test('dropped image bridge accepts disk image paths and rejects other files or s
     assert.equal(await api.getDroppedImagePath({ diskPath: 'C:\\Photos\\a.PNG' }), 'C:\\Photos\\a.PNG');
     assert.equal(await api.getDroppedImagePath({ diskPath: 'C:\\clip.mp4' }), null);
     assert.equal(await api.getDroppedImagePath({}), null);
+    assert.equal(await api.getDroppedFilePath({ diskPath: 'C:\clip.mp4' }), 'C:\clip.mp4');
+    assert.equal(await api.getDroppedFilePath({}), null);
   }
 });
 

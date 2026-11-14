@@ -1,6 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { searchHymns, searchMedia } from './quickSearchModel';
+import { searchHymns, searchMedia, searchScripture } from './quickSearchModel';
+
+const bible = {
+  books: [
+    {
+      name: 'Yuhanna',
+      number: '43',
+      chapters: [{ number: '1', verses: [1, 2, 3, 4, 5, 6].map((n) => ({ number: String(n), text: `Ayet ${n}` })) }],
+    },
+  ],
+};
+
+test('scripture search returns exact ranges, whole chapter only with "::"', () => {
+  const range = searchScripture(bible as never, null, 'yuhanna 1:3-5');
+  assert.deepEqual(range[0].verseNumbers, ['3', '4', '5']);
+  assert.deepEqual(searchScripture(bible as never, null, 'yuhanna 1'), []);
+  const whole = searchScripture(bible as never, null, 'yuhanna 1::');
+  assert.deepEqual(whole[0].verseNumbers, ['1', '2', '3', '4', '5', '6']);
+});
 
 const hymn = (id: string, title: string, lyrics = '') => ({ id, title, lyrics });
 

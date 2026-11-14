@@ -51,6 +51,8 @@ export default defineConfig(({ command }) => ({
               external: [
                 'electron',
                 '@napi-rs/canvas',
+                // Native NDI binding (prebuilt per platform, unpacked from asar).
+                'grandi',
               ],
               // Phase 7: second entry — the heavy-work UtilityProcess. Input
               // overrides the single lib entry (see vite-plugin-electron docs).
@@ -59,6 +61,7 @@ export default defineConfig(({ command }) => ({
                 heavyWorker: path.join(__dirname, 'src/main/utility/heavyWorker.ts'),
                 pptxImportWorker: path.join(__dirname, 'src/main/utility/pptxImportWorker.ts'),
                 gradientWorker: path.join(__dirname, 'src/main/utility/gradientWorker.ts'),
+                ndiWorker: path.join(__dirname, 'src/main/output/ndiWorker.ts'),
               },
               output: { entryFileNames: '[name].js' },
             },

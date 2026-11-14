@@ -117,9 +117,8 @@ test('music slides: add silently, live playback, pause, blackout, cancellation, 
     const designer = editor.getByTestId('gradient-designer');
     await designer.locator('details.gradient-more > summary').click();
     await designer.getByRole('button', { name: strings.gradient.regenerate, exact: true }).click();
-    const applyGradient = designer.getByRole('button', { name: strings.gradientLibrary.applyDraft.replace('{{count}}', '1'), exact: true });
-    await expect(applyGradient).toBeEnabled({ timeout: 40000 });
-    await applyGradient.click();
+    // Gradient changes apply themselves once the render settles.
+    await expect(designer.getByRole('status').filter({ hasText: strings.gradient.appliedCount_one.replace('{{count}}', '1') })).toBeVisible({ timeout: 40000 });
     await editor.locator('[data-guide-anchor="editor-save"]').click();
     await expect(editor.locator('[data-guide-anchor="editor-save"]')).toBeDisabled();
     await control.locator('[data-guide-anchor="nav-slides"]').click();

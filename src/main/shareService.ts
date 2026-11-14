@@ -13,10 +13,17 @@ import { newToken, tokenMatches, queryToken } from './shareTransport';
  */
 
 import crypto from 'node:crypto';
+import { clearShareImages, registerShareImage, serveShareImage } from './shareImages';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { WebSocket as WsSocket } from 'ws';
 import type { ShareSnapshot, ShareStatus } from '../shared/share';
 import { SHARE_HTML } from './share-html';
+
+/** Serves `/share/img/<id>?token=…` for the current broadcast (see shareImages.ts). */
+export function handleShareImageHttp(req: IncomingMessage, res: ServerResponse): boolean {
+  return serveShareImage(req, res, active.token);
+}
+export { registerShareImage };
 
 /** Bounded finalized history kept for late-joining phones. */
 const MAX_HISTORY = 15;
@@ -83,6 +90,7 @@ export function startShare(ip: string, port: number): { url: string } | null {
   active.ip = ip;
   active.port = port;
   active.lastSnapshot = null;
+  clearShareImages();
   return { url: buildUrl() };
 }
 
@@ -106,6 +114,7 @@ export function stopShare(): void {
   active.ip = null;
   active.port = null;
   active.lastSnapshot = null;
+  clearShareImages();
 }
 
 export function isShareActive(): boolean {

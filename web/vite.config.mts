@@ -25,8 +25,8 @@ const patches: Record<string, [string, string][]> = {
       `const getFileName = (p: string) => ${URL_SCHEME}.test(p) && p.includes('#') ? decodeURIComponent(p.split('#').slice(1).join('#')) : normalizePath(p).split('/').pop() ?? 'Untitled';`],
   ],
   '/src/renderer/editor/panels/SlideSettingsPanel.tsx': [
-    ["onChange({ backgroundImage: `file://${file.replace(/\\\\/g, '/')}` });",
-      `onChange({ backgroundImage: ${URL_SCHEME}.test(file) ? file : \`file://\${file.replace(/\\\\/g, '/')}\` });`],
+    ["onChange({ backgroundImage: `file://${file.replace(/\\\\/g, '/')}`, backgroundGradient: undefined });",
+      `onChange({ backgroundImage: ${URL_SCHEME}.test(file) ? file : \`file://\${file.replace(/\\\\/g, '/')}\`, backgroundGradient: undefined });`],
   ],
   '/src/renderer/editor/SlideEditor.tsx': [
     ["replaceImage(target, 'file://' + file.replace(/\\\\/g, '/'))",

@@ -12,18 +12,20 @@ import { buildSabrFormat, EnabledTrackTypes, Logger, LogLevel } from 'googlevide
 import { buildURL, getHeaders, USER_AGENT, parseLooseJSON } from 'bgutils-js/utils';
 import { isYouTubeVideoId, type YouTubeSearchResponse, type YouTubePlayResponse } from '../shared/youtubeMusic';
 import { YouTubeSearchPager, type YouTubeSearchPage } from './youtubeSearchPager';
-import { fetchMusicStream } from './musicStreamFetch';
+import { fetchMusicStream, pacedMusicFetch } from './musicStreamFetch';
+import { chooseCompactAudioFormat } from './musicFormat';
 import { OfflineMusicCache } from './offlineMusicCache';
 import { lookupMusicQuery } from './youtubeMusicLookup';
 
 const REQUEST_TIMEOUT_MS = 20_000;
 const PREPARED_TTL_MS = 120_000;
 const PREPARED_REFRESH_MARGIN_MS = 45_000;
-const PREPARED_MAX = 4;
+// Arama sonuçlarının üzerine gelerek hazırlananlar slayt parçalarını hemen dışarı itmesin.
+const PREPARED_MAX = 8;
 const TOKEN_TTL_MS = 15 * 60 * 1000;
 /** Kurulumda üç ağ isteği ve bir sayfa yüklemesi var; yavaş bağlantıda başarıyla biten kurulum düşmesin. */
 const TOKEN_SETUP_TIMEOUT_MS = 60_000;
-/** Sunucu ek medya vermezse sıcak istek döngüsünü önler. İlk istek beklemez. */
+/** Sunucu ek medya vermezse sıcak istek döngüsünü önler. İlk istek ve ilerleme getiren yanıtların ardılı beklemez. */
 const SABR_REQUEST_GAP_MS = 200;
 /** Token penceresi yalnızca ana belgeyi yükler; script, görsel, font ve diğer alt kaynaklar iptal edilir. */
 const TOKEN_ALLOWED_RESOURCES: ReadonlySet<string> = new Set(['mainFrame', 'xhr', 'webSocket']);
@@ -94,7 +96,8 @@ interface PreparedEntry { expires: number; promise: Promise<PreparedTrack> }
 /** Anonymous music service. Renderer receives only metadata and a random loopback URL. */
 export class YouTubeMusicService {
   private readonly offline = new OfflineMusicCache(path.join(app.getPath('userData'), 'offline-music'), async (id, cancelled) => {
-    const { stream } = await this.createAudio(id, cancelled);
+    // Çevrimdışı kopya sıkıştırılmış (≈70 kbps Opus) biçimde iner: yarı boyut, yeniden kodlama yok.
+    const { stream } = await this.createAudio(id, cancelled, true);
     return { audio: stream.audio, mimeType: stream.mimeType, finished: () => stream.finished, abort: () => abortSabr(stream.sabr) };
   });
   private readonly searchPager = new YouTubeSearchPager(async query => {
@@ -119,7 +122,9 @@ export class YouTubeMusicService {
 
   /** Uygulama açılışında çağrılırsa ilk arama/çalma Innertube kurulumunu beklemez. Token penceresini kurmaz. */
   warmup(): void {
-    if (!this.disposed) void this.getYouTube().catch(() => {});
+    if (this.disposed) return;
+    void this.getYouTube().catch(() => {});
+    void this.ensureServer().catch(() => {});
   }
 
   /** Warm connection metadata only: never replaces the active stream or starts audio. */
@@ -326,7 +331,9 @@ export class YouTubeMusicService {
       response.writeHead(404).end();
       return;
     }
-    response.writeHead(200, { 'Content-Type': stream.mimeType, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
+    // CORS lets the control window capture the music for the NDI Program audio (a cross-origin
+    // element cannot be captured). The path is a one-shot random stream id served to one reader.
+    response.writeHead(200, { 'Content-Type': stream.mimeType, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'Access-Control-Allow-Origin': '*' });
     stream.response = response;
     const reader = Readable.fromWeb(stream.audio as Parameters<typeof Readable.fromWeb>[0]);
     stream.reader = reader;
@@ -338,7 +345,7 @@ export class YouTubeMusicService {
     reader.pipe(response);
   }
 
-  private async createAudio(id: string, cancelled: () => boolean): Promise<{ stream: ActiveStream; port: number }> {
+  private async createAudio(id: string, cancelled: () => boolean, compact = false): Promise<{ stream: ActiveStream; port: number }> {
     let sabr: SabrStream | undefined;
     try {
       const preparation = this.prepareTrack(id);
@@ -349,25 +356,21 @@ export class YouTubeMusicService {
       if (cancelled()) throw new Error('cancelled');
       // SABR playback context belongs to one stream. Reusing it for a restart can
       // return an initialization segment followed by no further media parts.
-      let requests = 0;
       sabr = new SabrStream({
         serverAbrStreamingUrl: url,
         videoPlaybackUstreamerConfig: info.player_config?.media_common_config.media_ustreamer_request_config?.video_playback_ustreamer_config,
         formats: info.streaming_data!.adaptive_formats.map(buildSabrFormat), poToken: token,
         clientInfo: { clientName: Number(Constants.CLIENT_NAME_IDS.WEB), clientVersion: Constants.CLIENTS.WEB.VERSION },
-        fetch: async (input, init) => {
-          // Avoid a hot request loop if the server supplies no additional media.
-          // The first request cannot be part of a loop, so it goes out immediately.
-          if (requests++ > 0) await sleep(SABR_REQUEST_GAP_MS);
-          // Bound stalled reads, not the lifetime of a playing audio response.
-          return fetchMusicStream(input, init);
-        },
+        // Bound stalled reads, not the lifetime of a playing audio response; pause only
+        // after a response without new media so an empty-reply loop cannot run hot.
+        fetch: pacedMusicFetch(fetchMusicStream, SABR_REQUEST_GAP_MS, sleep),
       });
       let stream: ActiveStream | undefined;
       let finished = false;
       sabr.on('finish', () => { finished = true; if (stream) stream.finished = true; });
       const { audioStream, selectedFormats } = await sabr.start({
         enabledTrackTypes: EnabledTrackTypes.AUDIO_ONLY, preferWebM: true, preferOpus: true,
+        ...(compact ? { audioFormat: chooseCompactAudioFormat } : {}),
         maxRetries: 2, stallDetectionMs: 15000,
       });
       if (cancelled()) throw new Error('cancelled');

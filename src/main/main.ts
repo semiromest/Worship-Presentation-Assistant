@@ -42,6 +42,7 @@ import {
   session,
   systemPreferences,
   net,
+  clipboard,
 } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
@@ -66,15 +67,21 @@ import {
 import { initPerfMonitor, mainPerf, recordWs } from './perfMonitor';
 import { installIpcSenderPolicy } from './ipcSenderPolicy';
 import { hardenAppWindow, isAppDocument } from './windowSecurity';
+import { NdiSender } from './output/ndiSender';
+import { NDI_LYRICS_OUTPUT_ID, NDI_PROGRAM_OUTPUT_ID, NDI_OUTPUT_FPS, NDI_OUTPUT_HEIGHT, NDI_OUTPUT_WIDTH, NDI_SOURCE_NAMES, isVirtualOutputId, type NdiStatus, type NdiStatusMap } from '../shared/virtualOutputs';
 import { readWindowState, writeWindowState } from './windowState';
 import { pathToFileURL } from 'node:url';
 import { isRemoteAuthorized, loadOrCreateRemoteToken, readRemoteSettings, remoteAuthCookie, remoteTokenFromQuery, writeNewRemoteToken, writeRemoteSettings } from './remoteAuth';
 import { createPresetStore, isLiveSavePresetName } from './presetStore';
 import { localResourceUrlToPath, mediaRefToName } from '../shared/mediaTree';
-import { getMediaLibrary } from './mediaLibrary';
+import { getMediaLibrary, storeBytesTo } from './mediaLibrary';
 import { registerGradientService } from './gradientService';
 import { mediaStorageReport, removeUnusedMedia, updateMediaStorageSettings } from './mediaStorage';
 import { createVideoSinks, libraryFileSize, optimizeLibraryImage } from './mediaOptimizer';
+import { freeTranslate, resolveSourcePath, translateLibraryImage } from './imageTranslate';
+import { generateImage } from './imageGenerate';
+import { isImageGenerateRatio, isImageGenerateStyle } from '../shared/imageGenerate';
+import { IMAGE_TRANSLATION_INDEX, isImageTranslateLang } from '../shared/imageTranslate';
 import { getOrCreateThumbnail, thumbRefToPath, pruneThumbnailCache } from './mediaThumbnails';
 import { heavyClient } from './heavyWorkerClient';
 import { registerSttIpc, cleanupStt } from './sonioxService';
@@ -86,6 +93,8 @@ import {
   refreshShareHost,
   getShareStatus,
   handleShareHttp,
+  handleShareImageHttp,
+  registerShareImage,
   handleShareConnection,
   setClientCountListener,
   disposeShare,
@@ -187,7 +196,8 @@ ipcMain.handle('optimization:warm', async (event, service: unknown) => {
   requireControl(event);
   if (restricted || projectorWindows.size || nativeDialogBusy() || (service !== 'drive' && service !== 'youtube')) return;
   const started = performance.now();
-  if (service === 'drive') await driveService.get(); else await youtubeMusicService.get();
+  // Müzik: Innertube oturumu ve yerel ses sunucusu önceden kurulur; ilk arama/çalma bunları beklemez.
+  if (service === 'drive') await driveService.get(); else (await youtubeMusicService.get()).warmup();
   mainPerf.push({ kind: 'startup', label: 'warm-' + service, ms: performance.now() - started, bytes: 0, t: Date.now() });
 });
 let closingPractice = false;
@@ -236,7 +246,16 @@ type ProjectorEntry = {
   lastFrame?: Record<string, any>;
   receiverToken?: string;
   ready: boolean;
+  /** Offscreen output (NDI) with no physical display behind it. */
+  virtual?: boolean;
 };
+
+/** Physical projector/stage windows only; virtual (NDI) outputs never count as a screen. */
+function physicalOutputCount(): number {
+  let count = 0;
+  for (const entry of projectorWindows.values()) if (!entry.virtual) count++;
+  return count;
+}
 
 /** One reusable projector renderer per output display. */
 
@@ -304,6 +323,7 @@ function refreshProjectorWindows(): void {
   // Hotplug önce yayımlanır: operatör bağlantısı kopan açık ekranı, bilerek kapatılandan ayırabilsin.
   sendDisplaySnapshot();
   for (const [displayId, entry] of projectorWindows) {
+    if (entry.virtual) continue; // offscreen outputs survive display hotplug
     if (!getRawDisplay(displayId) && !entry.window.isDestroyed()) entry.window.close();
     // Fullscreen windows auto-position on their display — no reposition needed.
   }
@@ -565,6 +585,7 @@ function handleRemoteRequest(req: http.IncomingMessage, res: http.ServerResponse
 
   // Token korumalı paylaşım sayfaları: tünelden de erişilebilen tek yollar.
   if (pathname === '/share' && handleShareHttp(req, res)) return;
+  if (pathname.startsWith('/share/img/') && handleShareImageHttp(req, res)) return;
   if (pathname === '/screen' && handleScreenShareHttp(req, res)) return;
 
   // Tünelden gelen istek kontrol arayüzüne, komutlara ve tanılamaya ulaşamaz.
@@ -941,7 +962,8 @@ async function captureSlide(): Promise<void> {
   capturing = true;
   lastCaptureTime = Date.now();
   try {
-    const target = [...projectorWindows.values()].find((entry) => !entry.window.isDestroyed())?.window ?? win;
+    const outputs = [...projectorWindows.values()].filter((entry) => !entry.window.isDestroyed());
+    const target = (outputs.find((entry) => !entry.virtual) ?? outputs[0])?.window ?? win;
     if (!target || target.isDestroyed() || target.webContents.isDestroyed()) return;
     const full = await target.webContents.capturePage();
     if (full.isEmpty()) return;
@@ -994,6 +1016,39 @@ ipcMain.handle('media-optimize:video-begin', event => { requireControl(event); r
 ipcMain.handle('media-optimize:video-write', (event, id: unknown, position: unknown, bytes: unknown) => { requireControl(event); return videoSinks.write(String(id), Number(position), bytes); });
 ipcMain.handle('media-optimize:video-finish', (event, id: unknown, ext: unknown) => { requireControl(event); return videoSinks.finish(String(id), String(ext)); });
 ipcMain.handle('media-optimize:video-abort', (event, id: unknown) => { requireControl(event); return videoSinks.abort(String(id)); });
+// Image text translation: OCR → translate → paint out → redraw; stored as a new library file.
+const imageTranslateDeps = () => ({
+  dir: mediaLibrary.dir,
+  storeBytes: mediaLibrary.storeBytes,
+  cacheDir: path.join(app.getPath('userData'), 'tesseract'),
+  indexPath: path.join(app.getPath('userData'), IMAGE_TRANSLATION_INDEX),
+});
+ipcMain.handle('image-translate:run', (event, ref: unknown, source: unknown, target: unknown, options: unknown) => {
+  requireControl(event);
+  if (!isImageTranslateLang(target)) throw new Error('Unsupported target language');
+  const cachedOnly = !!(options && typeof options === 'object' && (options as { cachedOnly?: unknown }).cachedOnly === true);
+  return translateLibraryImage(imageTranslateDeps(), { ref: String(ref), source: isImageTranslateLang(source) ? source : 'auto', target, cachedOnly });
+});
+// AI image generation (Pollinations.ai, keyless); saved under userData/ai-images (see imageGenerate.ts).
+ipcMain.handle('image-generate:run', (event, prompt: unknown, style: unknown, ratio: unknown, seed: unknown) => {
+  requireControl(event);
+  return generateImage(
+    {
+      storeBytes: async (data, ext) => {
+        const dir = path.join(app.getPath('userData'), 'ai-images');
+        const ref = await storeBytesTo(dir, data, ext);
+        return ref ? path.join(dir, ref.slice(ref.lastIndexOf('/') + 1)) : null;
+      },
+      translate: freeTranslate(),
+    },
+    {
+      prompt: typeof prompt === 'string' ? prompt : '',
+      style: isImageGenerateStyle(style) ? style : 'none',
+      ratio: isImageGenerateRatio(ratio) ? ratio : '16:9',
+      seed: Number.isFinite(Number(seed)) ? Number(seed) : 0,
+    },
+  );
+});
 
 // Generic recursive file finder
 // One directory walker, parametrized by a filter, replaces two near-identical
@@ -1326,6 +1381,7 @@ function createProjectorWindow(requestedDisplayId?: string, initialData?: any): 
     ready: false,
   };
   projectorWindows.set(displayId, entry);
+  updateProgramLocalAudio();
   projectorWindow.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => {
     if (mainFrame && !inPlace) { entry.ready = false; entry.pendingPayload = entry.lastFrame ?? null; entry.receiverToken = undefined; }
   });
@@ -1404,15 +1460,135 @@ function createProjectorWindow(requestedDisplayId?: string, initialData?: any): 
       projectorWindows.delete(displayId);
     }
     sendToControl('projector-closed', { displayId });
-    remoteStatus.isProjectorOpen = projectorWindows.size > 0;
+    remoteStatus.isProjectorOpen = physicalOutputCount() > 0;
     broadcast({ type: 'status', data: publicStatus() });
     sendProjectorOutputStatus();
     scheduleSlideCapture(120);
+    updateProgramLocalAudio();
   });
 
   sendProjectorOutputStatus();
   return true;
 }
+
+// ─── Virtual (offscreen) outputs: NDI program and lyrics ────────────────────
+
+const ndiSenders = new Map<string, NdiSender>();
+let ndiStatus: NdiStatusMap = {};
+function publishNdiStatus(outputId: string, status: NdiStatus): void {
+  ndiStatus = { ...ndiStatus, [outputId]: status };
+  sendToControl('output:ndi-status', ndiStatus);
+}
+
+/**
+ * Renders the live presentation offscreen at a fixed 1920x1080 and sends it over NDI. The window
+ * shares the projector renderer, snapshot store and ready handshake, so it shows exactly what an
+ * audience screen would, independent of which physical displays are connected. The lyrics output
+ * renders only the text layer on a transparent page and sends straight (non-premultiplied) alpha.
+ */
+function createVirtualOutputWindow(outputId: string, initialData?: any): boolean {
+  if (restricted || !isVirtualOutputId(outputId)) return false;
+  const lyrics = outputId === NDI_LYRICS_OUTPUT_ID;
+  if (projectorWindows.has(outputId)) return true;
+
+  const outputWindow = new BrowserWindow({
+    show: false,
+    width: NDI_OUTPUT_WIDTH,
+    height: NDI_OUTPUT_HEIGHT,
+    useContentSize: true,
+    // Without this the window is clipped to the work area (1040 px tall above a taskbar).
+    enableLargerThanScreen: true,
+    frame: false,
+    ...(lyrics ? { transparent: true, backgroundColor: '#00000000' } : { backgroundColor: '#000000' }),
+    webPreferences: {
+      offscreen: true,
+      backgroundThrottling: false,
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      webSecurity: true,
+      webviewTag: false,
+    },
+  });
+  outputWindow.setContentSize(NDI_OUTPUT_WIDTH, NDI_OUTPUT_HEIGHT);
+  outputWindow.webContents.setFrameRate(NDI_OUTPUT_FPS);
+  // Local speakers: see updateProgramLocalAudio. The lyrics layer is always silent.
+  outputWindow.webContents.setAudioMuted(true);
+  hardenAppWindow(outputWindow.webContents, appDocumentUrl);
+
+  const entry: ProjectorEntry = {
+    displayId: outputId,
+    window: outputWindow,
+    pendingPayload: initialData ?? null,
+    lastFrame: initialData?.fullPresentation ? initialData : undefined,
+    ready: false,
+    virtual: true,
+  };
+  projectorWindows.set(outputId, entry);
+  outputWindow.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => {
+    if (mainFrame && !inPlace) { entry.ready = false; entry.pendingPayload = entry.lastFrame ?? null; entry.receiverToken = undefined; }
+  });
+
+  const sender = new NdiSender({
+    name: NDI_SOURCE_NAMES[outputId], fps: NDI_OUTPUT_FPS, straightAlpha: lyrics, audio: !lyrics, onStatus: (status) => publishNdiStatus(outputId, status),
+    onNeedFrame: () => { if (!outputWindow.isDestroyed()) outputWindow.webContents.invalidate(); },
+  });
+  ndiSenders.get(outputId)?.stop();
+  ndiSenders.set(outputId, sender);
+  sender.start();
+  outputWindow.webContents.on('paint', (_event, _dirty, image) => sender.pushImage(image));
+
+  // Same recovery rule as projector windows: reload a crashed renderer, at most 3 times a minute.
+  const crashTimes: number[] = [];
+  outputWindow.webContents.on('render-process-gone', (_event, details) => {
+    if (details.reason === 'clean-exit' || outputWindow.isDestroyed()) return;
+    const now = Date.now();
+    while (crashTimes.length && now - crashTimes[0] > 60_000) crashTimes.shift();
+    crashTimes.push(now);
+    entry.ready = false;
+    sendProjectorOutputStatus();
+    if (crashTimes.length <= 3) outputWindow.webContents.reload();
+  });
+
+  const query = { mode: 'projector', displayId: outputId, outputMode: 'follow' };
+  if (process.env.VITE_DEV_SERVER_URL) void outputWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL}?${new URLSearchParams(query)}`);
+  else void outputWindow.loadFile(path.join(DIST, 'index.html'), { query });
+
+  updateProgramLocalAudio();
+
+  outputWindow.on('closed', () => {
+    if (ndiSenders.get(outputId) === sender) { sender.stop(); ndiSenders.delete(outputId); }
+    if (projectorWindows.get(outputId)?.window === outputWindow) projectorWindows.delete(outputId);
+    sendToControl('projector-closed', { displayId: outputId });
+    sendProjectorOutputStatus();
+  });
+
+  sendProjectorOutputStatus();
+  return true;
+}
+
+/**
+ * Video sound on the operator's speakers: an audience screen plays it; when NDI Program is the only
+ * audience output (streaming without a projector), the program window plays it instead, so the room
+ * still hears what the stream carries. The NDI audio itself is captured either way.
+ */
+function updateProgramLocalAudio(): void {
+  const program = projectorWindows.get(NDI_PROGRAM_OUTPUT_ID);
+  if (!program || program.window.isDestroyed()) return;
+  const audienceScreen = [...projectorWindows.values()].some((entry) => !entry.virtual && !entry.window.isDestroyed() && entry.lastFrame?.outputMode !== 'stage');
+  program.window.webContents.setAudioMuted(audienceScreen);
+}
+
+const PROGRAM_AUDIO_MAX_SAMPLES = 2 * 4096;
+ipcMain.on('program-audio:pcm', (event, source: unknown, block: unknown) => {
+  const sender = ndiSenders.get(NDI_PROGRAM_OUTPUT_ID);
+  if (!sender || !(block instanceof Float32Array) || block.length === 0 || block.length > PROGRAM_AUDIO_MAX_SAMPLES || block.length % 2) return;
+  // Each source may only come from its own window: video from the program window, music from control.
+  const program = projectorWindows.get(NDI_PROGRAM_OUTPUT_ID);
+  if (source === 'video' && program && !program.window.isDestroyed() && event.sender === program.window.webContents) sender.pushAudio('video', block);
+  else if (source === 'music' && win && !win.isDestroyed() && event.sender === win.webContents && event.senderFrame === win.webContents.mainFrame) sender.pushAudio('music', block);
+});
 
 ipcMain.on('projector-ready', (event, _displayId?: string, receiverToken?: unknown) => {
   const entry = [...projectorWindows.values()].find((candidate) => candidate.window.webContents.id === event.sender.id);
@@ -1713,6 +1889,9 @@ app.on('will-quit', () => {
   remoteServer?.closeAllConnections(); // bekleyen keep-alive bağlantıları kapanışı geciktirmesin
   remoteServer?.close();
   cleanupStt();
+  // Stop the network sender before its source window goes away.
+  for (const sender of ndiSenders.values()) sender.stop();
+  ndiSenders.clear();
   for (const entry of projectorWindows.values()) {
     if (!entry.window.isDestroyed()) entry.window.close();
   }
@@ -2010,6 +2189,7 @@ ipcMain.handle('toggle-projector', (_, initialData?: any, requestedDisplayId?: s
 });
 
 ipcMain.handle('open-projector', (_, displayId: string, initialData?: any) => {
+  if (isVirtualOutputId(displayId)) return createVirtualOutputWindow(displayId, initialData);
   const display = getRawDisplay(displayId);
   if (!display) return false;
   const normalizedId = String(display.id);
@@ -2056,6 +2236,7 @@ ipcMain.handle('update-projector', (_, data: unknown) => {
     }
     entry.window.webContents.send('projector-update', { ...frame, receiverToken: entry.receiverToken });
   }
+  updateProgramLocalAudio(); // a screen switched to/from stage mode
   return projectorWindows.size > 0;
 });
 
@@ -2063,8 +2244,9 @@ ipcMain.handle('update-projector', (_, data: unknown) => {
 // default secondary display, with a safe fallback to any open output.
 ipcMain.handle('get-projector-status', () => {
   const defaultId = getDefaultDisplayId();
-  return defaultId ? projectorWindows.has(defaultId) : projectorWindows.size > 0;
+  return defaultId ? projectorWindows.has(defaultId) : physicalOutputCount() > 0;
 });
+ipcMain.handle('output:ndi-status', event => { requireControl(event); return ndiStatus; });
 ipcMain.handle('cleanup-temp-dir', async () => {
   await cleanupTempDir();
   return true;
@@ -2359,8 +2541,31 @@ ipcMain.handle('share:stop', async () => {
   return { ok: true };
 });
 
+// Slide pictures arrive as media refs: resolve each to a local file and swap in a token-protected
+// /share/img/ path. Kept in order so a slow lookup never publishes an older snapshot last.
+let sharePublishChain: Promise<void> = Promise.resolve();
+async function withShareImageUrls(snapshot: ShareSnapshot): Promise<ShareSnapshot> {
+  if (!Array.isArray(snapshot?.slideImages) || !snapshot.slideImages.length) return { ...snapshot, slideImages: [] };
+  const url = async (ref: unknown) => {
+    const file = typeof ref === 'string' ? await resolveSourcePath(ref, mediaLibrary.dir) : null;
+    return file ? registerShareImage(file) : null;
+  };
+  const slideImages = [];
+  for (const image of snapshot.slideImages.slice(0, 4)) {
+    const original = await url(image?.original);
+    if (!original) continue;
+    const translations: Record<string, string> = {};
+    for (const [lang, ref] of Object.entries(image.translations ?? {})) {
+      const translated = isImageTranslateLang(lang) ? await url(ref) : null;
+      if (translated) translations[lang] = translated;
+    }
+    // A picture with no translated copy (no readable text) is never shown on phones.
+    if (Object.keys(translations).length) slideImages.push({ original, translations });
+  }
+  return { ...snapshot, slideImages };
+}
 ipcMain.on('share:publish', (_event, snapshot: ShareSnapshot) => {
-  publishShare(snapshot);
+  sharePublishChain = sharePublishChain.then(async () => publishShare(await withShareImageUrls(snapshot))).catch(() => undefined);
 });
 
 ipcMain.handle('share:get-status', () => {
@@ -2524,10 +2729,48 @@ ipcMain.handle('send-slide-preview', (_, dataUrl: unknown) => {
  * quick-verse command). Text is capped so a malformed renderer call cannot be
  * used to push an oversized frame to every client.
  */
-ipcMain.handle('send-remote-notice', (_, notice: { text?: string; tone?: 'ok' | 'error' }) => {
+// Plain-text copy (e.g. ChordPro export). The session denies the web clipboard
+// permission, so the renderer writes through the main process instead.
+const MAX_CLIPBOARD_TEXT = 1024 * 1024;
+ipcMain.handle('write-clipboard-text', (event, text: unknown) => {
+  if (!win || win.isDestroyed() || event.sender !== win.webContents) return false;
+  if (typeof text !== 'string' || !text || text.length > MAX_CLIPBOARD_TEXT) return false;
+  clipboard.writeText(text);
+  return true;
+});
+
+ipcMain.handle('send-remote-notice', (_, notice: { text?: string; tone?: 'ok' | 'error' | 'progress' }) => {
   const text = typeof notice?.text === 'string' ? notice.text.slice(0, 160) : '';
   if (!text) return false;
-  broadcast({ type: 'notice', data: { text, tone: notice?.tone === 'error' ? 'error' : 'ok' } });
+  const tone = notice?.tone === 'error' ? 'error' : notice?.tone === 'progress' ? 'progress' : 'ok';
+  broadcast({ type: 'notice', data: { text, tone } });
+  return true;
+});
+
+// Phone quick search: results computed in the control window, broadcast to
+// phones. Each phone keeps only the reply to its own requestId.
+const REMOTE_SEARCH_KINDS = new Set(['scripture', 'hymn', 'media', 'setLink']);
+const clip = (value: unknown, max: number) => (typeof value === 'string' ? value.slice(0, max) : undefined);
+ipcMain.handle('send-remote-search-results', (_, payload: { requestId?: unknown; query?: unknown; results?: unknown; noBible?: unknown }) => {
+  const requestId = clip(payload?.requestId, 64);
+  if (!requestId) return false;
+  const results = (Array.isArray(payload?.results) ? payload.results : [])
+    .slice(0, 12)
+    .filter((item: any) => item && typeof item.id === 'string' && REMOTE_SEARCH_KINDS.has(item.kind))
+    .map((item: any) => ({
+      id: item.id.slice(0, 200),
+      kind: item.kind,
+      title: clip(item.title, 200) ?? '',
+      subtitle: clip(item.subtitle, 240),
+      mediaType: item.mediaType === 'video' || item.mediaType === 'image' ? item.mediaType : undefined,
+      hasChords: item.hasChords === true || undefined,
+      songCount: Number.isInteger(item.songCount) ? Math.min(item.songCount, 500) : undefined,
+      error: item.error === 'set-id-only' ? item.error : undefined,
+    }));
+  broadcast({
+    type: 'searchResults',
+    data: { requestId, query: clip(payload?.query, 2000) ?? '', results, noBible: payload?.noBible === true },
+  });
   return true;
 });
 
@@ -2623,6 +2866,23 @@ ipcMain.handle('select-media-file', async (_, type: 'image' | 'video') => {
   const { filePaths } = await showOpenDialogOwned({ defaultPath: lastDialogDir, filters, properties: ['openFile'] });
   rememberDir(filePaths?.[0]);
   return filePaths?.[0] ?? null;
+});
+
+// Multi-select picker for the media library (images or videos). The extension
+// lists mirror the renderer's IMAGE_EXTS / VIDEO_EXTS in MediaLoopTab.tsx.
+ipcMain.handle('select-media-files', async (_, type: 'image' | 'video') => {
+  if (restricted) return type === 'image' ? [await practiceWorkspace.sampleMedia()] : null;
+  const filters =
+    type === 'image'
+      ? [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'avif', 'svg'] }]
+      : [{ name: 'Videos', extensions: ['mp4', 'webm', 'mov', 'mkv', 'm4v', 'avi', 'ogg'] }];
+  const { filePaths } = await showOpenDialogOwned({
+    defaultPath: lastDialogDir,
+    filters,
+    properties: ['openFile', 'multiSelections'],
+  });
+  if (filePaths?.length) rememberDir(filePaths[0]);
+  return filePaths?.length ? filePaths : null;
 });
 
 ipcMain.handle('select-media-files-all', async () => {
@@ -2742,6 +3002,41 @@ ipcMain.handle('select-pptx-file', async () => {
   });
   rememberDir(filePaths?.[0]);
   return filePaths?.[0] ?? null;
+});
+
+// IPC: PDF → image slides. The renderer rasterizes pages with pdf.js; main
+// only hands out the bytes of a file the user picked and stores each page.
+const MAX_PDF_BYTES = 300 * 1024 * 1024;
+const MAX_PDF_PAGE_BYTES = 40 * 1024 * 1024;
+const approvedPdfPaths = new Set<string>();
+
+ipcMain.handle('select-pdf-file', async (event) => {
+  requireControl(event);
+  const { filePaths } = await showOpenDialogOwned({
+    defaultPath: lastDialogDir,
+    filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    properties: ['openFile'],
+  });
+  const picked = filePaths?.[0];
+  rememberDir(picked);
+  if (!picked) return null;
+  approvedPdfPaths.add(picked);
+  return picked;
+});
+
+ipcMain.handle('pdf:read', async (event, filePath: unknown) => {
+  requireControl(event);
+  if (typeof filePath !== 'string' || !approvedPdfPaths.has(filePath)) throw new Error('PDF was not selected by the user');
+  const stats = await fs.stat(filePath);
+  if (stats.size > MAX_PDF_BYTES) throw new Error('PDF is too large');
+  return new Uint8Array(await fs.readFile(filePath));
+});
+
+ipcMain.handle('pdf:store-page', async (event, bytes: unknown, ext: unknown) => {
+  requireControl(event);
+  if (!(bytes instanceof Uint8Array) || bytes.byteLength === 0 || bytes.byteLength > MAX_PDF_PAGE_BYTES) return null;
+  if (ext !== 'jpg' && ext !== 'png') return null;
+  return mediaLibrary.storeBytes(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength), ext);
 });
 
 async function importPowerPoint(event: Electron.IpcMainInvokeEvent, filePath: string) {

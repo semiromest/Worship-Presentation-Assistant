@@ -198,6 +198,7 @@ export function WatermarkSettingsPanel() {
             <span className="text-xs text-white/65">{t('watermark.position')}</span>
             <PositionPicker
               value={config.position}
+              includeCenter
               disabled={disabledControls}
               ariaLabel={t('watermark.position')}
               onChange={(position) => {

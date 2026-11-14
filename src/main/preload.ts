@@ -1,4 +1,4 @@
-import type { ElectronAPI } from '../shared/electronApi';
+import type { ElectronAPI, RemoteSearchResultsPayload } from '../shared/electronApi';
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
 import { PerfBuffer, estimatePayloadBytes, defaultPerfEnabled } from '../shared/perf';
 import type { SttConfig } from '../shared/stt';
@@ -15,7 +15,7 @@ type AnyFn = (...args: any[]) => any;
 type PerfMethods = Pick<ElectronAPI, 'getPerfSnapshot' | 'getPreloadPerfSnapshot' | 'resetPerf'>;
 
 /** Promise döndürmeyen, `send` ile çalışan sık/ateşle-unut çağrılar: ölçülmez, sarılmaz. */
-const FIRE_AND_FORGET: ReadonlySet<string> = new Set(['sttSendAudio', 'sharePublish', 'screenShareFrame', 'notifyProjectorReady']);
+const FIRE_AND_FORGET: ReadonlySet<string> = new Set(['sttSendAudio', 'sharePublish', 'screenShareFrame', 'notifyProjectorReady', 'programAudioPcm']);
 /** Abonelik fonksiyonları (`onXxx`) bir iptal fonksiyonu döndürür, Promise değil. */
 const IS_SUBSCRIPTION = /^on[A-Z]/;
 const DROPPABLE_IMAGE_RE = /\.(png|jpe?g|gif|webp|bmp)$/i;
@@ -100,6 +100,12 @@ const api = {
   mediaOptimizeVideoFinish: (id: string, ext: string) => ipcRenderer.invoke('media-optimize:video-finish', id, ext),
   mediaOptimizeVideoAbort: (id: string) => ipcRenderer.invoke('media-optimize:video-abort', id),
 
+  // ── Image text translation ──
+  imageTranslate: (ref: string, source: string, target: string, options?: { cachedOnly?: boolean }) => ipcRenderer.invoke('image-translate:run', ref, source, target, options),
+
+  // ── AI image generation ──
+  imageGenerate: (prompt: string, style: string, ratio: string, seed: number) => ipcRenderer.invoke('image-generate:run', prompt, style, ratio, seed),
+
   // ── Practice / tour ──
   onPracticeWorkspaceChanged: subscribe('practice:workspace-changed'),
   controlPracticeGuide: (id: string, step: string, action: string, input: unknown, label: string, destination?: string) =>
@@ -179,10 +185,22 @@ const api = {
       return null; // File olmayan nesne ya da diskte karşılığı olmayan dosya
     }
   },
+  // Any dropped file's disk path; the media library filters by extension itself.
+  getDroppedFilePath: async (file: File) => {
+    try {
+      return webUtils.getPathForFile(file) || null;
+    } catch {
+      return null;
+    }
+  },
+  selectMediaFiles: (type: 'image' | 'video') => ipcRenderer.invoke('select-media-files', type),
   selectMediaFilesAll: () => ipcRenderer.invoke('select-media-files-all'),
   importHymnArchive: (dirPath?: string) => ipcRenderer.invoke('import-hymn-archive', dirPath),
   selectPptxFile: () => ipcRenderer.invoke('select-pptx-file'),
   importPptx: (filePath: string) => ipcRenderer.invoke('import-pptx', filePath),
+  selectPdfFile: () => ipcRenderer.invoke('select-pdf-file'),
+  pdfRead: (filePath: string) => ipcRenderer.invoke('pdf:read', filePath),
+  pdfStorePage: (bytes: Uint8Array, ext: 'jpg' | 'png') => ipcRenderer.invoke('pdf:store-page', bytes, ext),
   googleSlidesStatus: () => ipcRenderer.invoke('google-slides-status'),
   googleSlidesConnect: () => ipcRenderer.invoke('google-slides-connect'),
   googleSlidesCancel: () => ipcRenderer.invoke('google-slides-cancel'),
@@ -230,7 +248,9 @@ const api = {
   updateAllSlidePreviews: (previews: any) => ipcRenderer.invoke('update-all-slide-previews', previews),
   updateSlidePreviewsDelta: (updates: any) => ipcRenderer.invoke('update-slide-previews-delta', updates),
   sendSlidePreview: (dataUrl: string) => ipcRenderer.invoke('send-slide-preview', dataUrl),
-  sendRemoteNotice: (notice: { text: string; tone?: 'ok' | 'error' }) => ipcRenderer.invoke('send-remote-notice', notice),
+  sendRemoteNotice: (notice: { text: string; tone?: 'ok' | 'error' | 'progress' }) => ipcRenderer.invoke('send-remote-notice', notice),
+  sendRemoteSearchResults: (payload: RemoteSearchResultsPayload) => ipcRenderer.invoke('send-remote-search-results', payload),
+  writeClipboardText: (text: string) => ipcRenderer.invoke('write-clipboard-text', text),
 
   // ── App / dialogs ──
   quitApp: () => ipcRenderer.invoke('quit-app'),
@@ -255,6 +275,9 @@ const api = {
   onProjectorReady: subscribe<{ displayId?: string } | undefined>('projector-ready-ack'),
   onDisplaysChanged: subscribe<any[]>('displays-changed'),
   onProjectorOutputStatus: subscribe<any[]>('projector-output-status'),
+  getNdiStatus: () => ipcRenderer.invoke('output:ndi-status'),
+  programAudioPcm: (source: 'video' | 'music', block: Float32Array) => ipcRenderer.send('program-audio:pcm', source, block),
+  onNdiStatus: subscribe<any>('output:ndi-status'),
   onPublicTunnelStatus: subscribe('public-tunnel:status'),
   onRemoteUrlChanged: subscribe<{ url: string }>('remote-url-changed'),
   onPptxImportProgress: subscribe<{ current: number; total: number }>('pptx-import-progress'),

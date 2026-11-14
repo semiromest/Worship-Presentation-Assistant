@@ -11,6 +11,7 @@ import type { Presentation, TransitionType } from '../types';
 import { chooseDefaultOutputDisplay, effectiveOutputSlideIndex, type DisplayMode } from '../../shared/displays';
 import { findLockedSlideIndex } from '../slideLock';
 import { slideTransitionKey } from '../../shared/slideContent';
+import { isVirtualOutputId } from '../../shared/virtualOutputs';
 
 const TRANSITION_MAP: Record<TransitionType, string> = {
   none: 'none',
@@ -96,9 +97,12 @@ export function useProjectorSync() {
         mode: assignment?.mode ?? 'follow',
         slideIndex,
         slideId: presentation.slides[slideIndex]?.id ?? null,
+        // The NDI program mirrors the audience screen, so the main blackout applies to it too.
         isBlackout: displayId === defaultDisplayId
           ? isBlackout
-          : !!assignment?.isBlackout,
+          : isVirtualOutputId(displayId)
+            ? isBlackout || !!assignment?.isBlackout
+            : !!assignment?.isBlackout,
       };
     }
     return frames;

@@ -7,7 +7,7 @@ import AdmZip from 'adm-zip';
 import PptxGenJS from 'pptxgenjs';
 import sharp from 'sharp';
 import { convertPptxToSvg, getWarningEntries, type SlideImage } from 'pptx-glimpse';
-import { embeddedFontPayload, renderPptx, sourceSlideCount, validateSlideImages } from './pptxRender';
+import { renderPptx, sourceSlideCount, validateSlideImages } from './pptxRender';
 import { runPptxImportWorker } from './pptxImportWorkerClient';
 
 async function fixture(custom = false, layout = 'LAYOUT_WIDE', imageBytes?: Buffer): Promise<Buffer> {
@@ -27,16 +27,6 @@ async function fixture(custom = false, layout = 'LAYOUT_WIDE', imageBytes?: Buff
   }
   return await ppt.write({ outputType: 'nodebuffer' }) as Buffer;
 }
-
-test('EOT extraction rejects short, compressed, obfuscated and invalid font payloads', () => {
-  assert.equal(embeddedFontPayload(Buffer.alloc(20)), null);
-  const eot = Buffer.alloc(100);
-  eot.writeUInt16LE(0x504c, 34); eot.writeUInt32LE(12, 4); eot.writeUInt32BE(0x00010000, 88);
-  assert.equal(embeddedFontPayload(eot)?.length, 12);
-  eot.writeUInt32LE(4, 12); assert.equal(embeddedFontPayload(eot), null);
-  eot.writeUInt32LE(0x10000000, 12); assert.equal(embeddedFontPayload(eot), null);
-  eot.writeUInt32LE(0, 12); eot.writeUInt32BE(0x12345678, 88); assert.equal(embeddedFontPayload(eot), null);
-});
 
 test('incomplete, duplicate, invalid and out-of-order conversion results', () => {
   const slide = (n: number): SlideImage => ({ slideNumber: n, width: 1024, height: 576, png: Buffer.from([1]) });

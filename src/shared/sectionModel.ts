@@ -305,7 +305,14 @@ export function moveSectionTo(deck: Presentation, id: string, targetIndex: numbe
   return rebuild(deck, sections, deck.slides);
 }
 
-export function removeSection(deck: Presentation, id: string, targetId?: string, deleteSlides = false): Presentation {
+export function removeSection(
+  deck: Presentation,
+  id: string,
+  targetId?: string,
+  deleteSlides = false,
+  /** Blank slide to leave behind when deleting would empty the whole deck. */
+  fallbackSlide?: Slide
+): Presentation {
   const source = deck.slides.filter((s) => s.sectionId === id);
   if (!deleteSlides && targetId === UNASSIGNED_DESTINATION) {
     return normalizeSections({
@@ -313,7 +320,16 @@ export function removeSection(deck: Presentation, id: string, targetId?: string,
       sections: deck.sections?.map((s) => (s.id === id ? { id, title: '', unassigned: true } : s)),
     });
   }
-  if (deleteSlides && (source.some((s) => s.locked) || source.length === deck.slides.length)) return deck;
+  if (deleteSlides && source.some((s) => s.locked)) return deck;
+  if (deleteSlides && source.length === deck.slides.length) {
+    if (!fallbackSlide) return deck;
+    // rebuild() only keeps section-owned slides, so normalize directly.
+    return normalizeSections({
+      ...deck,
+      sections: (deck.sections ?? []).filter((s) => s.id !== id),
+      slides: [{ ...fallbackSlide, sectionId: undefined, section: undefined }],
+    });
+  }
   if (!deleteSlides && source.length && (targetId === id || !deck.sections?.some((s) => s.id === targetId)))
     return deck;
   // Merging keeps the target's original side of the source in playback order.
