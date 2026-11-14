@@ -25,6 +25,8 @@ interface SlideSettingsPanelProps {
   renderGradient?: (autoStart: boolean) => ReactNode;
   /** Removes the gradient from the slides in scope. */
   onClearGradient?: () => void;
+  /** Open on the gradient designer (the gallery's "create in editor") without generating one yet. */
+  gradientRequested?: boolean;
 }
 
 /**
@@ -37,6 +39,7 @@ export const SlideSettingsPanel = memo(function SlideSettingsPanel({
   slideType,
   renderGradient,
   onClearGradient,
+  gradientRequested = false,
 }: SlideSettingsPanelProps) {
   const { t } = useTranslation();
   const getStr = (key: string, fallback = '') => (styles[key] as string) || fallback;
@@ -49,6 +52,11 @@ export const SlideSettingsPanel = memo(function SlideSettingsPanel({
     setMode(actual);
     setPicked(false);
   }, [actual]);
+  // Declared after the sync above so a request wins on mount; nothing is generated until the user acts.
+  const canGradient = !!renderGradient;
+  useEffect(() => {
+    if (gradientRequested && canGradient) setMode('gradient');
+  }, [gradientRequested, canGradient]);
 
   const bgImage = actual === 'image' ? getStr('backgroundImage') : '';
   const bgImageName = bgImage ? decodeURIComponent(bgImage.split(/[\\/]/).pop() || '') : '';

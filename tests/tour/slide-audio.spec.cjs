@@ -3,7 +3,7 @@ const path=require('node:path'),fs=require('node:fs'),http=require('node:http');
 const {test,_electron:electron,expect}=require('@playwright/test');const root=path.resolve('.');let app,media;
 async function main(){
   const wav=require('./workspace-test-utils.cjs').silentWav();
-  media=http.createServer((_,r)=>{r.writeHead(200,{'Content-Type':'audio/wav','Content-Length':wav.length});r.end(wav);});await new Promise(r=>media.listen(0,'127.0.0.1',r));
+  media=http.createServer((_,r)=>{r.writeHead(200,{'Content-Type':'audio/wav','Content-Length':wav.length,'Access-Control-Allow-Origin':'*'});r.end(wav);});await new Promise(r=>media.listen(0,'127.0.0.1',r));
   await expect.poll(async()=>{try{return(await fetch('http://127.0.0.1:5199')).ok;}catch{return false;}},{timeout:45000}).toBe(true);
   const env={...process.env,VITE_DEV_SERVER_URL:'http://127.0.0.1:5199'};delete env.ELECTRON_RUN_AS_NODE;
   env.WPA_TEST_PROFILE=testInfo.outputPath('profile');

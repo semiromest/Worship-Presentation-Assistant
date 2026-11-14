@@ -166,16 +166,19 @@ test('gradient designer shows moving pixels on a parts-mode hymn canvas without 
   test.setTimeout(90000);
   await seed([hymn(), textSlide('end')]);
   await page.getByTestId('gradient-quick-apply').click();
-  await page.getByRole('button', { name: 'Editörde gradient oluştur', exact: true }).click();
+  await page.getByRole('button', { name: 'Editörde gradyan oluştur', exact: true }).click();
   const editor = page.locator('[aria-labelledby="slide-editor-title"]');
   const designer = editor.getByTestId('gradient-designer');
-  await designer.getByRole('button', { name: 'Aurora', exact: true }).click();
-  await expect(designer.getByRole('button', { name: 'Taslağa uygula · 1 slayt', exact: true })).toBeEnabled({timeout:40000});
+  const motion = designer.getByRole('switch', { name: 'Hareketli', exact: true });
+  await motion.check();
+  await designer.getByRole('group', { name: 'Animasyon', exact: true }).getByRole('button', { name: 'Aurora', exact: true }).click();
+  // The designer applies the settled render to the editor draft by itself.
+  await expect(designer.locator('.gradient-status').filter({ hasText: '1 slayta uygulandı' })).toBeVisible({timeout:40000});
   const canvas = editor.locator('canvas.animated-gradient-background'); await expect(canvas).toHaveCount(1);
   const image = await canvas.evaluate(el => el.toDataURL());
   await expect.poll(() => canvas.evaluate(el => el.toDataURL()), { timeout: 5000 }).not.toBe(image);
   expect(await page.evaluate(() => window.__fixStore.getState().presentation.slides[0].styles.generatedBackground)).toBeUndefined();
-  await designer.getByRole('group', { name: 'Durağan', exact: true }).getByRole('button', { name: 'Akışkan', exact: true }).click(); await expect(canvas).toHaveCount(0);
+  await motion.uncheck(); await expect(canvas).toHaveCount(0);
 });
 
 test('external image file drops before a target and selects the inserted image; empty-space drops append', async ({}, info) => {

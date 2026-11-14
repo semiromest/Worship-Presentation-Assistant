@@ -12,7 +12,7 @@ test('music slides: add silently, live playback, pause, blackout, cancellation, 
   wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
   wav.writeUInt32LE(22050, 24); wav.writeUInt32LE(44100, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34);
   wav.write('data', 36); wav.writeUInt32LE(samples * 2, 40);
-  const server = http.createServer((_, response) => { response.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': wav.length }); response.end(wav); });
+  const server = http.createServer((_, response) => { response.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': wav.length, 'Access-Control-Allow-Origin': '*' }); response.end(wav); });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'wpa-music-slide-'));
   const env = { ...process.env, WPA_TEST_PROFILE: profile, VITE_DEV_SERVER_URL: 'http://127.0.0.1:5199/' };

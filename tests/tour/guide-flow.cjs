@@ -56,7 +56,7 @@ exports.finishRemaining = async function(page, checkResume = false) {
   await anchor('bible-add').click(); await exports.seeResult(page, 'bible-result'); await step('nav-media');
   await navigate('media','media-intro'); await step('media-menu'); await anchor('media-menu').click(); await step('media-import');
   await anchor('media-import').click(); await step('media-add');
-  const sampleImage=page.getByAltText('practice-image.svg');
+  const sampleImage=page.locator('.media-card').filter({ has: page.locator('.media-name', { hasText: 'practice-image.svg' }) }).locator('.media-thumb img');
   await expect.poll(()=>sampleImage.evaluate(element=>element.complete && element.naturalWidth>0)).toBe(true);
   if (checkResume) {
     await page.keyboard.press('Escape'); await page.reload(); await exports.waitForPractice(page,'media-add'); await expect(page.getByTestId('guide-resume')).toBeVisible();

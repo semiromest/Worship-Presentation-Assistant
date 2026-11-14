@@ -13,7 +13,7 @@ async function main() {
   wav.writeUInt32LE(22050, 24); wav.writeUInt32LE(44100, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34);
   wav.write('data', 36); wav.writeUInt32LE(wav.length - 44, 40);
   const local = testInfo.outputPath('music-modal.wav'); fs.writeFileSync(local, wav);
-  media = http.createServer((_, res) => { res.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': wav.length }); res.end(wav); });
+  media = http.createServer((_, res) => { res.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': wav.length, 'Access-Control-Allow-Origin': '*' }); res.end(wav); });
   await new Promise(resolve => media.listen(0, '127.0.0.1', resolve));
   await expect.poll(async () => { try { return (await fetch('http://127.0.0.1:5199')).ok; } catch { return false; } }, {timeout:45000}).toBe(true);
   const env = {...process.env, VITE_DEV_SERVER_URL:'http://127.0.0.1:5199'}; delete env.ELECTRON_RUN_AS_NODE;

@@ -159,7 +159,7 @@ test('control hints open on focus and hover, close on Escape and scroll, and pre
     await page.locator('.slide-search-input').focus();await more.hover();await expect(hint).toBeVisible();
     await page.locator('.design-slide-grid>[data-guide-scroll]').evaluate(el=>el.dispatchEvent(new Event('scroll')));
     await expect(hint).toHaveCount(0);
-    const copy=page.locator('.design-selection-actions button').nth(2);
+    const copy=page.locator('.design-selection-actions').getByRole('button',{name:localeStrings('en').common.duplicateSelected,exact:true});
     await page.keyboard.press('Tab');await copy.focus();await expect(hint).toContainText('Ctrl+D');
     await page.keyboard.press('Escape');
     const less=page.locator('[data-columns-action="decrease"]');

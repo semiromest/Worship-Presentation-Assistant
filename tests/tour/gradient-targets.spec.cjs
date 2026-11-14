@@ -49,6 +49,8 @@ async function seed(page) {
 }
 const slides = (page) => page.evaluate(() => window.__gradientStore.getState().presentation.slides);
 const editor = (page) => page.locator('[aria-labelledby="slide-editor-title"]');
+/** The designer applies settled changes itself; this status confirms the write to the editor draft. */
+const applied = (designer, count = 1) => designer.locator('.gradient-status').filter({ hasText: count + ' slayta uygulandı' });
 async function resize(app, width, height) {
   await app.evaluate(
     ({ BrowserWindow }, { width, height }) => {
@@ -60,7 +62,7 @@ async function resize(app, width, height) {
   );
 }
 
-test('inline gradient preview, persistent library and exact-selection quick apply preserve draft and undo contracts', async ({}, info) => {
+test('inline gradient designer auto-applies to the editor draft, persists a library and quick-applies to the exact selection', async ({}, info) => {
   test.setTimeout(150000);
   let app;
   try {
@@ -71,26 +73,31 @@ test('inline gradient preview, persistent library and exact-selection quick appl
     const before = await slides(page);
     await page.getByTestId('gradient-quick-apply').click();
     await expect(page.getByText('＋ ile görsel/video ekleyin veya seçili slaytın arka planını kaydedin.', { exact: false })).toBeVisible();
-    await page.getByRole('button', { name: 'Editörde gradient oluştur', exact: true }).click();
+    await page.getByRole('button', { name: 'Editörde gradyan oluştur', exact: true }).click();
     const e = editor(page),
-      designer = e.getByTestId('gradient-designer');
+      designer = e.getByTestId('gradient-designer'),
+      save = e.locator('[data-guide-anchor="editor-save"]');
     await expect(designer).toBeVisible();
+    await expect(e.getByRole('radio', { name: 'Gradyan', exact: true })).toHaveAttribute('aria-checked', 'true');
+    // Opening the designer from the gallery writes nothing by itself.
+    await expect(save).toBeDisabled();
     await designer.locator('details.gradient-more > summary').click();
     await designer.getByRole('button', { name: 'Yeniden üret', exact: true }).click();
-    const apply = designer.getByRole('button', { name: 'Taslağa uygula · 1 slayt', exact: true });
-    await expect(apply).toBeEnabled({ timeout: 40000 });
-    await expect(e.getByTestId('editor-canvas-background')).toHaveCSS('background-image', /data:image/);
+    await expect(applied(designer)).toBeVisible({ timeout: 40000 });
+    await expect(e.getByTestId('editor-canvas-background')).toHaveCSS('background-image', /url\(/);
+    // A settled change lands in the editor draft; the presentation waits for the editor's Save.
     expect(await slides(page)).toEqual(before);
-    await expect(e.locator('[data-guide-anchor="editor-save"]')).toBeDisabled();
+    await expect(save).toBeEnabled();
     for (const [w, h] of [
       [1920, 1080],
       [1366, 768],
       [800, 600],
     ]) {
       await resize(app, w, h);
-      await apply.scrollIntoViewIfNeeded();
+      const footer = designer.locator('.gradient-footer');
+      await footer.scrollIntoViewIfNeeded();
       expect(
-        await apply.evaluate((el) => {
+        await footer.evaluate((el) => {
           const r = el.getBoundingClientRect();
           return r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight;
         })
@@ -99,21 +106,29 @@ test('inline gradient preview, persistent library and exact-selection quick appl
       await page.screenshot({ path: info.outputPath('gradient-editor-' + w + '.png'), animations: 'disabled' });
     }
     await resize(app, 1366, 768);
-    await designer.getByRole('button', { name: 'Aurora', exact: true }).click();
-    await expect(apply).toBeEnabled({ timeout: 40000 });
+    await designer.getByRole('switch', { name: 'Hareketli', exact: true }).check();
+    await designer.getByRole('group', { name: 'Animasyon', exact: true }).getByRole('button', { name: 'Aurora', exact: true }).click();
+    await expect(applied(designer)).toBeVisible({ timeout: 40000 });
     await designer.getByRole('button', { name: 'Kütüphaneye kaydet', exact: true }).click();
-    await designer.getByLabel('Gradient adı', { exact: true }).fill('Deneme okyanus');
+    await designer.getByLabel('Gradyan adı', { exact: true }).fill('Deneme okyanus');
     await designer.getByRole('button', { name: 'Tasarımı kaydet', exact: true }).click();
-    await expect(designer.getByText('Gradient kütüphaneye kaydedildi.', { exact: true })).toBeVisible();
+    await expect(designer.getByText('Gradyan kütüphaneye kaydedildi.', { exact: true })).toBeVisible();
     expect(await slides(page)).toEqual(before);
-    await expect(e.locator('[data-guide-anchor="editor-save"]')).toBeDisabled();
-    await apply.click();
-    await expect(e.locator('[data-guide-anchor="editor-save"]')).toBeEnabled();
-    await e.getByRole('button', { name: 'Geri Al (Ctrl+Z)', exact: true }).click();
-    await expect(e.locator('[data-guide-anchor="editor-save"]')).toBeDisabled();
-    await e.getByRole('button', { name: 'İleri Al (Ctrl+Y)', exact: true }).click();
-    await e.locator('[data-guide-anchor="editor-save"]').click();
-    await expect(e.locator('[data-guide-anchor="editor-save"]')).toBeDisabled();
+    // Every auto-applied step is undoable in the editor, and redo brings them back.
+    const undo = e.getByRole('button', { name: 'Geri Al (Ctrl+Z)', exact: true }),
+      redo = e.getByRole('button', { name: 'İleri Al (Ctrl+Y)', exact: true });
+    let undos = 0;
+    while ((await save.isEnabled()) && undos < 5) {
+      await undo.click();
+      undos++;
+      await page.waitForTimeout(100);
+    }
+    await expect(save).toBeDisabled();
+    expect(undos).toBeGreaterThan(0);
+    for (let i = 0; i < undos; i++) await redo.click();
+    await expect(save).toBeEnabled();
+    await save.click();
+    await expect(save).toBeDisabled();
     await page.evaluate(() => window.__gradientStore.getState().setActiveTab('slides'));
     let result = await slides(page);
     expect(result.filter((s) => s.styles?.backgroundImage).map((s) => s.id)).toEqual(['one']);
@@ -172,8 +187,7 @@ test('inline gradient preview, persistent library and exact-selection quick appl
     await e.locator('[data-rail-slide="part1"]').click();
     await e.locator('[data-rail-slide="part2"]').click({ modifiers: ['Control'] });
     await e.getByRole('radio', { name: 'Seçili slaytlar (2)', exact: true }).click();
-    await designer.getByRole('tab', { name: 'Gradientlerim', exact: true }).click();
-    await designer.getByRole('button', { name: 'Deneme okyanus', exact: true }).click();
+    await designer.getByRole('list', { name: 'Kayıtlı gradyanlar', exact: true }).getByRole('button', { name: 'Deneme okyanus', exact: true }).click();
     await e.locator('[data-guide-anchor="editor-save"]').click();
     await expect
       .poll(
@@ -204,7 +218,6 @@ test('inline gradient preview, persistent library and exact-selection quick appl
     await page.evaluate(() => window.__gradientStore.getState().openEditor('one'));
     await editor(page).getByRole('tab', { name: 'Slayt', exact: true }).click();
     const d = editor(page).getByTestId('gradient-designer');
-    await d.getByRole('tab', { name: 'Gradientlerim', exact: true }).click();
     await d.getByRole('button', { name: /Deneme okyanus.*sil|sil.*Deneme okyanus/i }).click();
     expect(await page.evaluate(() => window.electronAPI.listGradientLibrary())).toEqual([]);
     expect(await page.evaluate(async (image) => (await fetch(image)).ok, entry.image)).toBe(true);
@@ -238,12 +251,15 @@ test('late gradient results and generation/save failures cannot mutate a present
       });
     });
     await page.getByTestId('gradient-quick-apply').click();
-    await page.getByRole('button', { name: 'Editörde gradient oluştur', exact: true }).click();
+    await page.getByRole('button', { name: 'Editörde gradyan oluştur', exact: true }).click();
     const e = editor(page),
       d = e.getByTestId('gradient-designer'),
-      apply = d.getByRole('button', { name: 'Taslağa uygula · 1 slayt', exact: true });
+      save = e.locator('[data-guide-anchor="editor-save"]'),
+      regenerate = d.getByRole('button', { name: 'Yeniden üret', exact: true });
     await d.locator('details.gradient-more > summary').click();
     const count = () => app.evaluate(() => global.gradientRequests.length);
+    const saves = () => app.evaluate(() => global.gradientSaves);
+    const background = () => e.getByTestId('editor-canvas-background').evaluate((el) => el.style.backgroundImage);
     const finish = (index) =>
       app.evaluate((_, index) => {
         const r = global.gradientRequests[index];
@@ -256,37 +272,30 @@ test('late gradient results and generation/save failures cannot mutate a present
           hash: 'hash-' + index,
         });
       }, index);
-    await d.getByRole('button', { name: 'Yeniden üret', exact: true }).click();
+    await regenerate.click();
     await expect.poll(count).toBe(1);
-    await finish(0);
-    await expect(apply).toBeEnabled();
-    const previous = await e.getByTestId('editor-canvas-background').evaluate((el) => el.style.backgroundImage);
-    await d.getByRole('button', { name: 'Yeniden üret', exact: true }).click();
+    const previous = await background();
+    await regenerate.click();
     await expect.poll(count).toBe(2);
-    await expect(apply).toBeDisabled();
-    expect(await e.getByTestId('editor-canvas-background').evaluate((el) => el.style.backgroundImage)).toBe(previous);
-    await d.getByRole('button', { name: 'Yeniden üret', exact: true }).click();
-    await expect.poll(count).toBe(3);
+    // A result for a superseded recipe is neither previewed nor saved, even after the settle delay.
+    await finish(0);
+    await page.waitForTimeout(800);
+    expect(await background()).toBe(previous);
+    expect(await saves()).toBe(0);
+    // The current result settles and is saved; a disk failure is reported and writes nothing.
     await finish(1);
-    await expect(apply).toBeDisabled();
-    expect(await e.getByTestId('editor-canvas-background').evaluate((el) => el.style.backgroundImage)).toBe(previous);
-    await finish(2);
-    await expect(apply).toBeEnabled();
-    await apply.click();
     await expect(d.getByRole('alert')).toBeVisible();
-    expect(await app.evaluate(() => global.gradientSaves)).toBe(1);
+    expect(await saves()).toBe(1);
     expect(await slides(page)).toEqual(before);
-    await expect(e.locator('[data-guide-anchor="editor-save"]')).toBeDisabled();
-    await d.getByRole('button', { name: 'Yeniden üret', exact: true }).click();
-    await expect.poll(count).toBe(4);
-    await app.evaluate(() => global.gradientRequests[3].reject(new Error('Test render failure')));
+    await expect(save).toBeDisabled();
+    // A render failure is reported the same way.
+    await regenerate.click();
+    await expect.poll(count).toBe(3);
+    await app.evaluate(() => global.gradientRequests[2].reject(new Error('Test render failure')));
     await expect(d.getByRole('alert')).toBeVisible();
-    await expect(apply).toBeDisabled();
+    expect(await saves()).toBe(1);
     expect(await slides(page)).toEqual(before);
-    await d.getByRole('button', { name: 'Yeniden üret', exact: true }).click();
-    await expect.poll(count).toBe(5);
-    await finish(4);
-    await expect(apply).toBeEnabled();
+    await expect(save).toBeDisabled();
     await app.evaluate(({ ipcMain }) => {
       ipcMain.removeHandler('gradient:save');
       ipcMain.handle(
@@ -297,11 +306,14 @@ test('late gradient results and generation/save failures cannot mutate a present
           })
       );
     });
-    await apply.click();
+    await regenerate.click();
+    await expect.poll(count).toBe(4);
+    await finish(3);
     await expect.poll(() => app.evaluate(() => !!global.gradientPendingSave)).toBe(true);
     await e.locator('[data-rail-slide="three"]').click();
     await app.evaluate(() => global.gradientPendingSave('local-resource://media/delayed.jpg'));
-    await expect(e.locator('[data-guide-anchor="editor-save"]')).toBeDisabled();
+    // Leaving the slide never drops a finished change: it reaches the editor draft, the presentation waits for Save.
+    await expect(save).toBeEnabled();
     expect(await slides(page)).toEqual(before);
   } finally {
     await closeWorkspace(app);
@@ -317,12 +329,16 @@ test('compact gradient panel adapts to content width and preserves colors, motio
     const page = f.page;
     await seed(page);
     await page.getByTestId('gradient-quick-apply').click();
-    await page.getByRole('button', { name: 'Editörde gradient oluştur', exact: true }).click();
+    await page.getByRole('button', { name: 'Editörde gradyan oluştur', exact: true }).click();
     const e = editor(page),
       d = e.getByTestId('gradient-designer'),
       before = await slides(page);
-    const aurora = d.getByRole('button', { name: 'Aurora', exact: true });
-    await expect(d.getByLabel('Animasyon', { exact: true })).toHaveCount(0);
+    const motion = d.getByRole('switch', { name: 'Hareketli', exact: true }),
+      animations = d.getByRole('group', { name: 'Animasyon', exact: true }),
+      looks = d.getByRole('group', { name: 'Stil', exact: true }),
+      aurora = animations.getByRole('button', { name: 'Aurora', exact: true });
+    await expect(animations).toHaveCount(0);
+    await motion.check();
     await aurora.click();
     await d.locator('details.gradient-more > summary').click();
     const speed = d.getByRole('slider', { name: /Hareket hızı/ }),
@@ -334,7 +350,7 @@ test('compact gradient panel adapts to content width and preserves colors, motio
     await page.keyboard.press('End');
     await page.keyboard.press('ArrowLeft');
     const values = [await speed.inputValue(), await amount.inputValue()];
-    await d.getByRole('button', { name: 'Dalgalar', exact: true }).click();
+    await animations.getByRole('button', { name: 'Dalgalar', exact: true }).click();
     await aurora.click();
     await expect(aurora).toHaveAttribute('aria-pressed', 'true');
     await expect(speed).toHaveValue(values[0]);
@@ -347,23 +363,26 @@ test('compact gradient panel adapts to content width and preserves colors, motio
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
       });
+    // A hand-picked color leaves every palette unselected.
     await expect(d.locator('.gradient-palette-chip[aria-pressed=true]')).toHaveCount(0);
-    await expect(d.getByText('Özel renkler', { exact: true })).toBeVisible();
-    await d.getByRole('button', { name: 'Yumuşak', exact: true }).click();
+    await looks.getByRole('button', { name: 'Yumuşak', exact: true }).click();
     await expect(d.locator('input[type=color]').first()).toHaveValue('#123456');
     await aurora.click();
     await expect(speed).toHaveValue(values[0]);
     await expect(amount).toHaveValue(values[1]);
-    await d.getByRole('group', { name: 'Durağan', exact: true }).getByRole('button', { name: 'Akışkan', exact: true }).click();
+    await looks.getByRole('button', { name: 'Akışkan', exact: true }).click();
     await expect(d.locator('input[type=color]').first()).toHaveValue('#123456');
     await d.getByRole('button', { name: 'Okyanus', exact: true }).click();
     await expect(d.getByRole('button', { name: 'Okyanus', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(d.locator('input[type=color]').first()).toHaveValue('#071b38');
-    await d.getByRole('button', { name: 'Düz geçiş', exact: true }).click();
+    // Two-color styles have no motion; switching back restores the four-color field.
+    await looks.getByRole('button', { name: 'Düz geçiş', exact: true }).click();
     await expect(d.locator('input[type=color]')).toHaveCount(2);
+    await expect(motion).toHaveCount(0);
     await expect(d.getByRole('slider', { name: /Koyuluk/ })).toHaveValue('0');
-    await d.getByRole('group', { name: 'Durağan', exact: true }).getByRole('button', { name: 'Akışkan', exact: true }).click();
+    await looks.getByRole('button', { name: 'Akışkan', exact: true }).click();
     await expect(d.locator('input[type=color]')).toHaveCount(4);
+    await motion.check();
     await aurora.click();
     for (const lang of ['tr', 'en', 'de', 'es', 'ko']) {
       await page.evaluate((lang) => window.__tourTest.language(lang), lang);
@@ -389,7 +408,8 @@ test('compact gradient panel adapts to content width and preserves colors, motio
         expect(layout.palettes, lang + ' ' + width).toBe('flex');
         expect(layout.colors, lang + ' ' + width).toBe(4);
         expect(layout.overflow, lang + ' ' + width).toBe(false);
-        expect(layout.controls.every((height) => height >= 36)).toBe(true);
+        // The compact designer uses 28px color swatches.
+        expect(layout.controls.every((height) => height >= 28)).toBe(true);
       }
     }
     await d.evaluate((node) => {
@@ -428,8 +448,8 @@ test('compact gradient panel adapts to content width and preserves colors, motio
           };
         })
       ).toEqual({ visible: true });
-    const apply = d.getByRole('button', { name: 'Taslağa uygula · 1 slayt', exact: true });
-    await expect(apply).toBeEnabled({ timeout: 40000 });
+    await expect(applied(d)).toBeVisible({ timeout: 40000 });
+    const saveToLibrary = d.getByRole('button', { name: 'Kütüphaneye kaydet', exact: true });
     for (const [width, height] of [
       [1920, 1080],
       [1366, 768],
@@ -444,27 +464,27 @@ test('compact gradient panel adapts to content width and preserves colors, motio
         await expect.poll(() => page.evaluate(() => innerWidth)).toBeCloseTo(width / zoom, 0);
         if ((await e.locator('#editor-inspector').getAttribute('aria-hidden')) === 'true')
           await e.getByRole('button', { name: 'Editör panelleri', exact: true }).click();
-        await d.locator('.gradient-looks').nth(1).scrollIntoViewIfNeeded();
+        await d.locator('.gradient-colors').scrollIntoViewIfNeeded();
         await capture('compact-gradient-colors-' + width + '-' + zoom + '.png');
-        await apply.scrollIntoViewIfNeeded();
-        await within(apply);
+        await saveToLibrary.scrollIntoViewIfNeeded();
+        await within(saveToLibrary);
         expect(await d.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
-        await d.getByRole('button', { name: 'Kütüphaneye kaydet', exact: true }).click();
-        const name = d.getByLabel('Gradient adı', { exact: true });
+        await saveToLibrary.click();
+        const name = d.getByLabel('Gradyan adı', { exact: true });
         await expect(name).toBeVisible();
         await name.fill('Yerleşim denemesi');
         const confirm = d.getByRole('button', { name: 'Tasarımı kaydet', exact: true });
         await confirm.scrollIntoViewIfNeeded();
         await within(confirm);
         await capture('compact-gradient-' + width + '-' + zoom + '.png');
-        await d.getByRole('button', { name: 'Kütüphaneye kaydet', exact: true }).click();
+        await saveToLibrary.click();
       }
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(1));
     await resize(app, 800, 600);
-    await apply.click();
     await expect(e.locator('[data-guide-anchor=editor-save]')).toBeEnabled();
     expect(await slides(page)).toEqual(before);
-    const clear = d.getByRole('button', { name: 'Gradyanı kaldır', exact: true });
+    // The background type switch removes the gradient and stays reachable by keyboard.
+    const clear = e.getByRole('radio', { name: 'Renk', exact: true });
     await clear.scrollIntoViewIfNeeded();
     await clear.focus();
     await expect(clear).toBeFocused();
@@ -472,7 +492,8 @@ test('compact gradient panel adapts to content width and preserves colors, motio
     await page.keyboard.press('Shift+Tab');
     await expect(clear).toBeFocused();
     await clear.click();
-    await d.getByRole('button', { name: 'Yumuşak', exact: true }).focus();
+    await expect(d).toHaveCount(0);
+    await clear.focus();
     await page.keyboard.press('Escape');
     await expect(e.locator('#editor-inspector')).toHaveAttribute('aria-hidden', 'true');
   } finally {

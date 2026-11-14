@@ -180,8 +180,15 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
   const [pasteMenu, setPasteMenu] = useState<PasteMenuContext | null>(null);
   const shortcutsEnabled = active && !showTemplates && !pasteMenu && !confirming && !cropTarget;
   const [scope, setScope] = useState<EditScope>('active');
+  // Slide whose background panel should open on the gradient designer; moving to another slide clears it.
+  const [gradientRequestSlide, setGradientRequestSlide] = useState<string | null>(null);
   useEffect(() => {
-    if (active && activeSlide && consumeGradientEditorRequest(activeSlide.id)) { setTab('slide'); setInspectorOpen(true); }
+    if (active && activeSlide && consumeGradientEditorRequest(activeSlide.id)) {
+      setTab('slide'); setInspectorOpen(true); setGradientRequestSlide(activeSlide.id);
+    } else {
+      // Keep it for a re-run on the same slide (StrictMode runs effects twice); drop it on another slide.
+      setGradientRequestSlide((requested) => (requested === activeSlide?.id ? requested : null));
+    }
   }, [active, activeSlide?.id]);
   useEffect(() => { if (gradientOnly) setTab('slide'); }, [gradientOnly]);
   const [railCollapsed, setRailCollapsed] = useState(() => {
@@ -1536,6 +1543,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
                       slideType={activeSlide.type}
                       renderGradient={activeSlide.type === 'text' || activeSlide.type === 'image' ? (autoStart) => renderGradient(autoStart, false) : undefined}
                       onClearGradient={clearGradient}
+                      gradientRequested={gradientRequestSlide === activeSlide.id}
                     />
                   )}
                 </>
