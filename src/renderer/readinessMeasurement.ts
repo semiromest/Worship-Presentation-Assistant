@@ -1,12 +1,11 @@
 import type { Slide, SlideItem } from './types';
 import type { ReadinessIssue } from '../shared/readiness';
 import { getSlideDisplayContent } from '../shared/slideContent';
+import { textItemInsets } from '../shared/canvasLayout';
 
 /** Reference stage size; must match the geometry LivePreview renders at. */
 const STAGE_WIDTH = 1920;
 const STAGE_HEIGHT = 1080;
-/** Padding LivePreview applies around a text item's content (8px per side). */
-const ITEM_PADDING = 16;
 /** Sub-pixel tolerance: scroll metrics are rounded to integers. */
 const TOLERANCE = 1;
 const PREVIEW_LENGTH = 40;
@@ -103,10 +102,11 @@ export function measureSlideReadability(slide: Slide): ReadinessIssue[] {
       if (item.type === 'text') {
         const style = item.textStyles;
         const content = item.content ?? '';
+        const inset = textItemInsets(style?.insetPercent, width, height);
         queue(
           content,
-          width - ITEM_PADDING,
-          height - ITEM_PADDING,
+          width - 2 * inset.horizontal,
+          height - 2 * inset.vertical,
           {
             fontSize: `${style?.fontSize || 32}px`,
             fontFamily: style?.fontFamily || 'inherit',

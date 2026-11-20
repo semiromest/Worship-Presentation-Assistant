@@ -68,8 +68,6 @@ export interface AppState {
   autoGoLive: boolean;
   setAutoGoLive: (auto: boolean) => void;
 
-  operatorNotesEnabled: boolean;
-  setOperatorNotesEnabled: (enabled: boolean) => void;
 
   // Optional "Next slide" preview + one-click advance under the live preview (off by default)
   nextSlidePreviewEnabled: boolean;

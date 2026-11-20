@@ -281,64 +281,69 @@ export function duplicateItems(items: SlideItem[], ids: Set<string>): SlideItem[
 // ─── Slide seed converter ─────────────────────────────────────────────────────
 
 export function convertSlideToItems(slide: Slide): SlideItem[] {
-  const items = normalizeItems(slide.items || []);
+  // An explicit layer stack already replaces the legacy content in the preview.
+  if (slide.items?.length) return normalizeItems(slide.items);
+  const slideStyles = slide.styles;
 
-  const baseMediaUrl = slide.mediaUrl;
-
-  const hasTextSeed = slide.type === 'text' && items.some((item) => item.type === 'text');
-
-  const hasMediaSeed = !!baseMediaUrl && items.some((item) => item.mediaUrl === baseMediaUrl);
-
-  if (slide.type === 'text' && slide.content && !hasTextSeed) {
-    const slideStyles = slide.styles as Record<string, unknown> | undefined;
-    items.push(
+  if (slide.type === 'text' && slide.content) {
+    return [
       normalizeItem({
         id: makeItemId(),
         type: 'text',
         content: slide.content,
-        // A legacy text slide represents full-slide content, not a caption.
-        // Leave comfortable margins while giving multiline verses room to wrap.
-        x: 8,
-        y: 10,
-        width: 84,
-        height: 80,
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 100,
         zIndex: 0,
         textStyles: {
-          fontSize: (slideStyles?.fontSize as number) ?? 48,
-          textColor: (slideStyles?.textColor as string) ?? '#ffffff',
-          textHighlight: (slideStyles?.textHighlight as string) ?? 'transparent',
+          // Keep the legacy 5% text margin inside the full-slide frame.
+          insetPercent: 5,
+          fontSize: slideStyles?.fontSize || 48,
+          textColor: slideStyles?.textColor ?? '#ffffff',
+          textHighlight: slideStyles?.textHighlight ?? 'transparent',
           textAlign: (slideStyles?.textAlign as TextStyle['textAlign']) ?? 'center',
+          verticalAlign: (slideStyles?.verticalAlign as TextStyle['verticalAlign']) ?? 'center',
           fontWeight: (slideStyles?.fontWeight as TextStyle['fontWeight']) ?? 'bold',
           fontStyle: (slideStyles?.fontStyle as TextStyle['fontStyle']) ?? 'normal',
-          lineHeight: (slideStyles?.lineHeight as number) ?? 1.3,
-          letterSpacing: (slideStyles?.letterSpacing as number) ?? 0,
-          textDecoration: (slideStyles?.textDecoration as string) ?? '',
-          fontFamily: slideStyles?.fontFamily as string | undefined,
+          lineHeight: slideStyles?.lineHeight ?? 1.3,
+          letterSpacing: slideStyles?.letterSpacing ?? 0,
+          textDecoration: slideStyles?.textDecoration ?? '',
+          textTransform: slideStyles?.textTransform,
+          fontFamily: slideStyles?.fontFamily,
         },
         styles: undefined,
-      })
-    );
+      }),
+    ];
   }
 
-  if (slide.type === 'image' && baseMediaUrl && !hasMediaSeed) {
-    items.push(
+  if (slide.type === 'image' && slide.mediaUrl) {
+    return [
       normalizeItem({
         id: makeItemId(),
         type: 'image',
-        mediaUrl: baseMediaUrl,
-        x: 5,
-        y: 5,
-        width: 90,
-        height: 90,
+        mediaUrl: slide.mediaUrl,
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 100,
         zIndex: 0,
         imageStyles: {
           ...DEFAULT_IMAGE_STYLE,
-          objectFit: ((slide.styles as Record<string, unknown>)?.objectFit as ImageStyle['objectFit']) || 'contain',
+          objectFit: slideStyles?.objectFit ?? 'contain',
+          opacity: slideStyles?.opacity ?? 1,
+          brightness: slideStyles?.imageBrightness ?? 1,
+          contrast: slideStyles?.imageContrast ?? 1,
+          grayscale: slideStyles?.imageGrayscale ?? 0,
+          sepia: slideStyles?.imageSepia ?? 0,
+          blur: slideStyles?.imageBlur ?? 0,
+          flipX: slideStyles?.imageFlipX,
+          flipY: slideStyles?.imageFlipY,
         },
         styles: undefined,
-      })
-    );
+      }),
+    ];
   }
 
-  return normalizeItems(items);
+  return [];
 }

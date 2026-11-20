@@ -46,7 +46,6 @@ import {
   Play,
   ListPlus,
   CircleCheck,
-  Sparkles,
 } from 'lucide-react';
 import type { LoopItem, MediaItem, MediaKind } from './types';
 import { LOOP_DEFAULT_DURATION } from './constants';
@@ -75,7 +74,6 @@ import {
   type MediaViewPrefs,
 } from './mediaLibraryModel';
 import './media-library.css';
-import { ImageGenerateDialog } from './components/ImageGenerateDialog';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -1116,8 +1114,6 @@ export default function MediaLoopTab({
 
   // ── Toast ──
   const [toast, setToast] = useState<string | null>(null);
-  const [aiOpen, setAiOpen] = useState(false);
-  const canGenerateImage = typeof window !== 'undefined' && !!window.electronAPI?.imageGenerate;
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(null), 2600);
@@ -1609,17 +1605,6 @@ export default function MediaLoopTab({
           <div className="media-head-actions">
             {activeSub === 'media' ? (
               <>
-              {canGenerateImage && (
-                <button
-                  type="button"
-                  className="media-tool media-outline media-ai"
-                  onClick={() => { setAiOpen(true); playSfx('open'); }}
-                  title={t('common.imageGenerateTitle')}
-                >
-                  <Sparkles size={15} aria-hidden="true" />
-                  {t('common.imageGenerateShort')}
-                </button>
-              )}
               <Menu.Root
                 modal={false}
                 open={menuOpen}
@@ -2058,19 +2043,6 @@ export default function MediaLoopTab({
             </>
           )}
         </div>
-      )}
-
-      {aiOpen && (
-        <ImageGenerateDialog
-          onClose={() => setAiOpen(false)}
-          onAddToMedia={(file) => {
-            void addMediaPaths([file]).then(() => setToast(t('common.imageGenerateAddedToMedia')));
-          }}
-          onAddAsSlide={(file) => {
-            onAddMediaToPresentation('image', file);
-            playSfx('complete');
-          }}
-        />
       )}
 
       {dropActive && (

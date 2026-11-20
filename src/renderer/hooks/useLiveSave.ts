@@ -5,11 +5,12 @@ import { shallow } from 'zustand/shallow';
 import { useStore } from '../state/useStore';
 import { IS_PROJECTOR_MODE } from '../constants';
 import type { Presentation } from '../types';
+import { DEFAULT_LIVE_SAVE_RETENTION_MS } from '../../shared/presetRetention';
+export { DEFAULT_LIVE_SAVE_RETENTION_MS } from '../../shared/presetRetention';
 
 export const LIVE_SAVE_PRESET_PREFIX = '__live_autosave_';
 export const LIVE_SAVE_PRESET_SUFFIX = '__';
-export const DEFAULT_LIVE_SAVE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
-export const LIVE_SAVE_RETENTION_OPTIONS = [0, 24 * 60 * 60 * 1000, 7 * 24 * 60 * 60 * 1000, 30 * 24 * 60 * 60 * 1000];
+export const LIVE_SAVE_RETENTION_OPTIONS = [0, 24 * 60 * 60 * 1000, DEFAULT_LIVE_SAVE_RETENTION_MS, 30 * 24 * 60 * 60 * 1000];
 
 const DEBOUNCE_MS = 400;
 const INTERVAL_MS = 30_000;

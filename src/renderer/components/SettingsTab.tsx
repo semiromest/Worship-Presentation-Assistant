@@ -5,6 +5,7 @@ import RemoteAutoStartSetting from './RemoteAutoStartSetting';
 import WebFullscreenSetting from './WebFullscreenSetting';
 import ControlTooltip from './ControlTooltip';
 import { useUiMotionEnabled } from '../hooks/useUiMotionEnabled';
+import { useStageNextSlideEnabled, useStageNotesEnabled, writeStageNextSlideEnabled, writeStageNotesEnabled } from '../stageDisplayPreferences';
 import { uiMotion } from '../uiMotion';
 import * as m from 'motion/react-m';
 import { playSfx } from '../sfx';
@@ -100,8 +101,8 @@ export default function SettingsTab() {
 
   const sectionsEnabled = useStore(s => s.serviceSectionsEnabled);
   const setSectionsEnabled = useStore(s => s.setServiceSectionsEnabled);
-  const operatorNotesEnabled = useStore((s) => s.operatorNotesEnabled);
-  const setOperatorNotesEnabled = useStore((s) => s.setOperatorNotesEnabled);
+  const stageNotesEnabled = useStageNotesEnabled();
+  const stageNextSlideEnabled = useStageNextSlideEnabled();
   const nextSlidePreviewEnabled = useStore((s) => s.nextSlidePreviewEnabled);
   const setNextSlidePreviewEnabled = useStore((s) => s.setNextSlidePreviewEnabled);
   const autoGoLive = useStore((s) => s.autoGoLive);
@@ -277,12 +278,20 @@ export default function SettingsTab() {
           <SettingSwitch checked={sectionsEnabled} onCheckedChange={setSectionsEnabled} label={t('sections.title')} />
         </section>
 
-        <section id="settings-item-notes" tabIndex={-1} className="settings-simple-card rounded-xl border border-white/10 bg-surface-raised p-4 settings-row flex items-center justify-between gap-4" aria-label={t('common.operatorNotes')}>
+        <section id="settings-item-notes" tabIndex={-1} className="settings-simple-card rounded-xl border border-white/10 bg-surface-raised p-4 settings-row flex items-center justify-between gap-4" aria-label={t('common.stageNotes')}>
           <div>
-            <h3 className="text-sm font-semibold">{t('common.operatorNotes')}</h3>
-            <p className="text-sm leading-relaxed text-white/60">{t('settings.operatorNotesDesc')}</p>
+            <h3 className="text-sm font-semibold">{t('common.stageNotes')}</h3>
+            <p className="text-sm leading-relaxed text-white/60">{t('settings.stageNotesDesc')}</p>
           </div>
-          <SettingSwitch checked={operatorNotesEnabled} onCheckedChange={setOperatorNotesEnabled} label={t('common.operatorNotes')} />
+          <SettingSwitch checked={stageNotesEnabled} onCheckedChange={writeStageNotesEnabled} label={t('common.stageNotes')} />
+        </section>
+
+        <section id="settings-item-stage-next-slide" tabIndex={-1} className="settings-simple-card rounded-xl border border-white/10 bg-surface-raised p-4 settings-row flex items-center justify-between gap-4" aria-label={t('settings.stageNextSlide')}>
+          <div>
+            <h3 className="text-sm font-semibold">{t('settings.stageNextSlide')}</h3>
+            <p className="text-sm leading-relaxed text-white/60">{t('settings.stageNextSlideDesc')}</p>
+          </div>
+          <SettingSwitch checked={stageNextSlideEnabled} onCheckedChange={writeStageNextSlideEnabled} label={t('settings.stageNextSlide')} />
         </section>
 
         <section id="settings-item-next-slide" tabIndex={-1} className="settings-simple-card rounded-xl border border-white/10 bg-surface-raised p-4 settings-row flex items-center justify-between gap-4" aria-label={t('common.upcomingSlide')}>

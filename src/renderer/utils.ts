@@ -1,4 +1,4 @@
-import { calculateFit, calculateCover, wrapCanvasText, canvasTypography, canvasLinePlacement } from '../shared/canvasLayout';
+import { calculateFit, calculateCover, wrapCanvasText, canvasTypography, canvasLinePlacement, textItemInsets } from '../shared/canvasLayout';
 import { hymnCreditFontSize, formatHymnCredit, readHymnAuthorPosition, readHymnAuthorSize } from './hymnAuthorSettings';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -629,7 +629,7 @@ async function renderItemsSlide(
       const ts = (item.textStyles ?? {}) as Record<string, any>;
       const fontSize = Math.max(4 / outScale, (ts.fontSize || 32) * baseScale);
       const lineHeight = (ts.lineHeight ?? 1.25) * fontSize;
-      const padding = 8 * baseScale;
+      const inset = textItemInsets(ts.insetPercent, iw, ih, 8 * baseScale);
       const align = ts.textAlign || 'center';
       const ff = ts.fontFamily ? ts.fontFamily.split(',')[0].trim() : 'sans-serif';
 
@@ -645,12 +645,14 @@ async function renderItemsSlide(
       else if (align === 'right') ctx.textAlign = 'right';
       else ctx.textAlign = 'center';
 
-      const maxWidth = iw - padding * 2;
+      const maxWidth = iw - inset.horizontal * 2;
       const lines = wrapCanvasText(ctx, text, maxWidth);
       if (lines.length > 0) {
         const totalH = lines.length * lineHeight;
-        const startY = y + (ih - totalH) / 2;
-        const tx = align === 'center' ? x + iw / 2 : align === 'right' ? x + iw - padding : x + padding;
+        const startY = ts.verticalAlign === 'top' ? y + inset.vertical
+          : ts.verticalAlign === 'bottom' ? y + ih - inset.vertical - totalH
+          : y + (ih - totalH) / 2;
+        const tx = align === 'center' ? x + iw / 2 : align === 'right' ? x + iw - inset.horizontal : x + inset.horizontal;
         const leading = (lineHeight - fontSize) / 2;
 
         if (ts.textShadow) {

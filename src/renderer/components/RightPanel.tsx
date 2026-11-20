@@ -6,6 +6,7 @@ import { SlideSelectionStatus, SlidePositionLabels } from './OutputStatus';
 import BroadcastControls from './BroadcastControls';
 import NextSlidePreview from './NextSlidePreview';
 import SlideChordControl from './SlideChordControl';
+import { useStageNotesEnabled } from '../stageDisplayPreferences';
 import { canAttachSlideMusic } from '../../shared/youtubeMusic';
 import { isEditorEditableSlide } from '../editor/slideCapabilities';
 import { useEffect, useRef } from 'react';
@@ -80,7 +81,7 @@ export default function RightPanel({
   const toggleSlideLock = useStore((s) => s.toggleSlideLock);
   const searchQuery = useStore((s) => s.searchQuery);
   const setSearchQuery = useStore((s) => s.setSearchQuery);
-  const operatorNotesEnabled = useStore((s) => s.operatorNotesEnabled);
+  const stageNotesEnabled = useStageNotesEnabled();
   const nextSlidePreviewEnabled = useStore((s) => s.nextSlidePreviewEnabled);
   const sectionFilterId = useStore(s => s.sectionFilterId);
   const sectionsEnabled = useStore(s => s.serviceSectionsEnabled);
@@ -336,26 +337,25 @@ export default function RightPanel({
             )}
           </div>
         </div>
-        {selectedSlide?.chords?.parts?.length ? <SlideChordControl slide={selectedSlide} /> : null}
-        {operatorNotesEnabled && selectedSlide && (
-          <div className="m-4 rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
+        {stageNotesEnabled && selectedSlide && (
+          <section className="m-4 rounded-xl border border-white/10 bg-white/5 p-3 space-y-2" aria-label={t('common.stageNotes')}>
             <label
               htmlFor="operator-notes"
               className="block text-[11px] font-bold text-white/55"
             >
-              {t('common.operatorNotes')}
+              {t('common.stageNotes')}
             </label>
+            {!!selectedSlide.chords?.parts?.length && <SlideChordControl slide={selectedSlide} />}
             <textarea
               id="operator-notes"
               value={selectedSlide.operatorNotes ?? ''}
               onChange={(e) => updateSlideProperty(selectedSlide.id, { operatorNotes: e.target.value })}
-              placeholder={t('common.operatorNotesPlaceholder')}
+              placeholder={t('common.stageNotesPlaceholder')}
               rows={2}
               className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white/80 resize-y focus-visible:border-blue-500/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500/30 transition-colors"
             />
-          </div>
-
-            )}
+          </section>
+        )}
       </div>
       </div>
       </div>

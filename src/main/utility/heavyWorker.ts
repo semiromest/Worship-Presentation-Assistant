@@ -19,7 +19,7 @@ import { readGpres } from '../gpresReader';
 import { createCanvas, loadImage, GlobalFonts, type Image, type SKRSContext2D } from '@napi-rs/canvas';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { calculateFit, calculateCover, wrapCanvasText, canvasTypography, canvasLinePlacement } from '../../shared/canvasLayout';
+import { calculateFit, calculateCover, wrapCanvasText, canvasTypography, canvasLinePlacement, textItemInsets } from '../../shared/canvasLayout';
 import { getPptxService } from '../pptxService';
 import { exportPresentationToPptx } from '../pptxExportService';
 import { writeGpresFile } from '../gpresWriter';
@@ -291,7 +291,7 @@ function drawItemText(ctx: Ctx, item: ThumbItem, x: number, y: number, iw: numbe
   const ts = (item.textStyles ?? {}) as Record<string, any>;
   const fontSize = Math.max(4, (ts.fontSize || 32) * baseScale);
   const lineHeight = (ts.lineHeight ?? 1.25) * fontSize;
-  const padding = 8 * baseScale;
+  const inset = textItemInsets(ts.insetPercent, iw, ih, 8 * baseScale);
   const align = ts.textAlign === 'left' || ts.textAlign === 'right' ? ts.textAlign : 'center';
   const family = ts.fontFamily ? ts.fontFamily.split(',')[0].trim() : 'sans-serif';
 
@@ -300,11 +300,14 @@ function drawItemText(ctx: Ctx, item: ThumbItem, x: number, y: number, iw: numbe
   ctx.textBaseline = 'top';
   ctx.textAlign = align;
 
-  const lines = wrapCanvasText(ctx, applyTextTransform(item.content ?? '', ts.textTransform), iw - padding * 2);
+  const lines = wrapCanvasText(ctx, applyTextTransform(item.content ?? '', ts.textTransform), iw - inset.horizontal * 2);
   if (lines.length === 0) return false;
 
-  const startY = y + (ih - lines.length * lineHeight) / 2;
-  const tx = align === 'center' ? x + iw / 2 : align === 'right' ? x + iw - padding : x + padding;
+  const textHeight = lines.length * lineHeight;
+  const startY = ts.verticalAlign === 'top' ? y + inset.vertical
+    : ts.verticalAlign === 'bottom' ? y + ih - inset.vertical - textHeight
+    : y + (ih - textHeight) / 2;
+  const tx = align === 'center' ? x + iw / 2 : align === 'right' ? x + iw - inset.horizontal : x + inset.horizontal;
   const leading = (lineHeight - fontSize) / 2;
   for (let i = 0; i < lines.length; i++) {
     const ly = startY + i * lineHeight + leading;

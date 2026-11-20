@@ -1,0 +1,208 @@
+.screen-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: auto;
+  background: var(--bg-base);
+  color: var(--text-primary);
+}
+
+.screen-page-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-normal);
+  background: var(--bg-surface);
+}
+
+.screen-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.screen-panel {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  background: var(--bg-surface);
+}
+
+.screen-panel-header {
+  display: flex;
+  min-height: 44px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.screen-panel-header .workspace-secondary-action {
+  min-height: 30px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+.screen-source-list {
+  display: flex;
+  max-height: 176px;
+  flex-direction: column;
+  gap: 4px;
+  overflow: auto;
+  padding: 6px;
+}
+
+.screen-source-card {
+  display: grid;
+  flex: none;
+  grid-template-columns: 60px minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 7px;
+  padding: 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  text-align: start;
+}
+
+.screen-source-card:hover { background: var(--bg-overlay); }
+.screen-source-card[aria-pressed='true'] {
+  border-color: var(--accent-border);
+  background: var(--accent-dim);
+}
+.screen-source-card:focus-visible { outline: 2px solid #93c5fd; outline-offset: -2px; }
+.screen-source-check { color: #bfdbfe; }
+
+.screen-source-thumb {
+  position: relative;
+  display: grid;
+  aspect-ratio: 16 / 9;
+  place-items: center;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  color: var(--text-secondary);
+}
+
+.screen-source-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.screen-source-message {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 16px 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
+  white-space: pre-line;
+}
+.screen-source-message[role='alert'] { color: #fca5a5; }
+
+.screen-preview-panel { background: var(--bg-base); }
+.screen-preview-panel .screen-panel-header { background: var(--bg-surface); }
+
+.screen-preview-heading {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+}
+
+.screen-selected-source {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.screen-status-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+.screen-status-dot[data-active] { background: #4ade80; }
+
+.screen-stage {
+  position: relative;
+  display: grid;
+  min-height: 180px;
+  flex: 1;
+  aspect-ratio: 16 / 9;
+  place-items: center;
+  overflow: hidden;
+  margin: 8px;
+  border: 1px solid var(--border-normal);
+  border-radius: var(--radius-sm);
+  background: #09090b;
+}
+
+.screen-stage video,
+.screen-stage-thumbnail {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.screen-stage video { background: #09090b; }
+.screen-stage video[hidden] { display: none; }
+.screen-stage-thumbnail { opacity: 0.32; }
+
+.screen-stage-message {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  margin: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: rgb(9 9 11 / 88%);
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.screen-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.screen-preview-actions [data-stopping] { color: #fca5a5; }
+.screen-preview-actions [data-stopping]:hover:not(:disabled) { color: #fee2e2; }
+
+@media (min-width: 900px) {
+  .screen-layout {
+    flex: 1 0 auto;
+    grid-template-columns: clamp(220px, 23%, 280px) minmax(0, 1fr);
+  }
+  .screen-source-list {
+    max-height: none;
+    flex: 1;
+    contain: size;
+  }
+  .screen-stage {
+    aspect-ratio: auto;
+  }
+  .screen-panel:first-child { border-right: 1px solid var(--border-normal); }
+}
+
+@media (max-width: 899px) {
+  .screen-panel:first-child { border-bottom: 1px solid var(--border-normal); }
+}

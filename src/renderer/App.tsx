@@ -562,8 +562,16 @@ function EditorConnection({ active }: { active: boolean }) {
     current.setActiveTab('slides');
   }, []);
   const close = useCallback(() => setActiveTab('slides'), [setActiveTab]);
+  const discard = useCallback(() => {
+    useStore.setState((state) => ({
+      activeTab: 'slides',
+      editorDirty: false,
+      editorSessionVersion: state.editorSessionVersion + 1,
+      editorTargetId: null,
+    }));
+  }, []);
   return <SlideEditor key={editorSessionVersion} active={active} slide={selectedSlide} deck={presentation}
-    onSave={save} onOpenInSlides={openInSlides} onClose={close} />;
+    onSave={save} onOpenInSlides={openInSlides} onClose={close} onDiscard={discard} />;
 }
 
 function CaptionsDock({ operations, commands }: { operations: Operations; commands: AppCommands }) {

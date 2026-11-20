@@ -134,6 +134,7 @@ test('a frame view into a larger buffer is sliced, and an undetachable buffer is
   sender.pushBitmap(pool.subarray(16, 32), 2, 2);
   assert.equal(workers[0].messages[1].data.byteLength, 16, 'only the frame bytes are sent');
   assert.equal(pool.buffer.byteLength, 64, 'the shared pool is not detached');
+  workers[0].emit('message', { type: 'frame-accepted' });
   let attempts = 0;
   workers[0].postMessage = function (message: any, transfer?: unknown[]) {
     attempts++;
@@ -144,4 +145,72 @@ test('a frame view into a larger buffer is sliced, and an undetachable buffer is
   assert.equal(attempts, 2);
   assert.equal(workers[0].messages.at(-1).type, 'frame');
   assert.equal(workers[0].messages.at(-1).data.byteLength, 16);
+});
+
+test('a stalled worker retains only the newest paint and defers bitmap readback', () => {
+  const { sender, workers } = setup();
+  sender.start();
+  const worker = workers[0];
+  worker.emit('message', { type: 'started', sourceName: 'x', ndiVersion: '6' });
+  let readbacks = 0;
+  const image = (value: number) => ({
+    getSize: () => ({ width: 2, height: 2 }),
+    toBitmap: () => { readbacks++; return Buffer.alloc(16, value); },
+  }) as any;
+  sender.pushImage(image(1));
+  for (let i = 2; i <= 100; i++) sender.pushImage(image(i));
+  assert.equal(readbacks, 1);
+  assert.equal(worker.messages.length, 2, 'only start and one frame cross the mailbox');
+  worker.emit('message', { type: 'frame-accepted' });
+  assert.equal(readbacks, 2);
+  assert.equal(new Uint8Array(worker.messages.at(-1).data)[0], 100);
+  worker.emit('message', { type: 'frame-accepted' });
+  assert.equal(readbacks, 2, 'the final static frame is sent without another paint');
+});
+
+test('restart discards pending old frames and ignores acknowledgements from the old worker', () => {
+  const { sender, workers } = setup();
+  sender.start();
+  workers[0].emit('message', { type: 'started', sourceName: 'x', ndiVersion: '6' });
+  sender.pushBitmap(Buffer.alloc(16, 1), 2, 2);
+  sender.pushBitmap(Buffer.alloc(16, 2), 2, 2);
+  workers[0].emit('exit', 1);
+  workers[1].emit('message', { type: 'started', sourceName: 'x', ndiVersion: '6' });
+  sender.pushBitmap(Buffer.alloc(16, 3), 2, 2);
+  workers[0].emit('message', { type: 'frame-accepted' });
+  sender.pushBitmap(Buffer.alloc(16, 4), 2, 2);
+  assert.equal(workers[1].messages.length, 2);
+  workers[1].emit('message', { type: 'frame-accepted' });
+  assert.equal(new Uint8Array(workers[1].messages.at(-1).data)[0], 4);
+});
+
+test('invalid dimensions and a dead worker cannot throw from a paint callback', () => {
+  const { sender, workers } = setup();
+  sender.start();
+  workers[0].emit('message', { type: 'started', sourceName: 'x', ndiVersion: '6' });
+  for (const [width, height] of [[0, 2], [2, 0], [-2, 2], [NaN, 2], [2, 3], [3, 2]]) {
+    sender.pushBitmap(Buffer.alloc(16), width, height);
+  }
+  assert.equal(workers[0].messages.length, 1);
+  workers[0].postMessage = () => { throw new Error('worker closed'); };
+  assert.doesNotThrow(() => sender.pushBitmap(Buffer.alloc(16), 2, 2));
+  assert.equal(sender.getStatus().error, 'worker closed');
+});
+
+test('worker construction failure is reported and an explicit retry restores availability', () => {
+  const worker = new FakeWorker();
+  let fail = true;
+  const sender = new NdiSender({ name: 'x', fps: 30, onStatus: () => {}, createWorker: () => {
+    if (fail) throw new Error('cannot create worker');
+    return worker as any;
+  } });
+  assert.doesNotThrow(() => sender.start());
+  assert.equal(sender.getStatus().error, 'cannot create worker');
+  fail = false;
+  sender.start();
+  worker.emit('message', { type: 'error', fatal: true, message: 'load failed' });
+  sender.start();
+  worker.emit('message', { type: 'started', sourceName: 'x', ndiVersion: '6' });
+  assert.equal(sender.getStatus().available, true);
+  assert.equal(sender.getStatus().error, null);
 });

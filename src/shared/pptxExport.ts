@@ -14,6 +14,7 @@
 
 import PptxGenJS from 'pptxgenjs';
 import type { Presentation, Slide, SlideItem } from './presentation';
+import { textItemInsets } from './canvasLayout';
 
 // ─── Geometry ──────────────────────────────────────────────────────────────
 
@@ -334,7 +335,7 @@ function addTextItem(
 ): void {
   const ts = (item.textStyles ?? {}) as Record<string, any>;
   const fontSize = Number(ts.fontSize) || 32;
-  const pad = ITEM_PAD;
+  const inset = textItemInsets(ts.insetPercent, box.w, box.h, ITEM_PAD);
   const hasContent = Boolean(item.content?.trim());
   const hasFill = Boolean(ts.backgroundColor);
   const hasBorder = Number(item.borderWidth) > 0;
@@ -366,10 +367,10 @@ function addTextItem(
     | undefined;
 
   pptxSlide.addText(text || ' ', {
-    x: box.x + pad,
-    y: box.y + pad,
-    w: Math.max(0.05, box.w - 2 * pad),
-    h: Math.max(0.05, box.h - 2 * pad),
+    x: box.x + inset.horizontal,
+    y: box.y + inset.vertical,
+    w: Math.max(0.05, box.w - 2 * inset.horizontal),
+    h: Math.max(0.05, box.h - 2 * inset.vertical),
     rotate: box.rotation || undefined,
     align: ts.textAlign || 'center',
     valign: mapVAlign(ts.verticalAlign || 'center'),

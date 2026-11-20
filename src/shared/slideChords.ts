@@ -1,4 +1,5 @@
-import { stripChords, transposeChordPro, transposeKey } from './chords';
+import { hasChords, stripChords, transposeChordPro, transposeKey } from './chords';
+import { cleanLyrics } from './hymnText';
 import { getPartIndex, type PartsSlide } from './slideContent';
 
 export interface SlideChords {
@@ -30,9 +31,12 @@ function activeChordPart(slide: ChordSlide): string | null {
 export function getSlideChordText(slide: ChordSlide | undefined): string | null {
   if (!slide?.chords) return null;
   const raw = activeChordPart(slide);
-  if (!raw) return null;
+  if (!raw || !hasChords(raw)) return null;
   const shown = slide.partsMode && slide.parts?.length ? slide.parts[getPartIndex(slide)] ?? slide.content : slide.content;
-  if (comparable(stripChords(raw)) !== comparable(shown)) return null;
+  const lyrics = stripChords(raw);
+  const shownText = comparable(shown);
+  // The import keeps original punctuation in the chord sheet and cleans it in the projection.
+  if (comparable(lyrics) !== shownText && comparable(cleanLyrics(lyrics)) !== shownText) return null;
   const semitones = slide.chords.transpose ?? 0;
   return semitones ? transposeChordPro(raw, semitones, { key: slide.chords.key }) : raw;
 }

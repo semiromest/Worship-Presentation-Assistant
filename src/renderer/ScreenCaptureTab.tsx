@@ -1,521 +1,250 @@
-import { playSfx } from './sfx';
-import { usePractice } from './hooks/usePractice';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Monitor, RefreshCw, Plus, Play, Square } from 'lucide-react';
+import { AlertCircle, AppWindow, Check, Loader2, Monitor, Play, Plus, RefreshCw, Square } from 'lucide-react';
 import { Skeleton } from './components/Skeleton';
+import { usePractice } from './hooks/usePractice';
+import { playSfx } from './sfx';
+import './screen-capture.css';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-interface ScreenSource {
-  id: string;
-  name: string;
-  thumbnail: string;
-  display_id: string;
-  appIcon?: string;
-}
+type ScreenSource = Awaited<ReturnType<NonNullable<Window['electronAPI']>['getScreenSources']>>[number];
+type StreamStatus = 'idle' | 'starting' | 'active' | 'error';
 
 interface ScreenCaptureTabProps {
   onAddScreenToPresentation: (sourceId: string, sourceName: string) => void;
 }
 
-type StreamStatus = 'idle' | 'starting' | 'active' | 'error';
-
-// ─── Custom Hooks ────────────────────────────────────────────────────────────
-
-/**
- * Manages screen sources fetching and caching
- */
 function useScreenSources() {
   const [sources, setSources] = useState<ScreenSource[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const requestRef = useRef(0);
 
-  const fetchSources = useCallback(async () => {
+  const refresh = useCallback(async () => {
+    const request = ++requestRef.current;
     setIsLoading(true);
-    setError(null);
-    
+    setFailed(false);
     try {
-      const api = (window as any).electronAPI;
-      if (!api?.getScreenSources) {
-        throw new Error('Screen capture API not available');
-      }
-      
+      const api = window.electronAPI;
+      if (!api?.getScreenSources) throw new Error('Screen capture API not available');
       const result = await api.getScreenSources();
-      setSources(result ?? []);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch sources';
-      console.error('[ScreenCapture] fetchSources error:', err);
-      setError(message);
-      setSources([]);
+      if (request === requestRef.current) setSources(result ?? []);
+    } catch (error) {
+      if (request !== requestRef.current) return;
+      console.error('[ScreenCapture] Could not fetch sources:', error);
+      setFailed(true);
     } finally {
-      setIsLoading(false);
+      if (request === requestRef.current) setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchSources();
-  }, [fetchSources]);
+    void refresh();
+    return () => { requestRef.current += 1; };
+  }, [refresh]);
 
-  return { sources, isLoading, error, fetchSources };
+  return { sources, isLoading, failed, refresh };
 }
 
-/**
- * Manages media stream lifecycle with proper cleanup
- */
-function useMediaStream() {
+function useScreenPreview() {
   const [status, setStatus] = useState<StreamStatus>('idle');
   const streamRef = useRef<MediaStream | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const requestRef = useRef(0);
 
-  const cleanup = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
+  const release = useCallback(() => {
+    requestRef.current += 1;
+    const stream = streamRef.current;
+    streamRef.current = null;
+    stream?.getTracks().forEach(track => track.stop());
+    const video = videoRef.current;
+    if (video) {
+      video.pause();
+      video.srcObject = null;
     }
-    
-    if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.srcObject = null;
-    }
-    
-    setStatus('idle');
   }, []);
 
-  const startStream = useCallback(async (sourceId: string) => {
-    cleanup();
+  const stop = useCallback(() => {
+    release();
+    setStatus('idle');
+  }, [release]);
+
+  const start = useCallback(async (sourceId: string) => {
+    release();
+    const request = requestRef.current;
     setStatus('starting');
 
     try {
-      const stream = await (navigator.mediaDevices as any).getUserMedia({
-        audio: false,
-        video: {
-          mandatory: {
-            chromeMediaSource: 'desktop',
-            chromeMediaSourceId: sourceId,
-            minFrameRate: 24,
-            maxFrameRate: 60,
-          },
+      const videoConstraints = {
+        mandatory: {
+          chromeMediaSource: 'desktop',
+          chromeMediaSourceId: sourceId,
+          minFrameRate: 24,
+          maxFrameRate: 60,
         },
-      });
-
-      if (!videoRef.current) {
-        stream.getTracks().forEach((track: { stop: () => any; }) => track.stop());
-        throw new Error('Video element not available');
+      };
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: videoConstraints as MediaTrackConstraints });
+      const video = videoRef.current;
+      if (request !== requestRef.current || !video) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
       }
 
       streamRef.current = stream;
-      videoRef.current.srcObject = stream;
-
-      // Handle stream ended event
-      const videoTrack = stream.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.addEventListener('ended', () => {
-          setStatus('error');
-        }, { once: true });
-      }
-
-      await videoRef.current.play();
+      video.srcObject = stream;
+      stream.getVideoTracks()[0]?.addEventListener('ended', () => {
+        if (streamRef.current !== stream) return;
+        release();
+        setStatus('error');
+      }, { once: true });
+      await video.play();
+      if (request !== requestRef.current) return;
       setStatus('active');
       playSfx('start');
-    } catch (err) {
-      console.error('[ScreenCapture] Stream error:', err);
-      playSfx('error');
-      cleanup();
+    } catch (error) {
+      if (request !== requestRef.current) return;
+      console.error('[ScreenCapture] Preview failed:', error);
+      release();
       setStatus('error');
+      playSfx('error');
     }
-  }, [cleanup]);
+  }, [release]);
 
-  const captureFrame = useCallback((maxWidth = 0, quality = 0.92): string | null => {
-    const video = videoRef.current;
-    if (!video || video.readyState < 2) return null;
+  useEffect(() => release, [release]);
 
-    let w = video.videoWidth;
-    let h = video.videoHeight;
-    if (maxWidth > 0 && w > maxWidth) {
-      h = Math.round((h * maxWidth) / w);
-      w = maxWidth;
-    }
-
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    
-    const ctx = canvas.getContext('2d', { alpha: false });
-    if (!ctx) return null;
-    
-    ctx.drawImage(video, 0, 0, w, h);
-    return canvas.toDataURL('image/jpeg', quality);
-  }, []);
-
-  // Cleanup on unmount
-  useEffect(() => cleanup, [cleanup]);
-
-  return {
-    status,
-    videoRef,
-    startStream,
-    stopStream: cleanup,
-    captureFrame,
-    isActive: status === 'active',
-    isStarting: status === 'starting',
-  };
+  return { status, videoRef, start, stop };
 }
 
-/**
- * Manages source selection state
- */
-function useSourceSelection(sources: ScreenSource[]) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  
-  const selectedSource = sources.find(s => s.id === selectedId) ?? null;
-  
-  const selectSource = useCallback((source: ScreenSource) => {
-    setSelectedId(prevId => prevId === source.id ? prevId : source.id);
-  }, []);
-
-  const clearSelection = useCallback(() => {
-    setSelectedId(null);
-  }, []);
-
-  return {
-    selectedId,
-    selectedSource,
-    selectSource,
-    clearSelection,
-  };
-}
-
-// ─── Sub-components ─────────────────────────────────────────────────────────
-
-function Header({ onRefresh, isLoading, t }: { onRefresh: () => void; isLoading: boolean; t: (key: string) => string }) {
-  return (
-    <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-white/10">
-      <div className="flex items-center gap-2">
-        <Monitor size={16} className="text-blue-500" />
-        <h2 className="text-lg font-semibold text-white">{t('common.screenTitle')}</h2>
-      </div>
-      <button
-        onClick={onRefresh}
-        disabled={isLoading}
-        className="workspace-secondary-action transition-colors"
-      >
-        <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-        <span>{t('common.screenRefresh')}</span>
-      </button>
-    </div>
-  );
-}
-
-function SourceCard({ 
-  source, 
-  isSelected, 
-  onSelect 
-}: { 
-  source: ScreenSource; 
-  isSelected: boolean; 
-  onSelect: (source: ScreenSource) => void;
+function SourceCard({ source, selected, onSelect }: {
+  source: ScreenSource;
+  selected: boolean;
+  onSelect: () => void;
 }) {
+  const { t } = useTranslation();
+  const isDisplay = source.id.startsWith('screen:');
+  const Icon = isDisplay ? Monitor : AppWindow;
   return (
-    <div
-      onClick={() => onSelect(source)}
-      className={`
-        relative bg-white/5 border-2 rounded-xl overflow-hidden cursor-pointer
-        transition-all duration-200 hover:bg-white/10
-        ${isSelected 
-          ? 'border-blue-500 shadow-[0_0_0_2px_rgba(59,130,246,0.3)]' 
-          : 'border-white/10 hover:border-white/20'
-        }
-      `}
-    >
-      <img 
-        src={source.thumbnail} 
-        alt={source.name} 
-        className="w-full aspect-video object-cover bg-black"
-        loading="lazy"
-      />
-      <div className="p-2">
-        <p className="text-xs font-medium text-white truncate">{source.name}</p>
-      </div>
-      {isSelected && (
-        <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-bold">
-          ✓
-        </div>
-      )}
-    </div>
+    <button type="button" className="screen-source-card" aria-pressed={selected} onClick={onSelect} title={source.name}>
+      <span className="screen-source-thumb">
+        <Icon size={20} aria-hidden="true" />
+        {source.thumbnail && <img src={source.thumbnail} alt="" loading="lazy" />}
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-xs font-semibold">{source.name}</span>
+        <span className="block text-[11px] text-white/60">{t(isDisplay ? 'common.screenDisplaySource' : 'common.screenWindowSource')}</span>
+      </span>
+      {selected && <Check className="screen-source-check" size={16} aria-hidden="true" />}
+    </button>
   );
 }
-
-function SourceGridSkeleton() {
-  return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3 overflow-y-auto pb-2" aria-hidden="true">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="rounded-xl border border-white/10 overflow-hidden">
-          <Skeleton className="w-full aspect-video rounded-none" />
-          <div className="p-2">
-            <Skeleton className="h-3.5 w-3/4" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function SourceGrid({ 
-  sources, 
-  selectedId, 
-  onSelect 
-}: { 
-  sources: ScreenSource[]; 
-  selectedId: string | null; 
-  onSelect: (source: ScreenSource) => void;
-}) {
-  return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3 overflow-y-auto pb-2">
-      {sources.map(source => (
-        <SourceCard
-          key={source.id}
-          source={source}
-          isSelected={selectedId === source.id}
-          onSelect={onSelect}
-        />
-      ))}
-    </div>
-  );
-}
-
-function PreviewPlaceholder({ 
-  status, 
-  hasSource,
-  t,
-}: { 
-  status: StreamStatus; 
-  hasSource: boolean;
-  t: (key: string) => string;
-}) {
-  const getMessage = () => {
-    if (status === 'starting') return t('common.screenConnecting');
-    if (status === 'error') return t('common.screenError');
-    if (!hasSource) return t('common.screenSelectFirst');
-    return t('common.screenClickStart');
-  };
-
-  const getIconColor = () => {
-    if (status === 'error') return 'text-red-400';
-    if (status === 'starting') return 'text-blue-400';
-    return 'text-white/60';
-  };
-
-  return (
-    <div className="flex flex-col items-center gap-2 text-white/60 text-xs">
-      <Monitor size={32} className={getIconColor()} />
-      <span>{getMessage()}</span>
-    </div>
-  );
-}
-
-function PreviewSection({ 
-  sourceName, 
-  videoRef, 
-  status,
-  t,
-}: { 
-  sourceName: string | null; 
-  videoRef: React.RefObject<HTMLVideoElement>; 
-  status: StreamStatus;
-  t: (key: string) => string;
-}) {
-  const showVideo = status === 'active' || status === 'starting';
-  
-  return (
-    <div className="flex-1 flex flex-col gap-3 min-h-[200px]">
-      <div className="text-xs font-semibold text-white/60">
-        {t('common.screenLivePreview')}{sourceName ? ` — ${sourceName}` : ''}
-      </div>
-      <div className="flex-1 bg-black rounded-xl overflow-hidden flex items-center justify-center relative">
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          disablePictureInPicture
-          className={`max-w-full max-h-full object-contain ${showVideo ? 'block' : 'hidden'}`}
-        />
-        
-        {status !== 'active' && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <PreviewPlaceholder 
-              status={status} 
-              hasSource={!!sourceName}
-              t={t}
-            />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function EmptyState({ type, t }: { type: 'loading' | 'empty' | 'error'; t: (key: string) => string }) {
-  const config = {
-    loading: {
-      text: t('common.screenLoading'),
-      className: 'text-white/55',
-    },
-    empty: {
-      text: t('common.screenEmpty'),
-      className: 'text-white/55 whitespace-pre-line',
-    },
-    error: {
-      text: t('common.screenErrorGeneric'),
-      className: 'text-red-400',
-    },
-  };
-
-  const { text, className } = config[type];
-
-  return (
-    <div className={`flex items-center justify-center h-full text-sm text-center p-5 ${className}`}>
-      {text}
-    </div>
-  );
-}
-
-function ControlButtons({ 
-  isActive, 
-  hasSource, 
-  onToggleCapture, 
-  onAddToPresentation,
-  t,
-}: { 
-  isActive: boolean; 
-  hasSource: boolean; 
-  onToggleCapture: () => void; 
-  onAddToPresentation: () => void;
-  t: (key: string) => string;
-}) {
-  return (
-    <div className="flex gap-2 p-3 border-t border-white/10 bg-[#181818]">
-      <button
-        onClick={onToggleCapture}
-        disabled={!hasSource}
-        className={`
-          flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold
-          transition-all duration-200
-          ${!hasSource 
-            ? 'opacity-50 cursor-not-allowed bg-white/10 text-white' 
-            : isActive
-              ? 'bg-red-500 text-white hover:bg-red-600'
-              : 'bg-white/10 text-white hover:bg-white/20'
-          }
-        `}
-      >
-        {isActive ? (
-          <>
-            <Square size={14} />
-            <span>{t('common.screenStopLive')}</span>
-          </>
-        ) : (
-          <>
-            <Play size={14} />
-            <span>{t('common.screenStartLive')}</span>
-          </>
-        )}
-      </button>
-      
-      <button
-        onClick={onAddToPresentation}
-        disabled={!hasSource}
-        className={`
-          flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold
-          transition-all duration-200
-          ${!hasSource 
-            ? 'opacity-50 cursor-not-allowed bg-blue-500 text-white'
-            : 'bg-blue-500 text-white hover:bg-blue-600'
-          }
-        `}
-      >
-        <Plus size={14} />
-        <span>{t('common.screenAddAsSlide')}</span>
-      </button>
-    </div>
-  );
-}
-
-// ─── Main Component ─────────────────────────────────────────────────────────
 
 function ActiveScreenCaptureTab({ onAddScreenToPresentation }: ScreenCaptureTabProps) {
   const { t } = useTranslation();
-  const { sources, isLoading, error, fetchSources } = useScreenSources();
-  const { selectedId, selectedSource, selectSource, clearSelection } = useSourceSelection(sources);
-  const { status, videoRef, startStream, stopStream, captureFrame, isActive } = useMediaStream();
+  const { sources, isLoading, failed, refresh } = useScreenSources();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = sources.find(source => source.id === selectedId);
+  const { status, videoRef, start, stop } = useScreenPreview();
+  const canStop = status === 'active' || status === 'starting';
 
-  const handleToggleCapture = useCallback(() => {
-    if (isActive) {
-      stopStream();
+  useEffect(() => {
+    if (selectedId && !selected) {
+      stop();
+      setSelectedId(null);
+    }
+  }, [selectedId, selected, stop]);
+
+  const togglePreview = () => {
+    if (canStop) {
+      stop();
       playSfx('stop');
-    } else if (selectedId) {
-      startStream(selectedId);
+    } else if (selected) {
+      void start(selected.id);
     }
-  }, [isActive, selectedId, startStream, stopStream]);
+  };
 
-  const handleSourceSelect = useCallback((source: ScreenSource) => {
+  const selectSource = (source: ScreenSource) => {
     if (source.id === selectedId) return;
-    if (isActive) stopStream();
-    selectSource(source);
+    stop();
+    setSelectedId(source.id);
     playSfx('select');
-  }, [isActive, stopStream, selectSource, selectedId]);
-
-  const handleAddToPresentation = useCallback(() => {
-    if (!selectedId || !selectedSource) return;
-
-    // Try to capture live frame if available
-    if (isActive) {
-      const frameDataUrl = captureFrame();
-      // Frame data URL could be used if needed in the future
-    }
-
-    onAddScreenToPresentation(selectedId, selectedSource.name);
-  }, [selectedId, selectedSource, isActive, captureFrame, onAddScreenToPresentation]);
-
-  const renderContent = () => {
-    if (isLoading) return <SourceGridSkeleton />;
-    if (error) return <EmptyState type="error" t={t} />;
-    if (sources.length === 0) return <EmptyState type="empty" t={t} />;
-
-    return (
-      <>
-        <SourceGrid 
-          sources={sources} 
-          selectedId={selectedId} 
-          onSelect={handleSourceSelect} 
-        />
-          <PreviewSection 
-          sourceName={selectedSource?.name ?? null}
-          videoRef={videoRef}
-          status={status}
-          t={t}
-        />
-      </>
-    );
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#121212] text-white">
-      <Header onRefresh={fetchSources} isLoading={isLoading} t={t} />
-      
-      <div className="flex-1 flex flex-col overflow-hidden p-4 gap-4">
-        {renderContent()}
-      </div>
+    <section className="screen-page" aria-labelledby="screen-heading" onKeyDown={event => {
+      if ((event.key === 'Enter' || event.key === ' ') && (event.target as HTMLElement).closest('button')) event.stopPropagation();
+    }}>
+      <header className="screen-page-header">
+        <Monitor size={16} className="text-white/65" aria-hidden="true" />
+        <h2 id="screen-heading" className="text-sm font-semibold">{t('common.screenTitle')}</h2>
+      </header>
 
-      <ControlButtons 
-        isActive={isActive}
-        hasSource={!!selectedId}
-        onToggleCapture={handleToggleCapture}
-        onAddToPresentation={handleAddToPresentation}
-        t={t}
-      />
-    </div>
+      <div className="screen-layout">
+        <section className="screen-panel" aria-labelledby="screen-sources-heading">
+          <div className="screen-panel-header">
+            <h3 id="screen-sources-heading" className="text-sm font-semibold">{t('common.screenSources')}</h3>
+            <button type="button" onClick={refresh} disabled={isLoading} className="workspace-secondary-action">
+              <RefreshCw size={14} className={isLoading ? 'animate-spin' : undefined} aria-hidden="true" />
+              {t('common.screenRefresh')}
+            </button>
+          </div>
+          <div className="screen-source-list" aria-busy={isLoading}>
+            {failed && <p role="alert" className="screen-source-message text-red-300"><AlertCircle size={19} aria-hidden="true" />{t('common.screenErrorGeneric')}</p>}
+            {!sources.length && isLoading && (
+              <div className="space-y-2">
+                <p role="status" className="px-1 pb-1 text-xs text-white/65">{t('common.screenLoading')}</p>
+                {Array.from({ length: 3 }, (_, index) => <Skeleton key={index} className="h-11 w-full" />)}
+              </div>
+            )}
+            {!sources.length && !isLoading && !failed && (
+              <p className="screen-source-message"><AppWindow size={23} aria-hidden="true" />{t('common.screenEmpty')}</p>
+            )}
+            {sources.map(source => (
+              <SourceCard key={source.id} source={source} selected={source.id === selectedId} onSelect={() => selectSource(source)} />
+            ))}
+          </div>
+        </section>
+
+        <section className="screen-panel screen-preview-panel" aria-labelledby="screen-preview-heading">
+          <div className="screen-panel-header">
+            <div className="screen-preview-heading">
+              <h3 id="screen-preview-heading" className="text-sm font-semibold">{t('common.screenLivePreview')}</h3>
+              {selected && (
+                <span className="screen-selected-source" title={selected.name}>
+                  <span className="screen-status-dot" data-active={status === 'active' || undefined} />
+                  <span className="truncate">{selected.name}</span>
+                </span>
+              )}
+            </div>
+            <div className="screen-preview-actions">
+              <button type="button" onClick={togglePreview} disabled={!canStop && !selected}
+                className="workspace-secondary-action" data-stopping={canStop || undefined}>
+                {canStop ? <Square size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}
+                {t(canStop ? 'common.screenStopLive' : 'common.screenStartLive')}
+              </button>
+              <button type="button" className="workspace-secondary-action" disabled={!selected}
+                onClick={() => { if (selected) onAddScreenToPresentation(selected.id, selected.name); }}>
+                <Plus size={14} aria-hidden="true" />
+                {t('common.screenAddAsSlide')}
+              </button>
+            </div>
+          </div>
+
+          <div className="screen-stage">
+            <video ref={videoRef} autoPlay muted playsInline disablePictureInPicture hidden={status !== 'active'} />
+            {status === 'idle' && selected?.thumbnail && <img src={selected.thumbnail} alt="" className="screen-stage-thumbnail" />}
+            {status !== 'active' && (
+              <div className="screen-stage-message" role={status === 'error' ? 'alert' : 'status'}>
+                {status === 'starting' && <Loader2 className="animate-spin" size={20} aria-hidden="true" />}
+                {status === 'error' && <AlertCircle className="text-red-300" size={20} aria-hidden="true" />}
+                {status === 'idle' && <Monitor size={20} aria-hidden="true" />}
+                {t(status === 'starting' ? 'common.screenConnecting'
+                  : status === 'error' ? 'common.screenError'
+                  : selected ? 'common.screenClickStart' : 'common.screenSelectFirst')}
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+    </section>
   );
 }
 

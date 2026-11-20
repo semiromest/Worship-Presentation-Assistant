@@ -74,13 +74,11 @@ import { pathToFileURL } from 'node:url';
 import { isRemoteAuthorized, loadOrCreateRemoteToken, readRemoteSettings, remoteAuthCookie, remoteTokenFromQuery, writeNewRemoteToken, writeRemoteSettings } from './remoteAuth';
 import { createPresetStore, isLiveSavePresetName } from './presetStore';
 import { localResourceUrlToPath, mediaRefToName } from '../shared/mediaTree';
-import { getMediaLibrary, storeBytesTo } from './mediaLibrary';
+import { getMediaLibrary } from './mediaLibrary';
 import { registerGradientService } from './gradientService';
 import { mediaStorageReport, removeUnusedMedia, updateMediaStorageSettings } from './mediaStorage';
 import { createVideoSinks, libraryFileSize, optimizeLibraryImage } from './mediaOptimizer';
-import { freeTranslate, resolveSourcePath, translateLibraryImage } from './imageTranslate';
-import { generateImage } from './imageGenerate';
-import { isImageGenerateRatio, isImageGenerateStyle } from '../shared/imageGenerate';
+import { resolveSourcePath, translateLibraryImage } from './imageTranslate';
 import { IMAGE_TRANSLATION_INDEX, isImageTranslateLang } from '../shared/imageTranslate';
 import { getOrCreateThumbnail, thumbRefToPath, pruneThumbnailCache } from './mediaThumbnails';
 import { heavyClient } from './heavyWorkerClient';
@@ -1028,26 +1026,6 @@ ipcMain.handle('image-translate:run', (event, ref: unknown, source: unknown, tar
   if (!isImageTranslateLang(target)) throw new Error('Unsupported target language');
   const cachedOnly = !!(options && typeof options === 'object' && (options as { cachedOnly?: unknown }).cachedOnly === true);
   return translateLibraryImage(imageTranslateDeps(), { ref: String(ref), source: isImageTranslateLang(source) ? source : 'auto', target, cachedOnly });
-});
-// AI image generation (Pollinations.ai, keyless); saved under userData/ai-images (see imageGenerate.ts).
-ipcMain.handle('image-generate:run', (event, prompt: unknown, style: unknown, ratio: unknown, seed: unknown) => {
-  requireControl(event);
-  return generateImage(
-    {
-      storeBytes: async (data, ext) => {
-        const dir = path.join(app.getPath('userData'), 'ai-images');
-        const ref = await storeBytesTo(dir, data, ext);
-        return ref ? path.join(dir, ref.slice(ref.lastIndexOf('/') + 1)) : null;
-      },
-      translate: freeTranslate(),
-    },
-    {
-      prompt: typeof prompt === 'string' ? prompt : '',
-      style: isImageGenerateStyle(style) ? style : 'none',
-      ratio: isImageGenerateRatio(ratio) ? ratio : '16:9',
-      seed: Number.isFinite(Number(seed)) ? Number(seed) : 0,
-    },
-  );
 });
 
 // Generic recursive file finder

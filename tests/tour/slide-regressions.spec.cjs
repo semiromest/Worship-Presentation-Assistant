@@ -17,6 +17,207 @@ async function seed(slides, selected = slides[0].id, selection = [selected]) {
 const textSlide = id => ({ id, type: 'text', content: id, styles: { fontSize: 82, textColor: '#fff', backgroundColor: '#000' } });
 const hymn = () => ({ ...textSlide('hymn'), content: 'First verse', partsMode: true, parts: ['First verse', 'Second verse', 'Third verse'], activePart: 0, group: { id: 'g', title: 'Example hymn', author: 'Example author', part: 1, parts: 3 } });
 
+test('screen capture can preview sources, refresh, and add the chosen source as a slide', async ({}, info) => {
+  const thumbnail = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90"%3E%3Crect width="160" height="90" fill="%23334967"/%3E%3Crect x="15" y="12" width="130" height="66" rx="3" fill="%236b8cb5"/%3E%3C/svg%3E';
+  await app.evaluate(({ ipcMain }, thumbnail) => {
+    ipcMain.removeHandler('get-screen-sources');
+    ipcMain.handle('get-screen-sources', () => [
+      { id: 'screen:1:0', name: 'Deneme ekranı', thumbnail },
+      { id: 'window:2:0', name: 'Deneme penceresi', thumbnail },
+    ]);
+  }, thumbnail);
+  await page.evaluate(() => {
+    navigator.mediaDevices.getUserMedia = async () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const stream = canvas.captureStream(20);
+      const [track] = stream.getVideoTracks();
+      const timer = setInterval(() => {
+        if (track.readyState === 'ended') clearInterval(timer);
+        else { ctx.fillStyle = '#334967'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+      }, 50);
+      window.__testScreenTrack = track;
+      return stream;
+    };
+    window.__fixStore.getState().setActiveTab('screen');
+  });
+  const workspace = page.locator('.screen-page');
+  const start = workspace.getByRole('button', { name: 'Önizlemeyi başlat', exact: true });
+  const secondSource = workspace.getByRole('button', { name: /^Deneme penceresi/ });
+  await expect(start).toBeDisabled();
+  await workspace.getByRole('button', { name: /^Deneme ekranı/ }).press('Enter');
+  await expect(workspace.locator('.screen-stage-thumbnail')).toBeVisible();
+  await page.screenshot({ path: info.outputPath('screen-workspace.png'), animations: 'disabled' });
+  await start.click();
+  await expect(workspace.locator('video')).toBeVisible();
+  await workspace.getByRole('button', { name: 'Yenile', exact: true }).click();
+  await expect(workspace.getByRole('button', { name: 'Yenile', exact: true })).toBeEnabled();
+  await expect(workspace.locator('video')).toBeVisible();
+  await secondSource.click();
+  await expect(secondSource).toHaveAttribute('aria-pressed', 'true');
+  await expect(workspace.locator('video')).toBeHidden();
+  expect(await page.evaluate(() => window.__testScreenTrack.readyState)).toBe('ended');
+
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(800, 600));
+  await expect.poll(() => workspace.evaluate(element => element.scrollWidth === element.clientWidth)).toBe(true);
+  await workspace.getByRole('button', { name: 'Slayt Olarak Ekle', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => window.__fixStore.getState().presentation.slides.at(-1)))
+    .toMatchObject({ type: 'screen', mediaUrl: 'window:2:0', content: 'Deneme penceresi' });
+});
+
+test('calendar keeps a saved event on the selected day across tab changes', async ({}, info) => {
+  const switchTab = tab => page.evaluate(tab => window.__fixStore.getState().setActiveTab(tab), tab);
+  await switchTab('calendar');
+  const calendar = page.locator('.calendar-page');
+  await calendar.getByRole('button', { name: 'Sonraki ay', exact: true }).click();
+  const nextDay = await calendar.locator('.calendar-day[aria-pressed="true"]').getAttribute('aria-label');
+  await calendar.getByRole('button', { name: 'Bugün', exact: true }).click();
+  const today = calendar.locator('.calendar-day[aria-current="date"]');
+  await expect(today).toHaveAttribute('aria-pressed', 'true');
+  expect(await today.getAttribute('aria-label')).not.toBe(nextDay);
+  const spilloverDay = calendar.locator('.calendar-day[data-outside]').last();
+  await spilloverDay.focus();
+  await page.keyboard.press('Enter');
+  await expect(calendar.locator('.calendar-day[aria-pressed="true"]')).toBeFocused();
+  await calendar.getByRole('button', { name: 'Bugün', exact: true }).click();
+
+  await calendar.getByRole('button', { name: 'Etkinlik Ekle', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('textbox', { name: 'Başlık', exact: true }).fill('Takvim deneme etkinliği');
+  await dialog.getByRole('button', { name: 'Yeşil', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Kaydet', exact: true }).click();
+  const agenda = calendar.getByRole('complementary');
+  await expect(agenda.getByText('Takvim deneme etkinliği', { exact: true })).toBeVisible();
+  await switchTab('slides');
+  await switchTab('calendar');
+  await expect(agenda.getByText('Takvim deneme etkinliği', { exact: true })).toBeVisible();
+  const desktopGutters = await calendar.evaluate(element => {
+    const page = element.getBoundingClientRect();
+    const month = element.querySelector('.calendar-month-panel').getBoundingClientRect();
+    const agenda = element.querySelector('.calendar-agenda-panel').getBoundingClientRect();
+    return [month.left - page.left, page.right - agenda.right, page.bottom - month.bottom];
+  });
+  for (const gutter of desktopGutters) expect(gutter).toBeCloseTo(12, 0);
+  await page.screenshot({ path: info.outputPath('calendar-desktop.png'), animations: 'disabled' });
+
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(800, 600));
+  await expect.poll(() => calendar.evaluate(element => element.scrollWidth === element.clientWidth)).toBe(true);
+});
+
+test('editable scripture and hymn text frames fill the canvas with their text inset', async () => {
+  const scripture = { ...textSlide('scripture'), scripture: true, content: 'Yuhanna 1:1\n\n1. Başlangıçta Söz vardı.' };
+  const hymnSlide = { ...textSlide('hymn-verse'), content: 'İlahi dizesi', group: { id: 'song', kind: 'hymn', title: 'İlahi', part: 1, parts: 2 } };
+  await seed([scripture, hymnSlide]);
+  const canvas = page.locator('.editor-canvas-stage');
+  const item = canvas.locator('[data-editor-item-id]');
+  for (const slide of [scripture, hymnSlide]) {
+    await page.evaluate(id => window.__fixStore.getState().openEditor(id), slide.id);
+    await expect(item).toHaveText(slide.content);
+    const frame = await item.evaluate(element => ({
+      width: element.style.width,
+      height: element.style.height,
+      top: element.style.top,
+      left: element.style.left,
+      inset: getComputedStyle(element).padding,
+    }));
+    expect(frame).toEqual({ width: '100%', height: '100%', top: '0%', left: '0%', inset: '54px 96px' });
+  }
+
+  await item.dblclick();
+  await item.locator('textarea').fill('Düzenlenmiş ilahi dizesi');
+  await page.locator('[data-guide-anchor="editor-save"]').click();
+  await expect.poll(() => page.evaluate(() => window.__fixStore.getState().presentation.slides.find(slide => slide.id === 'hymn-verse')))
+    .toMatchObject({
+      content: 'Düzenlenmiş ilahi dizesi',
+      group: { id: 'song', kind: 'hymn', part: 1, parts: 2 },
+      items: [{ type: 'text', x: 0, y: 0, width: 100, height: 100, textStyles: { fontSize: 82, insetPercent: 5 } }],
+    });
+});
+
+test('opening a legacy image keeps it fitted and all four resize handles usable', async () => {
+  const image = { id: 'legacy-image', type: 'image',
+    mediaUrl: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="160" height="90"%3E%3Crect width="160" height="90" fill="orange"/%3E%3C/svg%3E',
+    styles: { backgroundColor: '#000', textColor: '#fff', fontSize: 48, objectFit: 'cover' } };
+  await seed([image]);
+  await page.evaluate(() => window.__fixStore.getState().openEditor('legacy-image'));
+  const canvas = page.locator('.editor-canvas-stage');
+  const picture = canvas.locator('[data-editor-item-id] img');
+  await expect(picture).toBeVisible();
+  const measured = await picture.evaluate(img => {
+    const frame = img.closest('.slide-surface').getBoundingClientRect();
+    const item = img.getBoundingClientRect();
+    return { width: item.width / frame.width, height: item.height / frame.height, fit: getComputedStyle(img).objectFit };
+  });
+  expect(measured.width).toBeCloseTo(1);
+  expect(measured.height).toBeCloseTo(1);
+  expect(measured.fit).toBe('cover');
+
+  const item = canvas.locator('[data-editor-item-id]');
+  await item.click();
+  const handles = item.locator('[data-editor-resize-corner]');
+  await expect(handles).toHaveCount(4);
+  const hitTargets = () => handles.evaluateAll(elements => elements.map(element => {
+    const { x, y, width, height } = element.getBoundingClientRect();
+    // Aim outside the visible marker, on the enlarged part of the target.
+    const point = { x: x + 5, y: y + height / 2 };
+    return { width, height, hit: document.elementFromPoint(point.x, point.y) === element, point };
+  }));
+  const checkHitTargets = targets => {
+    for (const target of targets) {
+      expect(target.width).toBeCloseTo(30, 0);
+      expect(target.height).toBeCloseTo(30, 0);
+      expect(target.hit).toBe(true);
+    }
+  };
+  const atFullSize = await hitTargets();
+  checkHitTargets(atFullSize);
+  const initialWidth = (await item.boundingBox()).width;
+  const { x, y } = atFullSize[3].point;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x - 100, y - 70, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(async () => (await item.boundingBox()).width).toBeLessThan(initialWidth - 50);
+
+  await canvas.getByRole('button', { name: 'Uzaklaştır', exact: true }).click();
+  checkHitTargets(await hitTargets());
+
+  const beforeAltResize = await item.boundingBox();
+  const corner = (await hitTargets())[3].point;
+  await page.mouse.move(corner.x, corner.y);
+  await page.keyboard.down('Alt');
+  try {
+    await page.mouse.down();
+    await page.mouse.move(corner.x - 90, corner.y, { steps: 5 });
+    await page.mouse.up();
+  } finally {
+    await page.keyboard.up('Alt');
+  }
+  await expect.poll(async () => (await item.boundingBox()).width).toBeLessThan(beforeAltResize.width - 50);
+  const afterAltResize = await item.boundingBox();
+  expect(afterAltResize.width / afterAltResize.height).toBeCloseTo(beforeAltResize.width / beforeAltResize.height, 2);
+});
+
+test('saving a live layer preserves a reusable draft without changing its published content', async () => {
+  const trigger = page.getByTestId('live-overlays-trigger');
+  await trigger.click();
+  const draft = page.getByRole('textbox', { name: /Duyuru metni/ });
+  await draft.fill('Yayındaki duyuru');
+  await page.getByRole('button', { name: 'Yayına al', exact: true }).click();
+  await draft.fill('Daha sonra yayınlanacak duyuru');
+  await page.getByRole('radio', { name: 'Alt', exact: true }).click();
+  await page.getByRole('button', { name: 'Yayına almadan kaydet', exact: true }).click();
+  const readTicker = () => page.evaluate(async () => (await import('/src/renderer/state/useLiveOverlayStore.ts')).useLiveOverlayStore.getState().ticker);
+  expect(await readTicker()).toEqual({ text: 'Yayındaki duyuru', position: 'top', onAir: true });
+  await page.keyboard.press('Escape');
+  await expect(draft).toBeHidden();
+  await trigger.click();
+  await expect(draft).toHaveValue('Daha sonra yayınlanacak duyuru');
+  await expect(page.getByRole('radio', { name: 'Alt', exact: true })).toHaveAttribute('aria-checked', 'true');
+  await page.getByRole('button', { name: 'Güncelle', exact: true }).click();
+  expect(await readTicker()).toEqual({ text: 'Daha sonra yayınlanacak duyuru', position: 'bottom', onAir: true });
+});
+
 test('large section bodies keep bounded DOM and navigate to offscreen selections after resize', async () => {
   await expect(page.locator('.design-slide-grid')).toBeVisible();
   await page.evaluate(() => window.__fixStore.getState().setServiceSectionsEnabled(true));
@@ -50,6 +251,39 @@ test('editor loads on first use and keeps the mounted workspace across tab chang
   await page.evaluate(() => window.__fixStore.getState().setActiveTab('editor'));
   await expect(workspace).toBeVisible();
   expect(await page.evaluate(() => document.querySelector('.editor-workspace') === window.__editorWorkspace)).toBe(true);
+});
+
+test('confirming discard once closes the editor and clears the draft and its history', async () => {
+  await seed([textSlide('original')]);
+  const workspace = page.locator('.editor-workspace');
+  const addText = workspace.getByRole('button', { name: 'Metin', exact: true });
+  const discard = workspace.getByRole('button', { name: 'Kaydetmeden Çık', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Kaydedilmemiş Değişiklikler' });
+  const canvasItems = workspace.locator('[data-editor-item-id]');
+  const openEditor = () => page.evaluate(() => window.__fixStore.getState().openEditor('original'));
+
+  await openEditor();
+  await expect(canvasItems).toHaveCount(1);
+  await addText.click();
+  await expect(canvasItems).toHaveCount(2);
+  await discard.click();
+  await dialog.getByRole('button', { name: 'İptal', exact: true }).click();
+  await expect(workspace).toBeVisible();
+  await expect(canvasItems).toHaveCount(2);
+
+  await discard.click();
+  await dialog.getByRole('button', { name: 'Kaydetmeden Çık', exact: true }).click();
+  await expect(workspace).toBeHidden({ timeout: 3000 });
+  await expect(page.locator('.design-slide-grid')).toBeVisible();
+  expect(await page.evaluate(() => {
+    const { editorDirty, presentation } = window.__fixStore.getState();
+    return { editorDirty, slide: presentation.slides[0] };
+  })).toMatchObject({ editorDirty: false, slide: textSlide('original') });
+
+  await openEditor();
+  await expect(canvasItems).toHaveCount(1);
+  await expect(discard).toBeDisabled();
+  await expect(workspace.getByRole('button', { name: 'Geri Al (Ctrl+Z)', exact: true })).toBeDisabled();
 });
 
 test('item cards share grid dimensions without adding card or item resize observers', async () => {

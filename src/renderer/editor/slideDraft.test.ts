@@ -16,7 +16,8 @@ import {
   pasteItems,
   pruneDrafts,
 } from './slideDraft';
-import { DEFAULT_IMAGE_STYLE, DEFAULT_TEXT_STYLE } from './editorUtils';
+import { DEFAULT_IMAGE_STYLE, DEFAULT_TEXT_STYLE, SLIDE_REFERENCE_HEIGHT, SLIDE_REFERENCE_WIDTH } from './editorUtils';
+import { textItemInsets } from '../../shared/canvasLayout';
 
 const textItem = (overrides: Partial<SlideItem> = {}): SlideItem => ({
   id: 't1',
@@ -65,16 +66,36 @@ const slide = (overrides: Partial<Slide> = {}): Slide => ({
 
 const deck = (slides: Slide[]): Presentation => ({ id: 'deck', name: 'Deck', slides });
 
-test('opening a multiline legacy text slide creates a roomy editable text area', () => {
+test('opening legacy text uses the full slide while preserving its margins, font size, and alignment', () => {
   const base = slide({ content: 'Yaratılış 23:5–6\n\n5–6. Hititler, Efendim, bizi dinle diye yanıtladılar.\nUzun ayet metni.' });
+  Object.assign(base.styles!, { verticalAlign: 'top', textTransform: 'uppercase' });
   const draft = createDraft(base);
   const text = draft.items.find(item => item.type === 'text')!;
   assert.equal(text.content, base.content);
-  assert.equal(text.width, 84);
-  assert.equal(text.height, 80);
-  assert.equal(text.y + text.height, 90);
+  assert.deepEqual([text.x, text.y, text.width, text.height], [0, 0, 100, 100]);
+  const saved = draftToSlide(base, draft);
+  assert.deepEqual(textItemInsets(saved.items?.[0].textStyles?.insetPercent, SLIDE_REFERENCE_WIDTH, SLIDE_REFERENCE_HEIGHT),
+    { horizontal: 96, vertical: 54 });
   assert.equal(text.textStyles?.fontSize, 42);
+  assert.equal(text.textStyles?.verticalAlign, 'top');
+  assert.equal(text.textStyles?.textTransform, 'uppercase');
   assert.equal(base.items, undefined);
+});
+
+test('opening a legacy image keeps the full frame and its visual settings', () => {
+  const base = slide({ type: 'image', mediaUrl: 'file:///image.png' });
+  Object.assign(base.styles!, { objectFit: 'cover', opacity: 0.7, imageBrightness: 1.2, imageFlipX: true });
+  const [image] = createDraft(base).items;
+  assert.deepEqual([image.x, image.y, image.width, image.height], [0, 0, 100, 100]);
+  assert.deepEqual(image.imageStyles, { ...DEFAULT_IMAGE_STYLE, objectFit: 'cover', opacity: 0.7, brightness: 1.2, flipX: true, flipY: undefined });
+  assert.equal(draftToSlide(base, createDraft(base)).items?.[0].mediaUrl, base.mediaUrl);
+});
+
+test('a designed slide never gains layers from fallback content', () => {
+  const image = imageItem();
+  assert.deepEqual(createDraft(slide({ items: [image] })).items.map(item => item.id), [image.id]);
+  const text = textItem();
+  assert.deepEqual(createDraft(slide({ type: 'image', mediaUrl: image.mediaUrl, items: [text] })).items.map(item => item.id), [text.id]);
 });
 
 test('opening an already designed text slide preserves its custom text box', () => {

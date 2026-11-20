@@ -58,8 +58,6 @@ export interface ElectronAPI {
   mediaOptimizeVideoAbort?: (id: string) => Promise<void>;
   /** Desktop only: translate the text baked into a library image (see src/main/imageTranslate.ts). */
   imageTranslate?: (ref: string, source: import('./imageTranslate').ImageTranslateLang | 'auto', target: import('./imageTranslate').ImageTranslateLang, options?: { cachedOnly?: boolean }) => Promise<import('./imageTranslate').ImageTranslateResult>;
-  /** Desktop only: generate a picture from a text prompt (see src/main/imageGenerate.ts). */
-  imageGenerate?: (prompt: string, style: import('./imageGenerate').ImageGenerateStyle, ratio: import('./imageGenerate').ImageGenerateRatio, seed: number) => Promise<import('./imageGenerate').ImageGenerateResult>;
   /** Web only: asks the browser not to evict stored media. */
   mediaStorageRequestPersistence?: () => Promise<boolean | null>;
   /** Web only: downloads the Windows policy file that lets the output open fullscreen without a click. */

@@ -1,22 +1,19 @@
-import ControlTooltip from './components/ControlTooltip';
-import { useUiMotionEnabled } from './hooks/useUiMotionEnabled';
-import { uiMotion } from './uiMotion';
-import * as m from 'motion/react-m';
 import { playSfx } from './sfx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   CalendarDays,
+  Clock,
   ChevronLeft,
   ChevronRight,
   Pencil,
   Plus,
   Trash2,
   X,
-  Sparkles,
   Presentation,
 } from 'lucide-react';
 import Dialog from './components/Dialog';
+import './calendar.css';
 
 interface CalendarEvent {
   id: string;
@@ -32,7 +29,7 @@ interface CalendarEvent {
 function parseStoredEvents(raw: unknown): CalendarEvent[] {
   if (!Array.isArray(raw)) return [];
 
-  return raw.map((item): CalendarEvent => {
+  return raw.filter(item => item && typeof item === 'object').map((item): CalendarEvent => {
     const e = item as Record<string, unknown>;
     const legacyRef =
       typeof e.slideId === 'string' ? e.slideId : undefined;
@@ -71,12 +68,6 @@ const EVENT_COLORS = [
   'bg-orange-500',
   'bg-pink-500',
 ];
-
-function getLocaleMonths(locale: string): string[] {
-  return Array.from({ length: 12 }, (_, i) =>
-    new Date(2024, i, 1).toLocaleDateString(locale, { month: 'long' }),
-  );
-}
 
 function getLocaleDays(locale: string): string[] {
   return Array.from({ length: 7 }, (_, i) =>
@@ -118,8 +109,8 @@ export default function CalendarTab({
   onOpenPresentation,
 }: CalendarTabProps) {
   const { t, i18n } = useTranslation();
-  const motionEnabled = useUiMotionEnabled();
   const [monthDirection, setMonthDirection] = useState(0);
+  const focusDate = useRef<string | null>(null);
 
   const localeMap: Record<string, string> = {
     tr: 'tr-TR',
@@ -130,13 +121,13 @@ export default function CalendarTab({
   };
   const currentLocale = localeMap[i18n.language] || 'en-US';
 
-  const monthNames = useMemo(() => getLocaleMonths(currentLocale), [currentLocale]);
   const dayNames = useMemo(() => getLocaleDays(currentLocale), [currentLocale]);
+  const fullDate = useMemo(() => new Intl.DateTimeFormat(currentLocale, { dateStyle: 'full' }), [currentLocale]);
 
-  const today = useMemo(() => new Date(), []);
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [selectedDate, setSelectedDate] = useState(() => formatDate(currentDate));
+  const todayKey = formatDate(new Date());
 
-  const [currentDate, setCurrentDate] = useState(today);
-  const [selectedDate, setSelectedDate] = useState(formatDate(today));
 
   const [events, setEvents] = useState<CalendarEvent[]>(() => {
     try {
@@ -158,21 +149,10 @@ export default function CalendarTab({
     presentationName: '',
   });
 
-  const saveRef = useRef(events);
-  saveRef.current = events;
-
   useEffect(() => {
-    const timer = setTimeout(() => {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
-    }, 500);
-    return () => clearTimeout(timer);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(events)); }
+    catch { console.warn('Could not save calendar events'); }
   }, [events]);
-
-  useEffect(() => {
-    const flush = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(saveRef.current));
-    window.addEventListener('beforeunload', flush);
-    return () => window.removeEventListener('beforeunload', flush);
-  }, []);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -197,7 +177,11 @@ export default function CalendarTab({
     return map;
   }, [events]);
 
-  const selectedDayEvents = eventsByDate[selectedDate] || [];
+  const selectedDayEvents = [...(eventsByDate[selectedDate] || [])]
+    .sort((a, b) => (a.time || '24:00').localeCompare(b.time || '24:00'));
+  const selectedDayLabel = new Date(`${selectedDate}T00:00:00`).toLocaleDateString(currentLocale, {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
 
   const goToToday = useCallback(() => {
     const now = new Date();
@@ -208,21 +192,13 @@ export default function CalendarTab({
     setSelectedDate(formatDate(now));
   }, [selectedDate, currentDate]);
 
-  const goToPreviousMonth = useCallback(() => {
-    setMonthDirection(-1);
-    playSfx('back');
-    setCurrentDate(prev => {
-      return new Date(prev.getFullYear(), prev.getMonth() - 1, 1);
-    });
-  }, []);
-
-  const goToNextMonth = useCallback(() => {
-    setMonthDirection(1);
-    playSfx('forward');
-    setCurrentDate(prev => {
-      return new Date(prev.getFullYear(), prev.getMonth() + 1, 1);
-    });
-  }, []);
+  const changeMonth = (direction: number) => {
+    const next = new Date(year, month + direction, 1);
+    setMonthDirection(direction);
+    setCurrentDate(next);
+    setSelectedDate(formatDate(next));
+    playSfx(direction < 0 ? 'back' : 'forward');
+  };
 
   const openModal = useCallback(() => {
     setEditingEvent(null);
@@ -311,489 +287,207 @@ export default function CalendarTab({
   }, []);
 
   return (
-    <div className="h-full bg-[#16161a] text-white overflow-hidden">
-      <div className="h-full flex flex-col">
-        {/* HEADER */}
-        <div className="shrink-0 border-b border-white/[0.08] bg-[#26262b]/95 backdrop-blur-xl">
-          <div className="px-4 sm:px-6 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-3">
-            {/* LEFT */}
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-gradient-to-br from-blue-500/20 to-violet-500/20 border border-white/10 flex items-center justify-center shadow-lg shadow-blue-500/10">
-                <CalendarDays className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
-              </div>
+    <section className="calendar-page" aria-labelledby="calendar-heading" onKeyDown={event => {
+      if ((event.key === 'Enter' || event.key === ' ') && (event.target as HTMLElement).closest('button')) event.stopPropagation();
+    }}>
+      <header className="calendar-page-header">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="calendar-heading-icon"><CalendarDays size={19} aria-hidden="true" /></span>
+          <div className="min-w-0">
+            <h2 id="calendar-heading" className="text-lg font-semibold">{t('common.calendarTitle')}</h2>
+            <p className="text-xs text-white/65">{t('common.calendarSubtitle')}</p>
+          </div>
+        </div>
+        <button type="button" onClick={openModal} className="workspace-secondary-action">
+          <Plus size={16} aria-hidden="true" />
+          {t('common.calendarAddEvent')}
+        </button>
+      </header>
 
-              <div className="hidden sm:block">
-                <h2 className="text-lg font-semibold tracking-tight">
-                  {t('common.calendarTitle')}
-                </h2>
-
-                <p className="text-xs text-white/55 mt-0.5">
-                  {t('common.calendarSubtitle')}
-                </p>
-              </div>
-            </div>
-
-            {/* CENTER */}
-            <div className="flex items-center gap-2 sm:gap-3 order-3 sm:order-none w-full sm:w-auto justify-center">
-              <button
-                onClick={goToPreviousMonth}
-                aria-label={t('common.calendarPrevMonth')}
-                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] transition-all flex items-center justify-center"
-              >
-                <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
-              </button>
-
-              <div className="min-w-[160px] sm:min-w-[220px] text-center">
-                <h2 className="text-base sm:text-xl font-semibold tracking-tight">
-                  {monthNames[month]} {year}
-                </h2>
-              </div>
-
-              <button
-                onClick={goToNextMonth}
-                aria-label={t('common.calendarNextMonth')}
-                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] transition-all flex items-center justify-center"
-              >
-                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
-              </button>
-            </div>
-
-            {/* RIGHT */}
-            <div className="flex items-center gap-2 sm:gap-3">
-              <button
-                onClick={goToToday}
-                className="h-9 sm:h-10 px-3 sm:px-4 rounded-xl border border-blue-500/20 bg-blue-500/10 hover:bg-blue-500/20 transition-all text-xs sm:text-sm text-blue-300 font-medium"
-              >
+      <div className="calendar-layout">
+        <section className="calendar-panel calendar-month-panel min-w-0" aria-labelledby="calendar-month">
+          <div className="calendar-panel-header">
+            <h3 id="calendar-month" className="text-sm font-semibold capitalize" aria-live="polite">
+              {currentDate.toLocaleDateString(currentLocale, { month: 'long', year: 'numeric' })}
+            </h3>
+            <div className="flex items-center gap-1.5">
+              <button type="button" onClick={goToToday} className="workspace-secondary-action calendar-today">
                 {t('common.calendarToday')}
               </button>
-
-              <button
-                type="button"
-                onClick={openModal}
-                className="workspace-secondary-action h-9 sm:h-10"
-              >
-                <Plus className="w-4 h-4" aria-hidden="true" />
-                <span>{t('common.calendarAddEvent')}</span>
+              <button type="button" onClick={() => changeMonth(-1)} className="calendar-icon-button" aria-label={t('common.calendarPrevMonth')}>
+                <ChevronLeft size={16} aria-hidden="true" />
+              </button>
+              <button type="button" onClick={() => changeMonth(1)} className="calendar-icon-button" aria-label={t('common.calendarNextMonth')}>
+                <ChevronRight size={16} aria-hidden="true" />
               </button>
             </div>
           </div>
-        </div>
+          <div className="calendar-weekdays" aria-hidden="true">
+            {dayNames.map(day => <span key={day}>{day}</span>)}
+          </div>
+          <div key={`${year}-${month}`} className={cn('calendar-grid', monthDirection < 0 ? 'ui-calendar-previous' : monthDirection > 0 ? 'ui-calendar-next' : 'ui-calendar-static')}>
+            {calendarDays.map(date => {
+              const dateStr = formatDate(date);
+              const inMonth = date.getMonth() === month;
+              const isToday = dateStr === todayKey;
+              const isSelected = dateStr === selectedDate;
+              const dayEvents = eventsByDate[dateStr] || [];
+              const eventCount = t('common.calendarEventCount', { count: dayEvents.length });
+              return (
+                <button
+                  type="button"
+                  key={dateStr}
+                  className="calendar-day"
+                  data-outside={!inMonth || undefined}
+                  aria-current={isToday ? 'date' : undefined}
+                  aria-pressed={isSelected}
+                  aria-label={`${fullDate.format(date)} · ${eventCount}`}
+                  onClick={() => {
+                    if (isSelected) return;
+                    if (!inMonth) {
+                      focusDate.current = dateStr;
+                      setMonthDirection(date < new Date(year, month, 1) ? -1 : 1);
+                      setCurrentDate(date);
+                    }
+                    setSelectedDate(dateStr);
+                    playSfx('check');
+                  }}
+                  ref={element => {
+                    if (element && focusDate.current === dateStr) {
+                      focusDate.current = null;
+                      element.focus({ preventScroll: true });
+                    }
+                  }}
+                >
+                  <span className="calendar-day-number">{date.getDate()}</span>
+                  <span className="calendar-day-events" aria-hidden="true">
+                    {dayEvents.slice(0, 2).map(event => (
+                      <span key={event.id} className="calendar-event-preview">
+                        <span className={cn('calendar-event-dot', event.color || EVENT_COLORS[0])} />
+                        <span className="truncate">{event.title}</span>
+                      </span>
+                    ))}
+                    {dayEvents.length > 2 && <span className="calendar-more">+{dayEvents.length - 2}</span>}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
 
-        {/* BODY */}
-        <div className="min-h-0 flex-1 overflow-y-auto lg:flex lg:overflow-hidden">
-          {/* CALENDAR */}
-          <div className="lg:min-h-0 lg:min-w-0 lg:flex-1 lg:overflow-y-auto">
-            <div className="p-3 sm:p-5">
-              {/* WEEK DAYS */}
-              <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-1 sm:mb-2">
-                {dayNames.map(day => (
-                  <div
-                    key={day}
-                    className="h-8 sm:h-10 flex items-center justify-center text-[11px] sm:text-xs uppercase tracking-wider text-white/55 font-semibold"
-                  >
-                    {/* Show short form on mobile */}
-                    <span className="hidden sm:inline">{day}</span>
-                    <span className="sm:hidden">{day.charAt(0)}</span>
-                  </div>
+        <aside className="calendar-panel calendar-agenda-panel min-w-0" aria-labelledby="calendar-selected-date">
+          <div className="calendar-panel-header calendar-agenda-header">
+            <div className="min-w-0">
+              <p className="text-xs text-white/55">{t('common.calendarSelectedDay')}</p>
+              <h3 id="calendar-selected-date" className="mt-1 text-sm font-semibold capitalize" aria-live="polite">{selectedDayLabel}</h3>
+            </div>
+          </div>
+          <div className="calendar-agenda-content p-3 sm:p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-1">
+              <h4 className="text-sm font-semibold">{t('common.calendarEvents')}</h4>
+              <span className="text-xs text-white/55">{t('common.calendarEventCount', { count: selectedDayEvents.length })}</span>
+            </div>
+            {selectedDayEvents.length === 0 ? (
+              <div className="calendar-empty">
+                <CalendarDays size={22} className="mx-auto mb-2 text-white/45" aria-hidden="true" />
+                <p className="text-sm font-medium">{t('common.calendarNoEvents')}</p>
+                <p className="mt-1 text-xs leading-relaxed text-white/60">{t('common.calendarNoEventsDesc')}</p>
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {selectedDayEvents.map(event => (
+                  <li key={event.id} className="calendar-event">
+                    <div className="flex items-start gap-2">
+                      <span className={cn('calendar-event-dot mt-[7px]', event.color || EVENT_COLORS[0])} aria-hidden="true" />
+                      <h5 className="min-w-0 flex-1 break-words text-sm font-medium">{event.title}</h5>
+                      <button type="button" onClick={() => openEditModal(event)} className="calendar-icon-button" aria-label={t('common.edit')} title={t('common.edit')}>
+                        <Pencil size={14} aria-hidden="true" />
+                      </button>
+                      <button type="button" onClick={() => deleteEvent(event.id)} className="calendar-icon-button calendar-danger" aria-label={t('common.delete')} title={t('common.delete')}>
+                        <Trash2 size={14} aria-hidden="true" />
+                      </button>
+                    </div>
+                    {(event.time || event.presentationName) && (
+                      <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-white/60">
+                        {event.time && <span className="inline-flex items-center gap-1"><Clock size={13} aria-hidden="true" />{event.time}</span>}
+                        {event.presentationName && <span className="inline-flex min-w-0 items-center gap-1" title={event.presentationName}><Presentation size={13} className="shrink-0" aria-hidden="true" /><span className="truncate">{event.presentationName}</span></span>}
+                      </div>
+                    )}
+                    {event.description && <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-white/65">{event.description}</p>}
+                    {event.presentationName && onOpenPresentation && (
+                      <button type="button" onClick={() => onOpenPresentation(event.presentationName!)} className="workspace-secondary-action mt-3">
+                        <Presentation size={14} aria-hidden="true" />
+                        {t('common.calendarOpenPresentation')}
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </aside>
+      </div>
+
+      <Dialog open={isModalOpen} onClose={closeModal} labelledBy="calendar-event-title" className="calendar-dialog">
+        <form onSubmit={event => { event.preventDefault(); if (editingEvent) updateEvent(); else addEvent(); }}>
+          <div className="calendar-panel-header">
+            <div>
+              <h3 id="calendar-event-title" className="text-base font-semibold">
+                {t(editingEvent ? 'common.calendarEditModalTitle' : 'common.calendarModalTitle')}
+              </h3>
+              <p className="mt-0.5 text-xs text-white/60">{selectedDayLabel}</p>
+            </div>
+            <button type="button" onClick={() => { closeModal(); playSfx('close'); }} className="calendar-icon-button" aria-label={t('common.close')}>
+              <X size={17} aria-hidden="true" />
+            </button>
+          </div>
+
+          <div className="space-y-4 p-4">
+            <label className="calendar-field">
+              {t('common.calendarTitleLabel')}
+              <input autoFocus required value={newEvent.title} onChange={e => setNewEvent(prev => ({ ...prev, title: e.target.value }))} placeholder={t('common.calendarTitlePlaceholder')} />
+            </label>
+            <label className="calendar-field">
+              {t('common.calendarDescLabel')}
+              <textarea rows={3} value={newEvent.description} onChange={e => setNewEvent(prev => ({ ...prev, description: e.target.value }))} placeholder={t('common.calendarDescPlaceholder')} />
+            </label>
+            <label className="calendar-field">
+              {t('common.calendarTimeLabel')}
+              <input type="time" value={newEvent.time} onChange={e => setNewEvent(prev => ({ ...prev, time: e.target.value }))} />
+            </label>
+            <fieldset>
+              <legend className="mb-2 text-xs font-medium text-white/75">{t('common.calendarColorLabel')}</legend>
+              <div className="flex gap-2">
+                {EVENT_COLORS.map((color, index) => (
+                  <button key={color} type="button" className={cn('calendar-swatch', color)}
+                    aria-label={t(`common.calendarColors.${['blue', 'violet', 'green', 'orange', 'pink'][index]}`)} aria-pressed={newEvent.color === color}
+                    onClick={() => setNewEvent(prev => ({ ...prev, color }))} />
                 ))}
               </div>
-
-              {/* DAYS */}
-              <div key={`${year}-${month}`} className={cn('grid grid-cols-7 gap-1 sm:gap-2', monthDirection < 0 ? 'ui-calendar-previous' : monthDirection > 0 ? 'ui-calendar-next' : 'ui-calendar-static')}>
-                {calendarDays.map((date, index) => {
-                  const dateStr = formatDate(date);
-
-                  const isCurrentMonth = date.getMonth() === month;
-
-                  const isToday =
-                    dateStr === formatDate(new Date());
-
-                  const isSelected = dateStr === selectedDate;
-
-                  const dayEvents = eventsByDate[dateStr] || [];
-
-                  return (
-                    <button
-                      key={index}
-                      onClick={() => { if (selectedDate !== dateStr) { setSelectedDate(dateStr); playSfx('check'); } }}
-                      className={cn(
-                        'group relative min-h-[72px] sm:min-h-[88px] lg:min-h-[120px] rounded-xl border p-2 lg:p-3 text-left transition-all duration-200 overflow-hidden',
-                        isCurrentMonth
-                          ? 'bg-white/[0.05] border-white/[0.08]'
-                          : 'bg-white/[0.03] border-white/[0.05] opacity-40',
-                        'hover:border-blue-500/20 hover:bg-white/[0.07]',
-                        isSelected &&
-                          'border-blue-500/40 bg-blue-500/[0.10] shadow-lg shadow-blue-500/10',
-                        isToday &&
-                          'ring-1 ring-blue-500/40'
-                      )}
-                    >
-                      {isSelected && <m.span layoutId="calendar-selected-day" className="pointer-events-none absolute inset-0 rounded-xl bg-blue-500/10 sm:rounded-2xl" transition={{ duration: motionEnabled ? uiMotion.duration.fast : 0, ease: uiMotion.ease }} />}
-                      {/* Glow */}
-                      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-br from-blue-500/[0.03] to-violet-500/[0.03]" />
-
-                      {/* Top */}
-                      <div className="relative z-10 flex items-center justify-between">
-                        <span
-                          className={cn(
-                            'text-xs sm:text-sm font-semibold',
-                            isToday ? 'text-blue-300' : 'text-white/80'
-                          )}
-                        >
-                          {date.getDate()}
-                        </span>
-
-                        {dayEvents.length > 0 && (
-                          <div className="min-w-5 sm:min-w-6 h-5 sm:h-6 px-1 rounded-full bg-blue-500/20 border border-blue-500/20 text-[11px] sm:text-[11px] flex items-center justify-center text-blue-300 font-medium">
-                            {dayEvents.length}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* EVENTS */}
-                      <div className="relative z-10 mt-2 sm:mt-3 space-y-1 sm:space-y-1.5">
-                        {dayEvents.slice(0, 3).map(event => (
-                          <div
-                            key={event.id}
-                            className="flex items-center gap-1.5 sm:gap-2 rounded-lg bg-black/[0.08] border border-white/5 px-1.5 sm:px-2 py-1 sm:py-1.5"
-                          >
-                            <div
-                              className={cn(
-                                'w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full shrink-0',
-                                event.color
-                              )}
-                            />
-
-                            <span className="text-[11px] sm:text-[11px] text-white/80 truncate">
-                              {event.title}
-                            </span>
-                          </div>
-                        ))}
-
-                        {dayEvents.length > 3 && (
-                          <div className="text-[11px] sm:text-[11px] text-white/55 px-1">
-                            {t('common.calendarMoreEvents', { count: dayEvents.length - 3 })}
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* SIDEBAR */}
-          <div className="w-full lg:w-[380px] lg:min-h-0 lg:shrink-0 border-t lg:border-t-0 lg:border-l border-white/[0.08] bg-[#1e2128] lg:overflow-y-auto">
-            <div className="p-3 lg:p-4">
-              {/* DATE HEADER */}
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-gradient-to-br from-blue-500/10 to-violet-500/10 border border-white/5 p-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-blue-500/10 flex items-center justify-center border border-blue-500/10">
-                    <Sparkles className="w-5 h-5 text-blue-400" />
-                  </div>
-
-                  <div>
-                    <p className="text-xs uppercase tracking-wider text-white/55">
-                      {t('common.calendarSelectedDay')}
-                    </p>
-
-                    <h3 className="font-semibold">
-                      {new Date(selectedDate).toLocaleDateString(
-                        currentLocale,
-                        {
-                          weekday: 'long',
-                          day: 'numeric',
-                          month: 'long',
-                        }
-                      )}
-                    </h3>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* EVENTS */}
-              <div className="mt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-semibold">
-                    {t('common.calendarEvents')}
-                  </h4>
-
-                  <span className="text-xs text-white/55">
-                    {t('common.calendarEventCount', { count: selectedDayEvents.length })}
-                  </span>
-                </div>
-
-                <div aria-live="polite">
-                {selectedDayEvents.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-center">
-                    <div className="w-9 h-9 mx-auto rounded-lg bg-blue-500/10 border border-blue-500/10 flex items-center justify-center mb-2">
-                      <CalendarDays className="w-5 h-5 text-blue-400/60" />
-                    </div>
-
-                    <h5 className="font-medium text-white/80">
-                      {t('common.calendarNoEvents')}
-                    </h5>
-
-                    <p className="text-sm text-white/55 mt-2 leading-relaxed">
-                      {t('common.calendarNoEventsDesc')}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {selectedDayEvents.map(event => (
-                      <div
-                        key={event.id}
-                        className="group rounded-3xl border border-white/5 bg-white/[0.03] hover:bg-white/[0.05] transition-all p-4"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex min-w-0 gap-3 flex-1">
-                            <div
-                              className={cn(
-                                'w-3 h-3 rounded-full mt-1.5 shrink-0',
-                                event.color
-                              )}
-                            />
-
-                            <div className="min-w-0">
-                              <h5 className="font-medium text-sm truncate">
-                                {event.title}
-                              </h5>
-
-                              {(event.time || event.presentationName) && (
-                                <div className="flex gap-3 mt-1.5 text-xs text-white/50">
-                                  {event.time && <span>🕐 {event.time}</span>}
-                                  {event.presentationName && (
-                                    <ControlTooltip><span className="truncate" title={event.presentationName}>
-                                      📊 {event.presentationName}
-                                    </span></ControlTooltip>
-                                  )}
-                                </div>
-                              )}
-
-                              {event.description && (
-                                <p className="text-xs text-white/60 mt-2 leading-relaxed">
-                                  {event.description}
-                                </p>
-                              )}
-
-                              {event.presentationName && onOpenPresentation && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    onOpenPresentation(event.presentationName!)
-                                  }
-                                  className="mt-3 w-full h-9 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs font-medium flex items-center justify-center gap-2 transition-all"
-                                >
-                                  <Presentation className="w-3.5 h-3.5" />
-                                  {t('common.calendarOpenPresentation')}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="flex shrink-0 gap-1">
-                            <button
-                              onClick={() => openEditModal(event)}
-                              aria-label={t('common.edit')}
-                              className="transition-colors w-9 h-9 rounded-xl hover:bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                            >
-                              <Pencil className="w-4 h-4" aria-hidden="true" />
-                            </button>
-
-                            <button
-                              onClick={() => deleteEvent(event.id)}
-                              aria-label={t('common.delete')}
-                              className="transition-colors w-9 h-9 rounded-xl hover:bg-red-500/10 text-red-400 flex items-center justify-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                            >
-                              <Trash2 className="w-4 h-4" aria-hidden="true" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+            </fieldset>
+            <label className="calendar-field">
+              {t('common.calendarPresNameLabel')}
+              <select value={newEvent.presentationName} onChange={e => setNewEvent(prev => ({ ...prev, presentationName: e.target.value }))}>
+                <option value="">{t('common.calendarNoPresentation')}</option>
+                {newEvent.presentationName && !savedPresentationNames.includes(newEvent.presentationName) && (
+                  <option value={newEvent.presentationName}>{t('common.calendarMissingPresentation', { name: newEvent.presentationName })}</option>
                 )}
-              </div>
-              </div>
-            </div>
+                {savedPresentationNames.map(name => <option key={name} value={name}>{name}</option>)}
+              </select>
+              <span className="font-normal text-white/55">{t('common.calendarPresHint')}</span>
+            </label>
           </div>
-        </div>
 
-        {/* MODAL */}
-        <Dialog
-          open={isModalOpen}
-          onClose={closeModal}
-          labelledBy="calendar-event-title"
-          className="w-[calc(100%-32px)] sm:w-full max-w-md rounded-[24px] sm:rounded-[32px] border border-white/10 bg-surface-raised shadow-2xl shadow-black/40 overflow-hidden"
-        >
-              <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-white/5 flex items-center justify-between">
-                <div>
-                  <h3 id="calendar-event-title" className="text-lg font-semibold">
-                    {editingEvent
-                      ? t('common.calendarEditModalTitle')
-                      : t('common.calendarModalTitle')}
-                  </h3>
-
-                  <p className="text-sm text-white/60 mt-1">
-                    {new Date(selectedDate).toLocaleDateString(currentLocale)}
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => { closeModal(); playSfx('close'); }}
-                  aria-label={t('common.close')}
-                  className="w-10 h-10 rounded-xl hover:bg-white/[0.05] flex items-center justify-center transition-all focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
-                >
-                  <X className="w-5 h-5 text-white/60" aria-hidden="true" />
-                </button>
-              </div>
-
-              {/* BODY */}
-              <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
-                <div>
-                  <label htmlFor="cal-event-title" className="block text-xs uppercase tracking-wider text-white/55 mb-2">
-                    {t('common.calendarTitleLabel')}
-                  </label>
-
-                  <input
-                    id="cal-event-title"
-                    type="text"
-                    value={newEvent.title}
-                    onChange={e =>
-                      setNewEvent(prev => ({
-                        ...prev,
-                        title: e.target.value,
-                      }))
-                    }
-                    placeholder={t('common.calendarTitlePlaceholder')}
-                    className="w-full h-12 rounded-2xl bg-black/[0.08] border border-white/10 px-4 outline-none focus:border-blue-500/40 transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="cal-event-desc" className="block text-xs uppercase tracking-wider text-white/55 mb-2">
-                    {t('common.calendarDescLabel')}
-                  </label>
-
-                  <textarea
-                    id="cal-event-desc"
-                    value={newEvent.description}
-                    onChange={e =>
-                      setNewEvent(prev => ({
-                        ...prev,
-                        description: e.target.value,
-                      }))
-                    }
-                    placeholder={t('common.calendarDescPlaceholder')}
-                    className="w-full h-28 rounded-2xl bg-black/[0.08] border border-white/10 px-4 py-3 outline-none resize-none focus:border-blue-500/40 transition-all"
-                  />
-                </div>
-
-                {/* COLORS */}
-                <div>
-                  <label className="block text-xs uppercase tracking-wider text-white/55 mb-3">
-                    {t('common.calendarColorLabel')}
-                  </label>
-
-                  <div className="flex gap-3">
-                    {EVENT_COLORS.map(color => (
-                      <button
-                        key={color}
-                        type="button"
-                        aria-label={`${t('common.calendarColorLabel')} ${color}`}
-                        aria-pressed={newEvent.color === color}
-                        onClick={() =>
-                          setNewEvent(prev => ({
-                            ...prev,
-                            color,
-                          }))
-                        }
-                        className={cn(
-                          'w-10 h-10 rounded-2xl transition-all border-2',
-                          color,
-                          newEvent.color === color
-                            ? 'border-white scale-110'
-                            : 'border-transparent opacity-70 hover:opacity-100'
-                        )}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                {/* TIME */}
-                <div>
-                  <label htmlFor="cal-event-time" className="block text-xs uppercase tracking-wider text-white/55 mb-2">
-                    {t('common.calendarTimeLabel')}
-                  </label>
-
-                  <input
-                    id="cal-event-time"
-                    type="time"
-                    value={newEvent.time}
-                    onChange={e =>
-                      setNewEvent(prev => ({
-                        ...prev,
-                        time: e.target.value,
-                      }))
-                    }
-                    className="w-full h-12 rounded-2xl bg-black/[0.08] border border-white/10 px-4 outline-none focus:border-blue-500/40 transition-all"
-                  />
-                </div>
-
-                {/* Presentation name */}
-                <div>
-                  <label htmlFor="cal-event-pres-name" className="block text-xs uppercase tracking-wider text-white/55 mb-2">
-                    {t('common.calendarPresNameLabel')}
-                  </label>
-
-                  <select
-                    id="cal-event-pres-name"
-                    value={newEvent.presentationName}
-                    onChange={e =>
-                      setNewEvent(prev => ({
-                        ...prev,
-                        presentationName: e.target.value,
-                      }))
-                    }
-                    className="w-full h-12 rounded-2xl bg-black/[0.08] border border-white/10 px-4 outline-none focus:border-blue-500/40 transition-all"
-                  >
-                    <option value="" className="bg-surface-overlay">{t('common.calendarNoPresentation')}</option>
-                    {newEvent.presentationName && !savedPresentationNames.includes(newEvent.presentationName) && (
-                      <option value={newEvent.presentationName} className="bg-surface-overlay">
-                        {t('common.calendarMissingPresentation', { name: newEvent.presentationName })}
-                      </option>
-                    )}
-                    {savedPresentationNames.map(name => <option key={name} value={name} className="bg-surface-overlay">{name}</option>)}
-                  </select>
-                  <p className="text-[11px] text-white/60 mt-2">
-                    {t('common.calendarPresHint')}
-                  </p>
-                </div>
-              </div>
-
-              {/* FOOTER */}
-              <div className="px-4 sm:px-6 py-4 sm:py-5 border-t border-white/5 flex gap-2 sm:gap-3">
-                <button
-                  onClick={() => { closeModal(); playSfx('close'); }}
-                  className="flex-1 h-12 rounded-2xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] transition-all font-medium"
-                >
-                  {t('common.calendarCancel')}
-                </button>
-
-                <button
-                  onClick={editingEvent ? updateEvent : addEvent}
-                  disabled={!newEvent.title.trim()}
-                  className="flex-1 h-12 rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-all hover:opacity-90"
-                >
-                  {editingEvent
-                    ? t('common.calendarUpdate')
-                    : t('common.calendarSave')}
-                </button>
-              </div>
-        </Dialog>
-      </div>
-    </div>
+          <div className="calendar-dialog-footer">
+            <button type="button" onClick={() => { closeModal(); playSfx('close'); }} className="workspace-secondary-action">
+              {t('common.calendarCancel')}
+            </button>
+            <button type="submit" disabled={!newEvent.title.trim()} className="calendar-primary">
+              {t(editingEvent ? 'common.calendarUpdate' : 'common.calendarSave')}
+            </button>
+          </div>
+        </form>
+      </Dialog>
+    </section>
   );
 }

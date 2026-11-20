@@ -1,6 +1,7 @@
 // UndoAction is used in setPresentationName to keep rename in undo history
 import { isSfxEnabled, readSfxMuteDuringLive, setSfxEnabled, setSfxMuteDuringLive } from '../sfx';
 import { readUiMotionEnabled, writeUiMotionEnabled } from '../uiMotion';
+import { DEFAULT_LIVE_SAVE_RETENTION_MS } from '../../shared/presetRetention';
 
 import type { AppSet, AppState } from './storeTypes';
 
@@ -22,8 +23,6 @@ export function createPreferencesSlice(
   | 'setUiSfxEnabled'
   | 'sessionSaveStatus'
   | 'setSessionSaveStatus'
-  | 'operatorNotesEnabled'
-  | 'setOperatorNotesEnabled'
   | 'nextSlidePreviewEnabled'
   | 'setNextSlidePreviewEnabled'
   | 'sectionFilterId'
@@ -54,11 +53,11 @@ export function createPreferencesSlice(
     },
     liveSaveRetentionMs: (() => {
       try {
-        const raw = Number(localStorage.getItem('liveSaveRetentionMs'));
-        if (!Number.isFinite(raw) || raw < 0) return 7 * 24 * 60 * 60 * 1000;
-        return raw;
+        const stored = localStorage.getItem('liveSaveRetentionMs');
+        const value = stored?.trim() ? Number(stored) : NaN;
+        return Number.isFinite(value) && value >= 0 ? value : DEFAULT_LIVE_SAVE_RETENTION_MS;
       } catch {
-        return 7 * 24 * 60 * 60 * 1000;
+        return DEFAULT_LIVE_SAVE_RETENTION_MS;
       }
     })(),
     setLiveSaveRetentionMs: (ms) => {
@@ -86,21 +85,6 @@ export function createPreferencesSlice(
     },
     sessionSaveStatus: 'idle',
     setSessionSaveStatus: (sessionSaveStatus) => set({ sessionSaveStatus }),
-    operatorNotesEnabled: (() => {
-      try {
-        return localStorage.getItem('operatorNotesEnabled') === '1';
-      } catch {
-        return false;
-      }
-    })(),
-    setOperatorNotesEnabled: (enabled) => {
-      try {
-        localStorage.setItem('operatorNotesEnabled', enabled ? '1' : '0');
-      } catch {
-        /* storage unavailable */
-      }
-      set({ operatorNotesEnabled: enabled });
-    },
     nextSlidePreviewEnabled: (() => {
       try {
         return localStorage.getItem('nextSlidePreviewEnabled') === '1';

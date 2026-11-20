@@ -11,6 +11,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type RefObject,
   type ReactNode,
 } from 'react';
@@ -43,8 +44,7 @@ interface CanvasStageProps {
   onContextMenu?: (event: React.MouseEvent) => void;
   /**
    * Alt+drag starts a native drag carrying the given items so they can be
-   * dropped onto a slide thumbnail. Plain pointer dragging is untouched and Alt
-   * suspends item moving/resizing for the duration of the gesture.
+   * dropped onto a slide thumbnail. On corner handles, Alt locks the aspect ratio.
    */
   onItemDragStart?: (event: React.DragEvent, itemIds: string[]) => void;
   /** Inline text editing, owned by the editor so toolbars can start it. */
@@ -337,7 +337,8 @@ export function CanvasStage({
             height: SLIDE_REFERENCE_HEIGHT,
             transform: `translate(${panX}px, ${panY}px) scale(${scale})`,
             transformOrigin: 'top left',
-          }}
+            '--editor-handle-unit': `${1 / scale}px`,
+          } as CSSProperties}
         >
           {/* Background */}
           <div
@@ -428,6 +429,10 @@ export function CanvasStage({
               data-item
               draggable={altHeld && !item.locked && !!onItemDragStart}
               onDragStart={(event) => {
+                if (event.currentTarget.querySelector('[data-editor-resize-corner][data-editor-pointer-active="true"]')) {
+                  event.preventDefault();
+                  return;
+                }
                 if (!keyboardEnabled || !onItemDragStart) return;
                 const dragged = selectedIds.has(item.id) && selectedIds.size > 0 ? [...selectedIds] : [item.id];
                 onItemDragStart(event, dragged);

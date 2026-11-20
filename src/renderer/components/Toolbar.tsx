@@ -269,7 +269,8 @@ export default function Toolbar({
           data-preparation-status={readinessStatus}
           className="relative p-2.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none active:scale-[0.92]"
         >
-          <span className="design-action-label">{t('slidesWorkspace.readiness')}</span>{readinessStatus === 'checking' ? <MotionIcon name="loader" active loop /> : readinessStatus === 'complete' && readinessIssueCount === 0 ? <MotionIcon name="check-circle" active /> : <ClipboardCheck className="w-4 h-4" aria-hidden="true" />}
+          <span className="design-action-label">{t('slidesWorkspace.readiness')}</span>
+          <ClipboardCheck className="w-4 h-4" aria-hidden="true" />
           <span id="preparation-toolbar-status" className="sr-only">{readinessLabel}{readinessIssueCount > 0 ? ': ' + t('prepCheck.summary', { count: readinessIssueCount }) : ''}</span>
           {readinessStatus !== 'complete' && <span aria-hidden="true" className="absolute -top-1 -right-1 h-4 min-w-4 rounded-full bg-amber-500 text-black text-[11px]">{readinessStatus === 'failed' ? '!' : '…'}</span>}
           {readinessIssueCount > 0 && (

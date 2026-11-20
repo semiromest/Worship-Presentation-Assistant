@@ -17,6 +17,7 @@ import CaptionsRenderer from './components/CaptionsRenderer';
 import { useTranslation } from 'react-i18next';
 import { WatermarkOverlay } from './components/WatermarkOverlay';
 import { useWatermarkStore } from './state/useWatermarkStore';
+import { textItemInsets } from '../shared/canvasLayout';
 
 export interface LivePreviewProps {
   partTransition?: { from: Slide; incoming?: string; outgoing?: string };
@@ -269,9 +270,11 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
           )}
           <BackgroundDim value={slide.styles?.backgroundDim} />
           {slide.items.filter(item => item.visible !== false).map(item => {
+            const inset = textItemInsets(item.textStyles?.insetPercent,
+              width * item.width / 100, height * item.height / 100, 8 * scale);
             const borderWidth = item.borderWidth || 0;
             const borderStyle = borderWidth > 0
-              ? `${borderWidth}px solid ${item.borderColor || '#ffffff'}`
+              ? `${borderWidth * scale}px solid ${item.borderColor || '#ffffff'}`
               : undefined;
             const borderRadius = item.borderRadius
               ? `${item.borderRadius * scale}px`
@@ -293,9 +296,10 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
             >
               {item.type === 'image' ? <SlideImage src={item.mediaUrl} styles={item.imageStyles} /> : (
                 <div
-                  className="w-full h-full overflow-hidden p-2 flex items-center justify-center"
+                  className="w-full h-full overflow-hidden flex justify-center"
                   style={{
-                    padding:         `${8 * scale}px`,
+                    padding:         `${inset.vertical}px ${inset.horizontal}px`,
+                    alignItems:      item.textStyles?.verticalAlign === 'top' ? 'flex-start' : item.textStyles?.verticalAlign === 'bottom' ? 'flex-end' : 'center',
                     textAlign:       item.textStyles?.textAlign || 'center',
                   }}
                 >
@@ -304,7 +308,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
                     style={{
                       textTransform:   item.textStyles?.textTransform || 'none',
                       color:           item.textStyles?.textColor ?? '#ffffff',
-                      fontSize:        `${Math.max(4, (item.textStyles?.fontSize || 32) * scale)}px`,
+                      fontSize:        `${Math.max(4, item.textStyles?.fontSize || 32) * scale}px`,
                       fontFamily:      item.textStyles?.fontFamily,
                       fontWeight:      item.textStyles?.fontWeight || 'normal',
                       fontStyle:       item.textStyles?.fontStyle || 'normal',
@@ -445,7 +449,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
     const alignItemsMap: Record<string, string> = { top: 'flex-start', center: 'center', bottom: 'flex-end' };
     const textLayer = (content: string) => (
       <p data-gradient-text="" className="whitespace-pre-wrap leading-snug relative z-10" style={{
-        textTransform: styles.textTransform || 'none', fontSize: `${Math.max(8, fontSize * scale)}px`,
+        textTransform: styles.textTransform || 'none', fontSize: `${fontSize * scale}px`,
         color: styles.textColor ?? '#fff',
         backgroundColor: styles.textHighlight && styles.textHighlight !== 'transparent' ? styles.textHighlight : undefined,
         fontWeight, fontStyle: styles.fontStyle || 'normal', fontFamily: styles.fontFamily || 'inherit',

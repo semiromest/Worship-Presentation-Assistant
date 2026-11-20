@@ -103,9 +103,6 @@ const api = {
   // ── Image text translation ──
   imageTranslate: (ref: string, source: string, target: string, options?: { cachedOnly?: boolean }) => ipcRenderer.invoke('image-translate:run', ref, source, target, options),
 
-  // ── AI image generation ──
-  imageGenerate: (prompt: string, style: string, ratio: string, seed: number) => ipcRenderer.invoke('image-generate:run', prompt, style, ratio, seed),
-
   // ── Practice / tour ──
   onPracticeWorkspaceChanged: subscribe('practice:workspace-changed'),
   controlPracticeGuide: (id: string, step: string, action: string, input: unknown, label: string, destination?: string) =>

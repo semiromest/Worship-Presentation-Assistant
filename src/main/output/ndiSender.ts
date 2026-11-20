@@ -34,6 +34,8 @@ export class NdiSender {
   private worker: WorkerLike | null = null;
   private running = false;
   private started = false;
+  private frameInFlight = false;
+  private pendingFrame: (() => void) | null = null;
   private restarts: number[] = [];
   private status: NdiStatus = { ...IDLE_NDI_STATUS, available: true };
 
@@ -48,6 +50,7 @@ export class NdiSender {
   stop(): void {
     this.running = false;
     this.started = false;
+    this.clearFrames();
     const worker = this.worker;
     this.worker = null;
     if (worker) {
@@ -55,12 +58,17 @@ export class NdiSender {
       // The worker destroys the sender and exits on its own; terminate is the backstop.
       setTimeout(() => { void worker.terminate(); }, 1000).unref?.();
     }
-    this.update({ active: false, connections: 0, onProgram: false, onPreview: false });
+    this.update({ active: false, connections: 0, onProgram: false, onPreview: false, audio: undefined });
   }
 
   /** Forwards one offscreen paint. BGRA, stride = width * 4 (measured on Electron 43). */
   pushImage(image: NativeImage): void {
     if (!this.worker || !this.started) return;
+    if (this.frameInFlight) {
+      // Keep only the latest paint, and defer the expensive bitmap readback until it is needed.
+      this.pendingFrame = () => this.pushImage(image);
+      return;
+    }
     const size = image.getSize();
     if (!size.width || !size.height) return;
     this.pushBitmap(image.toBitmap(), size.width, size.height);
@@ -69,14 +77,25 @@ export class NdiSender {
   pushBitmap(bitmap: Buffer, width: number, height: number): void {
     if (!this.worker || !this.started) return;
     const stride = bitmap.length / height;
+    if (!Number.isSafeInteger(width) || width <= 0 || !Number.isSafeInteger(height) || height <= 0 ||
+        !Number.isSafeInteger(stride) || stride < width * 4) return;
+    if (this.frameInFlight) {
+      this.pendingFrame = () => this.pushBitmap(bitmap, width, height);
+      return;
+    }
     const whole = bitmap.byteOffset === 0 && bitmap.byteLength === bitmap.buffer.byteLength && bitmap.buffer instanceof ArrayBuffer;
     const data = whole ? (bitmap.buffer as ArrayBuffer) : bitmap.buffer.slice(bitmap.byteOffset, bitmap.byteOffset + bitmap.byteLength) as ArrayBuffer;
     const message: ToNdiWorker = { type: 'frame', data, width, height, stride };
+    this.frameInFlight = true;
     try {
       this.worker.postMessage(message, [data]);
     } catch {
       // Some externally backed buffers cannot be detached; a copy keeps the frame flowing.
-      this.worker.postMessage({ ...message, data: data.slice(0) });
+      try { this.worker.postMessage({ ...message, data: data.slice(0) }); }
+      catch (error) {
+        this.clearFrames();
+        this.update({ error: String((error as Error)?.message ?? error) });
+      }
     }
   }
 
@@ -86,20 +105,35 @@ export class NdiSender {
     const data = block.byteOffset === 0 && block.byteLength === block.buffer.byteLength && block.buffer instanceof ArrayBuffer
       ? block.buffer : block.slice().buffer;
     try { this.worker.postMessage({ type: 'audio', source, data } satisfies ToNdiWorker, [data]); }
-    catch { this.worker.postMessage({ type: 'audio', source, data: data.slice(0) } satisfies ToNdiWorker); }
+    catch {
+      try { this.worker.postMessage({ type: 'audio', source, data: data.slice(0) } satisfies ToNdiWorker); }
+      catch (error) { this.update({ error: String((error as Error)?.message ?? error) }); }
+    }
   }
 
   getStatus(): NdiStatus { return this.status; }
 
   private spawn(): void {
-    const worker = this.options.createWorker?.() ?? new Worker(path.join(__dirname, 'ndiWorker.js'));
+    this.clearFrames();
+    let worker: WorkerLike;
+    try { worker = this.options.createWorker?.() ?? new Worker(path.join(__dirname, 'ndiWorker.js')); }
+    catch (error) {
+      this.running = false;
+      this.update({ active: false, error: String((error as Error)?.message ?? error) });
+      return;
+    }
     this.worker = worker;
     worker.on('message', (message: FromNdiWorker) => {
       if (worker !== this.worker) return;
       if (message.type === 'started') {
         this.started = true;
-        this.update({ active: true, sourceName: message.sourceName, error: null });
+        this.update({ ...IDLE_NDI_STATUS, audio: undefined, active: true, sourceName: message.sourceName });
         this.options.onNeedFrame?.();
+      } else if (message.type === 'frame-accepted') {
+        this.frameInFlight = false;
+        const pending = this.pendingFrame;
+        this.pendingFrame = null;
+        pending?.();
       } else if (message.type === 'stats') {
         this.update({ connections: message.connections, onProgram: message.onProgram, onPreview: message.onPreview, sent: message.sent, dropped: message.dropped, audio: message.audio });
       } else if (message.type === 'error') {
@@ -107,9 +141,10 @@ export class NdiSender {
           // The library could not load or create a sender: retrying will not help.
           this.running = false;
           this.started = false;
+          this.clearFrames();
           this.worker = null;
           void worker.terminate();
-          this.update({ available: false, active: false, error: message.message });
+          this.update({ available: false, active: false, connections: 0, onProgram: false, onPreview: false, audio: undefined, error: message.message });
         } else {
           this.update({ error: message.message });
         }
@@ -119,7 +154,8 @@ export class NdiSender {
       if (worker !== this.worker) return;
       this.worker = null;
       this.started = false;
-      this.update({ active: false, connections: 0, onProgram: false, onPreview: false, error: reason });
+      this.clearFrames();
+      this.update({ active: false, connections: 0, onProgram: false, onPreview: false, audio: undefined, error: reason });
       if (!this.running) return;
       const now = (this.options.now ?? Date.now)();
       this.restarts = this.restarts.filter((t) => now - t < 60_000);
@@ -129,7 +165,17 @@ export class NdiSender {
     };
     worker.on('error', (error: Error) => onGone(error.message));
     worker.on('exit', (code: number) => onGone(`NDI sender exited (${code})`));
-    worker.postMessage({ type: 'start', name: this.options.name, fps: this.options.fps, straightAlpha: !!this.options.straightAlpha, audio: !!this.options.audio } satisfies ToNdiWorker);
+    try {
+      worker.postMessage({ type: 'start', name: this.options.name, fps: this.options.fps, straightAlpha: !!this.options.straightAlpha, audio: !!this.options.audio } satisfies ToNdiWorker);
+    } catch (error) {
+      void worker.terminate();
+      onGone(String((error as Error)?.message ?? error));
+    }
+  }
+
+  private clearFrames(): void {
+    this.frameInFlight = false;
+    this.pendingFrame = null;
   }
 
   private update(patch: Partial<NdiStatus>): void {

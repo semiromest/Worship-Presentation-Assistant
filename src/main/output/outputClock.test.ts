@@ -11,6 +11,15 @@ test('repeats the last frame on static slides', () => {
   assert.equal(clock.repeated, 4);
 });
 
+test('frame delay bounds burst retention and keeps the latest frames', async () => {
+  const { FrameDelay } = await import('./outputClock');
+  const delay = new FrameDelay<number>(100, 4);
+  for (let i = 0; i < 1000; i++) delay.push(i, i);
+  assert.equal(delay.release(1095), null, 'over-capacity old frames are discarded');
+  assert.equal(delay.release(1096), 996);
+  assert.equal(delay.release(1100), 999);
+});
+
 test('a busy sender drops ticks instead of queueing them', () => {
   const clock = new OutputClock<string>();
   clock.push('a');

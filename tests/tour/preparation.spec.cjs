@@ -153,6 +153,7 @@ test('pending checks never gate output and late results cannot replace a differe
   });
   await load([{ id: 'pending', type: 'image', content: '', mediaUrl: 'file:///pending-preparation-test.png' }]);
   await expect(toolbar()).toHaveAttribute('data-preparation-status', 'checking');
+  await expect(toolbar().locator('svg.lucide-clipboard-check')).toBeVisible();
   await page.getByRole('button', { name: 'Start Broadcast', exact: true }).click();
   await expectProjection();
   await remote('closeProjector');
@@ -161,6 +162,7 @@ test('pending checks never gate output and late results cannot replace a differe
   await expectProjection();
   await load([{ id: 'replacement', content: 'Ready' }], 'replacement-deck');
   await complete();
+  await expect(toolbar().locator('svg.lucide-clipboard-check')).toBeVisible();
   await app.evaluate(() => {
     globalThis.releasePreparation({ 'file:///pending-preparation-test.png': false });
   });

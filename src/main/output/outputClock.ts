@@ -49,9 +49,11 @@ export class OutputClock<T> {
  */
 export class FrameDelay<T> {
   private queue: { frame: T; at: number }[] = [];
-  constructor(private readonly delayMs: number) {}
+  constructor(private readonly delayMs: number, private readonly maxFrames = 8) {}
 
   push(frame: T, now: number): void {
+    // Bursty paints or a delayed tick must never retain an unbounded number of full-size images.
+    if (this.queue.length >= this.maxFrames) this.queue.shift();
     this.queue.push({ frame, at: now });
   }
 

@@ -115,6 +115,7 @@ interface SlideEditorProps {
   /** Called with only the slides that changed. */
   onSave: (slides: Slide[]) => void;
   onClose: () => void;
+  onDiscard: () => void;
   onOpenInSlides?: (slideId: string) => void;
 }
 
@@ -122,7 +123,7 @@ type InspectorTab = 'item' | 'slide' | 'layers';
 
 const RAIL_STORAGE_KEY = 'editorRailCollapsed';
 
-export default function SlideEditor({ slide, deck, active, onSave, onClose, onOpenInSlides }: SlideEditorProps) {
+export default function SlideEditor({ slide, deck, active, onSave, onClose, onDiscard, onOpenInSlides }: SlideEditorProps) {
   const { t } = useTranslation();
   const practice = usePractice();
   const [editableOnly, setEditableOnly] = useState(false);
@@ -682,7 +683,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
 
   // ── Save / close ───────────────────────────────────────────────────────────
 
-  const handleClose = useCallback(async () => {
+  const handleDiscard = useCallback(async () => {
     if (confirmingRef.current || savePendingRef.current) return;
     confirmingRef.current = true;
     setConfirming(true);
@@ -693,13 +694,12 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
       if (current.isDirty && !(await confirmDialog(t('common.editorUnsavedSlides', { count: current.touchedCount }), {
         title: t('common.editorUnsavedTitle'), confirmLabel: t('common.editorDiscard'), cancelLabel: t('common.cancel'),
       }))) return;
-      current.reset(useStore.getState().presentation, current.activeId);
-      useStore.getState().setEditorDirty(false);
+      onDiscard();
     } finally {
       confirmingRef.current = false;
       setConfirming(false);
     }
-  }, [t, finishInteraction]);
+  }, [t, finishInteraction, onDiscard]);
 
   const handleSave = useCallback(async (): Promise<boolean> => {
     if (!videoRangeValid || confirmingRef.current || savePendingRef.current) return false;
@@ -1300,8 +1300,8 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onOp
             </button>
             <button
               type="button"
-              onClick={handleClose}
-              disabled={!session.isDirty}
+              onClick={handleDiscard}
+              disabled={confirming || !session.isDirty}
               className={cn(headerButton, 'px-2.5')}
             >
               {t('common.editorDiscard')}

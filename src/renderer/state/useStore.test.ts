@@ -20,6 +20,13 @@ test('store slices preserve atomic updates, no-op snapshots and independent UI c
     },
   });
   const { useStore } = await import('./useStore');
+  const { createPreferencesSlice } = await import('./preferencesSlice');
+  const { DEFAULT_LIVE_SAVE_RETENTION_MS } = await import('../../shared/presetRetention');
+  assert.equal(useStore.getState().liveSaveEnabled, true);
+  assert.equal(useStore.getState().liveSaveRetentionMs, DEFAULT_LIVE_SAVE_RETENTION_MS);
+  data.set('liveSaveRetentionMs', '0');
+  assert.equal(createPreferencesSlice(() => {}).liveSaveRetentionMs, 0);
+  data.delete('liveSaveRetentionMs');
   const deck: Presentation = {
     id: 'test',
     name: 'Test',

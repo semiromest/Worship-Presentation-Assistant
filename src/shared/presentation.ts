@@ -17,6 +17,8 @@ export type TransitionType =
 
 export interface TextStyle {
   textDecoration: string;
+  /** Inner margin as a percentage of the text frame on each axis. */
+  insetPercent?: number;
   textTransform?: 'none' | 'uppercase' | 'lowercase';
   fontSize?: number;
   textColor?: string;

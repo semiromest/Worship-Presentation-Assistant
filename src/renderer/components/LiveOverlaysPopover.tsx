@@ -2,19 +2,55 @@ import ControlTooltip from './ControlTooltip';
 import { playSfx } from '../sfx';
 import { useState } from 'react';
 import { Popover } from '@base-ui/react/popover';
-import { Megaphone, MessageSquareWarning, UserRound, Radio, EyeOff, RefreshCw } from 'lucide-react';
+import { Megaphone, MessageSquareWarning, UserRound, Radio, EyeOff, RefreshCw, Save } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { useLiveOverlayStore } from '../state/useLiveOverlayStore';
 import {
-  SPEAKER_NAME_MAX_LENGTH, SPEAKER_TITLE_MAX_LENGTH, TICKER_MAX_LENGTH, speakerVisible, tickerLine, tickerVisible,
-  type TickerPosition,
+  SPEAKER_NAME_MAX_LENGTH, SPEAKER_TITLE_MAX_LENGTH, TICKER_MAX_LENGTH, parseLiveOverlays, speakerVisible, tickerLine, tickerVisible,
+  type LiveOverlayState, type TickerPosition,
 } from '../liveOverlays';
 import { cn } from '../utils';
 
 type OverlayTab = 'message' | 'speaker';
 
 const fieldClass = 'w-full rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-sm text-white placeholder:text-white/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500';
+
+// Keep reusable content separate from the state observed by live outputs.
+function useSavedOverlay<K extends keyof LiveOverlayState>(key: K, fallback: LiveOverlayState[K]) {
+  const storageKey = `presenter_live_overlay_saved_${key}`;
+  const [saved, setSaved] = useState(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) return parseLiveOverlays(raw)[key];
+    } catch { /* fall back to the last published content */ }
+    return fallback;
+  });
+  const [saveFailed, setSaveFailed] = useState(false);
+  const save = (value: Omit<LiveOverlayState[K], 'onAir'>) => {
+    const entry = { ...value, onAir: false } as LiveOverlayState[K];
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({ [key]: entry }));
+      setSaved(entry);
+      setSaveFailed(false);
+      playSfx('success');
+    } catch { setSaveFailed(true); }
+  };
+  return { saved, save, saveFailed };
+}
+
+function SaveOverlayButton({ changed, failed, onSave }: { changed: boolean; failed: boolean; onSave: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <button type="button" onClick={onSave} disabled={!changed} className="workspace-secondary-action w-full">
+        <Save className="h-4 w-4" aria-hidden="true" />
+        {t(changed ? 'liveOverlays.saveDraft' : 'liveOverlays.savedDraft')}
+      </button>
+      {failed && <p role="alert" className="text-xs text-red-300">{t('library.saveFailed')}</p>}
+    </>
+  );
+}
 
 function OnAirActions({ onAir, changed, canSend, onSend, onOff }: {
   onAir: boolean; changed: boolean; canSend: boolean; onSend: () => void; onOff: () => void;
@@ -47,12 +83,14 @@ function OnAirActions({ onAir, changed, canSend, onSend, onOff }: {
 function MessagePanel() {
   const { t } = useTranslation();
   const { ticker, setTicker } = useLiveOverlayStore(useShallow(s => ({ ticker: s.ticker, setTicker: s.setTicker })));
-  const [draft, setDraft] = useState(ticker.text);
+  const { saved, save, saveFailed } = useSavedOverlay('ticker', ticker);
+  const [draft, setDraft] = useState(saved.text);
+  const [position, setPosition] = useState(saved.position);
   const onAir = tickerVisible(ticker);
   const canSend = !!tickerLine(draft);
   const send = () => {
     if (!canSend) return;
-    setTicker({ text: draft, onAir: true });
+    setTicker({ text: draft, position, onAir: true });
     playSfx(onAir ? 'success' : 'start');
   };
   const positions: { value: TickerPosition; label: string }[] = [
@@ -75,17 +113,18 @@ function MessagePanel() {
         <span className="text-xs text-white/65">{t('liveOverlays.position')}</span>
         <div role="radiogroup" aria-label={t('liveOverlays.position')} className="grid grid-cols-2 gap-1 rounded-lg border border-white/10 bg-black/20 p-1">
           {positions.map(option => (
-            <button key={option.value} type="button" role="radio" aria-checked={ticker.position === option.value}
-              onClick={() => { if (ticker.position !== option.value) { setTicker({ position: option.value }); playSfx('snap'); } }}
+            <button key={option.value} type="button" role="radio" aria-checked={position === option.value}
+              onClick={() => { if (position !== option.value) { setPosition(option.value); playSfx('snap'); } }}
               className={cn('rounded-md px-2 py-1.5 text-xs font-semibold transition-colors',
-                ticker.position === option.value ? 'bg-white/15 text-white' : 'text-white/55 hover:text-white')}>
+                position === option.value ? 'bg-white/15 text-white' : 'text-white/55 hover:text-white')}>
               {option.label}
             </button>
           ))}
         </div>
       </div>
-      <OnAirActions onAir={onAir} changed={draft !== ticker.text} canSend={canSend} onSend={send}
+      <OnAirActions onAir={onAir} changed={draft !== ticker.text || position !== ticker.position} canSend={canSend} onSend={send}
         onOff={() => { setTicker({ onAir: false }); playSfx('stop'); }} />
+      <SaveOverlayButton changed={draft !== saved.text || position !== saved.position} failed={saveFailed} onSave={() => save({ text: draft, position })} />
       <p className="text-[11px] leading-relaxed text-white/45">{t('liveOverlays.messageHint')}</p>
     </div>
   );
@@ -94,8 +133,9 @@ function MessagePanel() {
 function SpeakerPanel() {
   const { t } = useTranslation();
   const { speaker, setSpeaker } = useLiveOverlayStore(useShallow(s => ({ speaker: s.speaker, setSpeaker: s.setSpeaker })));
-  const [name, setName] = useState(speaker.name);
-  const [title, setTitle] = useState(speaker.title);
+  const { saved, save, saveFailed } = useSavedOverlay('speaker', speaker);
+  const [name, setName] = useState(saved.name);
+  const [title, setTitle] = useState(saved.title);
   const onAir = speakerVisible(speaker);
   const canSend = !!name.trim();
   const send = () => {
@@ -118,6 +158,7 @@ function SpeakerPanel() {
       </label>
       <OnAirActions onAir={onAir} changed={name.trim() !== speaker.name || title.trim() !== speaker.title} canSend={canSend} onSend={send}
         onOff={() => { setSpeaker({ onAir: false }); playSfx('stop'); }} />
+      <SaveOverlayButton changed={name !== saved.name || title !== saved.title} failed={saveFailed} onSave={() => save({ name, title })} />
     </div>
   );
 }
@@ -156,6 +197,9 @@ export default function LiveOverlaysPopover() {
         <Popover.Positioner side="bottom" align="end" sideOffset={8} className="z-[80]">
           <Popover.Popup
             aria-label={t('liveOverlays.title')}
+            onKeyDown={event => {
+              if ((event.key === 'Enter' || event.key === ' ') && (event.target as HTMLElement).closest('button')) event.stopPropagation();
+            }}
             className="base-popover-popup w-[360px] max-w-[calc(100vw-24px)] rounded-xl border border-white/10 bg-surface-overlay shadow-2xl p-3 space-y-3 origin-[var(--transform-origin)]"
           >
             <div className="flex items-center gap-2 px-1">

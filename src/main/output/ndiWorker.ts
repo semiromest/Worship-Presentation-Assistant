@@ -29,6 +29,10 @@ let tickTimer: ReturnType<typeof setInterval> | null = null;
 let statsTimer: ReturnType<typeof setInterval> | null = null;
 let fps = 30;
 let straightAlpha = false;
+let stopping = false;
+let starting: Promise<void> | null = null;
+let videoSend: Promise<void> | null = null;
+let audioSend: Promise<void> | null = null;
 // Program audio: mixed here and paid out at wall-clock rate next to the video clock.
 let mixer: AudioMixer | null = null;
 let audioClock: AudioClock | null = null;
@@ -43,12 +47,21 @@ const AV_VIDEO_DELAY_MS = 100;
 let videoDelay: FrameDelay<Frame> | null = null;
 
 async function start(name: string, rate: number, straight: boolean, audio: boolean): Promise<void> {
+  if (!Number.isFinite(rate) || rate <= 0 || rate > 120) throw new Error('Invalid NDI frame rate');
   fps = rate;
   straightAlpha = straight;
-  if (audio) { mixer = new AudioMixer(); audioClock = new AudioClock(); audioStart = performance.now(); videoDelay = new FrameDelay(AV_VIDEO_DELAY_MS); }
   const mod = await import('grandi');
   grandi = (mod as any).default ?? mod;
-  sender = await grandi.send({ name, clockVideo: false });
+  if (stopping) return;
+  // Both streams are paced here; SDK audio clocking would introduce a second pacing mechanism.
+  sender = await grandi.send({ name, clockVideo: false, clockAudio: false });
+  if (stopping) return;
+  if (audio) {
+    mixer = new AudioMixer();
+    audioClock = new AudioClock();
+    audioStart = performance.now();
+    videoDelay = new FrameDelay(AV_VIDEO_DELAY_MS, Math.ceil(fps * AV_VIDEO_DELAY_MS / 1000) + 2);
+  }
   post({ type: 'started', sourceName: sender!.sourceName(), ndiVersion: String(grandi.version?.() ?? '') });
   tickTimer = setInterval(tick, 1000 / fps);
   statsTimer = setInterval(() => {
@@ -61,35 +74,42 @@ async function start(name: string, rate: number, straight: boolean, audio: boole
 }
 
 function sendAudio(): void {
-  if (!sender || !mixer || !audioClock) return;
+  if (!sender || !mixer || !audioClock || audioSend) return;
   const now = performance.now() - audioStart;
   const samples = audioClock.due(now);
   if (samples <= 0) return;
   // Silence is sent too, so receivers keep a steady audio clock between songs and videos.
   const planar = mixer.pull(samples, now);
-  sender.audio({
+  const activeSender = sender;
+  audioSend = Promise.resolve().then(() => activeSender.audio({
     sampleRate: MIXER_SAMPLE_RATE, channels: MIXER_CHANNELS, samples, channelStrideBytes: samples * 4,
     fourCC: grandi.FourCC.FLTp, data: Buffer.from(planar.buffer, planar.byteOffset, planar.byteLength),
-  }).catch((error: unknown) => post({ type: 'error', message: String((error as Error)?.message ?? error), fatal: false }));
+  })).catch(reportSendError).finally(() => { audioSend = null; });
 }
 
 function tick(): void {
-  if (!sender) return;
+  if (!sender || stopping) return;
   sendAudio();
   const delayed = videoDelay?.release(performance.now());
   if (delayed) clock.push(delayed);
   const frame = clock.tick();
   if (!frame) return;
-  sender.video({
+  const activeSender = sender;
+  videoSend = Promise.resolve().then(() => activeSender.video({
     xres: frame.width, yres: frame.height, frameRateN: fps * 1000, frameRateD: 1000, pictureAspectRatio: frame.width / frame.height,
     fourCC: grandi.FourCC.BGRA, frameFormatType: grandi.FrameType.Progressive, lineStrideBytes: frame.stride, data: frame.data,
-  }).then(() => clock.done(true), (error: unknown) => {
+  })).then(() => clock.done(true), (error: unknown) => {
     clock.done(false);
-    post({ type: 'error', message: String((error as Error)?.message ?? error), fatal: false });
-  });
+    reportSendError(error);
+  }).finally(() => { videoSend = null; });
 }
 
-function stop(): void {
+function reportSendError(error: unknown): void {
+  if (!stopping) post({ type: 'error', message: String((error as Error)?.message ?? error), fatal: false });
+}
+
+async function stop(): Promise<void> {
+  stopping = true;
   if (tickTimer) clearInterval(tickTimer);
   if (statsTimer) clearInterval(statsTimer);
   tickTimer = statsTimer = null;
@@ -98,26 +118,38 @@ function stop(): void {
   audioClock = null;
   videoDelay?.clear();
   videoDelay = null;
+  // Never destroy the native handle while an asynchronous native send still uses it.
+  await starting?.catch(() => {});
+  await Promise.allSettled([videoSend, audioSend]);
   try { sender?.destroy(); } catch { /* already gone */ }
   sender = null;
+  port!.close();
 }
 
 port.on('message', (message: ToNdiWorker) => {
+  if (stopping) return;
   if (message.type === 'frame') {
-    if (message.width * 4 > message.stride || message.stride * message.height > message.data.byteLength) return;
+    // Acknowledge ingestion, not network delivery: bounds the main-to-worker mailbox independently.
+    post({ type: 'frame-accepted' });
+    if (!sender || !Number.isSafeInteger(message.width) || message.width <= 0 ||
+        !Number.isSafeInteger(message.height) || message.height <= 0 ||
+        !Number.isSafeInteger(message.stride) || message.width * 4 > message.stride ||
+        message.stride * message.height > message.data.byteLength) return;
     const data = Buffer.from(message.data);
     // Converted once per paint; repeated frames on static slides reuse the converted buffer.
     if (straightAlpha) unpremultiplyBgra(data);
     const frame = { data, width: message.width, height: message.height, stride: message.stride };
     if (videoDelay) videoDelay.push(frame, performance.now()); else clock.push(frame);
   } else if (message.type === 'audio') {
-    if (mixer && message.data.byteLength <= 8 * 4096 * MIXER_CHANNELS) mixer.push(message.source, new Float32Array(message.data), performance.now() - audioStart);
+    if (mixer && (message.source === 'video' || message.source === 'music') && message.data.byteLength > 0 &&
+        message.data.byteLength % (4 * MIXER_CHANNELS) === 0 && message.data.byteLength <= 4 * 4096 * MIXER_CHANNELS)
+      mixer.push(message.source, new Float32Array(message.data), performance.now() - audioStart);
   } else if (message.type === 'start') {
-    start(message.name, message.fps, message.straightAlpha, message.audio).catch((error: unknown) => {
-      post({ type: 'error', message: String((error as Error)?.message ?? error), fatal: true });
+    if (starting) return;
+    starting = start(message.name, message.fps, message.straightAlpha, message.audio).catch((error: unknown) => {
+      if (!stopping) post({ type: 'error', message: String((error as Error)?.message ?? error), fatal: true });
     });
   } else if (message.type === 'stop') {
-    stop();
-    port.close();
+    void stop();
   }
 });

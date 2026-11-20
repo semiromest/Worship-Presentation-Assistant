@@ -164,7 +164,3 @@
   .loop-row{flex-wrap:wrap}
   .loop-controls{width:100%;justify-content:flex-end}
 }
-
-/* AI image generation entry */
-.media-tool.media-ai{color:#ddd6fe;border-color:#a78bfa4d;background:#8b5cf61a}
-.media-tool.media-ai:hover:not(:disabled){color:#fff;background:#8b5cf633}

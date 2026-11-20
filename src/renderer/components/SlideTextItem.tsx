@@ -1,11 +1,14 @@
 import { memo, useMemo } from 'react';
 import type { SlideItem } from '../types';
-import { DEFAULT_TEXT_STYLE } from '../editor/editorUtils';
+import { DEFAULT_TEXT_STYLE, SLIDE_REFERENCE_WIDTH, SLIDE_REFERENCE_HEIGHT } from '../editor/editorUtils';
+import { textItemInsets } from '../../shared/canvasLayout';
 
 // Text item renderer
 export const SlideTextItem = memo(({ item }: { item: SlideItem }) => {
   const styles = item.textStyles ?? DEFAULT_TEXT_STYLE;
   const shadow = styles.textShadow;
+  const inset = textItemInsets(styles.insetPercent,
+    SLIDE_REFERENCE_WIDTH * item.width / 100, SLIDE_REFERENCE_HEIGHT * item.height / 100);
 
   const textShadowStyle = useMemo(
     () =>
@@ -19,7 +22,7 @@ export const SlideTextItem = memo(({ item }: { item: SlideItem }) => {
     <div
       className="w-full h-full overflow-hidden flex justify-center"
       style={{
-        padding: '8px',
+        padding: `${inset.vertical}px ${inset.horizontal}px`,
         alignItems:
           styles.verticalAlign === 'top' ? 'flex-start' : styles.verticalAlign === 'bottom' ? 'flex-end' : 'center',
         textAlign: styles.textAlign ?? 'center',

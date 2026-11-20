@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import type { SlideItem } from '../types';
 import { cn } from '../utils';
 import { SlideImage } from '../components/SlideImage';
-import { DEFAULT_TEXT_STYLE, DEFAULT_IMAGE_STYLE } from './editorUtils';
+import { DEFAULT_TEXT_STYLE, DEFAULT_IMAGE_STYLE, SLIDE_REFERENCE_WIDTH, SLIDE_REFERENCE_HEIGHT } from './editorUtils';
+import { textItemInsets } from '../../shared/canvasLayout';
 import {
   moveBounds,
   resizeItemBounds,
@@ -38,6 +39,13 @@ interface CanvasItemProps {
 function stylesTextHighlight(value?: string): React.CSSProperties['backgroundColor'] {
   return value && value !== 'transparent' ? value : undefined;
 }
+
+const resizeCorners: Record<ResizeCorner, string> = {
+  tl: 'top-0 left-0 cursor-nw-resize',
+  tr: 'top-0 right-0 cursor-ne-resize',
+  bl: 'bottom-0 left-0 cursor-sw-resize',
+  br: 'bottom-0 right-0 cursor-se-resize',
+};
 
 export const CanvasItem = memo(function CanvasItem({
   item,
@@ -118,7 +126,7 @@ export const CanvasItem = memo(function CanvasItem({
             event.clientY - start.y,
             start.rect,
             grid,
-            lockRatio
+            lockRatio || event.altKey
           )
         );
       }
@@ -127,7 +135,8 @@ export const CanvasItem = memo(function CanvasItem({
   );
 
   const startGesture = (kind: Gesture['kind']) => (event: React.PointerEvent<HTMLDivElement>) => {
-    if (editing || item.locked || event.altKey || event.button !== 0 || !canvasRef.current) return;
+    if (editing || item.locked || event.button !== 0 || !canvasRef.current) return;
+    if (event.altKey && (kind === 'move' || kind === 'rotate')) return;
     event.stopPropagation();
     event.preventDefault();
     finishKeyboard();
@@ -204,28 +213,19 @@ export const CanvasItem = memo(function CanvasItem({
     isSelected && 'ring-2 ring-blue-500 ring-offset-0'
   );
 
-  const handleClassName = 'absolute w-3 h-3 bg-white border-2 border-blue-500 rounded-full z-10';
-
   const renderResizeHandles = () => {
     if (!isSelected || item.locked) return null;
     return (
       <>
-        <div
-          className={cn(handleClassName, 'top-0 left-0 -translate-x-1/2 -translate-y-1/2 cursor-nw-resize')}
-          onPointerDown={startResize('tl')}
-        />
-        <div
-          className={cn(handleClassName, 'top-0 right-0 translate-x-1/2 -translate-y-1/2 cursor-ne-resize')}
-          onPointerDown={startResize('tr')}
-        />
-        <div
-          className={cn(handleClassName, 'bottom-0 left-0 -translate-x-1/2 translate-y-1/2 cursor-sw-resize')}
-          onPointerDown={startResize('bl')}
-        />
-        <div
-          className={cn(handleClassName, 'bottom-0 right-0 translate-x-1/2 translate-y-1/2 cursor-se-resize')}
-          onPointerDown={startResize('br')}
-        />
+        {(Object.keys(resizeCorners) as ResizeCorner[]).map(corner => (
+          <div
+            key={corner}
+            aria-hidden="true"
+            data-editor-resize-corner={corner}
+            className={cn('editor-resize-handle absolute z-10', resizeCorners[corner])}
+            onPointerDown={startResize(corner)}
+          />
+        ))}
         {/* Rotation handle */}
         <div
           className="absolute left-1/2 -top-8 -translate-x-1/2 cursor-grab active:cursor-grabbing z-20"
@@ -279,51 +279,56 @@ export const CanvasItem = memo(function CanvasItem({
         className={cn(sharedClassName, 'border border-dashed border-blue-400/40')}
         style={sharedStyle}
       >
-        {item.groupItems.map((child) => (
-          <div
-            key={child.id}
-            className="absolute"
-            style={{
-              left: `${child.x}%`,
-              top: `${child.y}%`,
-              width: `${child.width}%`,
-              height: `${child.height}%`,
-              zIndex: child.zIndex ?? 0,
-              transform: child.rotation ? `rotate(${child.rotation}deg)` : undefined,
-            }}
-          >
-            {child.type === 'text' ? (
-              <div
-                className="w-full h-full flex overflow-hidden"
-                style={{
-                  alignItems: vAlignMap[child.textStyles?.verticalAlign || 'center'] || 'center',
-                  justifyContent: 'center',
-                  textAlign: child.textStyles?.textAlign || 'center',
-                  padding: '4px',
-                }}
-              >
-                {' '}
-                <span
+        {item.groupItems.map((child) => {
+          const inset = textItemInsets(child.textStyles?.insetPercent,
+            SLIDE_REFERENCE_WIDTH * item.width * child.width / 10000,
+            SLIDE_REFERENCE_HEIGHT * item.height * child.height / 10000, 4);
+          return (
+            <div
+              key={child.id}
+              className="absolute"
+              style={{
+                left: `${child.x}%`,
+                top: `${child.y}%`,
+                width: `${child.width}%`,
+                height: `${child.height}%`,
+                zIndex: child.zIndex ?? 0,
+                transform: child.rotation ? `rotate(${child.rotation}deg)` : undefined,
+              }}
+            >
+              {child.type === 'text' ? (
+                <div
+                  className="w-full h-full flex overflow-hidden"
                   style={{
-                    color: child.textStyles?.textColor ?? '#ffffff',
-                    backgroundColor: stylesTextHighlight(child.textStyles?.textHighlight),
-                    fontSize: `${Math.max(4, child.textStyles?.fontSize || 32)}px`,
-                    fontFamily: child.textStyles?.fontFamily,
-                    fontWeight: child.textStyles?.fontWeight,
-                    fontStyle: child.textStyles?.fontStyle,
-                    lineHeight: child.textStyles?.lineHeight || 1.25,
-                    whiteSpace: 'pre-wrap',
-                    width: '100%',
+                    alignItems: vAlignMap[child.textStyles?.verticalAlign || 'center'] || 'center',
+                    justifyContent: 'center',
+                    textAlign: child.textStyles?.textAlign || 'center',
+                    padding: `${inset.vertical}px ${inset.horizontal}px`,
                   }}
                 >
-                  {child.content}
-                </span>
-              </div>
-            ) : (
-              <SlideImage src={child.mediaUrl} styles={child.imageStyles} />
-            )}
-          </div>
-        ))}
+                  {' '}
+                  <span
+                    style={{
+                      color: child.textStyles?.textColor ?? '#ffffff',
+                      backgroundColor: stylesTextHighlight(child.textStyles?.textHighlight),
+                      fontSize: `${Math.max(4, child.textStyles?.fontSize || 32)}px`,
+                      fontFamily: child.textStyles?.fontFamily,
+                      fontWeight: child.textStyles?.fontWeight,
+                      fontStyle: child.textStyles?.fontStyle,
+                      lineHeight: child.textStyles?.lineHeight || 1.25,
+                      whiteSpace: 'pre-wrap',
+                      width: '100%',
+                    }}
+                  >
+                    {child.content}
+                  </span>
+                </div>
+              ) : (
+                <SlideImage src={child.mediaUrl} styles={child.imageStyles} />
+              )}
+            </div>
+          );
+        })}
         {renderResizeHandles()}
       </div>
     );
@@ -352,6 +357,9 @@ export const CanvasItem = memo(function CanvasItem({
     overflow: 'hidden',
   };
 
+  const inset = textItemInsets(textStyles.insetPercent,
+    SLIDE_REFERENCE_WIDTH * item.width / 100, SLIDE_REFERENCE_HEIGHT * item.height / 100);
+
   return (
     <div
       ref={selfRef}
@@ -373,7 +381,7 @@ export const CanvasItem = memo(function CanvasItem({
         alignItems: vAlignMap[textStyles.verticalAlign || 'center'] || 'center',
         justifyContent: 'center',
         textAlign: textStyles.textAlign || 'center',
-        padding: '8px',
+        padding: `${inset.vertical}px ${inset.horizontal}px`,
       }}
     >
       {editing ? (

@@ -1,6 +1,6 @@
 {
   "name": "worship-presentation-assistant",
-  "version": "1.4.36",
+  "version": "1.4.37",
   "main": "dist-electron/main.js",
   "description": "Worship Presentation Assistant - Simple Worship Presentation App",
   "author": "IPCA",
@@ -41,7 +41,7 @@
     "test:music": "tsx --test src/main/musicFormat.test.ts src/main/musicStreamFetch.test.ts src/main/youtubeSearchPager.test.ts src/main/youtubeMusicLookup.test.ts src/main/offlineMusicCache.test.ts src/renderer/musicSlides.test.ts src/renderer/audio/musicEnvelope.test.ts && node --test src/main/youtubeMusicContext.test.cjs",
     "test:workspace:e2e": "playwright test workspace-layout.spec.cjs hymn-part-keys.spec.cjs music-modal.spec.cjs slide-audio.spec.cjs offline-music.spec.cjs",
     "postinstall": "patch-package --error-on-fail",
-    "test:output": "tsx --test src/main/output/alpha.test.ts src/main/output/audioMixer.test.ts src/main/output/ndiSender.test.ts src/main/output/outputClock.test.ts",
+    "test:output": "tsx --test src/main/output/alpha.test.ts src/main/output/audioMixer.test.ts src/main/output/ndiSender.test.ts src/main/output/ndiWorker.test.ts src/main/output/outputClock.test.ts",
     "test:image-translate": "tsx --test src/main/imageTextLayout.test.ts src/main/imageTranslate.test.ts",
     "test:pptx": "tsx --test src/main/mtxFont.test.ts src/main/pptxMedia.test.ts src/main/pptxRender.test.ts src/main/pptxFontFiles.test.ts",
     "test:reliability": "tsx --test src/main/gpresReader.test.ts src/shared/desktop.test.ts src/renderer/previewEncoding.test.ts src/main/atomicFile.test.ts src/renderer/documentSession.test.ts src/main/presentationDownload.test.ts src/renderer/fontLoader.test.ts src/renderer/previewCache.test.ts src/renderer/previewQueue.test.ts",

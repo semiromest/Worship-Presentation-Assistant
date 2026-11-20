@@ -7,6 +7,7 @@ export type ToNdiWorker =
   | { type: 'stop' };
 
 export type FromNdiWorker =
+  | { type: 'frame-accepted' }
   | { type: 'started'; sourceName: string; ndiVersion: string }
   | { type: 'stats'; connections: number; onProgram: boolean; onPreview: boolean; sent: number; dropped: number; repeated: number;
       audio?: Record<string, { levelMs: number; primed: boolean; corrections: number; underruns: number }> }

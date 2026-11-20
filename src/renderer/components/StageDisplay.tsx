@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Clock, Timer } from 'lucide-react';
 import { useStore } from '../state/useStore';
-import { getSlideDisplayContent, getNextDisplaySlide } from '../../shared/slideContent';
-import { cn } from '../utils';
+import { getActivePartIndex, getNextDisplaySlide, getSlideDisplayContent } from '../../shared/slideContent';
+import { resolveCanvasSource } from '../canvasSource';
 import type { Slide } from '../types';
 import { parseChordLine } from '../../shared/chords';
 import { getSlideChordKey, getSlideChordText } from '../../shared/slideChords';
-import { useStageChordsEnabled } from '../stageChordsPreference';
+import { useStageNextSlideEnabled, useStageNotesEnabled } from '../stageDisplayPreferences';
+import './stage-display.css';
 
 function pad(n: number): string {
   return String(n).padStart(2, '0');
@@ -24,18 +26,22 @@ function formatClock(date: Date): string {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-/**
- * Plain text shown for a slide on the confidence monitor. Text/captions show
- * their content (active part for partsMode slides); media/utility slides show
- * a short localized type label so the operator still knows what's next.
- */
+function canvasText(items: Slide['items']): string {
+  return (items ?? []).map((item) => {
+    if (item.visible === false) return '';
+    if (item.type === 'group') return canvasText(item.groupItems);
+    return item.type === 'text' ? item.content?.trim() : '';
+  }).filter(Boolean).join('\n');
+}
+
 function slideText(slide: Slide | undefined, t: (key: string) => string): string {
   if (!slide) return '';
   const content = getSlideDisplayContent(slide).trim();
   switch (slide.type) {
     case 'text':
+      return content || canvasText(slide.items) || t('stage.empty');
     case 'captions':
-      return content || t('stage.empty');
+      return content || t('common.captionsSlide');
     case 'image':
       return content || t('stage.imageSlide');
     case 'video':
@@ -51,76 +57,180 @@ function slideText(slide: Slide | undefined, t: (key: string) => string): string
   }
 }
 
-/** True when the slide renders as an actual image (image slide or video with a stored thumbnail). */
-function isVisualSlide(slide: Slide | undefined): boolean {
+/** Keep the chord attached to its lyric fragment while letting the rest of the line wrap. */
+function ChordSheet({ text }: { text: string }) {
   return (
-    !!slide &&
-    ((slide.type === 'image' && !!slide.mediaUrl) ||
-      (slide.type === 'video' && !!slide.thumbnailUrl))
-  );
-}
-
-/**
- * Renders the slide's image (image slide → mediaUrl, video slide → thumbnail).
- * Returns null for text/media without a visual.
- */
-function StagePreview({ slide, fill = false }: { slide?: Slide; fill?: boolean }) {
-  const src =
-    slide?.type === 'image' ? slide.mediaUrl
-      : slide?.type === 'video' ? slide.thumbnailUrl
-      : undefined;
-  if (!src) return null;
-
-  const fit =
-    slide?.styles?.objectFit === 'cover' ? 'object-cover'
-      : slide?.styles?.objectFit === 'fill' ? 'object-fill'
-      : 'object-contain';
-
-  return (
-    <img
-      src={src}
-      alt=""
-      draggable={false}
-      className={cn(fit, fill ? 'w-full h-full' : 'max-w-full max-h-full')}
-    />
-  );
-}
-
-/**
- * Chords over the syllables they belong to. Each segment is an inline-block
- * (chord on top, text below), so alignment survives any line wrap.
- */
-function ChordSheet({ text, size }: { text: string; size: 'large' | 'small' }) {
-  const large = size === 'large';
-  return (
-    <div className={cn('text-center max-w-[92%]', large ? 'text-5xl leading-tight' : 'text-2xl leading-snug')}>
-      {text.split('\n').map((line, lineIndex) => {
-        const segments = parseChordLine(line);
-        const hasChord = segments.some((segment) => segment.chord);
-        return (
-          <div key={lineIndex} className={cn('whitespace-pre-wrap break-words', hasChord && (large ? 'mt-3' : 'mt-1'))}>
-            {segments.map((segment, index) =>
-              hasChord ? (
-                <span key={index} className="inline-flex flex-col items-start align-bottom">
-                  <span
-                    className={cn(
-                      'font-bold text-amber-300 leading-none whitespace-pre',
-                      large ? 'text-3xl mb-1' : 'text-lg mb-0.5',
-                      !segment.chord && 'invisible',
-                    )}
-                  >
-                    {segment.chord ? `${segment.chord} ` : ' '}
-                  </span>
-                  <span className="whitespace-pre-wrap">{segment.text || ' '}</span>
+    <div className="stage-chord-sheet">
+      {text.split('\n').map((line, lineIndex) => (
+        <div key={lineIndex} className="stage-chord-line">
+          {parseChordLine(line).map(({ chord, text: lyric }, index) => {
+            if (!chord) return <span key={index}>{lyric}</span>;
+            const firstSpace = lyric.search(/\s/);
+            const anchor = firstSpace < 0 ? lyric : lyric.slice(0, firstSpace);
+            const rest = firstSpace < 0 ? '' : lyric.slice(firstSpace);
+            return (
+              <span key={index}>
+                <span className="stage-chord-anchor">
+                  <span className="stage-chord-symbol">{chord}</span>
+                  <span>{anchor || '\u00a0'}</span>
                 </span>
-              ) : (
-                <span key={index}>{segment.text}</span>
-              ),
-            )}
-          </div>
-        );
-      })}
+                {rest}
+              </span>
+            );
+          })}
+        </div>
+      ))}
     </div>
+  );
+}
+
+function StageText({ text, chords, upcoming = false }: {
+  text: string;
+  chords: string | null;
+  upcoming?: boolean;
+}) {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLDivElement>(null);
+  const lineUnits = chords
+    ? chords.split('\n').reduce((units, line) => {
+        if (!line.trim()) return units + 0.55;
+        const hasChord = parseChordLine(line).some((segment) => segment.chord);
+        return units + (hasChord ? 2.1 : 1.18);
+      }, 0)
+    : text.split('\n').length * 1.18;
+
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    const content = textRef.current;
+    if (!viewport || !content) return;
+
+    const minSize = upcoming ? 16 : 20;
+    let fitTimer: ReturnType<typeof setTimeout>;
+    const fit = () => {
+      const heightRatio = viewport.clientHeight / Math.max(1, viewport.scrollHeight);
+      const widthRatio = viewport.clientWidth / Math.max(1, viewport.scrollWidth);
+      const ratio = Math.min(heightRatio, widthRatio);
+      const size = Number.parseFloat(getComputedStyle(content).fontSize);
+      if (ratio >= 1 || size <= minSize) return;
+      // Recheck after layout, since reducing the font may also unwrap lines.
+      const nextSize = Math.max(minSize, Math.floor(size * Math.max(0.85, ratio)));
+      content.style.setProperty('--stage-fitted-size', `${nextSize}px`);
+      fitTimer = setTimeout(fit, 0);
+    };
+    const scheduleFit = () => {
+      clearTimeout(fitTimer);
+      content.style.removeProperty('--stage-fitted-size');
+      viewport.scrollTop = 0;
+      fit();
+    };
+    scheduleFit();
+    const observer = new ResizeObserver(scheduleFit);
+    // A scrollbar changes the content box while fitting. Only refit from
+    // the maximum size when the allotted space itself changes.
+    observer.observe(viewport, { box: 'border-box' });
+    document.fonts.addEventListener('loadingdone', scheduleFit);
+    return () => {
+      clearTimeout(fitTimer);
+      observer.disconnect();
+      document.fonts.removeEventListener('loadingdone', scheduleFit);
+    };
+  }, [text, chords, upcoming]);
+
+  return (
+    <div ref={viewportRef} className="stage-text-viewport">
+      <div
+        ref={textRef}
+        className="stage-text"
+        style={{ '--stage-line-units': Math.max(1, lineUnits) } as CSSProperties}
+      >
+        {chords ? <ChordSheet text={chords} /> : <p>{text}</p>}
+      </div>
+    </div>
+  );
+}
+
+function StageClock() {
+  const { t } = useTranslation();
+  const [now, setNow] = useState(() => new Date());
+  const startedAtRef = useRef(now.getTime());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - startedAtRef.current) / 1000));
+  return (
+    <div className="stage-clock">
+      <div title={t('stage.clock')} aria-label={t('stage.clock')} role="timer">
+        <Clock aria-hidden="true" />
+        {formatClock(now)}
+      </div>
+      <div title={t('stage.elapsed')} aria-label={t('stage.elapsed')} role="timer">
+        <Timer aria-hidden="true" />
+        {formatElapsed(elapsedSeconds)}
+      </div>
+    </div>
+  );
+}
+
+function StageCue({ slide, chords, upcoming = false }: {
+  slide?: Slide;
+  chords: string | null;
+  upcoming?: boolean;
+}) {
+  const { t } = useTranslation();
+  const [failedSrc, setFailedSrc] = useState<string>();
+  const source = slide?.type === 'image' ? slide.mediaUrl
+    : slide?.type === 'video' ? slide.thumbnailUrl : undefined;
+  const src = source ? resolveCanvasSource(source, false).url : undefined;
+
+  if (!slide || !src || failedSrc === src) {
+    return <StageText text={slideText(slide, t)} chords={chords} upcoming={upcoming} />;
+  }
+
+  const caption = getSlideDisplayContent(slide).trim();
+  return (
+    <div className="stage-visual">
+      <div className="stage-media">
+        <img
+          key={src}
+          src={src}
+          alt=""
+          draggable={false}
+          className="w-full h-full"
+          style={{ objectFit: slide.styles?.objectFit ?? 'contain' }}
+          onError={() => setFailedSrc(src)}
+        />
+      </div>
+      {caption && (upcoming ? <StageText text={caption} chords={null} upcoming /> : <p>{caption}</p>)}
+    </div>
+  );
+}
+
+
+function StageKey({ slide }: { slide: Slide | undefined }) {
+  const { t } = useTranslation();
+  const { from, to, transpose } = getSlideChordKey(slide);
+  if (!to && !transpose) return null;
+  const offset = `${transpose > 0 ? '+' : ''}${transpose}`;
+
+  return (
+    <span className="stage-key">
+      <span>{t('stage.key')}</span>
+      {to && <strong>{to}</strong>}
+      {transpose !== 0 && <span>{from ? `${from} → ${to} (${offset})` : offset}</span>}
+    </span>
+  );
+}
+
+function StageNotes({ notes }: { notes?: string }) {
+  const { t } = useTranslation();
+  if (!notes?.trim()) return null;
+  return (
+    <aside className="stage-notes" aria-label={t('common.stageNotes')}>
+      <strong>{t('common.stageNotes')}</strong> {notes}
+    </aside>
   );
 }
 
@@ -128,135 +238,50 @@ export default function StageDisplay() {
   const { t } = useTranslation();
   const presentation = useStore((s) => s.presentation);
   const liveIndex = useStore((s) => s.liveIndex);
-  const [now, setNow] = useState(() => new Date());
-  const startedAtRef = useRef(Date.now());
-
-  // Live clock + elapsed time, updated every second.
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-
+  const showStageNotes = useStageNotesEnabled();
+  const showNextSlide = useStageNextSlideEnabled();
   const current = presentation.slides[liveIndex];
-  const next = getNextDisplaySlide(presentation.slides, liveIndex);
-  const currentIsVisual = isVisualSlide(current);
-  const nextIsVisual = isVisualSlide(next);
-  const currentText = slideText(current, t);
-  const nextText = slideText(next, t);
-  // For visual slides the image IS the display; only a stored caption text
-  // (not the generic type label) is shown alongside it.
-  const nextDisplayText = nextIsVisual && next ? getSlideDisplayContent(next).trim() : nextText;
-  const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - startedAtRef.current) / 1000));
-  const showChords = useStageChordsEnabled();
-  const currentChords = showChords ? getSlideChordText(current) : null;
-  const nextChords = showChords ? getSlideChordText(next) : null;
-  const chordKey = currentChords ? getSlideChordKey(current) : null;
+  const next = showNextSlide ? getNextDisplaySlide(presentation.slides, liveIndex) : undefined;
+  const currentChords = showStageNotes ? getSlideChordText(current) : null;
+  const nextChords = showStageNotes ? getSlideChordText(next) : null;
+  const part = current?.partsMode && current.parts?.length
+    ? ` · ${getActivePartIndex(current) + 1}/${current.parts.length}`
+    : '';
 
   return (
-    <div className="fixed inset-0 bg-[#0d0d12] text-white flex flex-col overflow-hidden select-none">
-      {/* Top bar: presentation name + clock + elapsed */}
-      <header className="flex items-center justify-between px-8 py-4 border-b border-white/10 bg-[#14141b]/80">
-        <h1 className="text-2xl font-bold text-white/90 truncate">{presentation.name}</h1>
-        <div className="flex items-center gap-6 shrink-0">
-          <div
-            className="flex items-center gap-2 text-4xl font-semibold tabular-nums text-white/90"
-            aria-label={t('stage.clock')}
-          >
-            <Clock className="w-7 h-7 text-white/55" aria-hidden="true" />
-            {formatClock(now)}
-          </div>
-          <div
-            className="flex items-center gap-2 text-4xl font-semibold tabular-nums text-white/90"
-            aria-label={t('stage.elapsed')}
-          >
-            <Timer className="w-7 h-7 text-white/55" aria-hidden="true" />
-            {formatElapsed(elapsedSeconds)}
-          </div>
-        </div>
+    <div className="stage-screen" data-show-next={showNextSlide} data-has-next={Boolean(next)}>
+      <header className="stage-header">
+        <h1>{presentation.name}</h1>
+        <StageClock />
       </header>
 
-      {/* Current slide — large, centered */}
-      <main className="flex-1 flex flex-col items-center justify-center px-16 min-h-0">
-        {current?.group?.title && (
-          <p className="text-2xl font-bold text-blue-300/90 mb-4 text-center">
-            {current.group.title}
-            {chordKey?.from && (
-              <span className="ml-3 text-xl font-semibold text-amber-300/90">
-                {t('stage.key')}: {chordKey.transpose ? `${chordKey.from} → ${chordKey.to}` : chordKey.from}
-                {chordKey.transpose !== 0 && ` (${chordKey.transpose > 0 ? '+' : ''}${chordKey.transpose})`}
-              </span>
-            )}
-          </p>
-        )}
-        {currentChords ? (
-          <ChordSheet text={currentChords} size="large" />
-        ) : currentIsVisual ? (
-          <>
-            <div className="max-w-[85%] max-h-[58vh] rounded-lg overflow-hidden bg-black/40 border border-white/10 shadow-2xl">
-              <StagePreview slide={current} />
-            </div>
-            {current && getSlideDisplayContent(current).trim() && (
-              <p className="mt-4 text-2xl text-white/60 text-center whitespace-pre-wrap break-words max-w-[80%]">
-                {getSlideDisplayContent(current)}
-              </p>
-            )}
-          </>
-        ) : (
-          <p className="text-6xl leading-snug font-semibold text-center whitespace-pre-wrap break-words max-w-[90%]">
-            {currentText}
-          </p>
-        )}
-        <p className="mt-6 text-xl text-white/55 tabular-nums">
-          {liveIndex + 1} / {presentation.slides.length}
-        </p>
-        {current?.operatorNotes?.trim() && (
-          <div className="mt-4 max-w-[80%] rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-amber-300/80 mb-1">
-              {t('common.operatorNotes')}
-            </p>
-            <p className="text-lg text-amber-100/85 whitespace-pre-wrap break-words">
-              {current.operatorNotes}
-            </p>
-          </div>
-        )}
+      <main className="stage-panel stage-current">
+        <div className="stage-meta">
+          <h2>{current?.group?.title}</h2>
+          {currentChords && <StageKey slide={current} />}
+          <span className="stage-progress">
+            {current ? liveIndex + 1 : 0} / {presentation.slides.length}{part}
+          </span>
+        </div>
+        <StageCue key={current?.id} slide={current} chords={currentChords} />
+        {showStageNotes && <StageNotes notes={current?.operatorNotes} />}
       </main>
 
-      {/* Next slide — smaller, dimmed */}
-      <footer className="px-8 py-6 border-t border-white/10 bg-[#14141b]/80">
-        <p className="text-sm font-semibold uppercase tracking-widest text-white/55 mb-2">
-          {t('stage.next')}
-        </p>
-        {next ? (
-          <div className="flex items-center gap-5 min-h-0">
-            {nextIsVisual && (
-              <div className="w-56 h-32 shrink-0 rounded-lg overflow-hidden bg-black/50 border border-white/10">
-                <StagePreview slide={next} fill />
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              {next.group?.title && (
-                <p className="text-lg font-semibold text-blue-300/70 mb-1">{next.group.title}</p>
-              )}
-              {nextChords ? (
-                <div className="text-white/60 [&>div]:text-left [&>div]:max-w-[95%]">
-                  <ChordSheet text={nextChords} size="small" />
-                </div>
-              ) : (
-                <p className="text-3xl leading-snug text-white/55 whitespace-pre-wrap break-words max-w-[95%]">
-                  {nextDisplayText}
-                </p>
-              )}
-              {next.operatorNotes?.trim() && (
-                <p className="mt-2 text-base text-amber-200/70 italic whitespace-pre-wrap break-words max-w-[95%]">
-                  {next.operatorNotes}
-                </p>
-              )}
-            </div>
+      {showNextSlide && (
+        <section className="stage-panel stage-next" aria-label={t('stage.next')}>
+          <div className="stage-meta">
+            <span className="stage-next-label">{t('stage.next')}</span>
+            {next?.group?.title && <h2>{next.group.title}</h2>}
+            {nextChords && <StageKey slide={next} />}
           </div>
-        ) : (
-          <p className="text-3xl text-white/50 italic">{t('stage.noNext')}</p>
-        )}
-      </footer>
+          {next ? (
+            <StageCue key={next.id} slide={next} chords={nextChords} upcoming />
+          ) : (
+            <p className="stage-no-next">{t('stage.noNext')}</p>
+          )}
+          {showStageNotes && <StageNotes notes={next?.operatorNotes} />}
+        </section>
+      )}
     </div>
   );
 }

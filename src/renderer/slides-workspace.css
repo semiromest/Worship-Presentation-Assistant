@@ -245,6 +245,31 @@
 .editor-selection-toolbar{transition:opacity var(--ui-motion-fast,120ms) ease}
 .editor-canvas-stage:has([data-editor-pointer-active="true"]) .editor-selection-toolbar{opacity:0;pointer-events:none}
 
+/* Inset the entire target so the slide viewport cannot clip off a full-frame corner.
+   The inverse canvas scale keeps the marker and hit area readable at different zoom levels. */
+.editor-resize-handle {
+  display: grid;
+  place-items: center;
+  width: min(50%, calc(30 * var(--editor-handle-unit, 1px)));
+  height: min(50%, calc(30 * var(--editor-handle-unit, 1px)));
+}
+
+.editor-resize-handle::after {
+  content: '';
+  pointer-events: none;
+  width: min(100%, calc(13 * var(--editor-handle-unit, 1px)));
+  height: min(100%, calc(13 * var(--editor-handle-unit, 1px)));
+  border: calc(2 * var(--editor-handle-unit, 1px)) solid #2563eb;
+  border-radius: calc(3 * var(--editor-handle-unit, 1px));
+  background: #fff;
+  box-shadow: 0 0 0 var(--editor-handle-unit, 1px) rgb(0 0 0 / 80%);
+}
+
+.editor-resize-handle:is(:hover, :active)::after {
+  border-color: #fff;
+  background: #2563eb;
+}
+
 .design-slide-columns{flex:none}
 .design-slide-columns-value{display:flex;align-items:center;justify-content:center;gap:6px;min-width:46px;padding-inline:4px;color:#ffffffb3;font-size:12px;font-variant-numeric:tabular-nums}
 .design-slide-columns-value>svg{width:14px;height:14px;color:#ffffff70}

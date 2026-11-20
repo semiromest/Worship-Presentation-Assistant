@@ -69,6 +69,14 @@ export interface CanvasTextStyle {
   textTransform?: string;
 }
 
+export function textItemInsets(insetPercent: unknown, width: number, height: number, fallback = 8) {
+  if (typeof insetPercent !== 'number' || !Number.isFinite(insetPercent)) {
+    return { horizontal: fallback, vertical: fallback };
+  }
+  const fraction = Math.max(0, Math.min(49, insetPercent)) / 100;
+  return { horizontal: width * fraction, vertical: height * fraction };
+}
+
 /** Pure typography calculations; canvas/font loading belongs to each adapter. */
 export function canvasTypography(styles: CanvasTextStyle, width: number, minimumFontSize = 8) {
   const family =
