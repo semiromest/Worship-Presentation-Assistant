@@ -9,7 +9,7 @@ import { nativeDialogBusy } from './nativeDialogGate';
 import { replacementDialogCopy, systemMessageCopy } from './desktopDialogCopy';
 
 const COMMANDS: readonly DesktopCommand[] = ['previous', 'next', 'blackout'];
-const AUTO_SPELLCHECK: Readonly<Record<string, string>> = { tr: 'tr', en: 'en-US', de: 'de', es: 'es', ko: 'ko' };
+const AUTO_SPELLCHECK: Readonly<Record<string, string>> = { tr: 'tr', en: 'en-US', de: 'de', es: 'es', ko: 'ko', ar: 'ar' };
 const MAX_OUTPUTS = 20;
 const MAX_PENDING = 20;
 const MAX_PREPARED = 20;

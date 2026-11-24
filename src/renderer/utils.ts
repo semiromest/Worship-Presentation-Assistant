@@ -222,6 +222,11 @@ async function renderTextSlide(
       ctx.restore();
       ctx.fillStyle = styles.textColor || '#ffffff';
     }
+    if (styles.textStroke?.width) {
+      ctx.strokeStyle = styles.textStroke.color;
+      ctx.lineWidth = styles.textStroke.width * baseScale;
+      ctx.strokeText(lines[i], x, y);
+    }
     ctx.fillText(lines[i], x, y);
   }
 

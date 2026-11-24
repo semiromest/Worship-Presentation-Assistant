@@ -55,6 +55,7 @@ export default function SlideStyleEditor({
     && splitPoint.part === activePart && splitPoint.text === displayContent
     && !!displayContent.slice(0, splitPoint.offset).trim() && !!displayContent.slice(splitPoint.offset).trim();
   const hasTextHighlight = !!selectedSlide.styles?.textHighlight && selectedSlide.styles.textHighlight !== 'transparent';
+  const hasTextStroke = !!selectedSlide.styles?.textStroke?.width;
 
   useEffect(() => {
     setSplitPoint(null);
@@ -239,13 +240,14 @@ export default function SlideStyleEditor({
         </div>
       </div>
 
-      {/* Text highlight */}
-      <div className="space-y-1.5">
-        <span className="block text-[11px] text-white/50 font-bold">
+      {/* Text highlight + border share one grid cell so the font row keeps its place */}
+      <div className="flex items-start gap-2">
+      <div className="min-w-0 space-y-1.5">
+        <span className="block truncate text-[11px] text-white/50 font-bold">
           {t('common.editorTextHighlight')}
         </span>
-        <div className="flex items-center gap-2">
-          <div className="relative h-[30px] w-10 rounded-lg border border-white/10 bg-white/5 focus-within:ring-2 focus-within:ring-blue-500">
+        <div className="flex items-center gap-1">
+          <div className="relative h-[30px] w-9 shrink-0 rounded-lg border border-white/10 bg-white/5 focus-within:ring-2 focus-within:ring-blue-500">
           {!hasTextHighlight && <span aria-hidden="true" className="pointer-events-none absolute inset-1 rounded bg-[repeating-linear-gradient(135deg,transparent,transparent_5px,rgba(255,255,255,0.08)_5px,rgba(255,255,255,0.08)_6px)]" />}
           <input
             type="color"
@@ -260,11 +262,44 @@ export default function SlideStyleEditor({
             onClick={() => updateSlideStyles({ textHighlight: 'transparent' })}
             title={t('common.editorClear')}
             aria-label={`${t('common.editorTextHighlight')}: ${t('common.editorClear')}`}
-            className="h-8 w-8 flex items-center justify-center rounded-lg text-white/50 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="h-8 w-7 shrink-0 flex items-center justify-center rounded-lg text-white/50 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <X className="w-3.5 h-3.5" aria-hidden="true" />
           </button></ControlTooltip>
         </div>
+      </div>
+
+      {/* Text border (stroke) */}
+      <div className="min-w-0 space-y-1.5">
+        <span className="block truncate text-[11px] text-white/50 font-bold">
+          {t('common.editorBorder')}
+        </span>
+        <div className="flex items-center gap-1">
+          <div className="relative h-[30px] w-9 shrink-0 rounded-lg border border-white/10 bg-white/5 focus-within:ring-2 focus-within:ring-blue-500">
+          {!hasTextStroke && <span aria-hidden="true" className="pointer-events-none absolute inset-1 rounded bg-[repeating-linear-gradient(135deg,transparent,transparent_5px,rgba(255,255,255,0.08)_5px,rgba(255,255,255,0.08)_6px)]" />}
+          <input
+            type="color"
+            value={selectedSlide.styles?.textStroke?.color ?? '#000000'}
+            onChange={(e) => updateSlideStyles({ textStroke: { color: e.target.value, width: selectedSlide.styles?.textStroke?.width || 2 } })}
+            className={cn('absolute inset-0 h-full w-full cursor-pointer rounded-lg border-0 bg-transparent', !hasTextStroke && 'opacity-0')}
+            aria-label={t('common.editorBorderColor')}
+          />
+          </div>
+          <input
+            type="number"
+            min={0}
+            max={20}
+            value={selectedSlide.styles?.textStroke?.width ?? 0}
+            onKeyDown={event => { if (!event.ctrlKey && !event.metaKey && !event.altKey) event.stopPropagation(); }}
+            onChange={(e) => {
+              const width = Math.max(0, Math.min(20, parseInt(e.target.value) || 0));
+              updateSlideStyles({ textStroke: width > 0 ? { color: selectedSlide.styles?.textStroke?.color ?? '#000000', width } : undefined });
+            }}
+            aria-label={t('common.editorBorder')}
+            className="h-[30px] w-11 shrink-0 rounded-lg border border-white/10 bg-black/40 px-1.5 text-center text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus-visible:border-blue-500/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500/30"
+          />
+        </div>
+      </div>
       </div>
 
       {/* Font Family */}
@@ -510,7 +545,7 @@ export default function SlideStyleEditor({
               },
               {
                 label: t('common.applyTextProperties'),
-                action: () => applyStyleFieldToAll({ fontSize: undefined, textColor: undefined, fontFamily: undefined }),
+                action: () => applyStyleFieldToAll({ fontSize: undefined, textColor: undefined, fontFamily: undefined, textStroke: undefined }),
               },
               {
                 label: t('common.applyBackgroundColor'),

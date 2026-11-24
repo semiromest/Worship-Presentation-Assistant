@@ -9,17 +9,24 @@ import {
   AlignStartHorizontal,
   AlignStartVertical,
   AlignVerticalDistributeCenter,
+  ArrowDownToLine,
+  ArrowUpToLine,
+  BringToFront,
+  SendToBack,
   MoveHorizontal,
   MoveVertical,
 } from 'lucide-react';
 import type { SlideItem } from '../types';
-import { layoutSelection, type LayoutAction } from './alignmentUtils';
+import { layoutSelection, type AlignTarget, type LayoutAction } from './alignmentUtils';
+import { canReorderSelection, type ZOrderAction } from './bulkItemOps';
 import { Section, Segmented, ToolButton, ToolDivider } from './EditorControls';
 
 interface AlignmentToolsProps {
   selectedItems: SlideItem[];
   items: SlideItem[];
   onUpdateItems: (items: SlideItem[]) => void;
+  /** Re-stacks the selection; omitted where layer order is not editable. */
+  onReorder?: (action: ZOrderAction) => void;
 }
 
 const alignButtons = [
@@ -31,17 +38,25 @@ const alignButtons = [
   { id: 'bottom', icon: AlignEndHorizontal, label: 'editorAlignBottom' },
 ] as const;
 
-export function AlignmentTools({ selectedItems, items, onUpdateItems }: AlignmentToolsProps) {
+const zOrderButtons = [
+  { id: 'front', icon: ArrowUpToLine, label: 'editorBringToFront' },
+  { id: 'forward', icon: BringToFront, label: 'editorBringForward' },
+  { id: 'backward', icon: SendToBack, label: 'editorSendBackward' },
+  { id: 'back', icon: ArrowDownToLine, label: 'editorSendToBack' },
+] as const;
+
+export function AlignmentTools({ selectedItems, items, onUpdateItems, onReorder }: AlignmentToolsProps) {
   const { t } = useTranslation();
-  const [targetOverride, setTargetOverride] = useState<'slide' | 'selection' | null>(null);
+  const [targetOverride, setTargetOverride] = useState<AlignTarget | null>(null);
   const eligible = selectedItems.filter((item) => !item.locked && item.visible !== false);
-  const target = eligible.length < 2 ? 'slide' : (targetOverride ?? 'selection');
+  const target: AlignTarget = eligible.length < 2 ? 'slide' : (targetOverride ?? 'selection');
+  const selectedIds = selectedItems.map((item) => item.id);
   if (!eligible.length) return null;
   const apply = (action: LayoutAction) =>
     onUpdateItems(
       layoutSelection(
         items,
-        selectedItems.map((item) => item.id),
+        selectedIds,
         action,
         target
       )
@@ -56,6 +71,7 @@ export function AlignmentTools({ selectedItems, items, onUpdateItems }: Alignmen
           options={[
             { value: 'slide', label: t('common.editorAlignToSlide'), text: t('common.editorAlignToSlide') },
             { value: 'selection', label: t('common.editorAlignToSelection'), text: t('common.editorAlignToSelection') },
+            { value: 'slideBlock', label: t('common.editorAlignBlockToSlideHint'), text: t('common.editorAlignBlockToSlide') },
           ]}
         />
       )}
@@ -91,6 +107,19 @@ export function AlignmentTools({ selectedItems, items, onUpdateItems }: Alignmen
               />
             </>
           )}
+        </div>
+      )}
+      {onReorder && (
+        <div className="flex flex-wrap items-center gap-0.5" role="group" aria-label={t('common.editorArrange')}>
+          {zOrderButtons.map((button) => (
+            <ToolButton
+              key={button.id}
+              label={t('common.' + button.label)}
+              icon={button.icon}
+              disabled={!canReorderSelection(items, selectedIds, button.id)}
+              onClick={() => onReorder(button.id)}
+            />
+          ))}
         </div>
       )}
       <p className="text-[11px] leading-snug text-white/40">{t('common.editorLayoutActiveOnly')}</p>

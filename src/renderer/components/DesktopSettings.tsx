@@ -31,7 +31,7 @@ export default function DesktopSettings() {
     {(['shortcutsEnabled', 'spellcheck', 'notifications'] as const).map(key => <div key={key} className="flex items-center justify-between gap-4 border-b border-white/10 pb-3 text-sm"><span>{t(`desktop.${key}`)}</span><SettingSwitch label={t(`desktop.${key}`)} checked={draft[key]} onCheckedChange={checked => void update({ [key]: checked })} /></div>)}
     {/Macintosh/.test(navigator.userAgent) ? <p className="text-xs text-white/60">{t('desktop.spellingSystem')}</p> : <label className="flex items-center justify-between gap-4 text-sm">
       <span>{t('desktop.spellingLanguage')}</span><select className="rounded-lg border border-white/15 bg-surface-base px-3 py-2" value={draft.spellcheckLanguage} onChange={event => void update({ spellcheckLanguage: event.target.value as DesktopPreferences['spellcheckLanguage'] })}>
-        {SPELLCHECK_LANGUAGES.map(value => <option key={value} value={value}>{value === 'auto' ? t('desktop.spellingAuto') : ({ tr: 'Türkçe', 'en-US': 'English (US)', de: 'Deutsch', es: 'Español', ko: '한국어' })[value]}</option>)}
+        {SPELLCHECK_LANGUAGES.map(value => <option key={value} value={value}>{value === 'auto' ? t('desktop.spellingAuto') : ({ tr: 'Türkçe', 'en-US': 'English (US)', de: 'Deutsch', es: 'Español', ko: '한국어', ar: 'العربية' })[value]}</option>)}
       </select>
     </label>}
     </fieldset>

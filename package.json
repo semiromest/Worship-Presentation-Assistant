@@ -1,6 +1,6 @@
 {
   "name": "worship-presentation-assistant",
-  "version": "1.4.38",
+  "version": "1.4.39",
   "main": "dist-electron/main.js",
   "description": "Worship Presentation Assistant - Simple Worship Presentation App",
   "author": "IPCA",
@@ -26,7 +26,7 @@
     "test:readiness": "tsx --test src/shared/readiness.test.ts src/main/preparationResources.test.ts src/renderer/preparationCheck.test.ts",
     "test:recent-ux": "tsx --test src/main/youtubeSearchPager.test.ts src/renderer/hymnAuthorSettings.test.ts",
     "test:canvas": "tsx --test src/renderer/canvasSource.test.ts",
-    "test:editor": "tsx --test src/renderer/videoOverlays.test.ts src/renderer/editor/videoTimeline.test.ts src/renderer/videoPlayback.test.ts src/renderer/editor/videoDraft.test.ts src/main/mediaPosterSource.test.ts src/renderer/editor/slideCapabilities.test.ts src/renderer/components/mediaPosterQueue.test.ts src/renderer/editor/editorSelection.test.ts src/renderer/editor/slideDraft.test.ts src/renderer/editor/elementDrag.test.ts src/renderer/editor/useEditorDeck.test.ts src/renderer/editor/editorDeckCommit.test.ts src/renderer/editor/editorWorkspace.test.ts src/renderer/slidePreviewGeometry.test.ts src/renderer/editor/canvasGeometry.test.ts src/renderer/editor/pointerSession.test.ts src/renderer/editor/colors.test.ts src/renderer/imageGeometry.test.ts src/renderer/editor/imageLayout.test.ts",
+    "test:editor": "tsx --test src/renderer/videoOverlays.test.ts src/renderer/editor/videoTimeline.test.ts src/renderer/videoPlayback.test.ts src/renderer/editor/videoDraft.test.ts src/main/mediaPosterSource.test.ts src/renderer/editor/slideCapabilities.test.ts src/renderer/components/mediaPosterQueue.test.ts src/renderer/editor/editorSelection.test.ts src/renderer/editor/slideDraft.test.ts src/renderer/editor/elementDrag.test.ts src/renderer/editor/useEditorDeck.test.ts src/renderer/editor/editorDeckCommit.test.ts src/renderer/editor/editorWorkspace.test.ts src/renderer/slidePreviewGeometry.test.ts src/renderer/editor/canvasGeometry.test.ts src/renderer/editor/pointerSession.test.ts src/renderer/editor/colors.test.ts src/renderer/imageGeometry.test.ts src/renderer/editor/imageLayout.test.ts src/renderer/editor/bulkItemOps.test.ts src/renderer/editor/groupUtils.test.ts",
     "test:zoom": "tsx --test src/renderer/__tests__/slideGridZoom.test.ts",
     "smoke:worker": "electron perf/worker-smoke.cjs",
     "test:tour": "tsx --test src/renderer/components/Tour/tour.test.ts src/main/tourProfile.test.ts && node --test scripts/check-tour-capture.test.cjs && tsx --test src/main/launchPolicy.test.ts src/main/practiceProgress.test.ts && tsx --test src/main/practiceWorkspace.test.ts src/main/practiceResult.test.ts",
@@ -129,7 +129,8 @@
       "en-US",
       "es",
       "ko",
-      "tr"
+      "tr",
+      "ar"
     ],
     "copyright": "Copyright © Worship Presentation Assistant",
     "appId": "com.worship-presentation-assistant",

@@ -22,7 +22,8 @@ interface CanvasItemProps {
   canvasRef: RefObject<HTMLDivElement | null>;
   onSelect: (id: string, multi?: boolean) => void;
   onDrag: (id: string, x: number, y: number) => void;
-  onDragEnd?: (id: string) => void;
+  /** `moved` is false for a press that never moved (pointer gestures only). */
+  onDragEnd?: (id: string, moved?: boolean) => void;
   onTransform: (id: string, bounds: ItemBounds) => void;
   onRotate?: (id: string, rotation: number) => void;
   snapEnabled?: boolean;
@@ -131,7 +132,7 @@ export const CanvasItem = memo(function CanvasItem({
         );
       }
     },
-    (start) => onDragEnd?.(start.item.id)
+    (start) => onDragEnd?.(start.item.id, start.moved)
   );
 
   const startGesture = (kind: Gesture['kind']) => (event: React.PointerEvent<HTMLDivElement>) => {

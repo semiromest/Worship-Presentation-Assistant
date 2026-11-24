@@ -452,6 +452,7 @@ export const LivePreview = memo(({ slide, size = 'preview', volume = 1, muted = 
         textTransform: styles.textTransform || 'none', fontSize: `${fontSize * scale}px`,
         color: styles.textColor ?? '#fff',
         backgroundColor: styles.textHighlight && styles.textHighlight !== 'transparent' ? styles.textHighlight : undefined,
+        WebkitTextStroke: styles.textStroke?.width ? `${styles.textStroke.width * scale}px ${styles.textStroke.color}` : undefined,
         fontWeight, fontStyle: styles.fontStyle || 'normal', fontFamily: styles.fontFamily || 'inherit',
         lineHeight: styles.lineHeight || 1.3, width: '100%', boxSizing: 'border-box',
         padding: `${54 * scale}px ${96 * scale}px`,

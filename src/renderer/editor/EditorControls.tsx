@@ -391,23 +391,38 @@ export const ScopeSelector = memo(function ScopeSelector({
   scope,
   selectedCount,
   slideCount,
+  skippedCount = 0,
   onChange,
   children,
 }: {
   scope: EditScope;
   selectedCount: number;
   slideCount: number;
+  /** Selected slides the current edit would skip (no matching element). */
+  skippedCount?: number;
   onChange: (scope: EditScope) => void;
   /** Extra bulk actions shown under the switch. */
   children?: ReactNode;
 }) {
   const { t } = useTranslation();
+  const labelId = useId();
   if (selectedCount <= 1) return null;
+  const live = scope === 'selected';
+  const targetCount = Math.min(selectedCount, slideCount);
   return (
-    <div className="space-y-2 border-b border-white/[0.06] bg-blue-500/[0.06] px-3 py-2.5">
+    <div
+      data-scope-live={live ? 'true' : undefined}
+      className={cn(
+        'space-y-2 border-b px-3 py-2.5 transition-colors',
+        live ? 'border-l-2 border-b-blue-400/30 border-l-blue-400 bg-blue-500/[0.12]' : 'border-white/[0.06] bg-blue-500/[0.04]'
+      )}
+    >
+      <span id={labelId} className="block text-[11px] font-medium text-white/60">
+        {t('common.editorScopeLabel')}
+      </span>
       <div
         role="radiogroup"
-        aria-label={t('common.editorScopeLabel')}
+        aria-labelledby={labelId}
         className="grid h-7 grid-cols-2 gap-0.5 rounded-md bg-black/30 p-0.5"
       >
         {[
@@ -422,16 +437,20 @@ export const ScopeSelector = memo(function ScopeSelector({
             onClick={() => onChange(option.value)}
             className={cn(
               'truncate rounded px-2 text-[11px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
-              scope === option.value ? 'bg-blue-500/30 text-blue-50' : 'text-white/55 hover:text-white/85'
+              scope === option.value ? 'bg-blue-500/40 text-white' : 'text-white/55 hover:text-white/85'
             )}
           >
             {option.label}
           </button>
         ))}
       </div>
-      {scope === 'selected' && (
-        <p role="status" className="text-[11px] leading-snug text-blue-100/75">
-          {t('common.editorScopeNotice', { count: Math.min(selectedCount, slideCount) })}
+      <p role="status" className="flex items-start gap-1.5 text-[11px] leading-snug text-blue-100/80">
+        {live && <span className="mt-1 h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-blue-300" aria-hidden="true" />}
+        <span>{live ? t('common.editorScopeLiveNotice', { count: targetCount }) : t('common.editorScopeActiveNotice')}</span>
+      </p>
+      {live && skippedCount > 0 && (
+        <p className="text-[11px] leading-snug text-amber-200/90">
+          {t('common.editorScopeSkipWarning', { count: skippedCount })}
         </p>
       )}
       {children}

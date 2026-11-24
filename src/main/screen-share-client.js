@@ -33,6 +33,11 @@
     live: '라이브',
     waiting: '방송 대기 중',
     ended: '방송 종료'
+  } : lang.indexOf('ar') === 0 ? {
+    connecting: 'جارٍ الاتصال…',
+    live: 'مباشر',
+    waiting: 'في انتظار البث',
+    ended: 'انتهى البث'
   } : {
     connecting: 'Connecting…',
     live: 'Live',

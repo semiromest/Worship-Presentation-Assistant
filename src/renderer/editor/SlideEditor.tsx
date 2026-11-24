@@ -11,6 +11,8 @@ ChevronLeft,
 ChevronRight,
 Copy,
 Crop,
+Eye,
+EyeOff,
   Languages,
 Grid3x3,
 Group,
@@ -77,7 +79,6 @@ import {
 DEFAULT_TEXT_STYLE,
 clamp,
 deleteItemAt,
-deleteItems,
 duplicateItem,
 duplicateItems,
 isEditableTarget,
@@ -89,6 +90,19 @@ toggleVisibility,
 } from './editorUtils';
 import { writeElementDrag } from './elementDrag';
 import { createGroup,ungroupGroup } from './groupUtils';
+import {
+  bulkTargets,
+  deleteSelection,
+  moveSelection,
+  reorderSelection,
+  resizeSelection,
+  selectableItemIds,
+  selectionBounds,
+  stylePatch,
+  toggleSelectionLock,
+  toggleSelectionVisibility,
+  type ZOrderAction,
+} from './bulkItemOps';
 import { ImageCropDialog } from './ImageCropDialog';
 import { ImageTranslateDialog } from './ImageTranslateDialog';
 import { isLocalImageSource } from '../../shared/imageTranslate';
@@ -97,7 +111,7 @@ import { useKeyboardShortcuts } from './keyboardShortcuts';
 import { LayerPanel } from './panels/LayerPanel';
 import { SlideSettingsPanel } from './panels/SlideSettingsPanel';
 import { editorFilterTarget,filteredEditorSlides,isEditorEditableSlide,isVideoEditableSlide } from './slideCapabilities';
-import { isItemEditableSlide,makeClipboard,type SlideDraft } from './slideDraft';
+import { isItemEditableSlide,makeClipboard,scopeCoverage,type SlideDraft } from './slideDraft';
 import { SlideTemplates } from './SlideTemplates';
 import { ImageStyleEditor } from './styleEditors/ImageStyleEditor';
 import { TextStyleEditor } from './styleEditors/TextStyleEditor';
@@ -395,10 +409,14 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onDi
   const handleDrag = useCallback(
     (id: string, x: number, y: number) => {
       beginGesture();
+      // Dragging (or arrow-nudging) one member of a multi-selection moves the
+      // whole unlocked selection as a block.
+      const group = selectedIds.size > 1 && selectedIds.has(id) ? selectedIds : null;
       session.updateItems(
         (prev) => {
           const target = prev.find((item) => item.id === id);
           if (!target || (target.x === x && target.y === y)) return prev;
+          if (group) return moveSelection(prev, group, x - target.x, y - target.y);
           return prev.map((item) => (item.id === id ? { ...item, x, y } : item));
         },
         {
@@ -406,7 +424,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onDi
         }
       );
     },
-    [beginGesture, session]
+    [beginGesture, session, selectedIds]
   );
 
   const handleTransform = useCallback(
@@ -446,10 +464,22 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onDi
     [beginGesture, session]
   );
 
-  const handleDragEnd = useCallback(() => endGesture(), [endGesture]);
+  // Pressing on a member of a multi-selection keeps the selection so it can be
+  // dragged together; a press that never moves collapses onto that item.
+  const pendingCollapseRef = useRef<string | null>(null);
+  const handleDragEnd = useCallback(
+    (id?: string, moved?: boolean) => {
+      endGesture();
+      const pending = pendingCollapseRef.current;
+      pendingCollapseRef.current = null;
+      if (pending && pending === id && moved === false) session.setItemSelection(new Set([pending]));
+    },
+    [endGesture, session]
+  );
 
   const handleSelect = useCallback(
     (id: string | null, multi?: boolean) => {
+      pendingCollapseRef.current = null;
       if (id === null) {
         session.setItemSelection(new Set());
         return;
@@ -458,6 +488,9 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onDi
       if (multi) {
         if (next.has(id)) next.delete(id);
         else next.add(id);
+      } else if (next.size > 1 && next.has(id)) {
+        pendingCollapseRef.current = id;
+        return;
       } else {
         next.clear();
         next.add(id);
@@ -525,11 +558,15 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onDi
     [items, session, t]
   );
 
+  // Locked items are skipped (and stay selected) so a bulk delete never removes
+  // something the user protected.
   const deleteSelected = useCallback(() => {
     if (selectedIds.size === 0) return;
-    session.updateItems((prev) => deleteItems(prev, selectedIds));
-    session.setItemSelection(new Set());
-  }, [session, selectedIds]);
+    const result = deleteSelection(items, selectedIds);
+    if (result.deleted.length === 0) return;
+    session.updateItems(result.items);
+    session.setItemSelection(new Set(result.kept));
+  }, [items, session, selectedIds]);
 
   const duplicateSelected = useCallback(() => {
     if (selectedIds.size === 0) return;
@@ -567,15 +604,71 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onDi
   }, [items, session, selectedIds]);
 
   const handleUngroup = useCallback(() => {
-    const groups = items.filter((item) => selectedIds.has(item.id) && item.type === 'group');
+    const groups = items.filter((item) => selectedIds.has(item.id) && item.type === 'group' && !item.locked);
     if (groups.length === 0) return;
-    session.updateItems((prev) => groups.reduce((result, group) => ungroupGroup(result, group.id), prev));
-    session.setItemSelection(new Set());
+    const next = groups.reduce((result, group) => ungroupGroup(result, group.id), items);
+    const before = new Set(items.map((item) => item.id));
+    session.updateItems(next);
+    // Keep working on what was in the groups, plus anything else that was selected.
+    session.setItemSelection(
+      new Set([
+        ...[...selectedIds].filter((id) => next.some((item) => item.id === id)),
+        ...next.filter((item) => !before.has(item.id)).map((item) => item.id),
+      ])
+    );
   }, [session, items, selectedIds]);
 
   const handleSelectAllItems = useCallback(() => {
-    session.setItemSelection(new Set(items.map((item) => item.id)));
+    session.setItemSelection(new Set(selectableItemIds(items)));
   }, [session, items]);
+
+  const toggleSelectedLock = useCallback(() => {
+    finishInteraction();
+    session.updateItems((prev) => toggleSelectionLock(prev, selectedIds));
+  }, [finishInteraction, session, selectedIds]);
+
+  const toggleSelectedVisibility = useCallback(() => {
+    finishInteraction();
+    session.updateItems((prev) => toggleSelectionVisibility(prev, selectedIds));
+  }, [finishInteraction, session, selectedIds]);
+
+  const reorderSelected = useCallback(
+    (action: ZOrderAction) => {
+      finishInteraction();
+      session.updateItems((prev) => reorderSelection(prev, selectedIds, action));
+    },
+    [finishInteraction, session, selectedIds]
+  );
+
+  /**
+   * Where a live bulk-scope edit of the selected elements will land, so the
+   * panel can warn about skipped slides and the rail can mark them up front.
+   */
+  const scopeMarks = useMemo(
+    () =>
+      effectiveScope === 'selected' && tab === 'item' && selectedIds.size > 0
+        ? scopeCoverage(items, [...selectedIds], selectedSlideIds, session.activeId, session.slideById, session.drafts)
+        : undefined,
+    [effectiveScope, tab, items, selectedIds, selectedSlideIds, session.activeId, session.slideById, session.drafts]
+  );
+  const skippedSlideCount = scopeMarks ? [...scopeMarks.values()].filter((mark) => mark === 'skip').length : 0;
+
+  /** Ids a multi-selection's inspector edits; the single-item path is unchanged. */
+  const bulkIds = useMemo(
+    () => (selectedIds.size > 1 ? bulkTargets(items, selectedIds).map((item) => item.id) : null),
+    [items, selectedIds]
+  );
+  const updateSelectedItems = useCallback(
+    (updates: Partial<SlideItem> | ((item: SlideItem) => Partial<SlideItem>), fallbackId: string) => {
+      if (!bulkIds) {
+        session.applyItemUpdate(fallbackId, updates, selectedSlideIds, effectiveScope);
+        return;
+      }
+      if (bulkIds.length === 0) return;
+      session.applyItemsUpdate(bulkIds, updates, selectedSlideIds, effectiveScope);
+    },
+    [bulkIds, effectiveScope, selectedSlideIds, session]
+  );
 
   const updateItemsBatch = useCallback(
     (next: SlideItem[]) => {
@@ -944,6 +1037,50 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onDi
   ];
 
   const selectedTextStyles = primarySelected?.type === 'text' ? (primarySelected.textStyles ?? DEFAULT_TEXT_STYLE) : null;
+  const multiItem = selectedIds.size > 1;
+  const allSelectedLocked = selectedItems.length > 0 && selectedItems.every((item) => item.locked);
+  const allSelectedHidden = selectedItems.length > 0 && selectedItems.every((item) => item.visible === false);
+  // In a multi-selection the style editors show the last editable item of
+  // each kind and apply only what changed to every editable item of that kind.
+  const pickSource = (type: 'text' | 'image') =>
+    multiItem
+      ? [...selectedItems].reverse().find((item) => item.type === type && !item.locked) ??
+        [...selectedItems].reverse().find((item) => item.type === type) ??
+        null
+      : primarySelected?.type === type
+        ? primarySelected
+        : null;
+  const textSource = pickSource('text');
+  const imageSource = pickSource('image');
+  const selectionBox = multiItem ? selectionBounds(items, selectedIds) : null;
+  const geometrySource = selectionBox && primarySelected ? { ...primarySelected, ...selectionBox } : primarySelected;
+  const applyTextStyles = (next: TextStyle) => {
+    if (!textSource) return;
+    if (!multiItem) {
+      updateItemStyle(textSource.id, { textStyles: next });
+      return;
+    }
+    const patch = stylePatch(textSource.textStyles ?? DEFAULT_TEXT_STYLE, next);
+    if (Object.keys(patch).length === 0) return;
+    updateSelectedItems(
+      (target) => (target.type === 'text' && !target.locked ? { textStyles: { ...(target.textStyles ?? DEFAULT_TEXT_STYLE), ...patch } } : {}),
+      textSource.id
+    );
+  };
+  const applyImageStyles = (next: NonNullable<SlideItem['imageStyles']>) => {
+    if (!imageSource) return;
+    finishInteraction();
+    if (!multiItem) {
+      updateItemStyle(imageSource.id, { imageStyles: next });
+      return;
+    }
+    const patch = stylePatch(imageSource.imageStyles ?? {}, next);
+    if (Object.keys(patch).length === 0) return;
+    updateSelectedItems(
+      (target) => (target.type === 'image' && !target.locked ? { imageStyles: { ...(target.imageStyles ?? {}), ...patch } as SlideItem['imageStyles'] } : {}),
+      imageSource.id
+    );
+  };
   const patchSelectedText = (patch: Partial<TextStyle>) => {
     if (!primarySelected || !selectedTextStyles) return;
     finishInteraction();
@@ -976,13 +1113,15 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onDi
           if (!(event.target as Element).closest('input')) event.preventDefault();
         }}
       >
-        {primarySelected.locked ? (
-          <ToolButton label={t('common.editorUnlock')} icon={Unlock} onClick={() => toggleItemLock(primarySelected.id)}>
+        {(multiItem ? allSelectedLocked : primarySelected.locked) ? (
+          <ToolButton label={t('common.editorUnlock')} icon={Unlock} onClick={() => (multiItem ? toggleSelectedLock() : toggleItemLock(primarySelected.id))}>
             <span className="pr-1">{t('common.editorUnlock')}</span>
           </ToolButton>
         ) : selectedIds.size > 1 ? (
           <>
             <ToolButton label={t('common.editorGroup')} icon={Group} onClick={handleGroup} />
+            <ToolButton label={t('common.editorBringToFront')} icon={BringToFront} onClick={() => reorderSelected('front')} />
+            <ToolButton label={t('common.editorSendToBack')} icon={SendToBack} onClick={() => reorderSelected('back')} />
             {hasGroupSelected && <ToolButton label={t('common.editorUngroup')} icon={Ungroup} onClick={handleUngroup} />}
             <ToolDivider />
             <ToolButton label={t('common.editorDuplicate')} icon={Copy} onClick={duplicateSelected} />
@@ -1350,6 +1489,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onDi
                 drafts={session.drafts}
                 activeId={session.activeId}
                 selectedIds={session.selection.selectedIds}
+                scopeMarks={scopeMarks}
                 liveSlideId={liveSlideId}
                 onActivate={activateSlide}
                 onSelectAll={session.selectEverySlide}
@@ -1553,7 +1693,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onDi
                 <LayerPanel
                   items={items}
                   selectedIds={selectedIds}
-                  onSelect={(id) => session.setItemSelection(new Set([id]))}
+                  onSelect={(ids) => session.setItemSelection(new Set(ids))}
                   onMove={moveItem}
                   onDelete={deleteItemById}
                   onToggleVisibility={toggleItemVisibility}
@@ -1569,19 +1709,34 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onDi
                     scope={effectiveScope}
                     selectedCount={selectedSlideIds.length}
                     slideCount={slideOrder.length}
+                    skippedCount={skippedSlideCount}
                     onChange={setScope}
                   >
                     {primarySelected && (
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={handleApplySelectionToOtherSlides}
-                          title={t('common.editorTransferHint', { count: selectedSlideIds.length })}
-                          className="h-7 min-w-0 flex-1 truncate rounded-md bg-blue-600 px-2 text-[11px] font-medium text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
-                        >
-                          {t('common.editorApplyToSelected', { count: otherSelectedCount })}
-                        </button>
-                        <ToolButton label={t('common.editorApplySameType')} icon={Paintbrush} onClick={handleApplySameTypeStyle} />
+                      // One-off actions, kept visually secondary so they are not
+                      // mistaken for "apply my changes" (the switch above does that).
+                      <div className="space-y-1 border-t border-white/[0.06] pt-2">
+                        <span className="block text-[11px] text-white/45">{t('common.editorOtherSlidesActions', { count: otherSelectedCount })}</span>
+                        <div className="grid grid-cols-2 gap-1">
+                          <button
+                            type="button"
+                            onClick={handleApplySelectionToOtherSlides}
+                            title={t('common.editorCopyElementHint', { count: otherSelectedCount })}
+                            className="inline-flex h-7 min-w-0 items-center justify-center gap-1.5 rounded-md border border-white/[0.12] bg-white/[0.04] px-2 text-[11px] font-medium text-white/85 transition hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                          >
+                            <Copy className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                            <span className="truncate">{t('common.editorCopyElement')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleApplySameTypeStyle}
+                            title={t('common.editorTransferStyleHint', { count: otherSelectedCount })}
+                            className="inline-flex h-7 min-w-0 items-center justify-center gap-1.5 rounded-md border border-white/[0.12] bg-white/[0.04] px-2 text-[11px] font-medium text-white/85 transition hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                          >
+                            <Paintbrush className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                            <span className="truncate">{t('common.editorTransferStyle')}</span>
+                          </button>
+                        </div>
                       </div>
                     )}
                   </ScopeSelector>
@@ -1604,13 +1759,32 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onDi
                               <ToolButton label={t('common.editorSendBackward')} descriptionKey="common.editorSendBackward" icon={SendToBack} disabled={!canMoveDown} onClick={() => moveItem(primarySelected.id, 'down')} />
                             </>
                           )}
-                          <ToolButton
-                            label={primarySelected.locked ? t('common.editorUnlock') : t('common.editorLock')}
-                            icon={primarySelected.locked ? Lock : Unlock}
-                            active={!!primarySelected.locked}
-                            pressed={!!primarySelected.locked}
-                            onClick={() => toggleItemLock(primarySelected.id)}
-                          />
+                          {multiItem ? (
+                            <>
+                              <ToolButton
+                                label={allSelectedLocked ? t('common.editorUnlock') : t('common.editorLockSelection')}
+                                icon={allSelectedLocked ? Lock : Unlock}
+                                active={allSelectedLocked}
+                                pressed={allSelectedLocked}
+                                onClick={toggleSelectedLock}
+                              />
+                              <ToolButton
+                                label={allSelectedHidden ? t('common.editorShowSelection') : t('common.editorHideSelection')}
+                                icon={allSelectedHidden ? EyeOff : Eye}
+                                active={allSelectedHidden}
+                                pressed={allSelectedHidden}
+                                onClick={toggleSelectedVisibility}
+                              />
+                            </>
+                          ) : (
+                            <ToolButton
+                              label={primarySelected.locked ? t('common.editorUnlock') : t('common.editorLock')}
+                              icon={primarySelected.locked ? Lock : Unlock}
+                              active={!!primarySelected.locked}
+                              pressed={!!primarySelected.locked}
+                              onClick={() => toggleItemLock(primarySelected.id)}
+                            />
+                          )}
                           <ToolButton label={t('common.editorDuplicate')} icon={Copy} onClick={duplicateSelected} />
                           <ToolButton
                             label={t('common.editorDelete')}
@@ -1662,10 +1836,17 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onDi
                               key={key}
                               label={key.toUpperCase() + ' %'}
                               prefix={key.toUpperCase()}
-                              value={Math.round(primarySelected[key])}
+                              value={Math.round((geometrySource ?? primarySelected)[key])}
                               onChange={(raw) => {
                                 const value = parseInt(raw);
                                 if (Number.isNaN(value)) return;
+                                if (selectionBox) {
+                                  // Moves the selection as a block to the typed position.
+                                  finishInteraction();
+                                  const delta = value - selectionBox[key];
+                                  session.updateItems((prev) => moveSelection(prev, selectedIds, key === 'x' ? delta : 0, key === 'y' ? delta : 0));
+                                  return;
+                                }
                                 const max = key === 'x' ? 100 - primarySelected.width : 100 - primarySelected.height;
                                 updateItem(primarySelected.id, { [key]: clamp(value, 0, max) });
                               }}
@@ -1679,7 +1860,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onDi
                             value={primarySelected.rotation || 0}
                             onChange={(raw) => {
                               const value = parseInt(raw || '0', 10);
-                              if (!Number.isNaN(value)) updateItem(primarySelected.id, { rotation: value });
+                              if (!Number.isNaN(value)) updateSelectedItems({ rotation: value }, primarySelected.id);
                             }}
                           />
                           {(['width', 'height'] as const).map((key) => (
@@ -1693,6 +1874,12 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onDi
                               onChange={(raw) => {
                                 const value = parseInt(raw);
                                 if (Number.isNaN(value)) return;
+                                if (multiItem) {
+                                  // Every editable item gets the typed size, each around its own centre.
+                                  finishInteraction();
+                                  session.updateItems((prev) => resizeSelection(prev, selectedIds, key, value));
+                                  return;
+                                }
                                 updateItem(primarySelected.id, (target) =>
                                   target.locked
                                     ? {}
@@ -1706,11 +1893,15 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onDi
                         </div>
                       </Section>
 
-                      {primarySelected.type === 'text' && (
+                      {textSource && (
                         <TextStyleEditor
-                          item={primarySelected}
-                          onChange={(styles) => updateItemStyle(primarySelected.id, { textStyles: styles })}
-                          content={
+                          item={textSource}
+                          onChange={applyTextStyles}
+                          content={multiItem ? (
+                            <p className="text-[11px] leading-snug text-white/45">
+                              {t('common.editorBulkStyleHint', { count: selectedItems.filter((item) => item.type === 'text' && !item.locked).length })}
+                            </p>
+                          ) : (
                             <label className="block space-y-1">
                               <span className="sr-only">{t('common.editorContent')}</span>
                               <textarea
@@ -1728,11 +1919,23 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onDi
                                 </span>
                               )}
                             </label>
-                          }
+                          )}
                         />
                       )}
 
-                      {primarySelected.type === 'image' && (
+                      {imageSource && multiItem && (
+                        <ImageStyleEditor
+                          key={imageSource.id}
+                          item={imageSource}
+                          canCrop={false}
+                          onCrop={() => undefined}
+                          onChange={applyImageStyles}
+                          source={null}
+                          translate={null}
+                        />
+                      )}
+
+                      {primarySelected.type === 'image' && !multiItem && (
                         <ImageStyleEditor
                           key={primarySelected.id}
                           item={primarySelected}
@@ -1797,7 +2000,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onDi
                             value={primarySelected.borderWidth || 0}
                             onChange={(raw) => {
                               const value = parseInt(raw);
-                              if (!Number.isNaN(value)) updateItem(primarySelected.id, { borderWidth: clamp(value, 0, 20) });
+                              if (!Number.isNaN(value)) updateSelectedItems({ borderWidth: clamp(value, 0, 20) }, primarySelected.id);
                             }}
                           />
                           <input
@@ -1805,7 +2008,7 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onDi
                             aria-label={t('common.editorBorderColor')}
                             title={t('common.editorBorderColor')}
                             value={primarySelected.borderColor || '#ffffff'}
-                            onChange={(event) => updateItem(primarySelected.id, { borderColor: event.target.value })}
+                            onChange={(event) => updateSelectedItems({ borderColor: event.target.value }, primarySelected.id)}
                             className="h-7 w-7 cursor-pointer rounded-md border border-white/[0.08] bg-black/25 p-1 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-sm [&::-webkit-color-swatch]:border-0"
                           />
                           <NumberField
@@ -1816,13 +2019,13 @@ export default function SlideEditor({ slide, deck, active, onSave, onClose, onDi
                             value={primarySelected.borderRadius || 0}
                             onChange={(raw) => {
                               const value = parseInt(raw);
-                              if (!Number.isNaN(value)) updateItem(primarySelected.id, { borderRadius: clamp(value, 0, 50) });
+                              if (!Number.isNaN(value)) updateSelectedItems({ borderRadius: clamp(value, 0, 50) }, primarySelected.id);
                             }}
                           />
                         </div>
                       </Section>
 
-                      <AlignmentTools selectedItems={selectedItems} items={items} onUpdateItems={updateItemsBatch} />
+                      <AlignmentTools selectedItems={selectedItems} items={items} onUpdateItems={updateItemsBatch} onReorder={reorderSelected} />
                     </>
                   ) : (
                     <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">

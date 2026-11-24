@@ -258,6 +258,11 @@ async function renderTextSlide(ctx: Ctx, slide: ThumbSlideData, W: number, H: nu
       ctx.fillRect(highlightX, y - leading, width, lineHeight);
       ctx.fillStyle = textColor;
     }
+    if (styles.textStroke?.width) {
+      ctx.strokeStyle = styles.textStroke.color;
+      ctx.lineWidth = styles.textStroke.width * (W / 1920);
+      ctx.strokeText(lines[i], x, y);
+    }
     ctx.fillText(lines[i], x, y);
   }
   return true;

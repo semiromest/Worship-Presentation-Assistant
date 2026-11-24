@@ -253,6 +253,7 @@ export const TextSlidePreview = memo(({ slide, cardWidth = 320, staticMedia = fa
           fontStyle: slide.styles?.fontStyle ?? 'normal',
           lineHeight: slide.styles?.lineHeight ?? 1.3,
           backgroundColor: slide.styles?.textHighlight && slide.styles.textHighlight !== 'transparent' ? slide.styles.textHighlight : undefined,
+          WebkitTextStroke: slide.styles?.textStroke?.width ? `${slide.styles.textStroke.width * previewScale}px ${slide.styles.textStroke.color}` : undefined,
         }}
       >
         {displayContent}

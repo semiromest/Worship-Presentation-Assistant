@@ -31,7 +31,7 @@ interface CanvasStageProps {
   onSelect: (id: string | null, multi?: boolean) => void;
   onSelectMany: (ids: Set<string>) => void;
   onDrag: (id: string, x: number, y: number) => void;
-  onDragEnd: (id: string) => void;
+  onDragEnd: (id: string, moved?: boolean) => void;
   onTransform: (id: string, bounds: ItemBounds) => void;
   onRotate: (id: string, rotation: number) => void;
   gridEnabled?: boolean;
@@ -270,9 +270,9 @@ export function CanvasStage({
     [snapEnabled]
   );
 
-  const handleDragEnd = useCallback((id: string) => {
+  const handleDragEnd = useCallback((id: string, moved?: boolean) => {
     setGuides(previous => previous.length ? [] : previous);
-    actionsRef.current.onDragEnd(id);
+    actionsRef.current.onDragEnd(id, moved);
   }, []);
 
   const handleSelect = useCallback((id: string | null, multi?: boolean) => {

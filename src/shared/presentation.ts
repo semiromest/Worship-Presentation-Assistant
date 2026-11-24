@@ -185,6 +185,8 @@ export interface Slide {
     textColor: string;
     /** Background paint behind the text glyphs, separate from the slide background. */
     textHighlight?: string;
+    /** Outline drawn around the text glyphs. */
+    textStroke?: { color: string; width: number };
     textAlign?: string;
     verticalAlign?: string;
     fontWeight?: string;

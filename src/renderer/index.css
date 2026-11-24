@@ -209,6 +209,13 @@ body {
   }
 }
 
+/* Arabic interface: the layout stays left-to-right, but each text run takes its
+   direction from its first strong character, so Arabic sentences read right-to-left
+   (punctuation on the correct side) while Latin names and numbers stay intact. */
+html[lang='ar'] body :is(p, span, label, button, a, li, h1, h2, h3, h4, h5, h6, td, th, option, input, textarea, [title]) {
+  unicode-bidi: plaintext;
+}
+
 /* UI motion preferences must not override explicitly chosen slide effects.
    The same exception applies above to the OS reduced-motion preference. */
 html[data-ui-motion='off'] *:not([data-slide-transition]),

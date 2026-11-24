@@ -5,6 +5,7 @@ import {
   createDraft,
   makeClipboard,
   applyDraftsToDeck,
+  applySlideStylesToDraft,
   applyItemStyle,
   counterpartItems,
   isItemEditableSlide,
@@ -711,27 +712,34 @@ export function useEditorDeck({ deck, initialSlide, editableOnly = false }: UseE
    * that plays the same role instead of the item with the same id (ids are
    * per-slide). Slides without a counter-part are reported, never invented.
    */
-  const applyItemUpdate = useCallback(
+  const applyItemsUpdate = useCallback(
     (
-      itemId: string,
+      itemIds: string[],
       updates: Partial<SlideItem> | ((item: SlideItem) => Partial<SlideItem>),
       slideIds: string[],
       scope: EditScope,
       options?: { history?: boolean }
     ) => {
-      if (!activeSlide || !activeDraft) return;
+      if (!activeSlide || !activeDraft || itemIds.length === 0) return;
+      const updateAll = (items: SlideItem[], ids: string[]) =>
+        ids.reduce((result, id) => updateItemAt(result, id, updates), items);
       if (scope === 'active' || slideIds.length <= 1) {
         dispatch({
           type: 'mutateSlide',
           slide: activeSlide,
-          history: true,
-          mutate: (draft) => ({ ...draft, items: updateItemAt(draft.items, itemId, updates) }),
+          history: options?.history ?? true,
+          mutate: (draft) => {
+            const items = updateAll(draft.items, itemIds);
+            return items.every((item, index) => JSON.stringify(item) === JSON.stringify(draft.items[index]))
+              ? draft
+              : { ...draft, items };
+          },
         });
         return;
       }
 
-      const source = activeDraft.items.find((item) => item.id === itemId);
-      if (!source) return;
+      const sourceIds = itemIds.filter((id) => activeDraft.items.some((item) => item.id === id));
+      if (sourceIds.length === 0) return;
       const sourceItems = activeDraft.items;
       const drafts = new Map(session.drafts);
       const touched: string[] = [];
@@ -746,12 +754,12 @@ export function useEditorDeck({ deck, initialSlide, editableOnly = false }: UseE
           continue;
         }
         const draft = drafts.get(slideId) ?? createDraft(slide);
-        const match = counterpartItems(sourceItems, itemId, draft.items)[0];
-        if (!match) {
+        const matches = sourceIds.flatMap((id) => counterpartItems(sourceItems, id, draft.items).slice(0, 1));
+        if (matches.length === 0) {
           unmatched += 1;
           continue;
         }
-        drafts.set(slideId, { ...draft, items: updateItemAt(draft.items, match.id, updates) });
+        drafts.set(slideId, { ...draft, items: updateAll(draft.items, matches.map((match) => match.id)) });
         touched.push(slideId);
       }
 
@@ -765,6 +773,17 @@ export function useEditorDeck({ deck, initialSlide, editableOnly = false }: UseE
     [activeDraft, activeSlide, session.drafts, slideById]
   );
 
+  const applyItemUpdate = useCallback(
+    (
+      itemId: string,
+      updates: Partial<SlideItem> | ((item: SlideItem) => Partial<SlideItem>),
+      slideIds: string[],
+      scope: EditScope,
+      options?: { history?: boolean }
+    ) => applyItemsUpdate([itemId], updates, slideIds, scope, options),
+    [applyItemsUpdate]
+  );
+
   /** Applies a slide-style patch to the working slide and every selected slide. */
   const applySlideStylePatch = useCallback(
     (updates: Record<string, unknown>, slideIds: string[], scope: EditScope) => {
@@ -774,7 +793,7 @@ export function useEditorDeck({ deck, initialSlide, editableOnly = false }: UseE
           type: 'mutateSlide',
           slide: activeSlide,
           history: true,
-          mutate: (draft) => ({ ...draft, styles: backgroundPatch(draft.styles, updates) }),
+          mutate: (draft) => applySlideStylesToDraft(draft, updates, backgroundPatch),
         });
         return;
       }
@@ -789,7 +808,7 @@ export function useEditorDeck({ deck, initialSlide, editableOnly = false }: UseE
           continue;
         }
         const draft = drafts.get(slideId) ?? createDraft(slide);
-        drafts.set(slideId, { ...draft, styles: backgroundPatch(draft.styles, updates) });
+        drafts.set(slideId, applySlideStylesToDraft(draft, updates, backgroundPatch));
         touched.push(slideId);
       }
       dispatch({
@@ -886,6 +905,7 @@ export function useEditorDeck({ deck, initialSlide, editableOnly = false }: UseE
     pasteStyleFromClipboard,
     applySelectionStyleToSlides,
     applyItemUpdate,
+    applyItemsUpdate,
     applySlideStylePatch,
     applyBackground,
     setNotice,

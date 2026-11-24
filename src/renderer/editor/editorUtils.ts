@@ -265,13 +265,14 @@ export function duplicateItems(items: SlideItem[], ids: Set<string>): SlideItem[
   const toDuplicate = ordered.filter((i) => ids.has(i.id));
   if (toDuplicate.length === 0) return ordered;
 
-  const copies = toDuplicate.map((source) =>
+  // Copies stack above everything, keeping the originals' relative order.
+  const copies = toDuplicate.map((source, index) =>
     normalizeItem({
       ...source,
       id: makeItemId(),
       x: clamp(source.x + 2, 0, 100 - source.width),
       y: clamp(source.y + 2, 0, 100 - source.height),
-      zIndex: ordered.length + Math.random(),
+      zIndex: ordered.length + index,
     })
   );
 
@@ -302,6 +303,7 @@ export function convertSlideToItems(slide: Slide): SlideItem[] {
           fontSize: slideStyles?.fontSize || 48,
           textColor: slideStyles?.textColor ?? '#ffffff',
           textHighlight: slideStyles?.textHighlight ?? 'transparent',
+          ...(slideStyles?.textStroke?.width ? { textStroke: { ...slideStyles.textStroke } } : {}),
           textAlign: (slideStyles?.textAlign as TextStyle['textAlign']) ?? 'center',
           verticalAlign: (slideStyles?.verticalAlign as TextStyle['verticalAlign']) ?? 'center',
           fontWeight: (slideStyles?.fontWeight as TextStyle['fontWeight']) ?? 'bold',

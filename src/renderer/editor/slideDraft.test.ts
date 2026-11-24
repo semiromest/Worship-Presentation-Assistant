@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import type { Presentation, Slide, SlideItem } from '../types';
 import {
   applyDraftsToDeck,
+  applySlideStylesToDraft,
+  scopeCoverage,
   applyItemStyle,
   applyItemsToSlides,
   applyStyleToDraft,
@@ -430,4 +432,61 @@ test('isItemEditableSlide describes exactly what the editor can hold', () => {
   assert.equal(isItemEditableSlide(slide({ type: 'loop' })), false);
   assert.equal(isItemEditableSlide(slide({ type: 'captions' })), false);
   assert.equal(isItemEditableSlide(slide({ partsMode: true })), false);
+});
+
+test('slide text defaults reach the text items and survive saving', () => {
+  const patch = (styles: Record<string, unknown>, updates: Record<string, unknown>) => ({ ...styles, ...updates });
+  const base = slide({
+    type: 'image',
+    items: [
+      textItem({ id: 'a' }),
+      textItem({ id: 'locked', locked: true }),
+      imageItem({ id: 'img' }),
+      { ...textItem({ id: 'g', type: 'group' }), groupItems: [textItem({ id: 'child' })] },
+    ],
+  });
+  const draft = createDraft(base);
+  const next = applySlideStylesToDraft(draft, { textColor: '#ff0000', fontSize: 80 }, patch);
+  const byId = new Map(next.items.map(item => [item.id, item]));
+  assert.equal(next.styles.textColor, '#ff0000');
+  assert.equal(byId.get('a')!.textStyles!.textColor, '#ff0000');
+  assert.equal(byId.get('a')!.textStyles!.fontSize, 80);
+  assert.equal(byId.get('a')!.textStyles!.fontFamily, 'Lora', 'other text styles are kept');
+  assert.equal(byId.get('locked')!.textStyles!.textColor, '#123456', 'locked items are left alone');
+  assert.equal(byId.get('g')!.groupItems![0].textStyles!.fontSize, 80);
+  assert.equal(byId.get('img'), draft.items.find(item => item.id === 'img'));
+
+  // Saving a text slide syncs the primary text item into the slide styles; the
+  // new default must win instead of being overwritten by the old item value.
+  const textSlide = slide({ content: 'Merhaba' });
+  const saved = draftToSlide(textSlide, applySlideStylesToDraft(createDraft(textSlide), { textColor: '#00ff00', fontSize: 64 }, patch));
+  assert.equal(saved.styles?.textColor, '#00ff00');
+  assert.equal(saved.styles?.fontSize, 64);
+  assert.equal(saved.items?.find(item => item.type === 'text')?.textStyles?.textColor, '#00ff00');
+
+  // Background-only patches leave items untouched.
+  assert.equal(applySlideStylesToDraft(draft, { backgroundColor: '#111111' }, patch).items, draft.items);
+});
+
+test('scope coverage marks which selected slides a live edit reaches before it happens', () => {
+  const active = slide({ id: 'a', type: 'image', items: [textItem({ id: 'x' }), imageItem({ id: 'y' })] });
+  const withText = slide({ id: 'b', type: 'image', items: [textItem({ id: 'other' })] });
+  const imageOnly = slide({ id: 'c', type: 'image', items: [imageItem({ id: 'pic' })] });
+  const video = { id: 'v', type: 'video', content: '', mediaUrl: 'file:///clip.mp4' } as Slide;
+  const slideById = new Map([active, withText, imageOnly, video].map(entry => [entry.id, entry] as const));
+  const drafts = new Map([['a', createDraft(active)]]);
+  const sourceItems = drafts.get('a')!.items;
+
+  const textMarks = scopeCoverage(sourceItems, ['x'], ['a', 'b', 'c', 'v'], 'a', slideById, drafts);
+  assert.deepEqual([...textMarks], [['b', 'match'], ['c', 'skip'], ['v', 'skip']]);
+
+  // One matching element is enough for the slide to be touched.
+  const bothMarks = scopeCoverage(sourceItems, ['x', 'y'], ['a', 'b', 'c'], 'a', slideById, drafts);
+  assert.deepEqual([...bothMarks], [['b', 'match'], ['c', 'match']]);
+
+  // Drafts win over the saved slide: an element added in the editor counts.
+  const edited = new Map(drafts);
+  edited.set('c', { ...createDraft(imageOnly), items: [...createDraft(imageOnly).items, textItem({ id: 'new' })] });
+  assert.equal(scopeCoverage(sourceItems, ['x'], ['c'], 'a', slideById, edited).get('c'), 'match');
+  assert.equal(scopeCoverage(sourceItems, ['ghost'], ['b'], 'a', slideById, drafts).size, 0);
 });

@@ -12,6 +12,7 @@ const lazyLocales: Record<string, () => Promise<{ default: ResourceKey }>> = {
   es: () => import("./locales/es/translation.json"),
   de: () => import("./locales/de/translation.json"),
   ko: () => import("./locales/ko/translation.json"),
+  ar: () => import("./locales/ar/translation.json"),
 };
 
 export const supportedUiLanguages = ['en', ...Object.keys(lazyLocales)];

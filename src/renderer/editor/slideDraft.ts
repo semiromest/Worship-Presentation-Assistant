@@ -9,6 +9,7 @@ import {
   normalizeItems,
   normalizeSlideStyles,
 } from './editorUtils';
+import { flattenGroups } from './groupUtils';
 
 /**
  * Pure helpers for the multi-slide slide editor.
@@ -52,6 +53,53 @@ export function createDraft(slide: Slide): SlideDraft {
   };
 }
 
+/** Slide-level style keys that are also per-item text styles. */
+const TEXT_DEFAULT_KEYS = [
+  'textColor',
+  'fontSize',
+  'fontFamily',
+  'fontWeight',
+  'fontStyle',
+  'lineHeight',
+  'letterSpacing',
+  'textAlign',
+  'verticalAlign',
+  'textStroke',
+] as const;
+
+/**
+ * Applies a slide-style patch to a draft. Text defaults (colour, size, …) are
+ * also pushed onto the slide's unlocked text items: the canvas draws items
+ * with their own text styles, and saving syncs the primary text item back
+ * into the slide styles, so changing only the slide value would be invisible
+ * and then overwritten on save.
+ */
+export function applySlideStylesToDraft(
+  draft: SlideDraft,
+  updates: Record<string, unknown>,
+  patchStyles: (styles: Record<string, unknown>, updates: Record<string, unknown>) => Record<string, unknown>
+): SlideDraft {
+  const styles = patchStyles(draft.styles, updates);
+  const textPatch: Record<string, unknown> = {};
+  for (const key of TEXT_DEFAULT_KEYS) if (key in updates) textPatch[key] = updates[key];
+  if (Object.keys(textPatch).length === 0) return { ...draft, styles };
+  let changed = false;
+  const patchItem = (item: SlideItem): SlideItem => {
+    if (item.locked) return item;
+    if (item.type === 'group' && item.groupItems) {
+      const groupItems = item.groupItems.map(patchItem);
+      return groupItems.some((child, index) => child !== item.groupItems![index]) ? { ...item, groupItems } : item;
+    }
+    if (item.type !== 'text') return item;
+    const current = (item.textStyles ?? {}) as Record<string, unknown>;
+    if (Object.entries(textPatch).every(([key, value]) => JSON.stringify(current[key]) === JSON.stringify(value))) return item;
+    changed = true;
+    return { ...item, textStyles: { ...current, ...textPatch } as unknown as TextStyle };
+  };
+  const items = draft.items.map(patchItem);
+  return { ...draft, styles, items: changed || items.some((item, index) => item !== draft.items[index]) ? items : draft.items };
+}
+
 /** Drafts are immutable; cloning shallow-copies the two mutable containers. */
 export function cloneDraft(draft: SlideDraft): SlideDraft {
   return { ...draft, items: draft.items.slice(), styles: { ...draft.styles } };
@@ -73,7 +121,8 @@ export function draftToSlide(slide: Slide, draft: SlideDraft): Slide {
   if (draft.backgroundOnly && slide.type === 'text') return { ...slide, styles: draft.styles as Slide['styles'] };
   if (isVideoEditableSlide(slide)) return { ...slide, videoPlayback: draft.videoPlayback ? { ...draft.videoPlayback } : undefined, videoOverlays: draft.videoOverlays?.map(item => ({ ...item, textStyles: item.textStyles ? { ...item.textStyles } : undefined })) };
   if (!isItemEditableSlide(slide)) return slide;
-  const items = normalizeItems(draft.items);
+  // Renderers only draw text and image items, so groups are saved as their parts.
+  const items = normalizeItems(flattenGroups(draft.items));
   const next: Slide = {
     ...slide,
     items,
@@ -428,4 +477,38 @@ export function applyStyleToSlides(
   }
 
   return { drafts, appliedSlideIds, unmatchedSlideIds };
+}
+
+export type ScopeMark = 'match' | 'skip';
+
+/**
+ * Which selected slides a bulk-scope item edit will reach, using the same
+ * rules as the edit itself (item-editable slide + a type/ordinal counterpart
+ * for at least one of the edited items). The active slide is the source and is
+ * left out. Lets the UI warn about skipped slides before anything is changed.
+ */
+export function scopeCoverage(
+  sourceItems: SlideItem[],
+  itemIds: string[],
+  slideIds: string[],
+  activeId: string,
+  slideById: Map<string, Slide>,
+  drafts: Map<string, SlideDraft>
+): Map<string, ScopeMark> {
+  const marks = new Map<string, ScopeMark>();
+  const sources = itemIds.filter((id) => sourceItems.some((item) => item.id === id));
+  if (sources.length === 0) return marks;
+  for (const slideId of slideIds) {
+    if (slideId === activeId) continue;
+    const slide = slideById.get(slideId);
+    if (!slide) continue;
+    if (!isItemEditableSlide(slide)) {
+      marks.set(slideId, 'skip');
+      continue;
+    }
+    const targetItems = (drafts.get(slideId) ?? createDraft(slide)).items;
+    const matched = sources.some((id) => counterpartItems(sourceItems, id, targetItems).length > 0);
+    marks.set(slideId, matched ? 'match' : 'skip');
+  }
+  return marks;
 }

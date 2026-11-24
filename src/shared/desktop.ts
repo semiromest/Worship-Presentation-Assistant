@@ -4,7 +4,7 @@ export const GLOBAL_SHORTCUTS = Object.freeze({
   next: 'Control+Alt+Right',
   blackout: 'Control+Alt+B',
 } satisfies Record<DesktopCommand, string>);
-export const SPELLCHECK_LANGUAGES = ['auto', 'tr', 'en-US', 'de', 'es', 'ko'] as const;
+export const SPELLCHECK_LANGUAGES = ['auto', 'tr', 'en-US', 'de', 'es', 'ko', 'ar'] as const;
 
 export interface DesktopPreferences {
   shortcutsEnabled: boolean;

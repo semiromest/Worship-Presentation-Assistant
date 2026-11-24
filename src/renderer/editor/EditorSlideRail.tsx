@@ -27,7 +27,7 @@ import {
 import type { Slide } from '../types';
 import { cn } from '../utils';
 import { SlidePreviewAny } from '../components/SlidePreview';
-import { isItemEditableSlide, type SlideDraft } from './slideDraft';
+import { isItemEditableSlide, type ScopeMark, type SlideDraft } from './slideDraft';
 import { isElementDrag, readElementDrag, type ElementDragPayload } from './elementDrag';
 import type { SelectModifiers } from './editorSelection';
 import { createFrameQueue } from './frameQueue';
@@ -72,7 +72,8 @@ function sameSlideInputs(prev: RailThumbProps, next: RailThumbProps): boolean {
     prev.isLive === next.isLive &&
     prev.isDropTarget === next.isDropTarget &&
     prev.enabled === next.enabled &&
-    prev.thumbWidth === next.thumbWidth
+    prev.thumbWidth === next.thumbWidth &&
+    prev.scopeMark === next.scopeMark
   );
 }
 
@@ -86,6 +87,8 @@ interface RailThumbProps {
   multi: boolean;
   isLive: boolean;
   isDropTarget: boolean;
+  /** Live bulk edit: this slide changes too ('match') or is skipped ('skip'). */
+  scopeMark?: ScopeMark;
   thumbWidth: number;
   enabled: boolean;
   onActivate: (slide: Slide, modifiers: SelectModifiers) => void;
@@ -104,6 +107,7 @@ const RailThumb = memo(function RailThumb({
   multi,
   isLive,
   isDropTarget,
+  scopeMark,
   thumbWidth,
   enabled,
   onActivate,
@@ -166,6 +170,7 @@ const RailThumb = memo(function RailThumb({
         'group relative flex cursor-pointer select-none flex-col gap-1 rounded-lg p-1 transition-colors',
         'focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none',
         isSelected ? (multi ? 'bg-blue-500/20 ring-1 ring-blue-400/60' : 'bg-blue-500/10') : 'hover:bg-white/5',
+        scopeMark === 'skip' && 'opacity-50',
         !isEditorEditableSlide(slide) && 'border border-white/10'
       )}
     >
@@ -202,6 +207,17 @@ const RailThumb = memo(function RailThumb({
           </span>
         )}
 
+        {scopeMark && !isDropTarget && (
+          <span
+            className={cn(
+              'absolute inset-x-0 bottom-0 px-1 py-0.5 text-center text-[9px] font-medium leading-tight',
+              scopeMark === 'match' ? 'bg-blue-500/85 text-white' : 'bg-amber-500/85 text-black'
+            )}
+          >
+            {t(scopeMark === 'match' ? 'common.editorRailWillChange' : 'common.editorRailWillSkip')}
+          </span>
+        )}
+
         {isDropTarget && (
           <span className="absolute inset-x-0 bottom-0 bg-blue-500/90 px-1 py-0.5 text-center text-[10px] font-medium text-white">
             {t('common.editorRailDropHere')}
@@ -230,6 +246,8 @@ export interface EditorSlideRailProps {
   drafts: Map<string, SlideDraft>;
   activeId: string;
   selectedIds: string[];
+  /** Live bulk-scope marks per slide id (see `scopeCoverage`). */
+  scopeMarks?: Map<string, ScopeMark>;
   liveSlideId: string | null;
   onActivate: (slide: Slide, modifiers: SelectModifiers) => void;
   onSelectAll: () => void;
@@ -257,6 +275,7 @@ export default function EditorSlideRail({
   drafts,
   activeId,
   selectedIds,
+  scopeMarks,
   liveSlideId,
   onActivate,
   onSelectAll,
@@ -474,6 +493,7 @@ export default function EditorSlideRail({
                   multi={selectedIds.length > 1}
                   isLive={slide.id === liveSlideId}
                   isDropTarget={dropTargetId === slide.id}
+                  scopeMark={scopeMarks?.get(slide.id)}
                   thumbWidth={thumbWidth}
                   onActivate={activate}
                   onContextMenu={handleContextMenu}

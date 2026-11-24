@@ -2,12 +2,27 @@ import type { SlideItem } from '../types';
 
 type AlignType = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
 type DistributeType = 'horizontal' | 'vertical';
+/**
+ * - selection: align to the selection's bounding box
+ * - slide: align every item to the slide on its own
+ * - slideBlock: move the selection as one block against the slide, keeping its layout
+ */
+export type AlignTarget = 'selection' | 'slide' | 'slideBlock';
 
 export function alignItems(
   items: SlideItem[],
   align: AlignType,
-  target: 'selection' | 'slide' = 'selection'
+  target: AlignTarget = 'selection'
 ): SlideItem[] {
+  if (target === 'slideBlock') {
+    if (items.length === 0) return items;
+    const bounds = getBounds(items);
+    const block = { id: '__block', type: 'text', x: bounds.minX, y: bounds.minY, width: bounds.maxX - bounds.minX, height: bounds.maxY - bounds.minY } as SlideItem;
+    const [moved] = alignItems([block], align, 'slide');
+    const dx = moved.x - block.x;
+    const dy = moved.y - block.y;
+    return items.map((item) => ({ ...item, x: Math.round((item.x + dx) * 10) / 10, y: Math.round((item.y + dy) * 10) / 10 }));
+  }
   if (items.length === 0 || (items.length < 2 && target === 'selection')) return items;
 
   const bounds = target === 'slide' ? { minX: 0, minY: 0, maxX: 100, maxY: 100 } : getBounds(items);
@@ -48,7 +63,7 @@ export function layoutSelection(
   items: SlideItem[],
   selectedIds: string[],
   action: LayoutAction,
-  target: 'selection' | 'slide' = 'selection'
+  target: AlignTarget = 'selection'
 ): SlideItem[] {
   const byId = new Map(items.map((item) => [item.id, item]));
   const selected = selectedIds.flatMap((id) => {

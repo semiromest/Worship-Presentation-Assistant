@@ -1,7 +1,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { checkLocales } = require('./check-locales.cjs');
-const valid = () => Object.fromEntries(['en', 'tr', 'de', 'es', 'ko'].map(l => [l, JSON.stringify(l === 'ko' || l === 'tr' ? { count: '{{count}} items', label: 'Label {{name}}' } : { count_one: '{{count}} item', count_other: '{{count}} items', label: 'Label {{name}}' })]));
+const arabicCounts = Object.fromEntries(['zero', 'one', 'two', 'few', 'many', 'other'].map(c => ['count_' + c, '{{count}} items']));
+const valid = () => Object.fromEntries(['en', 'tr', 'de', 'es', 'ko', 'ar'].map(l => [l, JSON.stringify(l === 'ko' || l === 'tr' ? { count: '{{count}} items', label: 'Label {{name}}' } : l === 'ar' ? { ...arabicCounts, label: 'Label {{name}}' } : { count_one: '{{count}} item', count_other: '{{count}} items', label: 'Label {{name}}' })]));
 test('locale-specific base counters work without copying English plurals', async () => {
   const data = valid();
   const es = JSON.parse(data.es); es.count_many = '{{count}} items'; data.es = JSON.stringify(es);
@@ -22,7 +23,7 @@ test('a missing required plural category fails, and extra source families fail',
 
 test('preparation messages render natural singular and plural forms in the application resources', async () => {
   const engine = require('i18next').createInstance();
-  const resources = Object.fromEntries(['en', 'tr', 'de', 'es', 'ko'].map(l => [l, { translation: require(`../src/renderer/locales/${l}/translation.json`) }]));
+  const resources = Object.fromEntries(['en', 'tr', 'de', 'es', 'ko', 'ar'].map(l => [l, { translation: require(`../src/renderer/locales/${l}/translation.json`) }]));
   await engine.init({ resources, fallbackLng: false, initImmediate: false });
   for (const [language, singular, plural] of [['en', '1 slide may', '2 slides may'], ['de', '1 Folie braucht', '2 Folien brauchen'], ['es', '1 diapositiva puede', '2 diapositivas pueden']]) {
     assert.ok(engine.t('prepCheck.summary', { lng: language, count: 1 }).startsWith(singular));

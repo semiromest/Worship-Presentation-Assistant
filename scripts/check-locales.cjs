@@ -3,7 +3,7 @@ const path = require('node:path');
 const ts = require('typescript');
 const i18next = require('i18next');
 
-const languages = ['en', 'tr', 'de', 'es', 'ko'];
+const languages = ['en', 'tr', 'de', 'es', 'ko', 'ar'];
 // This category intentionally has a heading without a subtitle in every locale.
 const allowedEmpty = new Set(['settings.navigation.categories.learning.description']);
 const pluralSuffix = /_(zero|one|two|few|many|other)$/;
@@ -84,7 +84,7 @@ if (require.main === module) {
     const texts = Object.fromEntries(languages.map(l => [l, fs.readFileSync(path.join(root, 'src/renderer/locales', l, 'translation.json'), 'utf8')]));
     const errors = await checkLocales(texts);
     if (errors.length) { console.error(errors.join('\n')); process.exitCode = 1; }
-    else console.log('Locale integrity passed for en, tr, de, es, ko (fallback disabled).');
+    else console.log(`Locale integrity passed for ${languages.join(', ')} (fallback disabled).`);
   }).catch(error => { console.error(error.message); process.exitCode = 2; });
 }
 module.exports = { checkLocales };

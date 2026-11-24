@@ -18,11 +18,13 @@ import {
   Unlock,
 } from 'lucide-react';
 import { ToolButton } from '../EditorControls';
+import { layerClickSelection } from '../bulkItemOps';
 
 interface LayerPanelProps {
   items: SlideItem[];
   selectedIds: Set<string>;
-  onSelect: (id: string) => void;
+  /** The new selection; the clicked row is last so it becomes the primary item. */
+  onSelect: (ids: string[]) => void;
   onMove: (id: string, direction: 'up' | 'down') => void;
   onDelete: (id: string) => void;
   onToggleVisibility: (id: string) => void;
@@ -69,7 +71,7 @@ export const LayerPanel = memo(function LayerPanel({
           return (
             <ControlTooltip key={item.id}>
               <div
-                onClick={() => onSelect(item.id)}
+                onClick={(event) => onSelect(layerClickSelection(sorted.map((row) => row.id), selectedIds, item.id, event))}
                 draggable={!!onDragItemStart}
                 onDragStart={(event) => onDragItemStart?.(event, item.id)}
                 title={onDragItemStart ? t('common.editorLayerDragHint') : undefined}
